@@ -1,0 +1,83 @@
+import { supabase } from '../lib/supabase';
+import { Supplier } from '../types';
+
+export const supplierService = {
+    listSuppliers: async (organizationId?: string): Promise<Supplier[]> => {
+        let query = supabase
+            .from('suppliers')
+            .select('*')
+            .order('name', { ascending: true });
+
+        if (organizationId) {
+            query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return data as Supplier[];
+    },
+
+    getByEmail: async (email: string): Promise<Supplier | null> => {
+        try {
+            const { data, error } = await supabase
+                .from('suppliers')
+                .select('*')
+                .eq('email', email.toLowerCase())
+                .maybeSingle();
+
+            if (error) throw error;
+            return data as Supplier;
+        } catch (error: any) {
+            console.error("[SUPPLIER SERVICE] Error fetching supplier by email:", error.message);
+            return null;
+        }
+    },
+
+    getById: async (id: string): Promise<Supplier | null> => {
+        try {
+            const { data, error } = await supabase
+                .from('suppliers')
+                .select('*')
+                .eq('id', id)
+                .maybeSingle();
+
+            if (error) throw error;
+            return data as Supplier;
+        } catch (error: any) {
+            console.error("[SUPPLIER SERVICE] Error fetching supplier by id:", error.message);
+            return null;
+        }
+    },
+
+    addSupplier: async (supplier: Omit<Supplier, 'id' | 'created_at'>): Promise<Supplier> => {
+        const { data, error } = await supabase
+            .from('suppliers')
+            .insert(supplier)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data as Supplier;
+    },
+
+    updateSupplier: async (id: string, updates: Partial<Supplier>): Promise<Supplier> => {
+        const { data, error } = await supabase
+            .from('suppliers')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data as Supplier;
+    },
+
+    deleteSupplier: async (id: string): Promise<void> => {
+        const { error } = await supabase
+            .from('suppliers')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    }
+};

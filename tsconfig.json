@@ -1,0 +1,60 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": true,
+    "types": [
+      "node",
+      "vite/client"
+    ],
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noEmit": true
+  },
+  "include": [
+    "components/**/*",
+    "services/**/*",
+    "hooks/**/*",
+    "utils/**/*",
+    "store/**/*",
+    "lib/**/*",
+    "supabase/**/*",
+    "App.tsx",
+    "index.tsx",
+    "constants.ts",
+    "constants_nbr.ts",
+    "types.ts",
+    "types_db.ts",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "*.mjs",
+    "*.cjs",
+    "*.js",
+    "*.json",
+    "lista gemini.xlsx",
+    "exemplo.xlsx"
+  ]
+}

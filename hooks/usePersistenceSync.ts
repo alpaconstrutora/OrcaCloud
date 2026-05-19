@@ -162,8 +162,13 @@ export const usePersistenceSync = ({
   // Does NOT depend on projectSettings.autoSave: that toggle is reserved for UI hints only.
   // isRehydrating guard prevents saving stale data while loading a project from Supabase.
   useEffect(() => {
-    if (!projectId || !session?.user?.id || isRehydrating || !projectSettings) return;
+    if (!projectId || !session?.user?.id || isRehydrating || !projectSettings) {
+      console.log('[AutoSave] SKIPPED', { projectId: !!projectId, userId: !!session?.user?.id, isRehydrating, hasSettings: !!projectSettings });
+      return;
+    }
+    console.log('[AutoSave] Agendado — itens:', budget.length, '| projeto:', projectSettings.name);
     const timeoutId = setTimeout(async () => {
+      console.log('[AutoSave] Disparando save para projeto:', projectId);
       try {
         await projectService.saveProject({
           id: projectId,
@@ -171,8 +176,9 @@ export const usePersistenceSync = ({
           settings: projectSettings,
           budget: budget
         });
+        console.log('[AutoSave] Sucesso!');
       } catch (error) {
-        console.error("Erro no salvamento automático:", error);
+        console.error('[AutoSave] ERRO:', error);
       }
     }, 2000);
     return () => clearTimeout(timeoutId);

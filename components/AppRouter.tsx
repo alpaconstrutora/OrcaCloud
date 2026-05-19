@@ -111,7 +111,7 @@ export interface AppRouterProps {
   handleDeleteProjectFromList: (id: string) => Promise<void>;
   handleDeleteOrganization: (id: string) => Promise<void>;
   handleUpsertOrganization: (data: Organization, shouldClose?: boolean) => Promise<void>;
-  handleSaveProject: () => Promise<void>;
+  handleSaveProject: (budget?: BudgetEntry[], settings?: ProjectSettings) => Promise<void>;
   handleUpdateSettings: (settings: ProjectSettings) => void;
   handleUpdateBudget: (budget: BudgetEntry[]) => void;
   handleContractSubmit: (data: any) => Promise<void>;
@@ -217,6 +217,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           budget={budget}
           onUpdateBudget={handleUpdateBudget}
           onUpdateSettings={handleUpdateSettings}
+          onSaveProject={handleSaveProject}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
         />

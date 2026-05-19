@@ -16,6 +16,7 @@ interface BudgetEditorProps {
   onToggleFavorite: (e: React.MouseEvent | React.TouchEvent, code: string) => void;
   onUpdateBudget: (newBudget: BudgetEntry[]) => void;
   onUpdateSettings: (newSettings: ProjectSettings) => void;
+  onSaveProject?: (budget: BudgetEntry[], settings: ProjectSettings) => Promise<void>;
 }
 
 interface AddingTarget {
@@ -60,6 +61,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   settings,
   onUpdateBudget,
   onUpdateSettings,
+  onSaveProject,
   favorites,
   onToggleFavorite,
 }) => {
@@ -163,7 +165,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     }
   };
 
-  const handleSaveVersion = () => {
+  const handleSaveVersion = async () => {
     if (!versionDescription.trim()) {
       alert("Por favor, insira uma descrição para a versão.");
       return;
@@ -180,19 +182,33 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       item: nextItemNumber,
       date: new Date().toISOString(),
       description: versionDescription,
-      budget: JSON.parse(JSON.stringify(budget)), // deep clone — versões devem ser completamente independentes
+      budget: JSON.parse(JSON.stringify(budget)),
       settings: { ...settings, versions: undefined }
     };
 
-    onUpdateSettings({
+    const newSettings: ProjectSettings = {
       ...settings,
       versions: [...currentVersions, newVersion],
       activeVersionId: newId,
-    });
+    };
 
+    onUpdateSettings(newSettings);
     setVersionDescription('');
     setIsVersionModalOpen(false);
-    alert(`Versão ${nextItemNumber} salva com sucesso!`);
+
+    // Persiste imediatamente no Supabase passando os dados explicitamente
+    // para evitar closure stale no handler do pai
+    if (onSaveProject) {
+      try {
+        await onSaveProject(budget, newSettings);
+        setNotification({ message: `Versão ${nextItemNumber} salva com sucesso!`, type: 'success' });
+      } catch {
+        setNotification({ message: `Versão ${nextItemNumber} salva localmente. Erro ao salvar na nuvem.`, type: 'error' });
+      }
+    } else {
+      setNotification({ message: `Versão ${nextItemNumber} salva com sucesso!`, type: 'success' });
+    }
+    setTimeout(() => setNotification(null), 4000);
   };
 
   const handleLoadVersion = (version: BudgetVersion) => {

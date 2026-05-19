@@ -95,22 +95,26 @@ export const useProjectOperations = ({
     }
   };
 
-  const handleSaveProject = async () => {
+  const handleSaveProject = async (explicitBudget?: BudgetEntry[], explicitSettings?: ProjectSettings) => {
     setIsSaving(true);
+    const b = explicitBudget ?? budget;
+    const s = explicitSettings ?? projectSettings;
     try {
       const savedProject = await projectService.saveProject({
         id: projectId || undefined,
-        name: projectSettings?.name || 'Projeto sem nome',
-        settings: projectSettings || INITIAL_PROJECT_SETTINGS,
-        budget: budget
+        name: s?.name || 'Projeto sem nome',
+        settings: s || INITIAL_PROJECT_SETTINGS,
+        budget: b
       });
       if (savedProject) {
-        setProjectId(savedProject.id);
-        alert(`Obra "${projectSettings?.name}" salva com sucesso na nuvem!`);
+        // Só atualiza projectId se estava nulo (novo projeto) — evita disparar rehydrate
+        if (!projectId) setProjectId(savedProject.id);
+        if (!explicitBudget) alert(`Obra "${s?.name}" salva com sucesso na nuvem!`);
       }
     } catch (error: any) {
       console.error("Erro ao salvar obra:", error);
-      alert("Erro ao salvar obra: " + (error.message || "Erro desconhecido"));
+      if (!explicitBudget) alert("Erro ao salvar obra: " + (error.message || "Erro desconhecido"));
+      throw error;
     } finally {
       setIsSaving(false);
     }

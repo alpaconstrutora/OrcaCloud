@@ -1,5 +1,6 @@
 import React from 'react';
-import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Trash2, Pencil } from 'lucide-react';
+import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Trash2, Pencil, Settings } from 'lucide-react';
+import HierarchicalSelect from './HierarchicalSelect';
 import { projectService, ProjectData } from '../services/projectService';
 import { supplierService } from '../services/supplierService';
 import { orderService } from '../services/orderService';
@@ -7,7 +8,8 @@ import { sinapiService } from '../services/sinapiService';
 import { organizationService } from '../services/organizationService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import MaterialSelectionModal from './MaterialSelectionModal';
-import { Supplier, BudgetEntry, SinapiType, PaymentAccount, CostCenter, ChartOfAccount } from '../types';
+import DatabasePickerModal from './DatabasePickerModal';
+import { Supplier, BudgetEntry, SinapiType, SinapiItem, PaymentAccount, CostCenter, ChartOfAccount } from '../types';
 import { formatCurrency } from '../utils/financialMath';
 
 interface AvulsoItem { code: string; description: string; unit: string; quantity: number; unitPrice: number; }
@@ -494,10 +496,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     }
 
     return (
-        <div className="absolute inset-0 z-[110] flex items-center justify-center p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="relative bg-white rounded-[3rem] shadow-2xl w-full h-full flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden border border-white/20">
+        <div className="absolute inset-0 z-[110] flex items-center justify-center p-2 md:p-8 lg:p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
+            <div className="relative bg-white rounded-2xl md:rounded-[3rem] shadow-2xl w-full h-full flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden border border-white/20">
 
-                <div className="px-12 py-10 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between shrink-0">
+                <div className="px-4 py-5 md:px-8 md:py-7 lg:px-12 lg:py-10 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-6">
                         <button
                             onClick={onBack}
@@ -509,7 +511,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                             <Package className="w-8 h-8" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                            <h1 className="text-xl md:text-3xl font-black text-gray-900 tracking-tight">
                                 {isEditing ? 'Editar Pedido de Compra' : 'Novo Pedido de Compra'}
                             </h1>
                             <p className="text-gray-400 text-[11px] font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
@@ -529,7 +531,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 </div>
 
                 {formError && (
-                    <div className="px-12 py-3 bg-red-50 border-b border-red-100 flex items-center gap-3 text-red-600 shrink-0 animate-in slide-in-from-top-2 duration-200">
+                    <div className="px-4 md:px-12 py-3 bg-red-50 border-b border-red-100 flex items-center gap-3 text-red-600 shrink-0 animate-in slide-in-from-top-2 duration-200">
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         <p className="text-xs font-medium flex-1">{formError}</p>
                         <button onClick={() => setFormError(null)} className="text-red-400 hover:text-red-600 transition-colors">
@@ -538,7 +540,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     </div>
                 )}
 
-                <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 custom-scrollbar">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 space-y-6">
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -716,35 +718,25 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         </div>
                                         <div className="space-y-3">
                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] px-1">Centro de Custo</label>
-                                            <div className="relative group">
-                                                <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors pointer-events-none" />
-                                                <select
-                                                    value={costCenter}
-                                                    onChange={(e) => setCostCenter(e.target.value)}
-                                                    className="w-full bg-gray-50/50 border border-gray-100 rounded-2xl pl-12 pr-4 py-4 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
-                                                >
-                                                    <option value="">Selecione o centro de custo...</option>
-                                                    {costCenters.map(center => (
-                                                        <option key={center.id} value={center.name}>{center.name}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
+                                            <HierarchicalSelect
+                                                items={costCenters}
+                                                value={costCenter}
+                                                onChange={setCostCenter}
+                                                valueField="name"
+                                                placeholder="Selecione o centro de custo..."
+                                                hoverCls="hover:bg-indigo-50"
+                                            />
                                         </div>
                                         <div className="space-y-3">
                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] px-1">Plano de Contas</label>
-                                            <div className="relative group">
-                                                <HandCoins className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors pointer-events-none" />
-                                                <select
-                                                    value={chartOfAccounts}
-                                                    onChange={(e) => setChartOfAccounts(e.target.value)}
-                                                    className="w-full bg-gray-50/50 border border-gray-100 rounded-2xl pl-12 pr-4 py-4 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
-                                                >
-                                                    <option value="">Selecione o plano de contas...</option>
-                                                    {coa.map(account => (
-                                                        <option key={account.id} value={account.code}>{account.code} - {account.name}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
+                                            <HierarchicalSelect
+                                                items={coa}
+                                                value={chartOfAccounts}
+                                                onChange={setChartOfAccounts}
+                                                valueField="code"
+                                                placeholder="Selecione o plano de contas..."
+                                                hoverCls="hover:bg-indigo-50"
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -1028,43 +1020,132 @@ interface AvulsoItemModalProps {
 
 const EMPTY_FORM: AvulsoItem = { code: '', description: '', unit: '', quantity: 1, unitPrice: 0 };
 
-const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial, onConfirm, onClose }) => {
-    const isEditing = initial !== null;
-    const [search, setSearch] = React.useState(initial?.description ?? '');
-    const [results, setResults] = React.useState<any[]>([]);
-    const [loading, setLoading] = React.useState(false);
-    const [showDropdown, setShowDropdown] = React.useState(false);
-    const [form, setForm] = React.useState<AvulsoItem>(initial ?? EMPTY_FORM);
-    const [formError, setFormError] = React.useState<string | null>(null);
-    const searchRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+// ─── Unit management ─────────────────────────────────────────────────────────
+const DEFAULT_UNITS = ['kg', 'm', 'm²', 'm³', 'l', 'pç', 'un', 'bd', 'br'];
+const UNITS_KEY = 'orcacloud_units';
+const loadUnits = (): string[] => { try { const s = localStorage.getItem(UNITS_KEY); return s ? JSON.parse(s) : [...DEFAULT_UNITS]; } catch { return [...DEFAULT_UNITS]; } };
+const persistUnits = (u: string[]) => localStorage.setItem(UNITS_KEY, JSON.stringify(u));
 
-    React.useEffect(() => () => { if (searchRef.current) clearTimeout(searchRef.current); }, []);
+interface UnitManagerModalProps { units: string[]; onClose: (updated: string[]) => void; }
 
-    const handleSearchChange = (term: string) => {
-        setSearch(term);
-        setForm(f => ({ ...f, description: term }));
-        if (searchRef.current) clearTimeout(searchRef.current);
-        if (term.length < 2) { setResults([]); setShowDropdown(false); return; }
-        setLoading(true);
-        searchRef.current = setTimeout(async () => {
-            try {
-                const state = projectData?.settings?.state || 'SP';
-                const chargeType = projectData?.settings?.socialChargesMode || 'Sem Desoneração';
-                const items = await sinapiService.search(term, { type: 'INPUT', state, chargeType, searchMode: 'all-words' });
-                setResults(items.slice(0, 8));
-                setShowDropdown(true);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
-        }, 400);
+const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClose }) => {
+    const [units, setUnits] = React.useState<string[]>(init);
+    const [newUnit, setNewUnit] = React.useState('');
+    const [editingIdx, setEditingIdx] = React.useState<number | null>(null);
+    const [editVal, setEditVal] = React.useState('');
+    const [error, setError] = React.useState('');
+
+    const handleAdd = () => {
+        const t = newUnit.trim();
+        if (!t) { setError('Digite uma unidade.'); return; }
+        if (units.map(u => u.toLowerCase()).includes(t.toLowerCase())) { setError('Unidade já existe.'); return; }
+        setUnits(prev => [...prev, t]);
+        setNewUnit('');
+        setError('');
     };
 
-    const selectResult = (item: any) => {
-        setForm({ code: item.code, description: item.description, unit: item.unit, quantity: 1, unitPrice: item.price || 0 });
-        setSearch(item.description);
-        setShowDropdown(false);
+    const handleEditSave = () => {
+        const t = editVal.trim();
+        if (!t || editingIdx === null) return;
+        setUnits(prev => prev.map((u, i) => i === editingIdx ? t : u));
+        setEditingIdx(null);
+    };
+
+    const handleClose = () => { persistUnits(units); onClose(units); };
+
+    return (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={handleClose}>
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="px-6 py-5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-base font-black text-gray-900">Gerenciar Unidades</h2>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Unidades de medida</p>
+                    </div>
+                    <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-xl transition-all text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={newUnit}
+                            onChange={e => { setNewUnit(e.target.value); setError(''); }}
+                            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                            placeholder="Nova unidade..."
+                            className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                        />
+                        <button onClick={handleAdd} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap">
+                            <Plus className="w-3.5 h-3.5" /> Adicionar
+                        </button>
+                    </div>
+                    {error && <p className="text-xs text-red-500 -mt-2">{error}</p>}
+
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto custom-scrollbar">
+                        {units.map((unit, i) => (
+                            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                                {editingIdx === i ? (
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={editVal}
+                                        onChange={e => setEditVal(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && handleEditSave()}
+                                        className="flex-1 text-sm font-bold border border-blue-300 rounded-lg px-2 py-0.5 outline-none focus:ring-2 focus:ring-blue-400"
+                                    />
+                                ) : (
+                                    <span className="flex-1 text-sm font-bold text-gray-800">{unit}</span>
+                                )}
+                                {editingIdx === i ? (
+                                    <button onClick={handleEditSave} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-all">
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                    </button>
+                                ) : (
+                                    <button onClick={() => { setEditingIdx(i); setEditVal(unit); }} className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all">
+                                        <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                                <button onClick={() => setUnits(prev => prev.filter((_, j) => j !== i))} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="px-6 pb-6 flex justify-end">
+                    <button onClick={handleClose} className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-black transition-all">
+                        Concluído
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
+const toCurrencyDigits = (value: number) => String(Math.round(value * 100));
+const fromCurrencyDigits = (digits: string) => parseInt(digits || '0', 10) / 100;
+const displayCurrencyDigits = (digits: string) => {
+    const num = parseInt(digits || '0', 10);
+    return (num / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial, onConfirm, onClose }) => {
+    const isEditing = initial !== null;
+    const [form, setForm] = React.useState<AvulsoItem>(initial ?? EMPTY_FORM);
+    const [priceDigits, setPriceDigits] = React.useState(() =>
+        initial ? toCurrencyDigits(initial.unitPrice) : '0'
+    );
+    const [units, setUnits] = React.useState<string[]>(loadUnits);
+    const [showUnitManager, setShowUnitManager] = React.useState(false);
+    const [pickerOpen, setPickerOpen] = React.useState(false);
+    const [formError, setFormError] = React.useState<string | null>(null);
+
+    const handlePickerSelect = (item: SinapiItem) => {
+        const price = item.price || 0;
+        setForm({ code: item.code, description: item.description, unit: item.unit, quantity: 1, unitPrice: price });
+        setPriceDigits(toCurrencyDigits(price));
+        setPickerOpen(false);
     };
 
     const handleConfirm = () => {
@@ -1089,40 +1170,16 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                 </div>
 
                 <div className="p-8 space-y-5">
-                    {/* Search SINAPI */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Buscar na SINAPI</label>
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            <input
-                                type="text"
-                                value={search}
-                                onChange={(e) => handleSearchChange(e.target.value)}
-                                onFocus={() => results.length > 0 && setShowDropdown(true)}
-                                placeholder="Ex: areia, cimento, vergalhão..."
-                                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-400 outline-none text-sm"
-                            />
-                            {loading && (
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
-                            )}
-                            {showDropdown && results.length > 0 && (
-                                <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden max-h-52 overflow-y-auto">
-                                    {results.map((r, i) => (
-                                        <button
-                                            key={i}
-                                            type="button"
-                                            onClick={() => selectResult(r)}
-                                            className="w-full text-left px-4 py-2.5 hover:bg-orange-50 border-b border-gray-50 last:border-0 transition-colors"
-                                        >
-                                            <div className="text-xs font-bold text-gray-900 truncate">{r.description}</div>
-                                            <div className="text-[10px] text-gray-400 font-mono mt-0.5">{r.code} • {r.unit} • {formatCurrency(r.price || 0)}</div>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                        <p className="text-[10px] text-gray-400 mt-1.5">Selecione um resultado ou preencha os campos abaixo manualmente.</p>
-                    </div>
+                    {/* Picker button */}
+                    <button
+                        type="button"
+                        onClick={() => setPickerOpen(true)}
+                        className="w-full flex items-center justify-center gap-2 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 rounded-xl py-3 text-sm font-black uppercase tracking-wider transition-all"
+                    >
+                        <Search className="w-4 h-4" />
+                        Buscar na base de dados
+                    </button>
+                    <p className="text-[10px] text-gray-400 -mt-3">Ou preencha os campos abaixo manualmente.</p>
 
                     <div className="h-px bg-gray-100" />
 
@@ -1140,13 +1197,29 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Unidade *</label>
-                            <input
-                                type="text"
-                                value={form.unit}
-                                onChange={(e) => setForm(f => ({ ...f, unit: e.target.value }))}
-                                placeholder="Ex: m³, kg, un"
-                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
-                            />
+                            <div className="flex gap-2">
+                                <select
+                                    value={units.includes(form.unit) ? form.unit : form.unit ? '__custom__' : ''}
+                                    onChange={e => {
+                                        if (e.target.value !== '__custom__') setForm(f => ({ ...f, unit: e.target.value }));
+                                    }}
+                                    className="flex-1 rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                                >
+                                    <option value="">Selecione...</option>
+                                    {units.map(u => <option key={u} value={u}>{u}</option>)}
+                                    {form.unit && !units.includes(form.unit) && (
+                                        <option value="__custom__">{form.unit}</option>
+                                    )}
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowUnitManager(true)}
+                                    title="Gerenciar unidades"
+                                    className="p-2.5 rounded-xl border border-gray-200 text-gray-400 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all shrink-0"
+                                >
+                                    <Settings className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
                         <div className="col-span-2">
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Descrição *</label>
@@ -1171,14 +1244,21 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Preço Unitário (R$)</label>
-                            <input
-                                type="number"
-                                min={0}
-                                step="any"
-                                value={form.unitPrice}
-                                onChange={(e) => setForm(f => ({ ...f, unitPrice: parseFloat(e.target.value) || 0 }))}
-                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
-                            />
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 pointer-events-none select-none">R$</span>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={displayCurrencyDigits(priceDigits)}
+                                    onChange={(e) => {
+                                        const digits = e.target.value.replace(/\D/g, '');
+                                        const trimmed = digits.replace(/^0+/, '') || '0';
+                                        setPriceDigits(trimmed);
+                                        setForm(f => ({ ...f, unitPrice: fromCurrencyDigits(trimmed) }));
+                                    }}
+                                    className="w-full pl-9 rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none text-right font-bold"
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -1213,6 +1293,22 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                     </button>
                 </div>
             </div>
+
+            {showUnitManager && (
+                <UnitManagerModal
+                    units={units}
+                    onClose={updated => { setUnits(updated); setShowUnitManager(false); }}
+                />
+            )}
+
+            <DatabasePickerModal
+                isOpen={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onSelect={handlePickerSelect}
+                title="Buscar Material / Serviço"
+                subtitle="Selecione um item da base de dados para adicionar ao pedido."
+                zIndex={210}
+            />
         </div>
     );
 };

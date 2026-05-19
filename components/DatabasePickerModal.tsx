@@ -16,9 +16,12 @@ interface DatabasePickerModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSelect: (item: SinapiItem) => void;
+    title?: string;
+    subtitle?: string;
+    zIndex?: number;
 }
 
-const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClose, onSelect }) => {
+const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClose, onSelect, title, subtitle, zIndex = 110 }) => {
     // Search States (Replicated from DatabaseExplorer)
     const [searchTerm, setSearchTerm] = React.useState('');
     const [searchCode, setSearchCode] = React.useState('');
@@ -125,14 +128,14 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
     };
 
     return (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
+        <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" style={{ zIndex }} onClick={e => { e.stopPropagation(); onClose(); }}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-200" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
                     <div>
-                        <h3 className="text-lg font-bold text-gray-900">Adicionar Componente</h3>
-                        <p className="text-xs text-gray-500">Selecione um item da base de dados para adicionar à composição.</p>
+                        <h3 className="text-lg font-bold text-gray-900">{title ?? 'Adicionar Componente'}</h3>
+                        <p className="text-xs text-gray-500">{subtitle ?? 'Selecione um item da base de dados para adicionar à composição.'}</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
                         <X className="w-5 h-5 text-gray-500" />

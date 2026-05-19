@@ -66,8 +66,12 @@ export interface Supplier {
     type: 'PF' | 'PJ';
     category?: string;
     address?: string;
+    street?: string;
+    number?: string;
+    neighborhood?: string;
     city?: string;
     state?: string;
+    zip_code?: string;
     organization_id?: string;
     created_at?: string;
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2 } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -39,6 +39,8 @@ const Layout: React.FC<LayoutProps> = ({
   const [isDarkMode, setIsDarkMode] = React.useState(true); // Default to dark for sidebar aesthetic
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
+  const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
+  React.useEffect(() => { if (activeView.startsWith('labor-')) setIsLaborOpen(true); }, [activeView]);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [toast, setToast] = React.useState<{ title: string; message: string } | null>(null);
 
@@ -143,15 +145,20 @@ const Layout: React.FC<LayoutProps> = ({
     );
   };
 
-  const NavDropdown = ({ label, icon: Icon, isOpen, onToggle, children }: { label: string, icon: any, isOpen: boolean, onToggle: () => void, children: React.ReactNode }) => {
+  const NavDropdown = ({ label, icon: Icon, isOpen, onToggle, children, hasActiveChild }: { label: string, icon: any, isOpen: boolean, onToggle: () => void, children: React.ReactNode, hasActiveChild?: boolean }) => {
     return (
       <div className="mb-1">
         <button
           onClick={onToggle}
-          className={`flex items-center w-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 rounded-xl hover:text-white hover:bg-white/5 text-gray-400 justify-between group`}
+          className={`flex items-center w-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 rounded-xl justify-between group
+            ${hasActiveChild
+              ? 'text-white bg-white/8 hover:bg-white/10'
+              : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }
+            ${isCollapsed ? 'justify-center' : ''}`}
         >
           <div className="flex items-center">
-            <Icon className="w-5 h-5 mr-3 text-gray-500 group-hover:text-blue-400" />
+            <Icon className={`w-5 h-5 mr-3 transition-colors ${hasActiveChild ? 'text-blue-400' : 'text-gray-500 group-hover:text-blue-400'} ${isCollapsed ? 'mr-0' : ''}`} />
             {!isCollapsed && <span>{label}</span>}
           </div>
           {!isCollapsed && (
@@ -159,7 +166,7 @@ const Layout: React.FC<LayoutProps> = ({
           )}
         </button>
         {isOpen && !isCollapsed && (
-          <div className="mt-1 ml-4 pl-4 border-l border-white/5 space-y-1">
+          <div className="mt-1 ml-4 pl-4 border-l border-white/5 space-y-0.5">
             {children}
           </div>
         )}
@@ -167,19 +174,28 @@ const Layout: React.FC<LayoutProps> = ({
     );
   };
 
-  const DropdownItem = ({ id, label, icon: Icon }: { id: string, label: string, icon?: any }) => {
+  const DropdownItem = ({ id, label, icon: Icon, badge }: { id: string, label: string, icon?: any, badge?: number }) => {
     const isActive = activeView === id;
     return (
       <button
-        onClick={() => onChangeView(id)}
+        onClick={() => { onChangeView(id); setIsMobileMenuOpen(false); }}
         className={`flex items-center w-full px-4 py-2 text-xs font-bold transition-all duration-200 rounded-lg
           ${isActive ? 'text-blue-400 bg-blue-400/10' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
       >
-        {Icon && <Icon className="w-3.5 h-3.5 mr-2" />}
-        <span>{label}</span>
+        {Icon && <Icon className="w-3.5 h-3.5 mr-2 shrink-0" />}
+        <span className="flex-1 text-left">{label}</span>
+        {badge !== undefined && badge > 0 && (
+          <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-black ml-1 ${isActive ? 'bg-blue-400/20 text-blue-300' : 'bg-red-500/80 text-white'}`}>{badge}</span>
+        )}
       </button>
     );
   };
+
+  const DropdownGroupLabel = ({ label }: { label: string }) => (
+    <div className="px-4 pt-3 pb-1">
+      <span className="text-[9px] font-black text-gray-600 uppercase tracking-[0.15em]">{label}</span>
+    </div>
+  );
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans relative">
@@ -224,7 +240,39 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="eng-orcamentos" icon={FolderOpen} label="Orçamentos" />
               <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" />
               <NavItem id="explorer" icon={BookOpen} label="Composições" />
-              <NavItem id="labor-management" icon={Users} label="Gestão de Mão de Obra" />
+              <NavDropdown
+                label="Gestão de Mão de Obra"
+                icon={Users}
+                isOpen={isLaborOpen}
+                onToggle={() => {
+                  if (isCollapsed) { onChangeView('labor-dashboard'); }
+                  else { setIsLaborOpen(o => !o); }
+                }}
+                hasActiveChild={activeView.startsWith('labor-')}
+              >
+                <DropdownGroupLabel label="Visão Geral" />
+                <DropdownItem id="labor-dashboard" label="Dashboard" icon={BarChart3} />
+                <DropdownItem id="labor-cost-dashboard" label="Custo por Obra" icon={TrendingUp} />
+
+                <DropdownGroupLabel label="Pessoas" />
+                <DropdownItem id="labor-employees" label="Colaboradores" icon={Users} />
+                <DropdownItem id="labor-teams" label="Equipes" icon={Shield} />
+                <DropdownItem id="labor-allocations" label="Alocações" icon={Target} />
+
+                <DropdownGroupLabel label="Operacional" />
+                <DropdownItem id="labor-timetracking" label="Ponto" icon={Clock} />
+                <DropdownItem id="labor-productivity" label="Produtividade" icon={Target} />
+                <DropdownItem id="labor-documents" label="Documentos" icon={FileText} />
+
+                <DropdownGroupLabel label="Financeiro" />
+                <DropdownItem id="labor-costs" label="Custos" icon={DollarSign} />
+                <DropdownItem id="labor-payroll" label="Folha" icon={Calculator} />
+                <DropdownItem id="labor-rubrics" label="Rubricas" icon={Shield} />
+                <DropdownItem id="labor-encargos" label="Encargos Sociais" icon={Percent} />
+
+                <DropdownGroupLabel label="Configurações" />
+                <DropdownItem id="labor-fiscal" label="Config. Fiscais" icon={Settings} />
+              </NavDropdown>
               <NavItem id="eng-planejamento" icon={Calendar} label="Planejamento" />
               <NavItem id="project-diary" icon={BookOpen} label="Diário de Obra" />
               <NavItem id="reports" icon={FileText} label="Relatórios" />

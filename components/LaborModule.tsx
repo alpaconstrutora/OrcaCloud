@@ -24,9 +24,31 @@ import { buildPartialFailureMessage } from '../lib/collectSettled';
 // ─── Types ──────────────────────────────────────────────────
 type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos';
 
+const SECTION_TO_TAB: Record<string, LaborTab> = {
+    'labor-dashboard': 'dashboard',
+    'labor-cost-dashboard': 'cost_dashboard',
+    'labor-employees': 'employees',
+    'labor-teams': 'teams',
+    'labor-allocations': 'allocations',
+    'labor-timetracking': 'timetracking',
+    'labor-productivity': 'productivity',
+    'labor-documents': 'documents',
+    'labor-costs': 'costs',
+    'labor-payroll': 'payroll',
+    'labor-rubrics': 'rubrics',
+    'labor-encargos': 'encargos',
+    'labor-fiscal': 'fiscal',
+};
+
+const TAB_TO_SECTION: Record<LaborTab, string> = Object.fromEntries(
+    Object.entries(SECTION_TO_TAB).map(([s, t]) => [t, s])
+) as Record<LaborTab, string>;
+
 interface LaborModuleProps {
     activeOrganizationId?: string;
     projects?: any[];
+    activeSection?: string;
+    onChangeView?: (view: string) => void;
 }
 
 // ─── KPI Card ───────────────────────────────────────────────
@@ -51,26 +73,6 @@ const KpiCard: React.FC<{
             </div>
         </div>
     </div>
-);
-
-// ─── Tab Button ─────────────────────────────────────────────
-const TabBtn: React.FC<{ id: LaborTab; active: LaborTab; label: string; icon: React.ElementType; onClick: (t: LaborTab) => void; badge?: number }> = ({ id, active, label, icon: Icon, onClick, badge }) => (
-    <button
-        onClick={() => onClick(id)}
-        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 whitespace-nowrap relative
-            ${active === id
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20'
-                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-    >
-        <Icon className="w-4 h-4" />
-        {label}
-        {badge !== undefined && badge > 0 && (
-            <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-black ${active === id ? 'bg-white text-indigo-600' : 'bg-red-500 text-white'}`}>
-                {badge}
-            </span>
-        )}
-    </button>
 );
 
 // ─── Dashboard Tab ──────────────────────────────────────────
@@ -164,8 +166,13 @@ const LaborDashboardTab: React.FC<{
 };
 
 // ─── MAIN MODULE ────────────────────────────────────────────
-const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, projects = [] }) => {
-    const [activeTab, setActiveTab]           = useState<LaborTab>('dashboard');
+const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, projects = [], activeSection, onChangeView }) => {
+    const activeTab: LaborTab = SECTION_TO_TAB[activeSection || ''] || 'dashboard';
+
+    const handleOpenTab = (tab: LaborTab) => {
+        if (onChangeView) onChangeView(TAB_TO_SECTION[tab] || 'labor-dashboard');
+    };
+
     const [editingEmployee, setEditingEmployee]= useState<Employee | null>(null);
     const [isEmployeeFormOpen, setIsEmployeeFormOpen] = useState(false);
     const [isMigrating, setIsMigrating]       = useState(false);
@@ -197,22 +204,6 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
 
     const pendingEntries = timeEntries.filter((e: any) => e.status === 'PENDENTE');
 
-    const tabs: { id: LaborTab; label: string; icon: React.ElementType; badge?: number }[] = [
-        { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-        { id: 'cost_dashboard', label: 'Custo por Obra', icon: TrendingUp },
-        { id: 'employees', label: 'Colaboradores', icon: Users, badge: employees.filter(e => e.status === 'ATIVO').length },
-        { id: 'teams', label: 'Equipes', icon: Shield },
-        { id: 'allocations', label: 'Alocações', icon: Target },
-        { id: 'timetracking', label: 'Ponto', icon: Clock, badge: pendingEntries.length || undefined },
-        { id: 'productivity', label: 'Produtividade', icon: Target },
-        { id: 'costs', label: 'Custos', icon: DollarSign },
-        { id: 'payroll', label: 'Folha', icon: Calculator },
-        { id: 'rubrics', label: 'Rubricas', icon: Shield },
-        { id: 'fiscal', label: 'Config. Fiscais', icon: Settings },
-        { id: 'encargos', label: 'Encargos Sociais', icon: Percent },
-        { id: 'documents', label: 'Documentos', icon: FileText, badge: docAlerts.length || undefined },
-    ];
-
     const orgId = activeOrganizationId || '';
     const isAllOrgsMode = !currentOrgId;
 
@@ -228,33 +219,32 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
     }
 
     return (
-        <div className="flex flex-col h-full space-y-6">
+        <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-6 py-4 bg-white border-b border-slate-100 shrink-0">
                 <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                        <div className="p-2.5 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-900/20">
-                            <Users className="w-7 h-7 text-white" />
+                    <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                        <div className="p-2 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-900/20">
+                            <Users className="w-5 h-5 text-white" />
                         </div>
                         Gestão de Mão de Obra
                         {isAllOrgsMode && (
-                            <span className="ml-3 px-3 py-1 bg-amber-100 text-amber-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-amber-200 shadow-sm animate-pulse">
+                            <span className="ml-2 px-3 py-1 bg-amber-100 text-amber-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-amber-200 shadow-sm animate-pulse">
                                 Modo Consolidado
                             </span>
                         )}
                     </h1>
-                    <p className="text-slate-400 text-sm mt-1.5 font-medium ml-1">
+                    <p className="text-slate-400 text-xs mt-1 font-medium ml-1">
                         Controle total de pessoal • Produtividade • Custos em obra
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    {/* Organization Internal Filter */}
-                    <div className="hidden md:flex items-center gap-2 bg-white px-3 py-2 rounded-2xl border border-slate-100 shadow-sm">
+                    <div className="hidden md:flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
                         <Building2 className="w-4 h-4 text-slate-400" />
                         <select
                             value={selectedOrgId || ''}
                             onChange={(e) => setSelectedOrgId(e.target.value === '' ? undefined : e.target.value)}
-                            className="text-xs font-bold text-slate-600 outline-none bg-transparent min-w-[200px]"
+                            className="text-xs font-bold text-slate-600 outline-none bg-transparent min-w-[180px]"
                         >
                             <option value="">Todas as Organizações</option>
                             {organizations.map(org => (
@@ -265,17 +255,17 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
 
                     {activeTab === 'employees' && (
                         <button
-                            onClick={() => { 
+                            onClick={() => {
                                 if (isAllOrgsMode) {
                                     alert('Para cadastrar um novo colaborador, selecione uma organização específica no filtro acima ou no menu lateral.');
                                     return;
                                 }
-                                setEditingEmployee(null); 
-                                setIsEmployeeFormOpen(true); 
+                                setEditingEmployee(null);
+                                setIsEmployeeFormOpen(true);
                             }}
-                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all font-bold text-sm shadow-lg active:scale-95
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-sm shadow-lg active:scale-95
                                 ${isAllOrgsMode ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-900/20'}`}
-                            title={isAllOrgsMode ? "Selecione uma organização para cadastrar" : ""}
+                            title={isAllOrgsMode ? 'Selecione uma organização para cadastrar' : ''}
                         >
                             <UserPlus className="w-4 h-4" />
                             Novo Colaborador
@@ -283,7 +273,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     <button
                         onClick={refetchAll}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-white text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all font-bold text-sm"
+                        className="flex items-center gap-2 px-3 py-2 bg-slate-50 text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-100 transition-all font-bold text-sm"
                         title="Recarregar dados"
                     >
                         <Calendar className="w-4 h-4" />
@@ -292,9 +282,11 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                 </div>
             </div>
 
+            {/* Banners */}
+            <div className="px-6 space-y-3 shrink-0">
             {/* Banner de falhas parciais de carregamento */}
             {failedLabels.length > 0 && (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-amber-800 text-sm">
+                <div className="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-amber-800 text-sm">
                     <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                     <p className="font-bold">{buildPartialFailureMessage(failedLabels)}</p>
                     <button onClick={refetchAll} className="ml-auto shrink-0 text-xs font-black uppercase text-amber-600 hover:text-amber-800 underline">Tentar novamente</button>
@@ -356,105 +348,95 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                 </div>
             )}
 
-            {/* Tabs */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide bg-white px-3 py-2 rounded-2xl border border-slate-100 shadow-sm">
-                {tabs.map(t => (
-                    <TabBtn key={t.id} id={t.id} active={activeTab} label={t.label} icon={t.icon} onClick={setActiveTab} badge={t.badge} />
-                ))}
-            </div>
+            </div>{/* /Banners */}
 
-            {/* Tab Content */}
-            <div className="flex-1 overflow-y-auto">
-                {activeTab === 'dashboard' && (
-                    <LaborDashboardTab
-                        employees={employees}
-                        teams={teams}
-                        pendingEntries={pendingEntries}
-                        productivity={productivityLogs}
-                        costSummary={costSummary}
-                        onOpenTab={setActiveTab}
-                    />
-                )}
-                {activeTab === 'cost_dashboard' && (
-                    <LaborCostDashboard 
-                        orgId={currentOrgId || activeOrganizationId || ''} 
-                        legacyCount={legacyCount}
-                        onMigrate={handleMigrate}
-                    />
-                )}
-                {activeTab === 'employees' && (
-                    <LaborEmployeeList
-                        employees={employees}
-                        projects={projects}
-                        organizations={organizations}
-                        onEdit={(emp) => { setEditingEmployee(emp); setIsEmployeeFormOpen(true); }}
-                        onRefresh={refetchAll}
-                    />
-                )}
-                {activeTab === 'teams' && (
-                    <LaborTeams
-                        teams={teams}
-                        employees={employees}
-                        projects={projects}
-                        orgId={currentOrgId || activeOrganizationId || ''}
-                        onRefresh={refetchAll}
-                    />
-                )}
-                {activeTab === 'allocations' && (
-                    <LaborAllocations
-                        orgId={currentOrgId || activeOrganizationId || ''}
-                        employees={employees}
-                    />
-                )}
-                {activeTab === 'timetracking' && (
-                    <LaborTimeTracking
-                        employees={employees}
-                        projects={projects}
-                        orgId={currentOrgId || activeOrganizationId || ''}
-                        onRefresh={refetchAll}
-                    />
-                )}
-                {activeTab === 'productivity' && (
-                    <LaborProductivity
-                        employees={employees}
-                        teams={teams}
-                        projects={projects}
-                        orgId={currentOrgId || activeOrganizationId || ''}
-                        onRefresh={refetchAll}
-                    />
-                )}
-                {activeTab === 'costs' && (
-                    <LaborCosts
-                        employees={employees}
-                        teams={teams}
-                        orgId={currentOrgId || activeOrganizationId || ''}
-                        projects={projects}
-                        legacyCount={legacyCount}
-                        onMigrate={handleMigrate}
-                    />
-                )}
-
-                {activeTab === 'payroll' && (
-                    <LaborPayroll
-                        orgId={selectedOrgId !== undefined ? selectedOrgId : (activeOrganizationId || 'all')}
-                    />
-                )}
-                {activeTab === 'rubrics' && (
-                    <LaborRubrics />
-                )}
-                {activeTab === 'fiscal' && (
-                    <LaborFiscalSettings />
-                )}
-                {activeTab === 'encargos' && (
-                    <LaborEncargos orgId={currentOrgId || activeOrganizationId || ''} />
-                )}
-                {activeTab === 'documents' && (
-                    <LaborDocuments
-                        employees={employees}
-                        orgId={currentOrgId || activeOrganizationId || ''}
-                        onRefresh={refetchAll}
-                    />
-                )}
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+                    {activeTab === 'dashboard' && (
+                        <LaborDashboardTab
+                            employees={employees}
+                            teams={teams}
+                            pendingEntries={pendingEntries}
+                            productivity={productivityLogs}
+                            costSummary={costSummary}
+                            onOpenTab={handleOpenTab}
+                        />
+                    )}
+                    {activeTab === 'cost_dashboard' && (
+                        <LaborCostDashboard
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            legacyCount={legacyCount}
+                            onMigrate={handleMigrate}
+                        />
+                    )}
+                    {activeTab === 'employees' && (
+                        <LaborEmployeeList
+                            employees={employees}
+                            projects={projects}
+                            organizations={organizations}
+                            onEdit={(emp) => { setEditingEmployee(emp); setIsEmployeeFormOpen(true); }}
+                            onRefresh={refetchAll}
+                        />
+                    )}
+                    {activeTab === 'teams' && (
+                        <LaborTeams
+                            teams={teams}
+                            employees={employees}
+                            projects={projects}
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            onRefresh={refetchAll}
+                        />
+                    )}
+                    {activeTab === 'allocations' && (
+                        <LaborAllocations
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            employees={employees}
+                        />
+                    )}
+                    {activeTab === 'timetracking' && (
+                        <LaborTimeTracking
+                            employees={employees}
+                            projects={projects}
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            onRefresh={refetchAll}
+                        />
+                    )}
+                    {activeTab === 'productivity' && (
+                        <LaborProductivity
+                            employees={employees}
+                            teams={teams}
+                            projects={projects}
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            onRefresh={refetchAll}
+                        />
+                    )}
+                    {activeTab === 'costs' && (
+                        <LaborCosts
+                            employees={employees}
+                            teams={teams}
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            projects={projects}
+                            legacyCount={legacyCount}
+                            onMigrate={handleMigrate}
+                        />
+                    )}
+                    {activeTab === 'payroll' && (
+                        <LaborPayroll
+                            orgId={selectedOrgId !== undefined ? selectedOrgId : (activeOrganizationId || 'all')}
+                        />
+                    )}
+                    {activeTab === 'rubrics' && <LaborRubrics />}
+                    {activeTab === 'fiscal' && <LaborFiscalSettings />}
+                    {activeTab === 'encargos' && (
+                        <LaborEncargos orgId={currentOrgId || activeOrganizationId || ''} />
+                    )}
+                    {activeTab === 'documents' && (
+                        <LaborDocuments
+                            employees={employees}
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            onRefresh={refetchAll}
+                        />
+                    )}
             </div>
 
             {/* Employee Form Modal */}

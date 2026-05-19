@@ -19,6 +19,7 @@ const AUDIT_TABLE = 'boletos_auditoria';
 function mapRowToBoleto(row: any): Boleto {
     return {
         id: row.id,
+        numero: row.numero,
         organization_id: row.organization_id,
         documento_path: row.documento_path,
         documento_nome: row.documento_nome,

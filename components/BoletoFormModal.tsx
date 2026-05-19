@@ -4,14 +4,19 @@ import {
     Building2, Calendar, DollarSign, Hash, Eye, Save,
     ThumbsUp, Ban, Trash2, UserPlus,
 } from 'lucide-react';
+import HierarchicalSelect from './HierarchicalSelect';
 import { boletoService } from '../services/boletoService';
 import { supplierService } from '../services/supplierService';
 import { financialRegistryService } from '../services/financialRegistryService';
+import { projectService } from '../services/projectService';
+import { extractFromPdfFile } from '../utils/boletoParser';
 import { onlyDigits } from '../utils/febrabanRules';
-import type { Boleto, Supplier, CostCenter, ChartOfAccount } from '../types';
+import type { Boleto, BoletoExtractionResult, Supplier, CostCenter, ChartOfAccount } from '../types';
 
 interface BoletoFormModalProps {
     organizationId: string;
+    organizations?: { id: string; name: string }[];
+    onOrgChange?: (id: string) => void;
     userEmail?: string;
     projectId?: string;
     boleto?: Boleto;
@@ -25,8 +30,10 @@ const formatBRL = (v?: number) =>
         : '—';
 
 const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
-    organizationId, userEmail, projectId, boleto: initial, onClose, onSaved,
+    organizationId: initialOrgId, organizations = [], onOrgChange,
+    userEmail, projectId, boleto: initial, onClose, onSaved,
 }) => {
+    const [organizationId, setOrganizationId] = React.useState(initialOrgId);
     const [boleto, setBoleto] = useState<Boleto | undefined>(initial);
     const [uploading, setUploading] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -37,12 +44,18 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
     const [charts, setCharts] = useState<ChartOfAccount[]>([]);
+    const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
     const [documentoBlobUrl, setDocumentoBlobUrl] = useState<string | null>(null);
+
+    // Arquivo selecionado mas ainda não enviado ao Supabase (aguardando org)
+    const [pendingFile, setPendingFile] = useState<File | null>(null);
+    const [pendingExtraction, setPendingExtraction] = useState<BoletoExtractionResult | null>(null);
 
     // Form fields
     const [supplierId, setSupplierId] = useState<string>(initial?.supplier_id ?? '');
     const [costCenterId, setCostCenterId] = useState<string>(initial?.cost_center_id ?? '');
     const [chartId, setChartId] = useState<string>(initial?.chart_of_accounts_id ?? '');
+    const [selectedProjectId, setSelectedProjectId] = useState<string>(initial?.project_id ?? projectId ?? '');
     const [observacoes, setObservacoes] = useState<string>(initial?.observacoes ?? '');
     const [valor, setValor] = useState<string>(initial?.valor != null ? String(initial.valor) : '');
     const [vencimento, setVencimento] = useState<string>(initial?.vencimento ?? '');
@@ -52,7 +65,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
     // Mini-formulário de cadastro rápido de fornecedor
     const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
-    const [novoForn, setNovoForn] = useState({ name: '', document: '', type: 'PJ' as 'PJ' | 'PF', category: 'Materiais de Construção' });
+    const [novoForn, setNovoForn] = useState({
+        name: '', document: '', type: 'PJ' as 'PJ' | 'PF', category: 'Materiais de Construção',
+        street: '', number: '', neighborhood: '', city: '', state: '', zip_code: '',
+    });
     const [salvandoForn, setSalvandoForn] = useState(false);
 
     useEffect(() => {
@@ -60,10 +76,17 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             supplierService.listSuppliers(organizationId),
             financialRegistryService.listCostCenters(organizationId),
             financialRegistryService.listChartOfAccounts(organizationId),
-        ]).then(([sup, cc, ch]) => {
+            projectService.listProjects().catch(() => []),
+        ]).then(([sup, cc, ch, projs]) => {
             setSuppliers(sup || []);
             setCostCenters(cc || []);
             setCharts(ch || []);
+            setProjects((projs || [])
+                .filter((p: any) =>
+                    p.settings?.classification === 'OBRA' &&
+                    !/gest[aã]o\s+comercial/i.test(p.name ?? '')
+                )
+                .map((p: any) => ({ id: p.id, name: p.name })));
         }).catch(err => console.warn('falha ao carregar registros', err));
     }, [organizationId]);
 
@@ -126,19 +149,59 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     async function handleFile(file: File) {
         setError(null);
         setUploading(true);
+        // Gera preview local imediato
+        const localUrl = URL.createObjectURL(file);
+        setDocumentoBlobUrl(prev => { if (prev) URL.revokeObjectURL(prev); return localUrl; });
         try {
-            const result = await boletoService.uploadBoleto({ organizationId, file, userEmail, projectId });
-            if (result.duplicate) {
-                setInfo('Este boleto já havia sido capturado anteriormente. Carregando registro existente.');
+            const extraction = await extractFromPdfFile(file).catch(() => null);
+            setPendingFile(file);
+            setPendingExtraction(extraction);
+            // Pré-preenche campos com o que foi extraído
+            if (extraction) {
+                setValor(extraction.campos.valor.valor != null ? String(extraction.campos.valor.valor) : '');
+                setVencimento(extraction.campos.vencimento.valor ?? '');
             }
-            setBoleto(result.boleto);
-            // Preenche o form com o que foi extraído
-            setValor(result.boleto.valor != null ? String(result.boleto.valor) : '');
-            setVencimento(result.boleto.vencimento ?? '');
         } catch (err: any) {
-            setError(err.message || 'Falha no upload');
+            setError(err.message || 'Falha na extração');
         } finally {
             setUploading(false);
+        }
+    }
+
+    async function handleUploadAndSave(closeAfter = true) {
+        if (!pendingFile || !organizationId) return;
+        setBusy(true);
+        setError(null);
+        try {
+            const result = await boletoService.uploadBoleto({
+                organizationId, file: pendingFile, userEmail,
+                projectId: selectedProjectId || projectId,
+            });
+            // Aplica associações do formulário
+            const updated = await boletoService.associar(result.boleto.id, organizationId, {
+                supplier_id:          supplierId || undefined,
+                cost_center_id:       costCenterId || undefined,
+                chart_of_accounts_id: chartId || undefined,
+                project_id:           selectedProjectId || projectId || undefined,
+                observacoes:          observacoes || undefined,
+                valor:                valor ? Number(valor) : undefined,
+                vencimento:           vencimento || undefined,
+            }, userEmail);
+            setPendingFile(null);
+            setPendingExtraction(null);
+            onSaved(updated);
+            if (result.duplicate) {
+                // Boleto duplicado: mostra aviso e permanece no modal com os dados existentes
+                setBoleto(updated);
+                setInfo('Este boleto já havia sido capturado anteriormente. Carregando registro existente.');
+            } else if (closeAfter) {
+                onClose();
+            } else {
+                setBoleto(updated);
+            }
+        } catch (err: any) {
+            setError(err.message || 'Falha ao salvar boleto');
+            setBusy(false);
         }
     }
 
@@ -176,7 +239,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 supplier_id: supplierId || undefined,
                 cost_center_id: costCenterId || undefined,
                 chart_of_accounts_id: chartId || undefined,
-                project_id: projectId || boleto.project_id,
+                project_id: selectedProjectId || projectId || boleto.project_id,
                 observacoes: observacoes || undefined,
                 valor: valor ? Number(valor) : undefined,
                 vencimento: vencimento || undefined,
@@ -231,10 +294,16 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         setSalvandoForn(true);
         try {
             const criado = await supplierService.addSupplier({
-                name: novoForn.name.trim(),
-                document: novoForn.document.trim() || undefined,
-                type: novoForn.type,
-                category: novoForn.category,
+                name:         novoForn.name.trim(),
+                document:     novoForn.document.trim() || undefined,
+                type:         novoForn.type,
+                category:     novoForn.category,
+                street:       novoForn.street.trim() || undefined,
+                number:       novoForn.number.trim() || undefined,
+                neighborhood: novoForn.neighborhood.trim() || undefined,
+                city:         novoForn.city.trim() || undefined,
+                state:        novoForn.state.trim() || undefined,
+                zip_code:     novoForn.zip_code.trim() || undefined,
                 organization_id: organizationId,
             } as any);
             setSuppliers(prev => [...prev, criado].sort((a, b) => a.name.localeCompare(b.name)));
@@ -284,8 +353,13 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 {/* Header */}
                 <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between z-10">
                     <div>
-                        <h2 className="text-xl font-black text-gray-900">
+                        <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">
                             {isCreating ? 'Capturar Boleto' : `Boleto · ${boleto?.banco_nome ?? 'Documento'}`}
+                            {!isCreating && boleto?.numero != null && (
+                                <span className="text-sm font-black text-gray-400 tracking-widest">
+                                    #{String(boleto.numero).padStart(4, '0')}
+                                </span>
+                            )}
                         </h2>
                         {boleto && (
                             <p className="text-xs text-gray-500 mt-1 font-medium uppercase tracking-wider">
@@ -317,8 +391,8 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                         </div>
                     )}
 
-                    {/* Upload zone (only when creating) */}
-                    {isCreating && (
+                    {/* Upload zone (only when creating and no file selected yet) */}
+                    {isCreating && !pendingFile && (
                         <div
                             onClick={() => fileInputRef.current?.click()}
                             className="border-2 border-dashed border-gray-200 rounded-2xl p-12 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
@@ -347,6 +421,134 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     if (f) handleFile(f);
                                 }}
                             />
+                        </div>
+                    )}
+
+                    {/* Preview local após seleção do arquivo, antes de salvar */}
+                    {isCreating && pendingFile && !boleto && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Preview do PDF */}
+                            <div className="space-y-4">
+                                <div className="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                                    <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-2 text-xs uppercase font-bold tracking-widest text-gray-500">
+                                        <FileText className="w-3.5 h-3.5" /> Documento original
+                                    </div>
+                                    <div className="aspect-[3/4] bg-white">
+                                        {documentoBlobUrl
+                                            ? <iframe src={documentoBlobUrl} className="w-full h-full" title="Boleto" />
+                                            : <div className="flex items-center justify-center h-full text-gray-400 text-sm"><Loader2 className="w-5 h-5 animate-spin mr-2" />Carregando...</div>
+                                        }
+                                    </div>
+                                    <div className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100 truncate">{pendingFile.name}</div>
+                                </div>
+                            </div>
+
+                            {/* Dados extraídos + formulário */}
+                            <div className="space-y-4">
+                                {pendingExtraction && (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <ReadOnlyField icon={Building2} label="Banco" value={pendingExtraction.campos.banco_nome?.valor ?? '—'} />
+                                        <ReadOnlyField icon={Hash} label="Confiança" value={`${pendingExtraction.confidence_score ?? 0}%`} />
+                                        {pendingExtraction.campos.beneficiario_nome?.valor && (
+                                            <ReadOnlyField label="Beneficiário" value={
+                                                pendingExtraction.campos.beneficiario_nome.valor
+                                                    .replace(/[\s\-–]+(?:CNPJ|CPF)[:\s]*[\d.\/\-]+.*/i, '')
+                                                    .replace(/\s+\d{11,14}\b.*/g, '')
+                                                    .trim()
+                                            } />
+                                        )}
+                                        {pendingExtraction.campos.beneficiario_cnpj?.valor && (
+                                            <ReadOnlyField label="CNPJ / CPF" value={pendingExtraction.campos.beneficiario_cnpj.valor} mono />
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Organização — obrigatória para salvar */}
+                                {organizations.length > 0 && (
+                                    <div className={`p-3 rounded-xl border ${organizationId ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200'}`}>
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
+                                            Organização *
+                                        </label>
+                                        <select
+                                            value={organizationId}
+                                            onChange={e => { setOrganizationId(e.target.value); onOrgChange?.(e.target.value); }}
+                                            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 outline-none focus:border-blue-400"
+                                            autoFocus={!organizationId}
+                                        >
+                                            <option value="">— Selecione a organização —</option>
+                                            {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                                        </select>
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <FormField label="Valor (R$)" icon={DollarSign}>
+                                        <input type="number" step="0.01" min="0" value={valor}
+                                            onChange={e => setValor(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                                    </FormField>
+                                    <FormField label="Vencimento" icon={Calendar}>
+                                        <input type="date" value={vencimento}
+                                            onChange={e => setVencimento(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                                    </FormField>
+                                </div>
+
+                                <FormField label="Obra / Projeto">
+                                    <select value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                                        <option value="">— Sem vínculo —</option>
+                                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                </FormField>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <FormField label="Centro de Custo">
+                                        <select value={costCenterId} onChange={e => setCostCenterId(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                                            <option value="">—</option>
+                                            {costCenters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </FormField>
+                                    <FormField label="Plano de Contas">
+                                        <select value={chartId} onChange={e => setChartId(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                                            <option value="">—</option>
+                                            {charts.map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
+                                        </select>
+                                    </FormField>
+                                </div>
+
+                                <FormField label="Observações">
+                                    <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)}
+                                        rows={2} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                                </FormField>
+
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <button onClick={() => { setPendingFile(null); setPendingExtraction(null); setDocumentoBlobUrl(null); }}
+                                        className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-xs font-bold uppercase tracking-widest">
+                                        Trocar arquivo
+                                    </button>
+                                    <button
+                                        onClick={() => handleUploadAndSave(false)}
+                                        disabled={busy || !organizationId}
+                                        className="flex items-center gap-2 px-5 py-2 bg-gray-100 text-gray-900 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-200 disabled:opacity-50"
+                                        title={!organizationId ? 'Selecione a organização antes de salvar' : undefined}
+                                    >
+                                        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                                        Salvar rascunho
+                                    </button>
+                                    <button
+                                        onClick={() => handleUploadAndSave(true)}
+                                        disabled={busy || !organizationId}
+                                        className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50"
+                                        title={!organizationId ? 'Selecione a organização antes de salvar' : undefined}
+                                    >
+                                        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ThumbsUp className="w-3.5 h-3.5" />}
+                                        Salvar e fechar
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -433,13 +635,12 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </FormField>
                                 </div>
 
-                                {boleto.beneficiario_nome && (() => {
-                                    // Limpa nome removendo CNPJ/CPF embutido
+                                {/* Beneficiário só aparece quando não há fornecedor vinculado — evita duplicidade */}
+                                {boleto.beneficiario_nome && !supplierId && (() => {
                                     const nomeExib = boleto.beneficiario_nome!
                                         .replace(/[\s\-–]+(?:CNPJ|CPF)[:\s]*[\d.\/\-]+.*/i, '')
                                         .replace(/\s+\d{11,14}\b.*/g, '')
                                         .trim();
-                                    // Extrai CNPJ do nome se não veio no campo próprio
                                     let cnpjExib = boleto.beneficiario_cnpj ?? '';
                                     if (!cnpjExib) {
                                         const m = boleto.beneficiario_nome!.match(/\b(\d{14}|\d{11})\b/);
@@ -547,6 +748,81 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                     </select>
                                                 </div>
 
+                                                {/* Endereço */}
+                                                <div className="pt-1 border-t border-blue-100">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Endereço</p>
+                                                    <div className="grid grid-cols-3 gap-2 mb-2">
+                                                        <div className="col-span-2">
+                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Rua / Logradouro</label>
+                                                            <input
+                                                                type="text"
+                                                                value={novoForn.street}
+                                                                onChange={e => setNovoForn(p => ({ ...p, street: e.target.value }))}
+                                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                                                placeholder="Av. Paulista"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Número</label>
+                                                            <input
+                                                                type="text"
+                                                                value={novoForn.number}
+                                                                onChange={e => setNovoForn(p => ({ ...p, number: e.target.value }))}
+                                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                                                placeholder="123"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2 mb-2">
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Bairro</label>
+                                                            <input
+                                                                type="text"
+                                                                value={novoForn.neighborhood}
+                                                                onChange={e => setNovoForn(p => ({ ...p, neighborhood: e.target.value }))}
+                                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                                                placeholder="Centro"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">CEP</label>
+                                                            <input
+                                                                type="text"
+                                                                value={novoForn.zip_code}
+                                                                onChange={e => setNovoForn(p => ({ ...p, zip_code: e.target.value }))}
+                                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono bg-white"
+                                                                placeholder="00000-000"
+                                                                maxLength={9}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <div className="col-span-2">
+                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Cidade</label>
+                                                            <input
+                                                                type="text"
+                                                                value={novoForn.city}
+                                                                onChange={e => setNovoForn(p => ({ ...p, city: e.target.value }))}
+                                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                                                placeholder="São Paulo"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">UF</label>
+                                                            <select
+                                                                value={novoForn.state}
+                                                                onChange={e => setNovoForn(p => ({ ...p, state: e.target.value }))}
+                                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                                            >
+                                                                <option value="">—</option>
+                                                                {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
+                                                                    <option key={uf} value={uf}>{uf}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                                 <div className="flex gap-2 pt-1">
                                                     <button
                                                         type="button"
@@ -570,30 +846,39 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </>
                                 </FormField>
 
+                                <FormField label="Obra / Projeto">
+                                    <select
+                                        value={selectedProjectId}
+                                        onChange={(e) => setSelectedProjectId(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                                    >
+                                        <option value="">— Sem vínculo —</option>
+                                        {projects.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
+                                </FormField>
+
                                 <div className="grid grid-cols-2 gap-3">
                                     <FormField label="Centro de Custo">
-                                        <select
+                                        <HierarchicalSelect
+                                            items={costCenters}
                                             value={costCenterId}
-                                            onChange={(e) => setCostCenterId(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                                        >
-                                            <option value="">—</option>
-                                            {costCenters.map(c => (
-                                                <option key={c.id} value={c.id}>{c.name}</option>
-                                            ))}
-                                        </select>
+                                            onChange={setCostCenterId}
+                                            valueField="id"
+                                            placeholder="—"
+                                            hoverCls="hover:bg-blue-50"
+                                        />
                                     </FormField>
                                     <FormField label="Plano de Contas">
-                                        <select
+                                        <HierarchicalSelect
+                                            items={charts}
                                             value={chartId}
-                                            onChange={(e) => setChartId(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                                        >
-                                            <option value="">—</option>
-                                            {charts.map(c => (
-                                                <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
-                                            ))}
-                                        </select>
+                                            onChange={setChartId}
+                                            valueField="id"
+                                            placeholder="—"
+                                            hoverCls="hover:bg-blue-50"
+                                        />
                                     </FormField>
                                 </div>
 

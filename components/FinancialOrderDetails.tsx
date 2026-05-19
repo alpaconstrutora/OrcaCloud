@@ -13,6 +13,7 @@ import {
     ArrowLeft,
     HandCoins
 } from 'lucide-react';
+import HierarchicalSelect from './HierarchicalSelect';
 import { PurchaseOrder, PaymentAccount, CostCenter, ChartOfAccount } from '../types';
 import { orderService } from '../services/orderService';
 import { organizationService } from '../services/organizationService';
@@ -302,37 +303,25 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] px-1">Centro de Custo</label>
-                            <div className="relative group">
-                                <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors pointer-events-none" />
-                                <select
-                                    value={costCenter}
-                                    onChange={(e) => setCostCenter(e.target.value)}
-                                    className="w-full bg-gray-50/50 border border-gray-100 rounded-2xl pl-12 pr-4 py-4 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
-                                >
-                                    <option value="">Selecione o centro de custo...</option>
-                                    {costCenters.map(center => (
-                                        <option key={center.id} value={center.name}>{center.name}</option>
-                                    ))}
-                                    {!costCenters.length && <option value="" disabled>Nenhum centro de custo cadastrado</option>}
-                                </select>
-                            </div>
+                            <HierarchicalSelect
+                                items={costCenters}
+                                value={costCenter}
+                                onChange={setCostCenter}
+                                valueField="name"
+                                placeholder="Selecione o centro de custo..."
+                                hoverCls="hover:bg-indigo-50"
+                            />
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] px-1">Plano de Contas</label>
-                            <div className="relative group">
-                                <HandCoins className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors pointer-events-none" />
-                                <select
-                                    value={chartOfAccounts}
-                                    onChange={(e) => setChartOfAccounts(e.target.value)}
-                                    className="w-full bg-gray-50/50 border border-gray-100 rounded-2xl pl-12 pr-4 py-4 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
-                                >
-                                    <option value="">Selecione o plano de contas...</option>
-                                    {coa.map(account => (
-                                        <option key={account.id} value={account.code}>{account.code} - {account.name}</option>
-                                    ))}
-                                    {!coa.length && <option value="" disabled>Nenhum plano de contas cadastrado</option>}
-                                </select>
-                            </div>
+                            <HierarchicalSelect
+                                items={coa}
+                                value={chartOfAccounts}
+                                onChange={setChartOfAccounts}
+                                valueField="code"
+                                placeholder="Selecione o plano de contas..."
+                                hoverCls="hover:bg-indigo-50"
+                            />
                         </div>
                     </div>
                 </div>

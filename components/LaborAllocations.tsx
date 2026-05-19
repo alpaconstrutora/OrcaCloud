@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { payrollService, Worksite, EmployeeAllocation } from '../services/payrollService';
 import { Employee } from '../services/laborService';
+import { getCodeLevelStyle, sortByCode } from '../utils/codeHierarchy';
 
 interface LaborAllocationsProps {
     orgId: string;
@@ -580,26 +581,30 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                     </div>
                                                     {costCenterOpen && (
                                                         <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                            {costCenters
+                                                            {sortByCode(costCenters)
                                                                 .filter((c: any) => {
                                                                     const q = costCenterSearch.toLowerCase();
                                                                     return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                 })
-                                                                .map((c: any) => (
+                                                                .map((c: any) => {
+                                                                    const lvl = getCodeLevelStyle(c.code, 'slate');
+                                                                    return (
                                                                     <button
                                                                         key={c.id}
                                                                         type="button"
                                                                         onMouseDown={(e) => { e.preventDefault(); setSelectedCostCenter(c.name); setCostCenterOpen(false); setCostCenterSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, c.name, selectedChartOfAccount); }}
-                                                                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-emerald-50 transition-colors group"
+                                                                        className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-emerald-50 transition-colors group"
+                                                                        style={{ paddingLeft: 12 + lvl.indent }}
                                                                     >
                                                                         {c.code && (
-                                                                            <span className="shrink-0 text-[10px] font-black text-slate-500 group-hover:text-emerald-700 bg-slate-100 group-hover:bg-emerald-100 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate">
+                                                                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
                                                                                 {c.code}
                                                                             </span>
                                                                         )}
-                                                                        <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900 truncate">{c.name}</span>
+                                                                        <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
                                                                     </button>
-                                                                ))
+                                                                    );
+                                                                })
                                                             }
                                                             {costCenters.filter((c: any) => {
                                                                 const q = costCenterSearch.toLowerCase();
@@ -657,26 +662,30 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                     </div>
                                                     {chartOpen && (
                                                         <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                            {chartOfAccounts
+                                                            {sortByCode(chartOfAccounts)
                                                                 .filter((c: any) => {
                                                                     const q = chartSearch.toLowerCase();
                                                                     return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                 })
-                                                                .map((c: any) => (
+                                                                .map((c: any) => {
+                                                                    const lvl = getCodeLevelStyle(c.code, 'slate');
+                                                                    return (
                                                                     <button
                                                                         key={c.id}
                                                                         type="button"
                                                                         onMouseDown={(e) => { e.preventDefault(); setSelectedChartOfAccount(c.name); setChartOpen(false); setChartSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, c.name); }}
-                                                                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-emerald-50 transition-colors group"
+                                                                        className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-emerald-50 transition-colors group"
+                                                                        style={{ paddingLeft: 12 + lvl.indent }}
                                                                     >
                                                                         {c.code && (
-                                                                            <span className="shrink-0 text-[10px] font-black text-slate-500 group-hover:text-emerald-700 bg-slate-100 group-hover:bg-emerald-100 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate">
+                                                                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
                                                                                 {c.code}
                                                                             </span>
                                                                         )}
-                                                                        <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900 truncate">{c.name}</span>
+                                                                        <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
                                                                     </button>
-                                                                ))
+                                                                    );
+                                                                })
                                                             }
                                                             {chartOfAccounts.filter((c: any) => {
                                                                 const q = chartSearch.toLowerCase();
@@ -744,26 +753,30 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                         </div>
                                                         {encargoCostCenterOpen && (
                                                             <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                                {costCenters
+                                                                {sortByCode(costCenters)
                                                                     .filter((c: any) => {
                                                                         const q = encargoCostCenterSearch.toLowerCase();
                                                                         return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                     })
-                                                                    .map((c: any) => (
+                                                                    .map((c: any) => {
+                                                                        const lvl = getCodeLevelStyle(c.code, 'slate');
+                                                                        return (
                                                                         <button
                                                                             key={c.id}
                                                                             type="button"
                                                                             onMouseDown={(e) => { e.preventDefault(); setSelectedEncargoCostCenter(c.name); setEncargoCostCenterOpen(false); setEncargoCostCenterSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, c.name, selectedEncargoChartOfAccount); }}
-                                                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-orange-50 transition-colors group"
+                                                                            className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-orange-50 transition-colors group"
+                                                                            style={{ paddingLeft: 12 + lvl.indent }}
                                                                         >
                                                                             {c.code && (
-                                                                                <span className="shrink-0 text-[10px] font-black text-slate-500 group-hover:text-orange-700 bg-slate-100 group-hover:bg-orange-100 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate">
+                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
                                                                                     {c.code}
                                                                                 </span>
                                                                             )}
-                                                                            <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900 truncate">{c.name}</span>
+                                                                            <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
                                                                         </button>
-                                                                    ))
+                                                                        );
+                                                                    })
                                                                 }
                                                                 {costCenters.filter((c: any) => { const q = encargoCostCenterSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
                                                                     <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
@@ -816,26 +829,30 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                         </div>
                                                         {encargoChartOpen && (
                                                             <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                                {chartOfAccounts
+                                                                {sortByCode(chartOfAccounts)
                                                                     .filter((c: any) => {
                                                                         const q = encargoChartSearch.toLowerCase();
                                                                         return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                     })
-                                                                    .map((c: any) => (
+                                                                    .map((c: any) => {
+                                                                        const lvl = getCodeLevelStyle(c.code, 'slate');
+                                                                        return (
                                                                         <button
                                                                             key={c.id}
                                                                             type="button"
                                                                             onMouseDown={(e) => { e.preventDefault(); setSelectedEncargoChartOfAccount(c.name); setEncargoChartOpen(false); setEncargoChartSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, selectedEncargoCostCenter, c.name); }}
-                                                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-orange-50 transition-colors group"
+                                                                            className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-orange-50 transition-colors group"
+                                                                            style={{ paddingLeft: 12 + lvl.indent }}
                                                                         >
                                                                             {c.code && (
-                                                                                <span className="shrink-0 text-[10px] font-black text-slate-500 group-hover:text-orange-700 bg-slate-100 group-hover:bg-orange-100 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate">
+                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
                                                                                     {c.code}
                                                                                 </span>
                                                                             )}
-                                                                            <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900 truncate">{c.name}</span>
+                                                                            <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
                                                                         </button>
-                                                                    ))
+                                                                        );
+                                                                    })
                                                                 }
                                                                 {chartOfAccounts.filter((c: any) => { const q = encargoChartSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
                                                                     <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
@@ -901,26 +918,30 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                         </div>
                                                         {terceiroCostCenterOpen && (
                                                             <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                                {costCenters
+                                                                {sortByCode(costCenters)
                                                                     .filter((c: any) => {
                                                                         const q = terceiroCostCenterSearch.toLowerCase();
                                                                         return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                     })
-                                                                    .map((c: any) => (
+                                                                    .map((c: any) => {
+                                                                        const lvl = getCodeLevelStyle(c.code, 'slate');
+                                                                        return (
                                                                         <button
                                                                             key={c.id}
                                                                             type="button"
                                                                             onMouseDown={(e) => { e.preventDefault(); setSelectedTerceiroCostCenter(c.name); setTerceiroCostCenterOpen(false); setTerceiroCostCenterSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, selectedEncargoCostCenter, selectedEncargoChartOfAccount, c.name, selectedTerceiroChartOfAccount); }}
-                                                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-purple-50 transition-colors group"
+                                                                            className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-purple-50 transition-colors group"
+                                                                            style={{ paddingLeft: 12 + lvl.indent }}
                                                                         >
                                                                             {c.code && (
-                                                                                <span className="shrink-0 text-[10px] font-black text-slate-500 group-hover:text-purple-700 bg-slate-100 group-hover:bg-purple-100 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate">
+                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
                                                                                     {c.code}
                                                                                 </span>
                                                                             )}
-                                                                            <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900 truncate">{c.name}</span>
+                                                                            <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
                                                                         </button>
-                                                                    ))
+                                                                        );
+                                                                    })
                                                                 }
                                                                 {costCenters.filter((c: any) => { const q = terceiroCostCenterSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
                                                                     <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
@@ -973,26 +994,30 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                         </div>
                                                         {terceiroChartOpen && (
                                                             <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                                {chartOfAccounts
+                                                                {sortByCode(chartOfAccounts)
                                                                     .filter((c: any) => {
                                                                         const q = terceiroChartSearch.toLowerCase();
                                                                         return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                     })
-                                                                    .map((c: any) => (
+                                                                    .map((c: any) => {
+                                                                        const lvl = getCodeLevelStyle(c.code, 'slate');
+                                                                        return (
                                                                         <button
                                                                             key={c.id}
                                                                             type="button"
                                                                             onMouseDown={(e) => { e.preventDefault(); setSelectedTerceiroChartOfAccount(c.name); setTerceiroChartOpen(false); setTerceiroChartSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, selectedEncargoCostCenter, selectedEncargoChartOfAccount, selectedTerceiroCostCenter, c.name); }}
-                                                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-purple-50 transition-colors group"
+                                                                            className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-purple-50 transition-colors group"
+                                                                            style={{ paddingLeft: 12 + lvl.indent }}
                                                                         >
                                                                             {c.code && (
-                                                                                <span className="shrink-0 text-[10px] font-black text-slate-500 group-hover:text-purple-700 bg-slate-100 group-hover:bg-purple-100 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate">
+                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
                                                                                     {c.code}
                                                                                 </span>
                                                                             )}
-                                                                            <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900 truncate">{c.name}</span>
+                                                                            <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
                                                                         </button>
-                                                                    ))
+                                                                        );
+                                                                    })
                                                                 }
                                                                 {chartOfAccounts.filter((c: any) => { const q = terceiroChartSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
                                                                     <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>

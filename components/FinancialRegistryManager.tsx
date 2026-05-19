@@ -94,6 +94,26 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
             return a.code.localeCompare(b.code, 'pt-BR', { numeric: true });
         });
 
+    const getLevel = (code?: string) => code ? code.split('.').length : 0;
+
+    const LEVEL_STYLES = [
+        // level 0 (sem código)
+        { indent: 0,  nameCls: 'text-sm font-bold text-gray-900',        codeCls: 'bg-gray-100 text-gray-500',          rowCls: '' },
+        // level 1  (ex: 1)
+        { indent: 0,  nameCls: 'text-sm font-black text-gray-900',       codeCls: 'bg-gray-800 text-white',             rowCls: 'bg-gray-50/60' },
+        // level 2  (ex: 1.1)
+        { indent: 16, nameCls: 'text-sm font-bold text-gray-800',        codeCls: 'bg-blue-100 text-blue-700',          rowCls: '' },
+        // level 3  (ex: 1.1.1)
+        { indent: 32, nameCls: 'text-xs font-semibold text-gray-500',    codeCls: 'bg-gray-100 text-gray-400',          rowCls: '' },
+        // level 4  (ex: 1.1.1.1)
+        { indent: 48, nameCls: 'text-xs font-medium text-gray-400',      codeCls: 'bg-gray-50 text-gray-300 border border-gray-200', rowCls: '' },
+    ];
+
+    const getLevelStyle = (code?: string) => {
+        const level = getLevel(code);
+        return LEVEL_STYLES[Math.min(level, LEVEL_STYLES.length - 1)];
+    };
+
     return (
         <div className="flex flex-col h-full bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
             {/* Header */}
@@ -279,21 +299,23 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredItems.map(item => (
-                                        <tr key={item.id} className="group hover:bg-blue-50/50 transition-colors cursor-pointer" onClick={() => handleEdit(item)}>
+                                    filteredItems.map(item => {
+                                        const lvl = showCode ? getLevelStyle(item.code) : getLevelStyle(undefined);
+                                        return (
+                                        <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors cursor-pointer ${lvl.rowCls}`} onClick={() => handleEdit(item)}>
                                             {showCode && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <span className="text-[10px] font-black bg-gray-100 text-gray-500 px-2 py-1 rounded uppercase tracking-wider whitespace-nowrap">
+                                                    <span className={`text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider whitespace-nowrap ${lvl.codeCls}`}>
                                                         {item.code || '-'}
                                                     </span>
                                                 </td>
                                             )}
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex items-center gap-2.5">
+                                                <div className="flex items-center gap-2.5" style={{ paddingLeft: showCode ? lvl.indent : 0 }}>
                                                     <div className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-white border border-transparent group-hover:border-blue-100 transition-all shrink-0">
                                                         <Icon className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-500 transition-colors" />
                                                     </div>
-                                                    <span className="font-bold text-gray-900 text-sm truncate">{item.name}</span>
+                                                    <span className={`truncate ${lvl.nameCls}`}>{item.name}</span>
                                                 </div>
                                             </td>
                                             {(showDescription || showBankDetails) && (
@@ -332,7 +354,8 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </tbody>
                         </table>

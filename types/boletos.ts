@@ -40,6 +40,7 @@ export interface BoletoExtractionResult {
 
 export interface Boleto {
     id: string;
+    numero?: number;
     organization_id: string;
 
     documento_path: string;

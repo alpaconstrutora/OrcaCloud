@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins } from 'lucide-react';
+import HierarchicalSelect from './HierarchicalSelect';
 import { Contract, Supplier, CostCenter, ChartOfAccount } from '../types';
 import { supplierService } from '../services/supplierService';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -510,29 +511,25 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Centro de Custo</label>
-                                    <select
+                                    <HierarchicalSelect
+                                        items={costCenters}
                                         value={formData.cost_center_id || ''}
-                                        onChange={(e) => setFormData({ ...formData, cost_center_id: e.target.value })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
-                                    >
-                                        <option value="">Nenhum centro vinculado</option>
-                                        {costCenters.map(cc => (
-                                            <option key={cc.id} value={cc.id}>{cc.name}</option>
-                                        ))}
-                                    </select>
+                                        onChange={(v) => setFormData({ ...formData, cost_center_id: v })}
+                                        valueField="id"
+                                        placeholder="Nenhum centro vinculado"
+                                        hoverCls="hover:bg-blue-50"
+                                    />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Conta Financeira</label>
-                                    <select
+                                    <HierarchicalSelect
+                                        items={chartOfAccounts}
                                         value={formData.category_id || ''}
-                                        onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
-                                    >
-                                        <option value="">Nenhuma conta vinculada</option>
-                                        {chartOfAccounts.map(ca => (
-                                            <option key={ca.id} value={ca.id}>{ca.code} - {ca.name}</option>
-                                        ))}
-                                    </select>
+                                        onChange={(v) => setFormData({ ...formData, category_id: v })}
+                                        valueField="id"
+                                        placeholder="Nenhuma conta vinculada"
+                                        hoverCls="hover:bg-blue-50"
+                                    />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Obra Relacionada</label>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Plus, Search, FileText, Loader2, RefreshCw,
     Building2, Calendar, AlertTriangle, ChevronDown,
@@ -6,7 +6,10 @@ import {
     ArrowUpDown, Download, LayoutGrid, List,
 } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
-import type { Boleto, BoletoStatus, BoletoFilters, Organization } from '../types';
+import { financialRegistryService } from '../services/financialRegistryService';
+import { projectService } from '../services/projectService';
+import { supplierService } from '../services/supplierService';
+import type { Boleto, BoletoStatus, BoletoFilters, Organization, CostCenter } from '../types';
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 
 interface BoletoManagerProps {
@@ -57,9 +60,17 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [vencAte, setVencAte] = useState('');
     const [valorMin, setValorMin] = useState('');
     const [valorMax, setValorMax] = useState('');
-    const [ordenarPor, setOrdenarPor] = useState<'vencimento' | 'valor' | 'created_at'>('created_at');
+    const [ordenarPor, setOrdenarPor] = useState<'vencimento' | 'valor' | 'created_at' | 'numero' | 'project_id' | 'cost_center_id' | 'beneficiario_nome' | 'status'>('created_at');
     const [ordenarDir, setOrdenarDir] = useState<'asc' | 'desc'>('desc');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+    // Lookup maps para exibição nos cards/linhas
+    const [ccMap, setCcMap] = useState<Record<string, string>>({});
+    const [projectMap, setProjectMap] = useState<Record<string, string>>({});
+    const [supplierMap, setSupplierMap] = useState<Record<string, string>>({});
+
+    const [orgPrompt, setOrgPrompt] = useState(false);
+    const orgSelectRef = useRef<HTMLSelectElement>(null);
 
     const temFiltroAtivo = vencDe || vencAte || valorMin || valorMax;
 
@@ -81,8 +92,18 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             const filters: BoletoFilters = {};
             if (filtroStatus !== 'todos') filters.status = filtroStatus;
             if (projectId) filters.project_id = projectId;
-            const list = await boletoService.list(orgId, filters);
+
+            const [list, ccs, projs, sups] = await Promise.all([
+                boletoService.list(orgId, filters),
+                financialRegistryService.listCostCenters(orgId).catch(() => [] as CostCenter[]),
+                projectService.listProjects().catch(() => [] as any[]),
+                supplierService.listSuppliers(orgId).catch(() => [] as any[]),
+            ]);
+
             setBoletos(list);
+            setCcMap(Object.fromEntries((ccs || []).map((c: any) => [c.id, c.name])));
+            setProjectMap(Object.fromEntries((projs || []).map((p: any) => [p.id, p.name])));
+            setSupplierMap(Object.fromEntries((sups || []).map((s: any) => [s.id, s.name])));
         } catch (err: any) {
             setError(err.message || 'Falha ao carregar boletos');
         } finally {
@@ -104,6 +125,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             list = list.filter(item =>
                 (item.documento_nome ?? '').toLowerCase().includes(b) ||
                 (item.beneficiario_nome ?? '').toLowerCase().includes(b) ||
+                (item.supplier_id ? (supplierMap[item.supplier_id] ?? '').toLowerCase().includes(b) : false) ||
                 (item.linha_digitavel ?? '').includes(b) ||
                 (item.banco_nome ?? '').toLowerCase().includes(b),
             );
@@ -122,15 +144,15 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         // Ordenação
         list = [...list].sort((a, b) => {
             let va: any, vb: any;
-            if (ordenarPor === 'vencimento') {
-                va = a.vencimento ?? '';
-                vb = b.vencimento ?? '';
-            } else if (ordenarPor === 'valor') {
-                va = a.valor ?? 0;
-                vb = b.valor ?? 0;
-            } else {
-                va = a.created_at;
-                vb = b.created_at;
+            switch (ordenarPor) {
+                case 'numero':        va = a.numero ?? 0;                       vb = b.numero ?? 0;                       break;
+                case 'vencimento':    va = a.vencimento ?? '';                  vb = b.vencimento ?? '';                  break;
+                case 'valor':         va = a.valor ?? 0;                        vb = b.valor ?? 0;                        break;
+                case 'project_id':    va = projectMap[a.project_id ?? ''] ?? ''; vb = projectMap[b.project_id ?? ''] ?? ''; break;
+                case 'cost_center_id':va = ccMap[a.cost_center_id ?? ''] ?? '';  vb = ccMap[b.cost_center_id ?? ''] ?? '';  break;
+                case 'beneficiario_nome': va = (a.beneficiario_nome ?? '').toLowerCase(); vb = (b.beneficiario_nome ?? '').toLowerCase(); break;
+                case 'status':        va = a.status;                            vb = b.status;                            break;
+                default:              va = a.created_at;                        vb = b.created_at;
             }
             if (va < vb) return ordenarDir === 'asc' ? -1 : 1;
             if (va > vb) return ordenarDir === 'asc' ? 1 : -1;
@@ -138,7 +160,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         });
 
         return list;
-    }, [boletos, busca, vencDe, vencAte, valorMin, valorMax, ordenarPor, ordenarDir]);
+    }, [boletos, busca, vencDe, vencAte, valorMin, valorMax, ordenarPor, ordenarDir, supplierMap]);
 
     const counts = useMemo(() => {
         const c: Record<string, number> = { todos: boletos.length };
@@ -222,6 +244,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         <div className="relative flex items-center gap-2 bg-white border border-gray-200 rounded-[1.25rem] px-4 py-2.5 min-w-[220px]">
                             <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
                             <select
+                                ref={orgSelectRef}
                                 value={selectedOrgId}
                                 onChange={(e) => handleOrgChange(e.target.value)}
                                 className="w-full bg-transparent text-xs font-bold text-gray-700 outline-none cursor-pointer appearance-none pr-5"
@@ -265,9 +288,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     </button>
                     <button
                         onClick={abrirNovo}
-                        disabled={!effectiveOrgId}
-                        title={!effectiveOrgId ? 'Selecione uma organização específica para criar um boleto' : undefined}
-                        className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
                     >
                         <Plus className="w-4 h-4" />
                         Novo Boleto
@@ -461,9 +482,14 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             onChange={(e) => setOrdenarPor(e.target.value as any)}
                             className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold"
                         >
+                            <option value="numero">Código</option>
                             <option value="created_at">Data de captura</option>
                             <option value="vencimento">Vencimento</option>
                             <option value="valor">Valor</option>
+                            <option value="beneficiario_nome">Beneficiário</option>
+                            <option value="project_id">Obra</option>
+                            <option value="cost_center_id">Centro de Custo</option>
+                            <option value="status">Status</option>
                         </select>
                         <button
                             onClick={() => setOrdenarDir(d => d === 'asc' ? 'desc' : 'asc')}
@@ -513,13 +539,22 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                             {b.banco_nome ?? 'Banco desconhecido'}
                                         </span>
                                     </div>
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
-                                        {STATUS_LABELS[b.status]}
-                                    </span>
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                        {b.numero != null && (
+                                            <span className="text-[10px] font-black text-gray-400 tracking-widest">
+                                                #{String(b.numero).padStart(4, '0')}
+                                            </span>
+                                        )}
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
+                                            {STATUS_LABELS[b.status]}
+                                        </span>
+                                    </div>
                                 </div>
 
                                 <p className="text-xs text-gray-500 mb-3 truncate">
-                                    {b.beneficiario_nome ?? b.documento_nome}
+                                    {b.supplier_id
+                                        ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
+                                        : (b.beneficiario_nome ?? b.documento_nome)}
                                 </p>
 
                                 <div className="flex items-end justify-between">
@@ -553,9 +588,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                                <th className="text-left px-4 py-3">Banco</th>
+                                <th className="text-left px-4 py-3 w-20">Código</th>
                                 <th className="text-left px-4 py-3">Beneficiário</th>
-                                <th className="text-left px-4 py-3">Documento</th>
+                                <th className="text-left px-4 py-3">Obra</th>
+                                <th className="text-left px-4 py-3">Centro de Custo</th>
                                 <th className="text-right px-4 py-3">Valor</th>
                                 <th className="text-center px-4 py-3">Vencimento</th>
                                 <th className="text-center px-4 py-3">Status</th>
@@ -571,17 +607,26 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         onClick={() => abrirEdicao(b)}
                                         className={`cursor-pointer hover:bg-gray-50 transition-colors ${atrasado ? 'bg-red-50/40' : ''}`}
                                     >
-                                        <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">
-                                            {b.banco_nome ?? '—'}
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <span className="text-xs font-black text-gray-500 tracking-widest">
+                                                {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
+                                            </span>
                                         </td>
-                                        <td className="px-4 py-3 text-gray-600 max-w-[220px]">
-                                            <p className="truncate">{b.beneficiario_nome ?? '—'}</p>
-                                            {b.beneficiario_cnpj && (
+                                        <td className="px-4 py-3 text-gray-700 max-w-[200px]">
+                                            <p className="font-medium truncate">
+                                                {b.supplier_id
+                                                    ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
+                                                    : (b.beneficiario_nome ?? b.documento_nome)}
+                                            </p>
+                                            {b.beneficiario_cnpj && !b.supplier_id && (
                                                 <p className="text-[11px] text-gray-400 font-mono truncate">{b.beneficiario_cnpj}</p>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-gray-400 text-xs max-w-[180px]">
-                                            <p className="truncate">{b.documento_nome}</p>
+                                        <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px]">
+                                            <p className="truncate">{b.project_id ? (projectMap[b.project_id] ?? '—') : '—'}</p>
+                                        </td>
+                                        <td className="px-4 py-3 text-xs text-gray-500 max-w-[140px]">
+                                            <p className="truncate">{b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—'}</p>
                                         </td>
                                         <td className="px-4 py-3 text-right font-bold text-gray-900 whitespace-nowrap">
                                             {formatBRL(b.valor)}
@@ -606,7 +651,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </tbody>
                         <tfoot>
                             <tr className="bg-gray-50 border-t border-gray-100">
-                                <td colSpan={3} className="px-4 py-2 text-xs text-gray-400">{filtered.length} boleto{filtered.length !== 1 ? 's' : ''}</td>
+                                <td colSpan={4} className="px-4 py-2 text-xs text-gray-400">{filtered.length} boleto{filtered.length !== 1 ? 's' : ''}</td>
                                 <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
                                     {formatBRL(filtered.filter(b => !['pago','cancelado'].includes(b.status)).reduce((s, b) => s + (b.valor ?? 0), 0))}
                                 </td>
@@ -617,9 +662,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             )}
 
-            {isModalOpen && (effectiveOrgId || editing?.organization_id) && (
+            {isModalOpen && (
                 <BoletoFormModal
-                    organizationId={(editing?.organization_id ?? effectiveOrgId)!}
+                    organizationId={editing?.organization_id ?? effectiveOrgId ?? ''}
+                    organizations={organizations}
+                    onOrgChange={(id) => { handleOrgChange(id); }}
                     userEmail={userEmail}
                     projectId={projectId}
                     boleto={editing}

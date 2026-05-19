@@ -158,27 +158,29 @@ export const usePersistenceSync = ({
     setViewingImovibStudyId
   ]);
 
-  // Auto-save logic — fires whenever budget or settings change while logged in with an active project.
-  // Does NOT depend on projectSettings.autoSave: that toggle is reserved for UI hints only.
-  // isRehydrating guard prevents saving stale data while loading a project from Supabase.
+  // Auto-save: persiste budget + sincroniza snapshot da versão ativa
   useEffect(() => {
-    if (!projectId || !session?.user?.id || isRehydrating || !projectSettings) {
-      console.log('[AutoSave] SKIPPED', { projectId: !!projectId, userId: !!session?.user?.id, isRehydrating, hasSettings: !!projectSettings });
-      return;
-    }
-    console.log('[AutoSave] Agendado — itens:', budget.length, '| projeto:', projectSettings.name);
+    if (!projectId || !session?.user?.id || isRehydrating || !projectSettings) return;
     const timeoutId = setTimeout(async () => {
-      console.log('[AutoSave] Disparando save para projeto:', projectId);
+      // Se há versão ativa, atualiza o snapshot dela com o budget atual
+      let settingsToSave = projectSettings;
+      if (projectSettings.activeVersionId && (projectSettings.versions?.length ?? 0) > 0) {
+        const updatedVersions = projectSettings.versions!.map(v =>
+          v.id === projectSettings.activeVersionId
+            ? { ...v, budget: JSON.parse(JSON.stringify(budget)) }
+            : v
+        );
+        settingsToSave = { ...projectSettings, versions: updatedVersions };
+      }
       try {
         await projectService.saveProject({
           id: projectId,
-          name: projectSettings.name,
-          settings: projectSettings,
+          name: settingsToSave.name,
+          settings: settingsToSave,
           budget: budget
         });
-        console.log('[AutoSave] Sucesso!');
       } catch (error) {
-        console.error('[AutoSave] ERRO:', error);
+        console.error('Erro no salvamento automático:', error);
       }
     }, 2000);
     return () => clearTimeout(timeoutId);

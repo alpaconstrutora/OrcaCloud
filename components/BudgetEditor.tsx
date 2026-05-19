@@ -213,11 +213,30 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
   const handleLoadVersion = (version: BudgetVersion) => {
     if (window.confirm(`Deseja carregar a versão ${version.item}? O orçamento atual será substituído.`)) {
+      // Congela o budget atual no snapshot da versão ativa antes de trocar
+      const currentActiveId = settings.activeVersionId;
+      let newVersions = settings.versions || [];
+      if (currentActiveId && currentActiveId !== version.id) {
+        newVersions = newVersions.map(v =>
+          v.id === currentActiveId
+            ? { ...v, budget: JSON.parse(JSON.stringify(budget)) }
+            : v
+        );
+      }
+
       const restoredBudget: BudgetEntry[] = JSON.parse(JSON.stringify(version.budget));
+      const newSettings = { ...settings, versions: newVersions, activeVersionId: version.id };
+
       onUpdateBudget(restoredBudget);
-      onUpdateSettings({ ...settings, activeVersionId: version.id });
+      onUpdateSettings(newSettings);
       setShowHistory(false);
-      setNotification({ message: `Versão ${version.item} restaurada. Salve o projeto para persistir.`, type: 'success' });
+
+      // Persiste imediatamente para garantir que o freeze da versão anterior chegue ao Supabase
+      if (onSaveProject) {
+        onSaveProject(restoredBudget, newSettings).catch(console.error);
+      }
+
+      setNotification({ message: `Versão ${version.item} carregada.`, type: 'success' });
       setTimeout(() => setNotification(null), 5000);
     }
   };

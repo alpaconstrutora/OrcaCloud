@@ -158,9 +158,11 @@ export const usePersistenceSync = ({
     setViewingImovibStudyId
   ]);
 
-  // Auto-save logic
+  // Auto-save logic — fires whenever budget or settings change while logged in with an active project.
+  // Does NOT depend on projectSettings.autoSave: that toggle is reserved for UI hints only.
+  // isRehydrating guard prevents saving stale data while loading a project from Supabase.
   useEffect(() => {
-    if (!projectSettings?.autoSave || !projectId || !session?.user?.id || isRehydrating) return;
+    if (!projectId || !session?.user?.id || isRehydrating || !projectSettings) return;
     const timeoutId = setTimeout(async () => {
       try {
         await projectService.saveProject({

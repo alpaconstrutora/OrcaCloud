@@ -45,6 +45,7 @@ export interface ProjectSettings {
         };
     wbs: WBSGroup[];
     versions?: BudgetVersion[];
+    activeVersionId?: string;
     budgetStatus?: 'Em Andamento' | 'Fechado';
     status?: 'Em Andamento' | 'Finalizado' | 'Aprovado' | 'Proposta';
     obraStatus?: 'Não Iniciado' | 'Em andamento' | 'Concluída';

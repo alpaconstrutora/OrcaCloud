@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-declare const Deno: any;
+declare const Deno: { env: { get(key: string): string | undefined } };
 
 // ============================================================
 // Edge Function: quality-sla-enforcement
@@ -91,8 +91,8 @@ serve(async (req: Request) => {
             results.escalated.push(c.condition_id)
             console.log(`Escalated: ${c.condition_id}`)
           }
-        } catch (e: any) {
-          results.errors.push(`Escalate exception ${c.condition_id}: ${e.message}`)
+        } catch (e: unknown) {
+          results.errors.push(`Escalate exception ${c.condition_id}: ${e instanceof Error ? e.message : String(e)}`)
         }
       }
     }
@@ -140,14 +140,14 @@ serve(async (req: Request) => {
 
           results.slaBreached.push(plan.condition_id)
           console.log(`SlaBreached: condition ${plan.condition_id}, plan ${plan.id}`)
-        } catch (e: any) {
-          results.errors.push(`SlaBreached ${plan.condition_id}: ${e.message}`)
+        } catch (e: unknown) {
+          results.errors.push(`SlaBreached ${plan.condition_id}: ${e instanceof Error ? e.message : String(e)}`)
         }
       }
     }
 
-  } catch (e: any) {
-    results.errors.push(`Top-level exception: ${e.message}`)
+  } catch (e: unknown) {
+    results.errors.push(`Top-level exception: ${e instanceof Error ? e.message : String(e)}`)
   }
 
   const status = results.errors.length > 0 ? 207 : 200

@@ -6,7 +6,7 @@ interface BrokerIntegrationsProps {
     organizationId: string;
 }
 
-const TYPE_CONFIG: Record<BrokerIntegration['type'], { icon: any; color: string; bg: string; label: string }> = {
+const TYPE_CONFIG: Record<BrokerIntegration['type'], { icon: React.ElementType; color: string; bg: string; label: string }> = {
     CRM: { icon: Database, color: 'text-indigo-600', bg: 'bg-indigo-50', label: 'CRM' },
     ERP: { icon: Settings, color: 'text-blue-600', bg: 'bg-blue-50', label: 'ERP' },
     ASSINATURA: { icon: FileSignature, color: 'text-purple-600', bg: 'bg-purple-50', label: 'Assinatura Digital' },
@@ -14,7 +14,7 @@ const TYPE_CONFIG: Record<BrokerIntegration['type'], { icon: any; color: string;
     OUTRO: { icon: Plug, color: 'text-gray-600', bg: 'bg-gray-50', label: 'Outro' },
 };
 
-const STATUS_CONFIG: Record<BrokerIntegration['status'], { icon: any; color: string; bg: string; label: string }> = {
+const STATUS_CONFIG: Record<BrokerIntegration['status'], { icon: React.ElementType; color: string; bg: string; label: string }> = {
     ATIVO: { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', label: 'Ativo' },
     INATIVO: { icon: XCircle, color: 'text-gray-400', bg: 'bg-gray-50', label: 'Inativo' },
     CONFIGURANDO: { icon: Settings, color: 'text-amber-600', bg: 'bg-amber-50', label: 'Configurando' },

@@ -1,9 +1,42 @@
 import { supabase } from '../lib/supabase';
-import { 
-    BankTransaction, 
+import {
+    BankTransaction,
     BankTransactionStatus,
     MatchType
 } from '../types';
+
+interface RawTransaction {
+    date: string;
+    amount: number;
+    description?: string;
+    memo?: string;
+    fitid?: string;
+    id?: string;
+}
+
+interface NormalizedBankTx {
+    organization_id: string;
+    bank_account_id: string;
+    external_id: string;
+    transaction_date: string;
+    amount: number;
+    direction: 'DEBIT' | 'CREDIT';
+    description_raw: string;
+    status: BankTransactionStatus;
+    fingerprint: string;
+}
+
+interface RuleCondition {
+    field: string;
+    type: 'contains' | 'equals' | 'starts_with' | 'regex';
+    value: string;
+}
+
+interface InternalTxCandidate {
+    id: string;
+    description?: string;
+    transaction_date: string;
+}
 
 export const bankReconciliationService = {
     /**
@@ -29,12 +62,12 @@ export const bankReconciliationService = {
      * Ingiere múltiplos arquivos OFX, CSV ou CNAB e cria as transações brutas de forma consolidada.
      */
     async ingestMultipleFiles(files: File[], bankAccountId: string, organizationId: string) {
-        const allNormalizedTxs: any[] = [];
+        const allNormalizedTxs: NormalizedBankTx[] = [];
 
         for (const file of files) {
             try {
                 const text = await file.text();
-                const rawTransactions: any[] = [];
+                const rawTransactions: RawTransaction[] = [];
                 const fileName = file.name.toLowerCase();
 
                 if (fileName.endsWith('.ofx')) {
@@ -56,7 +89,7 @@ export const bankReconciliationService = {
                     external_id: tx.fitid || tx.id || `ext-${Math.random().toString(36).substring(7)}`,
                     transaction_date: tx.date,
                     amount: Math.abs(tx.amount),
-                    direction: tx.amount < 0 ? 'DEBIT' : 'CREDIT',
+                    direction: (tx.amount < 0 ? 'DEBIT' : 'CREDIT') as 'DEBIT' | 'CREDIT',
                     description_raw: tx.memo || tx.description || 'Sem descrição',
                     status: 'IMPORTED' as BankTransactionStatus,
                     fingerprint: this.generateFingerprint(tx)
@@ -223,21 +256,20 @@ export const bankReconciliationService = {
         return appliedCount;
     },
 
-    evaluateRule(tx: BankTransaction, conditions: any, organizationId: string): boolean {
-        // Suporte a múltiplas condições (OR/AND)
+    evaluateRule(tx: BankTransaction, conditions: RuleCondition | RuleCondition[], organizationId: string): boolean {
         if (Array.isArray(conditions)) {
             return conditions.some(c => this.evaluateRuleSingle(tx, c, organizationId));
         }
         return this.evaluateRuleSingle(tx, conditions, organizationId);
     },
 
-    evaluateRuleSingle(tx: BankTransaction, cond: any, organizationId: string): boolean {
+    evaluateRuleSingle(tx: BankTransaction, cond: RuleCondition, organizationId: string): boolean {
         // Normaliza o nome do campo para garantir compatibilidade com versões anteriores
         const fieldName = (cond.field === 'description_norm' || cond.field === 'description') 
             ? 'description_normalized' 
             : cond.field;
             
-        const rawVal = (tx as any)[fieldName] || tx.description_normalized || tx.description_raw || '';
+        const rawVal = (tx as unknown as Record<string, unknown>)[fieldName] ?? tx.description_normalized ?? tx.description_raw ?? '';
         
         // Normalização extrema para comparação
         const normalizedFieldVal = this.normalizeText(rawVal.toString());
@@ -392,7 +424,7 @@ export const bankReconciliationService = {
         }
     },
 
-    async createSuggestion(bankTxId: string, candidates: any[], score: number) {
+    async createSuggestion(bankTxId: string, candidates: InternalTxCandidate[], score: number) {
         for (const candidate of candidates) {
             // Verifica se já existe a sugestão para evitar duplicidade
             const { data: existing } = await supabase
@@ -443,8 +475,8 @@ export const bankReconciliationService = {
         }
     },
 
-    parseCNAB240(text: string): any[] {
-        const transactions: any[] = [];
+    parseCNAB240(text: string): RawTransaction[] {
+        const transactions: RawTransaction[] = [];
         const lines = text.split('\n');
         
         lines.forEach(line => {
@@ -474,8 +506,8 @@ export const bankReconciliationService = {
         return transactions;
     },
 
-    parseCNAB400(text: string): any[] {
-        const transactions: any[] = [];
+    parseCNAB400(text: string): RawTransaction[] {
+        const transactions: RawTransaction[] = [];
         const lines = text.split('\n');
         
         lines.forEach(line => {
@@ -503,8 +535,8 @@ export const bankReconciliationService = {
         return transactions;
     },
 
-    parseOFX(text: string): any[] {
-        const transactions: any[] = [];
+    parseOFX(text: string): RawTransaction[] {
+        const transactions: RawTransaction[] = [];
         const stmTrnMatches = text.match(/<STMTTRN>([\s\S]*?)<\/STMTTRN>/g);
         
         if (stmTrnMatches) {
@@ -544,9 +576,9 @@ export const bankReconciliationService = {
         return transactions;
     },
 
-    parseCSV(text: string): any[] {
+    parseCSV(text: string): RawTransaction[] {
         const lines = text.split('\n').filter(l => l.trim());
-        const transactions: any[] = [];
+        const transactions: RawTransaction[] = [];
 
         lines.slice(1).forEach(line => {
             const cols = line.split(',');
@@ -563,7 +595,7 @@ export const bankReconciliationService = {
         return transactions;
     },
 
-    generateFingerprint(tx: any): string {
+    generateFingerprint(tx: RawTransaction): string {
         return btoa(`${tx.date}-${tx.amount}-${tx.memo || tx.description}`).substring(0, 32);
     }
 };

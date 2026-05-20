@@ -24,6 +24,7 @@ export interface CompositionComponent {
     type: SinapiType;
     quantity: number;
     category?: SinapiCategory | string;
+    nature?: string;
 }
 
 export interface SinapiItem {

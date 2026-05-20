@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BudgetEntry, ProjectSettings, SinapiItem, Organization } from '../types';
+import { BudgetEntry, ProjectSettings, SinapiItem, Organization, CompositionComponent } from '../types';
 import { exportService } from '../services/exportService';
 import { sinapiService } from '../services/sinapiService';
 import { projectService } from '../services/projectService';
@@ -152,11 +152,11 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
             settings,
             {
                 fileName: `Orcamento_${reportType}`,
-                organization: selectedOrganization,
+                organization: selectedOrganization ?? undefined,
                 showNatureBreakdown: showNatureBreakdown,
                 auxiliaryItems: auxiliaryItems
             },
-            typeForExport as any
+            typeForExport as 'ANALYTIC' | 'SYNTHETIC' | 'INPUTS'
         );
     };
 
@@ -167,11 +167,11 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
             settings,
             {
                 fileName: `Orcamento_${reportType}`,
-                organization: selectedOrganization,
+                organization: selectedOrganization ?? undefined,
                 showNatureBreakdown: showNatureBreakdown,
                 auxiliaryItems: auxiliaryItems
             },
-            typeForExport as any
+            typeForExport as 'ANALYTIC' | 'SYNTHETIC' | 'INPUTS'
         );
     };
 
@@ -225,7 +225,8 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
         }>();
 
         // Recursive function to traverse items
-        const traverse = (item: { code: string, description: string, unit: string, price: number, type: string, composition?: any[] } | null | undefined, quantityMultiplier: number, path: string[]) => {
+        type CompositionChild = { code: string; description: string; unit: string; price: number; type: string; quantity: number; nature?: string };
+        const traverse = (item: { code: string; description: string; unit: string; price: number; type: string; composition?: CompositionChild[] } | null | undefined, quantityMultiplier: number, path: string[]) => {
             if (!item) return;
 
             // Check if it's a Composition that needs explosion
@@ -244,7 +245,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
             // Decide whether to recurse or add to list
             if (isComposition && composition && composition.length > 0) {
                 // Recurse into children
-                composition.forEach((comp: any) => {
+                composition.forEach((comp) => {
                     traverse({
                         code: comp.code,
                         description: comp.description,
@@ -303,7 +304,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
     const getNatureBreakdown = (entry: BudgetEntry) => {
         const breakdown = { material: 0, labor: 0, equipment: 0, other: 0 };
 
-        const traverse = (item: any, quantity: number) => {
+        const traverse = (item: { code: string; type?: string; composition?: CompositionComponent[]; nature?: string; price?: number } | null | undefined, quantity: number) => {
             if (!item) return;
 
             const itemType = (item.type || '') as string;
@@ -316,14 +317,12 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
             }
 
             if (isComposition && composition && composition.length > 0) {
-                composition.forEach((comp: any) => {
+                composition.forEach((comp) => {
                     traverse({
                         code: comp.code,
-                        description: comp.description,
-                        unit: comp.unit,
-                        price: comp.price,
                         type: comp.type,
-                        nature: comp.nature
+                        nature: comp.nature,
+                        price: comp.price
                     }, quantity * comp.quantity);
                 });
             } else {
@@ -482,7 +481,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                     </span>
                                     <select
                                         value={detailLevel}
-                                        onChange={(e) => setDetailLevel(e.target.value as any)}
+                                        onChange={(e) => setDetailLevel(e.target.value as 'GROUP' | 'PHASE' | 'SUBPHASE' | 'ITEM')}
                                         className="bg-transparent text-sm rounded-md py-1 pr-1 outline-none cursor-pointer text-gray-700 font-bold focus:text-amber-600 transition-colors"
                                     >
                                         <option value="GROUP">Grupos</option>

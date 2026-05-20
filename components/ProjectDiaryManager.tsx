@@ -36,15 +36,11 @@ import { useStore } from '../store/useStore';
 
 
 // Bug 2: tipo explícito para substituir projects: any[]
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface ProjectSummary {
     id: string;
     name: string;
-    settings?: {
-        classification?: string;
-        linkedProjectId?: string;
-        linkedProjectName?: string;
-        [key: string]: any;
-    };
+    settings?: any;
 }
 
 interface ProjectDiaryManagerProps {
@@ -68,12 +64,12 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         localStorage.getItem('diary_editing_id')
     );
     const [activeTab, setActiveTab] = useState<'geral' | 'comentarios' | 'arquivos'>(
-        (localStorage.getItem('diary_active_tab') as any) || 'geral'
+        (localStorage.getItem('diary_active_tab') as 'geral' | 'comentarios' | 'arquivos') || 'geral'
     );
     const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
     const [isLinkingPlanningOpen, setIsLinkingPlanningOpen] = useState(false);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>(
-        (localStorage.getItem('diary_view_mode') as any) || 'list'
+        (localStorage.getItem('diary_view_mode') as 'grid' | 'list') || 'list'
     );
     const [linkedSchedule, setLinkedSchedule] = useState<ProjectSchedule | null>(null);
     const [linkedBudget, setLinkedBudget] = useState<BudgetEntry[]>([]);
@@ -492,7 +488,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         if (onSave) await onSave();
     };
 
-    const handleWeatherShiftChange = (index: number, field: keyof WeatherShift, value: any) => {
+    const handleWeatherShiftChange = (index: number, field: keyof WeatherShift, value: string) => {
         setFormData((prev: Partial<DiaryEntry>) => {
             const newShifts = [...(prev.weatherShifts || [])];
             newShifts[index] = { ...newShifts[index], [field]: value };
@@ -513,11 +509,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         setFormData({ ...formData, activities: newActivities });
     };
 
-    const handleActivityChange = (index: number, field: keyof DiaryActivity, value: any) => {
+    const handleActivityChange = (index: number, field: keyof DiaryActivity, value: string | number) => {
         setFormData((prev: Partial<DiaryEntry>) => {
             const newActivities = [...(prev.activities || [])];
             if (field === 'evolution') {
-                const num = parseInt(value, 10) || 0; // Bug 9: radix + NaN guard
+                const num = parseInt(String(value), 10) || 0; // Bug 9: radix + NaN guard
                 const plannedQty = newActivities[index].plannedQty || 0;
                 newActivities[index] = {
                     ...newActivities[index],
@@ -526,7 +522,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                     status: num === 100 ? 'Finalizada' : 'Em Andamento'
                 };
             } else if (field === 'realizedQty') {
-                const num = parseFloat(value) || 0;
+                const num = parseFloat(String(value)) || 0;
                 const plannedQty = newActivities[index].plannedQty || 1;
                 newActivities[index] = {
                     ...newActivities[index],
@@ -549,7 +545,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         setFormData({ ...formData, labor: newLabor });
     };
 
-    const handleLaborChange = (index: number, field: keyof LaborEntry, value: any) => {
+    const handleLaborChange = (index: number, field: keyof LaborEntry, value: string | number) => {
         setFormData((prev: Partial<DiaryEntry>) => {
             const newLabor = [...(prev.labor || [])];
             newLabor[index] = { ...newLabor[index], [field]: value };
@@ -817,7 +813,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                             ].map(s => (
                                                 <button
                                                     key={s.val}
-                                                    onClick={() => setFormData({ ...formData, status: s.val as any })}
+                                                    onClick={() => setFormData({ ...formData, status: s.val as DiaryEntry['status'] })}
                                                     className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${formData.status === s.val ? s.color : 'text-gray-400 hover:text-gray-600'}`}
                                                 >
                                                     {s.val}

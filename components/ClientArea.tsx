@@ -30,7 +30,7 @@ import {
     FileDown
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
-import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client } from '../types';
+import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment } from '../types';
 import { calculateProjectProgress, calculateUpcomingPhases, getPhaseSchedule, calculateRealizedFinancialProgress, calculatePlannedFinancialProgress } from '../utils/projectUtils';
 import ProjectGallery from './ProjectGallery';
 import { ClientAIInsight } from '../services/clientAiService';
@@ -79,7 +79,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const isAdmin = profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER || profile?.group === 'DESENVOLVEDOR';
 
-    const [globalClientInstallments, setGlobalClientInstallments] = React.useState<any[]>([]);
+    const [globalClientInstallments, setGlobalClientInstallments] = React.useState<PaymentInstallment[]>([]);
     
     React.useEffect(() => {
         if (clientProfile && activeTab === 'financeiro') {
@@ -310,7 +310,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     ))}
                                                 </Pie>
                                                 <RechartsTooltip
-                                                    formatter={(value: any) => `R$ ${(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                                                    formatter={(value: unknown) => `R$ ${(Number(value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
                                                 />
                                             </PieChart>
@@ -442,7 +442,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
         // Se for um perfil de cliente, garantimos que ele veja apenas as suas parcelas da obra atual
         if (clientProfile) {
-            consolidatedInsts = consolidatedInsts.filter((i: any) => i.clientId === clientProfile.id);
+            consolidatedInsts = consolidatedInsts.filter((i) => i.clientId === clientProfile.id);
         }
 
         // Adicionar parcelas globais (carregadas no useEffect via listAllClientInstallments)
@@ -470,7 +470,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         const balanceRemaining = displayTotalValue - totalPaid;
         const paidPercentage = displayTotalValue > 0 ? (totalPaid / displayTotalValue) * 100 : 0;
 
-        const handleUpdateFinancial = async (newInsts: any[]) => {
+        const handleUpdateFinancial = async (newInsts: PaymentInstallment[]) => {
             if (onUpdateSettings) {
                 const newFinInfo = { ...financialInfo, installments: newInsts, transactions: financialInfo.transactions || [] };
                 onUpdateSettings({ ...settings, financialInfo: newFinInfo });
@@ -612,7 +612,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     {['VISTA', 'PARCELADO'].map((t) => (
                                         <button
                                             key={t}
-                                            onClick={() => setGenConfig({ ...genConfig, type: t as any })}
+                                            onClick={() => setGenConfig({ ...genConfig, type: t as 'VISTA' | 'PARCELADO' })}
                                             className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
                                                 ${genConfig.type === t ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-gray-400 border border-gray-100 hover:border-indigo-200'}
                                             `}
@@ -747,10 +747,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             const remaining = total - sinal - chaves - totalBalloons;
                                             const monthlyVal = numMensais > 0 ? remaining / numMensais : 0;
 
-                                            const newInsts: any[] = [];
+                                            const newInsts: PaymentInstallment[] = [];
                                             const baseDate = new Date(startDate + 'T12:00:00');
 
-                                            if (sinal > 0) newInsts.push({ id: 's' + Math.random().toString(36).substr(2, 5), description: 'SINAL / ENTRADA', value: sinal, dueDate: new Date().toISOString().split('T')[0], status: 'PENDING' });
+                                            if (sinal > 0) newInsts.push({ id: 's' + Math.random().toString(36).substr(2, 5), description: 'SINAL / ENTRADA', value: sinal, dueDate: new Date().toISOString().split('T')[0], status: 'PENDING' as const });
 
                                             for (let i = 0; i < numMensais; i++) {
                                                 const d = new Date(baseDate);
@@ -760,7 +760,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     description: `PARCELA MENSAL ${i + 1}/${numMensais}`,
                                                     value: monthlyVal,
                                                     dueDate: d.toISOString().split('T')[0],
-                                                    status: 'PENDING'
+                                                    status: 'PENDING' as const
                                                 });
                                             }
 
@@ -772,7 +772,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     description: `BALÃO SEMESTRAL ${i + 1}/${numSeme}`,
                                                     value: valSeme,
                                                     dueDate: d.toISOString().split('T')[0],
-                                                    status: 'PENDING'
+                                                    status: 'PENDING' as const
                                                 });
                                             }
 
@@ -784,14 +784,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     description: `BALÃO ANUAL ${i + 1}/${numAnual}`,
                                                     value: valAnual,
                                                     dueDate: d.toISOString().split('T')[0],
-                                                    status: 'PENDING'
+                                                    status: 'PENDING' as const
                                                 });
                                             }
 
                                             if (chaves > 0) {
                                                 const lastDate = new Date(baseDate);
                                                 lastDate.setMonth(lastDate.getMonth() + Math.max(numMensais, numSeme * 6, numAnual * 12));
-                                                newInsts.push({ id: 'c' + Math.random().toString(36).substr(2, 5), description: 'ENTREGA DAS CHAVES', value: chaves, dueDate: lastDate.toISOString().split('T')[0], status: 'PENDING' });
+                                                newInsts.push({ id: 'c' + Math.random().toString(36).substr(2, 5), description: 'ENTREGA DAS CHAVES', value: chaves, dueDate: lastDate.toISOString().split('T')[0], status: 'PENDING' as const });
                                             }
 
                                             const newFinInfo = { ...financialInfo, paymentMethod: 'PARCELADO', installments: newInsts, transactions: financialInfo.transactions || [] };
@@ -1470,9 +1470,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     };
 
     const renderDocumentos = () => {
-        const displayDocs = currentClientDocs;
-
-        const handleDownload = (doc: any) => {
+        type ClientDoc = { name: string; category: string; url?: string; disabled?: boolean; isDummy?: boolean; date?: string };
+        const displayDocs = currentClientDocs as ClientDoc[];
+        const handleDownload = (doc: ClientDoc) => {
             if (!doc.url) {
                 alert('Arquivo físico não encontrado no servidor. Verifique se o documento foi enviado corretamente.');
                 return;
@@ -1541,7 +1541,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {viewMode === 'grid' ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
                             {displayDocs.length > 0 ? (
-                                displayDocs.map((doc: any, i) => (
+                                displayDocs.map((doc, i) => (
                                     <div key={i}
                                         onClick={() => handleDownload(doc)}
                                         className={`group flex flex-col items-center p-8 rounded-[2rem] border border-gray-50 bg-gray-50/30 hover:bg-white hover:border-indigo-100 hover:shadow-2xl hover:shadow-indigo-100/30 transition-all cursor-pointer relative ${doc.disabled ? 'opacity-50' : ''}`}
@@ -1635,7 +1635,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {displayDocs.length > 0 ? (
-                                        displayDocs.map((doc: any, i) => (
+                                        displayDocs.map((doc, i) => (
                                             <tr key={i} className="hover:bg-indigo-50/30 transition-colors group">
                                                 <td className="px-8 py-4">
                                                     <div className="flex items-center gap-4">
@@ -1767,7 +1767,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </h1>
                                     {isAdmin && clientProfile && (
                                         <button
-                                            onClick={() => onClientSelect?.(null as any)}
+                                            onClick={() => onClientSelect?.(null!)}
                                             className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-indigo-100 text-gray-500 hover:text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-transparent hover:border-indigo-200"
                                         >
                                             <Users className="w-3 h-3" />
@@ -1824,7 +1824,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
+                        onClick={() => setActiveTab(tab.id as typeof activeTab)}
                         className={`
                             flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all duration-300
                             ${activeTab === tab.id
@@ -1859,7 +1859,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             title={aiInsight.title}
                                             content={aiInsight.message}
                                             type={aiInsight.type === 'alert' ? 'warning' : aiInsight.type === 'emotional' ? 'success' : 'info'}
-                                            onAction={() => setActiveTab(aiInsight.actionable?.target as any)}
+                                            onAction={() => setActiveTab(aiInsight.actionable?.target as typeof activeTab)}
                                         />
 
                                         {/* Smart Shortcuts */}
@@ -1873,7 +1873,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 ].map((link, idx) => (
                                                     <button
                                                         key={idx}
-                                                        onClick={() => setActiveTab(link.tab as any)}
+                                                        onClick={() => setActiveTab(link.tab as typeof activeTab)}
                                                         className="w-full text-left px-4 py-3 rounded-xl bg-gray-50 hover:bg-indigo-50 text-[11px] font-bold text-gray-600 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100"
                                                     >
                                                         {link.label}

@@ -8,7 +8,55 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { SchedulingEngine } from '../utils/schedulingEngine';
-import { ResourceRole, ResourceWorker, ResourceTeam, Organization, ItemScheduleDetails, ResourceAllocation } from '../types';
+import { ResourceRole, ResourceWorker, ResourceTeam, Organization, ItemScheduleDetails, ResourceAllocation, BudgetEntry } from '../types';
+
+// Local types for capacity histogram data
+interface CapacityResourceEntry {
+    used: number;
+    capacity: number;
+    name: string;
+    taskIds: Set<string>;
+}
+
+interface CapacityDayEntry {
+    name: string;
+    timestamp: number;
+    [resourceId: string]: CapacityResourceEntry | string | number;
+}
+
+interface ChartDataEntry {
+    name: string;
+    [key: string]: string | number;
+}
+
+type AllocationStatus = 'CONFIRMED' | 'SUGGESTION' | 'GAP';
+type AllocationSource = 'COMPOSITION' | 'MANUAL';
+
+interface SmartAssignment {
+    taskId: string;
+    taskName: string;
+    roleId: string | null | undefined;
+    roleName: string;
+    allocationId?: string;
+    worker?: ResourceWorker;
+    suggestion?: ResourceWorker;
+    status: AllocationStatus;
+    source: AllocationSource;
+    compIdx?: number;
+    budgetedCost?: number;
+}
+
+interface BottleneckEntry {
+    name: string;
+    over: number;
+    used: number;
+    capacity: number;
+}
+
+interface ProjectResources {
+    roles: ResourceRole[];
+    workers: ResourceWorker[];
+}
 
 interface ResourceManagementProps {
     resources: {
@@ -31,7 +79,7 @@ interface ResourceManagementProps {
     description?: string;
     organizations?: Organization[];
     localLabel?: string;
-    budget?: any[]; // BudgetEntry[]
+    budget?: BudgetEntry[];
 }
 
 export const ResourceManagement: React.FC<ResourceManagementProps> = ({
@@ -100,7 +148,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
 
         if (allDates.length === 0) return [];
 
-        const grouped: Record<string, any> = {};
+        const grouped: Record<string, CapacityDayEntry> = {};
         allDates.forEach(dateStr => {
             const date = new Date(dateStr + 'T12:00:00');
             let key = dateStr;
@@ -128,8 +176,8 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                    resources.teams.find(t => t.id === resId)?.name || resId;
                     grouped[key][resId] = { used: 0, capacity: limit, name: resName, taskIds: new Set<string>() };
                 }
-                grouped[key][resId].used = Math.max(grouped[key][resId].used, usage.total);
-                if (usage.taskIds) usage.taskIds.forEach((tid: string) => grouped[key][resId].taskIds.add(tid));
+                (grouped[key][resId] as CapacityResourceEntry).used = Math.max((grouped[key][resId] as CapacityResourceEntry).used, usage.total);
+                if (usage.taskIds) usage.taskIds.forEach((tid: string) => (grouped[key][resId] as CapacityResourceEntry).taskIds.add(tid));
             });
         });
 
@@ -144,7 +192,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
         capacityData.forEach(day => {
             Object.entries(day).forEach(([k, v]) => {
                 if (k !== 'name' && k !== 'timestamp' && typeof v === 'object' && v !== null && 'used' in v) {
-                    usageTotals.set(k, (usageTotals.get(k) || 0) + (v as any).used);
+                    usageTotals.set(k, (usageTotals.get(k) || 0) + (v as CapacityResourceEntry).used);
                 }
             });
         });
@@ -170,21 +218,21 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
             capacityData.forEach(day => {
                 Object.entries(day).forEach(([k, v]) => {
                     if (k !== 'name' && k !== 'timestamp' && typeof v === 'object' && v !== null && 'used' in v) {
-                        usageTotals.set(k, (usageTotals.get(k) || 0) + (v as any).used);
+                        usageTotals.set(k, (usageTotals.get(k) || 0) + (v as CapacityResourceEntry).used);
                     }
                 });
             });
             const top10Ids = Array.from(usageTotals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10).map(x => x[0]);
 
             return capacityData.map(d => {
-                const entry: any = { name: d.name };
+                const entry: ChartDataEntry = { name: d.name as string };
                 // Garantir que todas as chaves existam (mesmo com 0) para o Recharts não falhar
-                chartSeries.forEach(s => entry[s] = 0);
+                chartSeries.forEach(s => { entry[s] = 0; });
                 let othersSum = 0;
 
                 Object.entries(d).forEach(([k, v]) => {
                     if (k !== 'name' && k !== 'timestamp' && typeof v === 'object' && v !== null && 'used' in v) {
-                        const resVal = v as any;
+                        const resVal = v as CapacityResourceEntry;
                         if (top10Ids.includes(k)) {
                             entry[resVal.name] = resVal.used;
                         } else {
@@ -199,36 +247,39 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
             return capacityData.map(d => {
                 let used = 0, cap = 0, name = '';
                 const resVal = d[selectedResourceId];
-                if (resVal) { used = resVal.used; cap = resVal.capacity; name = resVal.name; }
-                return { name: d.name, used, capacity: cap, resourceName: name };
+                if (resVal && typeof resVal === 'object' && 'used' in resVal) {
+                    const rv = resVal as CapacityResourceEntry;
+                    used = rv.used; cap = rv.capacity; name = rv.name;
+                }
+                return { name: d.name as string, used, capacity: cap, resourceName: name };
             });
         }
     }, [capacityData, selectedResourceId, chartSeries]);
 
     const capacityStats = useMemo(() => {
         let totalUt = 0, utDays = 0, overloadedP = 0;
-        const bs: any[] = [];
+        const bs: BottleneckEntry[] = [];
         const hiringGaps = new Map<string, { roleName: string; totalHours: number; periods: Set<string> }>();
 
         capacityData.forEach(day => {
             let dayOver = false, dUsed = 0, dCap = 0;
             Object.entries(day).forEach(([k, v]) => {
                 if (k !== 'name' && k !== 'timestamp' && typeof v === 'object' && v !== null && 'used' in v) {
-                    const res = v as any;
+                    const res = v as CapacityResourceEntry;
                     // Somar todos se 'all', senão apenas o selecionado
                     if (selectedResourceId === 'all' || k === selectedResourceId) {
-                        dUsed += res.used; 
+                        dUsed += res.used;
                         dCap += res.capacity;
                         if (res.used > res.capacity) {
                             dayOver = true;
-                            bs.push({ name: `${res.name} (${day.name})`, over: res.used - res.capacity, used: res.used, capacity: res.capacity });
+                            bs.push({ name: `${res.name} (${day.name as string})`, over: res.used - res.capacity, used: res.used, capacity: res.capacity });
                         }
-                        
+
                         // Detectar gap de contratação (demanda > capacidade do cargo)
                         if (res.used > res.capacity && resources.roles.some(r => r.id === k)) {
                              const existing = hiringGaps.get(k) || { roleName: res.name, totalHours: 0, periods: new Set() };
                              existing.totalHours += (res.used - res.capacity) * (capacityScale === 'day' ? 1 : capacityScale === 'week' ? 5 : 22);
-                             existing.periods.add(day.name);
+                             existing.periods.add(day.name as string);
                              hiringGaps.set(k, existing);
                         }
                     }
@@ -247,9 +298,9 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
             if (!task) return;
 
             const compositions = budgetItem.sinapiItem?.composition || [];
-            const laborNeeds = compositions.filter((c: any) => SchedulingEngine.isLaborItem(c));
+            const laborNeeds = compositions.filter(c => SchedulingEngine.isLaborItem(c));
 
-            laborNeeds.forEach((comp: any) => {
+            laborNeeds.forEach(comp => {
                 const desc = String(comp.description || '').toUpperCase();
                 const LABOR_ROLES_KEYWORDS = ['PEDREIRO', 'SERVENTE', 'CARPINTEIRO', 'ARMADOR', 'PINTOR', 'ELETRICISTA', 'ENCANADOR', 'MESTRE', 'ENCARREGADO', 'GESSEIRO', 'TELHADISTA', 'SERRALHEIRO', 'BOMBEIRO', 'AJUDANTE', 'AUXILIAR', 'TEC', 'OPERADOR', 'MOTORISTA', 'MONTADOR', 'OFICIAL'];
                 const kw = LABOR_ROLES_KEYWORDS.find(k => desc.includes(k));
@@ -257,7 +308,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
 
                 const role = resources.roles.find(r => r.name.toUpperCase().includes(kw));
                 if (role) {
-                    const hasPhysicalAssigned = task.allocations?.some((a: any) => {
+                    const hasPhysicalAssigned = task.allocations?.some(a => {
                         if (a.resourceType === 'WORKER') {
                             const w = resources.workers.find(worker => worker.id === a.resourceId);
                             return w?.roleId === role.id;
@@ -287,7 +338,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
     // --- Smart Suggestion Logic (Budget Based) ---
     const smartAssignments = useMemo(() => {
         if (!itemSchedules?.length) return [];
-        const list: any[] = [];
+        const list: SmartAssignment[] = [];
         const allWorkers = resources.workers;
         const LABOR_ROLES_KEYWORDS = [
             'PEDREIRO', 'SERVENTE', 'CARPINTEIRO', 'ARMADOR', 'PINTOR', 
@@ -304,20 +355,20 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
             // 1. Verificar Composition (Mão de Obra Técnica do SINAPI)
             if (budgetItem?.sinapiItem?.composition) {
                 const compositions = budgetItem.sinapiItem.composition || [];
-                const laborNeeds = compositions.filter((c: any) => SchedulingEngine.isLaborItem(c));
+                const laborNeeds = compositions.filter(c => SchedulingEngine.isLaborItem(c));
 
-                laborNeeds.forEach((comp: any) => {
+                laborNeeds.forEach(comp => {
                     const desc = String(comp.description || '').toUpperCase();
                     const matchedKeyword = LABOR_ROLES_KEYWORDS.find(k => desc.includes(k));
                     if (!matchedKeyword) return;
 
                     let systemRole = resources.roles.find(r => r.name.toUpperCase() === matchedKeyword);
                     if (!systemRole) systemRole = resources.roles.find(r => r.name.toUpperCase().includes(matchedKeyword));
-                    
+
                     if (!systemRole) return;
                     foundTechnical = true;
 
-                    const existingPhysical = (taskSchedule.allocations || []).find((a: any) => {
+                    const existingPhysical = (taskSchedule.allocations || []).find(a => {
                         if (a.resourceType === 'WORKER') {
                             const w = allWorkers.find(worker => worker.id === a.resourceId);
                             return w?.roleId === systemRole!.id;
@@ -325,7 +376,8 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                         return false;
                     });
 
-                    const budgetedCost = comp.unit_price || comp.unitPrice || comp.price || 0;
+                    const compAny = comp as unknown as { unit_price?: number; unitPrice?: number };
+                    const budgetedCost = compAny.unit_price || compAny.unitPrice || comp.price || 0;
 
                     if (existingPhysical) {
                         const worker = allWorkers.find(w => w.id === existingPhysical.resourceId);
@@ -349,7 +401,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                     } else if (alloc.resourceType === 'ROLE') {
                         const role = resources.roles.find(r => r.id === alloc.resourceId);
                         const suggestion = allWorkers.find(w => w.roleId === role?.id);
-                        list.push({ taskId: taskSchedule.id, taskName, roleId: role?.id, roleName: role?.name, allocationId: alloc.id, suggestion, status: suggestion ? 'SUGGESTION' : 'GAP', source: 'MANUAL' });
+                        list.push({ taskId: taskSchedule.id, taskName, roleId: role?.id, roleName: role?.name || '', allocationId: alloc.id, suggestion, status: suggestion ? 'SUGGESTION' : 'GAP', source: 'MANUAL' });
                     }
                 }
             });
@@ -403,7 +455,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
     }, [smartAssignments, allocationFilter, itemSchedules]);
 
     const groupedAssignments = useMemo(() => {
-        const groups: Record<string, any[]> = {};
+        const groups: Record<string, SmartAssignment[]> = {};
         (filteredAssignments || []).forEach(a => {
             const role = a?.roleName || 'Sem Cargo';
             if (!groups[role]) groups[role] = [];
@@ -433,7 +485,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
         activeAllocations.forEach((main, i) => {
             activeAllocations.forEach((other, j) => {
                 if (i === j) return;
-                if (main.worker.id !== other.worker.id) return;
+                if (main.worker?.id !== other.worker?.id) return;
 
                 // Overlap: (A.Inicio <= B.Fim) && (A.Fim >= B.Inicio)
                 const hasOverlap = (main.start! <= other.end!) && (main.end! >= other.start!);
@@ -449,14 +501,14 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
         return conflicts;
     }, [smartAssignments, itemSchedules]);
 
-    const handleConfirmSuggestion = (item: any) => {
+    const handleConfirmSuggestion = (item: SmartAssignment) => {
         if (!item.suggestion) return;
         const newSchedules = itemSchedules.map(task => {
             if (task.id === item.taskId) {
                 const currentAllocations = task.allocations || [];
                 const newAlloc: ResourceAllocation = {
                     id: crypto.randomUUID(),
-                    resourceId: item.suggestion.id,
+                    resourceId: item.suggestion!.id,
                     resourceType: 'WORKER' as const,
                     quantity: 1,
                     hoursPerDay: 8
@@ -666,7 +718,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                 
                 <div className="flex gap-8">
                     {['roles', 'workers', 'teams', 'capacity', 'allocation'].map(tab => (
-                        <button key={tab} onClick={() => { setActiveTab(tab as any); setIsAdding(false); }} className={`pb-4 text-sm font-bold transition-all border-b-2 ${activeTab === tab ? 'text-blue-600 border-blue-600' : 'text-gray-400 border-transparent hover:text-gray-600'}`}>
+                        <button key={tab} onClick={() => { setActiveTab(tab as 'roles' | 'workers' | 'teams' | 'capacity' | 'allocation'); setIsAdding(false); }} className={`pb-4 text-sm font-bold transition-all border-b-2 ${activeTab === tab ? 'text-blue-600 border-blue-600' : 'text-gray-400 border-transparent hover:text-gray-600'}`}>
                             {tab === 'roles' ? 'Funções' : tab === 'workers' ? 'Trabalhadores' : tab === 'teams' ? 'Equipes' : tab === 'capacity' ? 'Capacidade' : 'Alocação'}
                         </button>
                     ))}
@@ -793,7 +845,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                 <span className="text-[10px] font-black uppercase text-gray-400 block mb-1">Escala</span>
                                 <select 
                                     value={capacityScale} 
-                                    onChange={(e) => setCapacityScale(e.target.value as any)}
+                                    onChange={(e) => setCapacityScale(e.target.value as 'day' | 'week' | 'month')}
                                     className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-lg outline-none cursor-pointer"
                                 >
                                     <option value="day">Diário</option>
@@ -910,7 +962,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                         <div className="flex justify-end items-center gap-3 px-2">
                              <select 
                                 value={allocationFilter}
-                                onChange={(e) => setAllocationFilter(e.target.value as any)}
+                                onChange={(e) => setAllocationFilter(e.target.value as 'all' | 'thisWeek' | 'next15Days' | 'thisMonth')}
                                 className="text-[10px] font-black uppercase text-gray-600 bg-white border border-gray-200 px-4 py-2.5 rounded-2xl outline-none focus:border-blue-300 transition-all hover:bg-gray-50"
                              >
                                 <option value="all">Todo o Cronograma</option>
@@ -1071,7 +1123,7 @@ const ResourceImportModal: React.FC<{
     onClose: () => void; 
     organizations: Organization[]; 
     onConfirm: (r: string[], w: string[], t: string[], org: string) => void; 
-    projectResources: any;
+    projectResources: ProjectResources;
     initialTab: string;
 }> = ({ isOpen, onClose, organizations, onConfirm, projectResources, initialTab }) => {
     const [selectedOrgId, setSelectedOrgId] = useState<string>(organizations[0]?.id || '');
@@ -1120,7 +1172,7 @@ const ResourceImportModal: React.FC<{
                                 <div className="mb-6">
                                     <div className="grid grid-cols-2 gap-3">
                                         {filteredRoles.map(r => {
-                                            const exists = projectResources.roles.some((pr: any) => pr.name.toLowerCase() === r.name.toLowerCase());
+                                            const exists = projectResources.roles.some(pr => pr.name.toLowerCase() === r.name.toLowerCase());
                                             return (
                                                 <label key={r.id} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-all">
                                                     <input type="checkbox" checked={selRoles.has(r.id)} onChange={() => { const n = new Set(selRoles); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); setSelRoles(n); }} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" />
@@ -1140,7 +1192,7 @@ const ResourceImportModal: React.FC<{
                                     <div className="grid grid-cols-2 gap-3">
                                         {filteredWorkers.map(w => {
                                             const roleName = selectedOrg?.resources?.roles.find(r => r.id === w.roleId)?.name || 'Sem cargo';
-                                            const exists = projectResources.workers.some((pw: any) => pw.name.toLowerCase() === w.name.toLowerCase());
+                                            const exists = projectResources.workers.some(pw => pw.name.toLowerCase() === w.name.toLowerCase());
                                             return (
                                                 <label key={w.id} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-all">
                                                     <input type="checkbox" checked={selWorkers.has(w.id)} onChange={() => { const n = new Set(selWorkers); if (n.has(w.id)) n.delete(w.id); else n.add(w.id); setSelWorkers(n); }} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" />

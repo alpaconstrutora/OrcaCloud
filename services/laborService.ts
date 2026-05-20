@@ -220,7 +220,9 @@ export const laborService = {
     },
 
     async updateEmployee(id: string, updates: Partial<Employee>): Promise<Employee> {
-        const { id: _id, created_at, updated_at, allocations, ...cleanUpdates } = updates as any;
+        // Strip computed/join fields before sending to DB
+        const { id: _id, created_at: _ca, updated_at: _ua, ...cleanUpdates } =
+            updates as Partial<Employee> & { allocations?: unknown };
         const { data, error } = await supabase
             .from('employees')
             .update(cleanUpdates)
@@ -283,14 +285,15 @@ export const laborService = {
         const { data, error } = await query.order('name');
         if (error) throw error;
 
-        return (data || []).map((t: any) => ({
+        type TeamJoin = Omit<LaborTeam, 'members'> & { members?: Array<{ employee: Employee }> };
+        return (data as unknown as TeamJoin[] || []).map(t => ({
             ...t,
-            members: (t.members || []).map((m: any) => m.employee).filter(Boolean),
+            members: (t.members || []).map(m => m.employee).filter(Boolean) as Employee[],
         }));
     },
 
     async createTeam(team: Omit<LaborTeam, 'id' | 'created_at' | 'members' | 'foreman_name'>): Promise<LaborTeam> {
-        const { members, foreman_name, ...cleanTeam } = team as any;
+        const cleanTeam = team;
         const { data, error } = await supabase
             .from('labor_teams')
             .insert(cleanTeam)
@@ -301,7 +304,7 @@ export const laborService = {
     },
 
     async updateTeam(id: string, updates: Partial<LaborTeam>): Promise<LaborTeam> {
-        const { id: _id, members, foreman_name, ...clean } = updates as any;
+        const { id: _id, members: _members, foreman_name: _fn, ...clean } = updates;
         const { data, error } = await supabase
             .from('labor_teams')
             .update(clean)
@@ -364,15 +367,15 @@ export const laborService = {
         if (error) throw error;
 
         // Filtrar por org_id via join
-        const orgData = (data || []).filter((e: any) => !filters.orgId || e.employee?.org_id === filters.orgId);
-        return orgData.map((e: any) => ({
+        const orgData = (data || []).filter((e: TimeEntry & { employee?: { name: string; org_id: string } }) => !filters.orgId || e.employee?.org_id === filters.orgId);
+        return orgData.map(e => ({
             ...e,
             employee_name: e.employee?.name,
-        }));
+        })) as TimeEntry[];
     },
 
     async createTimeEntry(entry: Omit<TimeEntry, 'id' | 'total_cost' | 'created_at' | 'employee_name'>): Promise<TimeEntry> {
-        const { employee_name, ...clean } = entry as any;
+        const clean = entry;
         const { data, error } = await supabase
             .from('time_entries')
             .insert(clean)
@@ -383,7 +386,7 @@ export const laborService = {
     },
 
     async updateTimeEntry(id: string, updates: Partial<TimeEntry>): Promise<TimeEntry> {
-        const { id: _id, total_cost, employee_name, ...clean } = updates as any;
+        const { id: _id, total_cost: _tc, employee_name: _en, ...clean } = updates;
         const { data, error } = await supabase
             .from('time_entries')
             .update(clean)
@@ -441,17 +444,18 @@ export const laborService = {
         const { data, error } = await query;
         if (error) throw error;
 
-        const orgData = (data || []).filter((e: any) => !filters.orgId || e.employee?.org_id === filters.orgId);
+        type ProdRow = ProductivityLog & { employee?: { name: string; org_id: string }; team?: { name: string } };
+        const orgData = (data || []).filter((e: ProdRow) => !filters.orgId || e.employee?.org_id === filters.orgId);
 
-        return orgData.map((p: any) => ({
+        return orgData.map((p: ProdRow) => ({
             ...p,
             employee_name: p.employee?.name,
             team_name: p.team?.name,
-        }));
+        })) as ProductivityLog[];
     },
 
     async createProductivityLog(log: Omit<ProductivityLog, 'id' | 'man_hour_per_unit' | 'productivity_pct' | 'created_at' | 'employee_name' | 'team_name'>): Promise<ProductivityLog> {
-        const { employee_name, team_name, ...clean } = log as any;
+        const clean = log;
         const { data, error } = await supabase
             .from('productivity_logs')
             .insert(clean)
@@ -489,7 +493,8 @@ export const laborService = {
         const { data, error } = await query;
         if (error) throw error;
 
-        const entries = ((data || []) as any[]).filter(e => !orgId || e.employee?.org_id === orgId);
+        type CostEntry = { hours_worked: number; overtime_hours: number; total_cost: number; project_name?: string; employee?: { id: string; name: string; org_id: string }; team?: { id: string; name: string } };
+        const entries = ((data as unknown as CostEntry[]) || []).filter(e => !orgId || e.employee?.org_id === orgId);
 
         const totalHours = entries.reduce((s, e) => s + (e.hours_worked || 0), 0);
         const totalOvertimeHours = entries.reduce((s, e) => s + (e.overtime_hours || 0), 0);
@@ -546,7 +551,8 @@ export const laborService = {
         const { data, error } = await query;
         if (error) throw error;
 
-        return (data || []).map((d: any) => ({
+        type DocRow = EmployeeDocument & { employee?: { name: string } };
+        return (data || [] as DocRow[]).map((d: DocRow) => ({
             ...d,
             employee_name: d.employee?.name
         }));
@@ -638,7 +644,8 @@ export const laborService = {
         const { data, error } = await query;
         if (error) throw error;
 
-        return (data || []).map((d: any) => ({
+        type DocRow = EmployeeDocument & { employee?: { name: string } };
+        return (data || [] as DocRow[]).map((d: DocRow) => ({
             ...d,
             employee_name: d.employee?.name
         }));
@@ -656,7 +663,7 @@ export const laborService = {
         if (error) return 0;
         
         let total = 0;
-        data.forEach((org: any) => {
+        (data as Array<{ resources?: { workers?: unknown[] } }>).forEach(org => {
             const workers = org.resources?.workers || [];
             total += workers.length;
         });

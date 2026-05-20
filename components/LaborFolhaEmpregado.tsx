@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, AlertCircle, Printer, RefreshCw } from 'lucide-react';
-import { payrollService } from '../services/payrollService';
+import { payrollService, PayrollRubric } from '../services/payrollService';
 import { supabase } from '../lib/supabase';
 
 interface LaborFolhaEmpregadoProps {
@@ -63,19 +63,20 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
             }
 
             // Nome da obra (primeiro worksiteId não nulo)
-            const firstRunWithSite = closedRuns.find(r => (r as any).worksite_id);
-            if ((firstRunWithSite as any)?.worksite_id) {
+            type RunWithWorksite = typeof closedRuns[number] & { worksite_id?: string };
+            const firstRunWithSite = closedRuns.find(r => (r as RunWithWorksite).worksite_id) as RunWithWorksite | undefined;
+            if (firstRunWithSite?.worksite_id) {
                 const { data: ws } = await supabase
                     .from('worksites')
                     .select('name')
-                    .eq('id', (firstRunWithSite as any).worksite_id)
+                    .eq('id', firstRunWithSite.worksite_id)
                     .single();
                 setWorksiteName(ws?.name || '');
             }
 
             // Rubricas para classificar itens
             const rubrics = await payrollService.listRubrics();
-            const rubricByCode: Record<string, any> = Object.fromEntries(rubrics.map(r => [r.code, r]));
+            const rubricByCode: Record<string, PayrollRubric> = Object.fromEntries(rubrics.map(r => [r.code, r]));
 
             // Identificar INSS, IRRF, FGTS, Salário Família por nome de rubrica
             const isINSS = (name: string) =>
@@ -150,7 +151,7 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
                                 rubName.toUpperCase().includes('SALÁRIO') ||
                                 rubName.toUpperCase().includes('SALARIO') ||
                                 rubName.toUpperCase().includes('BASE') ||
-                                rub?.is_base_salary;
+                                (rub as unknown as { is_base_salary?: boolean })?.is_base_salary;
                             if (isBase) {
                                 byEmp[item.employee_id].salario += abs;
                             } else {
@@ -177,7 +178,7 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
                 .select('id, name, registration_number')
                 .in('id', empIds);
             const empMap: Record<string, { name: string; seq: number }> = Object.fromEntries(
-                (empRows || []).map((e: any) => [e.id, { name: e.name, seq: e.registration_number || 0 }])
+                (empRows || []).map((e: { id: string; name: string; registration_number?: number }) => [e.id, { name: e.name, seq: e.registration_number || 0 }])
             );
 
             // Montar linhas
@@ -196,7 +197,7 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
             lista.forEach((r, i) => { r.seq = i + 1; });
 
             setRows(lista);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('[FolhaEmpregado]', err);
             setError('Erro ao buscar dados da folha. Verifique o console.');
         } finally {

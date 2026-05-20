@@ -136,8 +136,8 @@ const DetectConditionModal: React.FC<Props> = ({
       }
 
       onCreated(conditionId);
-    } catch (e: any) {
-      setError(e.message ?? 'Erro ao registrar condição');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao registrar condição');
       setIsSubmitting(false);
     }
   };
@@ -343,7 +343,7 @@ const DetectConditionModal: React.FC<Props> = ({
             Cancelar
           </button>
           <button
-            onClick={handleSubmit as any}
+            onClick={handleSubmit as React.MouseEventHandler<HTMLButtonElement>}
             disabled={isSubmitting}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
           >

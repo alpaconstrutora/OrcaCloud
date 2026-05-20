@@ -81,12 +81,13 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setSuppliers(sup || []);
             setCostCenters(cc || []);
             setCharts(ch || []);
-            setProjects((projs || [])
-                .filter((p: any) =>
+            type ProjectRow = { id: string; name: string; settings?: { classification?: string } };
+            setProjects(((projs || []) as ProjectRow[])
+                .filter((p) =>
                     p.settings?.classification === 'OBRA' &&
                     !/gest[aã]o\s+comercial/i.test(p.name ?? '')
                 )
-                .map((p: any) => ({ id: p.id, name: p.name })));
+                .map((p) => ({ id: p.id, name: p.name })));
         }).catch(err => console.warn('falha ao carregar registros', err));
     }, [organizationId]);
 
@@ -161,8 +162,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 setValor(extraction.campos.valor.valor != null ? String(extraction.campos.valor.valor) : '');
                 setVencimento(extraction.campos.vencimento.valor ?? '');
             }
-        } catch (err: any) {
-            setError(err.message || 'Falha na extração');
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha na extração');
         } finally {
             setUploading(false);
         }
@@ -199,8 +201,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             } else {
                 setBoleto(updated);
             }
-        } catch (err: any) {
-            setError(err.message || 'Falha ao salvar boleto');
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha ao salvar boleto');
             setBusy(false);
         }
     }
@@ -223,8 +226,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setVencimento(updated.vencimento ?? '');
             setLinhaManual('');
             setInfo('Linha digitável processada com sucesso.');
-        } catch (err: any) {
-            setError(err.message || 'Falha ao processar linha digitável');
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha ao processar linha digitável');
         } finally {
             setBusy(false);
         }
@@ -247,8 +251,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setBoleto(updated);
             setInfo('Boleto atualizado.');
             onSaved(updated);
-        } catch (err: any) {
-            setError(err.message || 'Falha ao salvar');
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha ao salvar');
         } finally {
             setBusy(false);
         }
@@ -268,8 +273,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setBoleto(updated);
             setInfo('Boleto aprovado e lançado em contas a pagar.');
             onSaved(updated);
-        } catch (err: any) {
-            setError(err.message || 'Falha ao aprovar');
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha ao aprovar');
         } finally {
             setBusy(false);
         }
@@ -282,8 +288,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             const updated = await boletoService.marcarPago(boleto.id, organizationId, userEmail);
             setBoleto(updated);
             onSaved(updated);
-        } catch (err: any) {
-            setError(err.message || 'Falha ao marcar como pago');
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha ao marcar como pago');
         } finally {
             setBusy(false);
         }
@@ -305,13 +312,14 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 state:        novoForn.state.trim() || undefined,
                 zip_code:     novoForn.zip_code.trim() || undefined,
                 organization_id: organizationId,
-            } as any);
+            });
             setSuppliers(prev => [...prev, criado].sort((a, b) => a.name.localeCompare(b.name)));
             setSupplierId(criado.id);
             setShowNovoFornecedor(false);
             setInfo(`Fornecedor "${criado.name}" cadastrado e selecionado.`);
-        } catch (err: any) {
-            setError(err.message || 'Falha ao cadastrar fornecedor');
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha ao cadastrar fornecedor');
         } finally {
             setSalvandoForn(false);
         }
@@ -326,8 +334,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             const updated = await boletoService.cancelar(boleto.id, organizationId, motivo, userEmail);
             setBoleto(updated);
             onSaved(updated);
-        } catch (err: any) {
-            setError(err.message || 'Falha ao cancelar');
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha ao cancelar');
         } finally {
             setBusy(false);
         }
@@ -341,8 +350,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             await boletoService.excluirRascunho(boleto.id, organizationId, userEmail);
             onSaved({ ...boleto, status: 'cancelado' }); // sinal de atualização
             onClose();
-        } catch (err: any) {
-            setError(err.message || 'Falha ao excluir');
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha ao excluir');
             setBusy(false);
         }
     }

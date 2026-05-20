@@ -138,7 +138,7 @@ const App: React.FC = () => {
     handleDeleteOrganization,
     handleContractSubmit
   } = useProjectOperations({
-    organizations, projects, projectSettings, projectModalMode, projectId, budget, activeOrganizationId, activeView, session,
+    organizations, projects: projects as { id: string; name: string; settings?: ProjectSettings }[], projectSettings, projectModalMode, projectId, budget, activeOrganizationId, activeView, session,
     fetchProjects, fetchOrganizations, setProjectSettings, setBudget, setProjectId,
     setIsProjectModalOpen, setProjectModalInitialClassification, showToast, setActiveView,
     editingOrganizationId, setIsCreatingOrganization, setEditingOrganizationId,
@@ -230,7 +230,7 @@ const App: React.FC = () => {
         projects={projects}
         organizations={organizations}
         projectId={projectId}
-        session={session}
+        session={session as import('@supabase/supabase-js').Session | null}
         activeOrganizationId={activeOrganizationId}
         setActiveOrganizationId={setActiveOrganizationId}
         clientProfile={clientProfile}
@@ -301,7 +301,8 @@ const App: React.FC = () => {
       <ProjectModal
         isOpen={isProjectModalOpen}
         onClose={() => setIsProjectModalOpen(false)}
-        onSubmit={handleUpsertProject}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onSubmit={handleUpsertProject as (data: any) => void}
         initialData={projectModalMode === 'edit' ? projectSettings as any : undefined}
         mode={projectModalMode as any}
         initialClassification={projectModalInitialClassification}
@@ -328,7 +329,7 @@ const App: React.FC = () => {
       <ContractModal
         isOpen={isCreatingContract}
         onClose={() => { setIsCreatingContract(false); setEditingContract(null); }}
-        onSubmit={handleContractSubmit}
+        onSubmit={handleContractSubmit as unknown as (data: Partial<Contract>) => Promise<void>}
         projectId={projectId || ''}
         organizationId={activeOrganizationId || undefined}
         initialData={editingContract || undefined}

@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { projectService } from './projectService';
 import { validateAllocationTotal } from '../lib/validators';
+import type { ProjectSettings } from '../types';
 
 // Contribuições de Terceiros (taxas parafiscais) — alíquotas incidentes sobre a folha bruta
 export interface TerceiroTax { code: string; name: string; rate: number }
@@ -103,10 +104,49 @@ export interface PayrollAuditLog {
     action: 'CREATE' | 'UPDATE' | 'DELETE';
     entity_type: 'RUBRIC' | 'EVENT' | 'FISCAL_BRACKET' | 'PAYROLL_RUN';
     entity_id: string;
-    old_data?: any;
-    new_data?: any;
+    old_data?: unknown;
+    new_data?: unknown;
     description?: string;
     created_at?: string;
+}
+
+// Resultado de folha com join do colaborador
+export interface PayrollResultWithEmployee extends PayrollResult {
+    employee?: {
+        name: string;
+        role: string;
+        cpf: string;
+        base_salary: number;
+        hourly_cost: number;
+        org_id: string;
+    };
+}
+
+// Transação interna para tabela internal_transactions
+interface InternalTransaction {
+    organization_id: string;
+    source_system: 'LABOR';
+    reference_id: string;
+    transaction_date: string;
+    amount: number;
+    direction: 'DEBIT' | 'CREDIT';
+    description: string;
+    category: string;
+    status: 'PENDING' | 'PAID';
+}
+
+// Lançamento financeiro interno a projetos (settings.financialInfo.transactions)
+interface ProjectFinancialTx {
+    id: string;
+    date: string;
+    type: string;
+    category: string;
+    description: string;
+    value: number;
+    status: string;
+    notes?: string;
+    costCenter?: string;
+    chartOfAccounts?: string;
 }
 
 export interface PayrollResult {
@@ -255,9 +295,9 @@ export const payrollService = {
     async duplicateRun(id: string) {
         // 1. Obter a folha original
         const original = await this.getRun(id);
-        
+
         // 2. Criar nova folha (como rascunho)
-        const { id: oldId, created_at, ...rest } = original as any;
+        const { id: oldId, created_at, ...rest } = original as PayrollRun;
         const newRun = await this.createRun({
             ...rest,
             status: 'RASCUNHO'
@@ -446,7 +486,7 @@ export const payrollService = {
             .order('employee_id');
 
         if (error) throw error;
-        return data as any[];
+        return data as PayrollResultWithEmployee[];
     },
 
     async getPayrollResult(runId: string, employeeId: string) {
@@ -461,7 +501,7 @@ export const payrollService = {
             .single();
 
         if (error) throw error;
-        return data as any;
+        return data as PayrollResultWithEmployee;
     },
 
     async getEmployeeItems(runId: string, employeeId: string) {
@@ -549,7 +589,7 @@ export const payrollService = {
             .eq('reference_period', currentPeriod);
         
         if (error) throw error;
-        return (data || []).map((a: any) => ({
+        return (data || []).map((a: EmployeeAllocation & { worksite?: { name: string } }) => ({
             ...a,
             worksite_name: a.worksite?.name
         })) as EmployeeAllocation[];
@@ -680,9 +720,9 @@ export const payrollService = {
 
         // 2. Obter todos os resultados da folha + nomes dos colaboradores
         const results = await this.listResultsByRun(runId);
-        const empIds = results.map((r: any) => r.employee_id).filter(Boolean);
+        const empIds = results.map(r => r.employee_id).filter(Boolean);
         const { data: empRows } = await supabase.from('employees').select('id, name').in('id', empIds);
-        const empNameMap: Record<string, string> = Object.fromEntries((empRows || []).map((e: any) => [e.id, e.name]));
+        const empNameMap: Record<string, string> = Object.fromEntries((empRows || []).map((e: { id: string; name: string }) => [e.id, e.name]));
 
         // 3. Obter todas as alocações da organização para o período
         const summary: Record<string, { id: string, name: string, cost: number, netSalary: number, encargos: number, gross: number, contribuicoes: number, employees: string[] }> = {};
@@ -699,7 +739,7 @@ export const payrollService = {
             const grossSalary = res.gross || 0;
             const encargos = Math.max(0, employerCost - netSalary);
             const contribuicoes = Math.round(grossSalary * 0.058 * 100) / 100;
-            const empName = empNameMap[(res as any).employee_id] || '';
+            const empName = empNameMap[res.employee_id] || '';
 
             if (allocations.length === 0) {
                 unallocatedCost += employerCost;
@@ -745,7 +785,7 @@ export const payrollService = {
             unallocatedEncargos,
             unallocatedGross,
             unallocatedContribuicoes,
-            total: results.reduce((s: number, r: any) => s + (r.employer_cost || 0), 0)
+            total: results.reduce((s: number, r: PayrollResultWithEmployee) => s + (r.employer_cost || 0), 0)
         };
     },
 
@@ -773,13 +813,14 @@ export const payrollService = {
                 .filter('settings->>organizationId', 'eq', run.org_id);
             if (allProjects && allProjects.length > 0) {
                 for (const proj of allProjects) {
-                    const info = (proj.settings as any)?.financialInfo;
+                    const settings = proj.settings as ProjectSettings;
+                    const info = settings?.financialInfo;
                     if (!info?.transactions?.length) continue;
-                    const cleaned = info.transactions.filter((t: any) => !String(t.id || '').startsWith(laborPrefix));
+                    const cleaned = (info.transactions as ProjectFinancialTx[]).filter(t => !String(t.id || '').startsWith(laborPrefix));
                     if (cleaned.length < info.transactions.length) {
                         await supabase
                             .from('projects')
-                            .update({ settings: { ...(proj.settings as any), financialInfo: { ...info, transactions: cleaned } } })
+                            .update({ settings: { ...settings, financialInfo: { ...info, transactions: cleaned } } })
                             .eq('id', proj.id);
                         console.log(`[PAYROLL-SYNC] Limpeza: removidas ${info.transactions.length - cleaned.length} entradas antigas do projeto ${proj.id}`);
                     }
@@ -793,24 +834,25 @@ export const payrollService = {
                 .eq('source_system', 'LABOR')
                 .like('reference_id', `${laborPrefix}%`);
             console.log(`[PAYROLL-SYNC] Limpeza global concluída`);
-        } catch (cleanErr: any) {
-            console.warn(`[PAYROLL-SYNC] Aviso na limpeza global: ${cleanErr?.message || cleanErr}`);
+        } catch (cleanErr: unknown) {
+            const msg = cleanErr instanceof Error ? cleanErr.message : String(cleanErr);
+            console.warn(`[PAYROLL-SYNC] Aviso na limpeza global: ${msg}`);
         }
 
         // Helper: busca itens de payroll com fallback V1(run_id) → V2(payroll_run_id)
-        const fetchPayrollItems = async (selectFields: string, codes: string[]): Promise<any[]> => {
+        const fetchPayrollItems = async (selectFields: string, codes: string[]): Promise<PayrollItem[]> => {
             const { data: v2, error: e2 } = await supabase
                 .from('payroll_items')
                 .select(selectFields)
                 .eq('payroll_run_id', runId)
                 .in('code', codes);
-            if (!e2 && v2 && v2.length > 0) return v2 as any[];
+            if (!e2 && v2 && v2.length > 0) return v2 as unknown as PayrollItem[];
             const { data: v1 } = await supabase
                 .from('payroll_items')
                 .select(selectFields)
                 .eq('run_id', runId)
                 .in('code', codes);
-            return (v1 || []) as any[];
+            return (v1 || []) as unknown as PayrollItem[];
         };
 
         // Buscar rubricas com lançamento individualizado (filtro server-side)
@@ -821,7 +863,7 @@ export const payrollService = {
         const rubricasIndiv = (rubricasIndivRaw || []) as Array<{ code: string; name: string; dia_lancamento: number | null }>;
         console.log(`[PAYROLL-SYNC] Rubricas individualizadas: ${rubricasIndiv.map(r => r.code).join(', ') || 'nenhuma'}`);
 
-        const internalTxs: any[] = [];
+        const internalTxs: InternalTransaction[] = [];
         const errors: string[] = [];
 
         // Acumuladores de dedução — preenchidos no passo 4 e consumidos no passo 3
@@ -834,13 +876,13 @@ export const payrollService = {
             console.log(`[PAYROLL-SYNC] Itens individualizados encontrados: ${indivItems.length}`);
 
             if (indivItems.length > 0) {
-                const empIds = [...new Set(indivItems.map((i: any) => i.employee_id))];
+                const empIds = [...new Set(indivItems.map(i => i.employee_id))];
                 const { data: empRows } = await supabase
                     .from('employees')
                     .select('id, name')
                     .in('id', empIds as string[]);
                 const empMap: Record<string, string> = Object.fromEntries(
-                    (empRows || []).map((e: any) => [e.id, e.name])
+                    (empRows || []).map((e: { id: string; name: string }) => [e.id, e.name])
                 );
 
                 const [runYear, runMonth] = run.start_date.slice(0, 7).split('-');
@@ -874,9 +916,9 @@ export const payrollService = {
                             try {
                                 const project = await projectService.loadProject(alloc.project_id);
                                 if (project) {
-                                    const settings = project.settings as any;
-                                    const info = settings.financialInfo || { installments: [], transactions: [] };
-                                    const filtered = (info.transactions || []).filter((t: any) => t.id !== refId);
+                                    const settings = project.settings as ProjectSettings;
+                                    const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
+                                    const filtered = (info.transactions as ProjectFinancialTx[] || []).filter(t => t.id !== refId);
                                     await projectService.saveProject({
                                         ...project,
                                         settings: {
@@ -897,8 +939,9 @@ export const payrollService = {
                                         }
                                     });
                                 }
-                            } catch (projErr: any) {
-                                const msg = `Erro ao salvar ${rubric.name} em ${alloc.project_id}: ${projErr?.message || projErr}`;
+                            } catch (projErr: unknown) {
+                                const errMsg = projErr instanceof Error ? projErr.message : String(projErr);
+                                const msg = `Erro ao salvar ${rubric.name} em ${alloc.project_id}: ${errMsg}`;
                                 console.error(`[PAYROLL-SYNC] ${msg}`);
                                 errors.push(msg);
                             }
@@ -954,11 +997,9 @@ export const payrollService = {
                     continue;
                 }
 
-                const settings = project.settings as any;
-                const info = settings.financialInfo || { installments: [], transactions: [] };
-                const empLabel = (worksite as any).employees?.length
-                    ? (worksite as any).employees.join(', ')
-                    : '';
+                const settings = project.settings as ProjectSettings;
+                const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
+                const empLabel = worksite.employees?.length ? worksite.employees.join(', ') : '';
 
                 const refIdSalario  = `labor-${runId}-${worksite.id}-salario`;
                 const refIdEncargos = `labor-${runId}-${worksite.id}-encargos`;
@@ -966,11 +1007,11 @@ export const payrollService = {
 
                 // Remove entradas anteriores desta folha para esta obra (entrada única legada + separadas)
                 const worksitePrefix = `labor-${runId}-${worksite.id}-`;
-                const filteredTransactions = (info.transactions || []).filter((t: any) =>
+                const filteredTransactions = (info.transactions as ProjectFinancialTx[] || []).filter(t =>
                     t.id !== oldRefId && !String(t.id || '').startsWith(worksitePrefix)
                 );
 
-                const newTransactions = [];
+                const newTransactions: ProjectFinancialTx[] = [];
                 if (netSalaryCost > 0) {
                     const descSalario = empLabel
                         ? `Salários - ${empLabel} - ${worksite.name} - Folha ${formattedPeriod}`
@@ -1060,8 +1101,9 @@ export const payrollService = {
                     }
                 });
                 console.log(`[PAYROLL-SYNC] Obra ${worksite.name}: salário=${netSalaryCost} | encargos=${encargosCost} | contribuições=${contribuicoesCost}`);
-            } catch (err: any) {
-                const msg = `Erro ao sincronizar obra ${worksite.name}: ${err?.message || err}`;
+            } catch (err: unknown) {
+                const errMsg = err instanceof Error ? err.message : String(err);
+                const msg = `Erro ao sincronizar obra ${worksite.name}: ${errMsg}`;
                 console.error(`[PAYROLL-SYNC] ${msg}`);
                 errors.push(msg);
             }
@@ -1270,7 +1312,7 @@ export const payrollService = {
         const terceiroTotalRate = orgTerceirosTaxes.reduce((s, t) => s + t.rate, 0);
         const contribuicoesTotal = grossSalary ? Math.max(0, Math.round(grossSalary * terceiroTotalRate * 100) / 100) : 0;
 
-        const internalTxs: any[] = [];
+        const internalTxs: InternalTransaction[] = [];
 
         // 2. Iterar sobre alocações — gera dois lançamentos por obra: salário e encargos
         for (const alloc of allocations) {
@@ -1287,19 +1329,19 @@ export const payrollService = {
                 const project = await projectService.loadProject(alloc.project_id);
                 if (!project) continue;
 
-                const settings = project.settings as any;
-                const info = settings.financialInfo || { installments: [], transactions: [] };
+                const settings = project.settings as ProjectSettings;
+                const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
 
                 const oldRefId         = `labor-${runId}-${alloc.project_id}-${employeeId}`;
                 const empPrefix        = `labor-${runId}-${alloc.project_id}-${employeeId}-`;
                 const refIdSalario     = `labor-${runId}-${alloc.project_id}-${employeeId}-salario`;
                 const refIdEncargos    = `labor-${runId}-${alloc.project_id}-${employeeId}-encargos`;
 
-                const filteredTransactions = (info.transactions || []).filter((t: any) =>
+                const filteredTransactions = (info.transactions as ProjectFinancialTx[] || []).filter(t =>
                     t.id !== oldRefId && !String(t.id || '').startsWith(empPrefix)
                 );
 
-                const newTransactions: any[] = [];
+                const newTransactions: ProjectFinancialTx[] = [];
 
                 if (salaryCost > 0) {
                     const desc = `Salários - ${employeeName} - Folha ${formattedPeriod}`;

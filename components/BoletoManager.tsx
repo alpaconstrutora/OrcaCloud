@@ -96,16 +96,17 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             const [list, ccs, projs, sups] = await Promise.all([
                 boletoService.list(orgId, filters),
                 financialRegistryService.listCostCenters(orgId).catch(() => [] as CostCenter[]),
-                projectService.listProjects().catch(() => [] as any[]),
-                supplierService.listSuppliers(orgId).catch(() => [] as any[]),
+                projectService.listProjects().catch(() => [] as { id: string; name: string }[]),
+                supplierService.listSuppliers(orgId).catch(() => [] as { id: string; name: string }[]),
             ]);
 
             setBoletos(list);
-            setCcMap(Object.fromEntries((ccs || []).map((c: any) => [c.id, c.name])));
-            setProjectMap(Object.fromEntries((projs || []).map((p: any) => [p.id, p.name])));
-            setSupplierMap(Object.fromEntries((sups || []).map((s: any) => [s.id, s.name])));
-        } catch (err: any) {
-            setError(err.message || 'Falha ao carregar boletos');
+            setCcMap(Object.fromEntries((ccs || []).map((c) => [c.id, c.name])));
+            setProjectMap(Object.fromEntries((projs || []).map((p) => [p.id, p.name])));
+            setSupplierMap(Object.fromEntries((sups || []).map((s) => [s.id, s.name])));
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha ao carregar boletos');
         } finally {
             setLoading(false);
         }
@@ -143,7 +144,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
         // Ordenação
         list = [...list].sort((a, b) => {
-            let va: any, vb: any;
+            let va: string | number, vb: string | number;
             switch (ordenarPor) {
                 case 'numero':        va = a.numero ?? 0;                       vb = b.numero ?? 0;                       break;
                 case 'vencimento':    va = a.vencimento ?? '';                  vb = b.vencimento ?? '';                  break;
@@ -221,7 +222,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             const nome = `boletos${selectedOrgId !== 'ALL' ? `_${selectedOrgId.slice(0,8)}` : ''}`;
             if (tipo === 'excel') await boletoService.exportarExcel(filtered, nome);
             else await boletoService.exportarPDF(filtered, nome);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('[export]', err);
         } finally {
             setExporting(false);
@@ -354,7 +355,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 {(['todos', ...Object.keys(STATUS_LABELS)] as const).map((s) => (
                     <button
                         key={s}
-                        onClick={() => setFiltroStatus(s as any)}
+                        onClick={() => setFiltroStatus(s as BoletoStatus | 'todos')}
                         className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest border transition-colors ${
                             filtroStatus === s
                                 ? 'bg-gray-900 text-white border-gray-900'
@@ -479,7 +480,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Ordenar por</span>
                         <select
                             value={ordenarPor}
-                            onChange={(e) => setOrdenarPor(e.target.value as any)}
+                            onChange={(e) => setOrdenarPor(e.target.value as typeof ordenarPor)}
                             className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold"
                         >
                             <option value="numero">Código</option>

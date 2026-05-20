@@ -54,7 +54,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         direction: 'HORIZONTAL' | 'VERTICAL' = 'HORIZONTAL',
         topOrientation?: 'NORTH' | 'SOUTH' | 'EAST' | 'WEST'
     ) => {
-        const cells: any[] = [];
+        const cells: GridCellConfig[] = [];
         let index = 1;
 
         // Mapeamento de rotação para os 4 lados
@@ -71,8 +71,8 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
 
         for (let y = 0; y < depth; y++) {
             for (let x = 0; x < width; x++) {
-                let posType = 'LATERAL';
-                let cellOrient = undefined;
+                let posType: 'FRONT' | 'LATERAL' | 'BACK' | 'NONE' = 'LATERAL';
+                let cellOrient: 'NORTH' | 'SOUTH' | 'EAST' | 'WEST' | undefined = undefined;
 
                 if (blockPosition === 'ISOLATED') {
                     if (y === 0) {
@@ -116,7 +116,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
 
     const updateTowersGridCells = (towersList: TowerMatrixConfig[], isConnected: boolean, dir: 'HORIZONTAL' | 'VERTICAL' = 'HORIZONTAL') => {
         return towersList.map((t, i) => {
-            let pos: any = 'ISOLATED';
+            let pos: 'FRONT_BLOCK' | 'BACK_BLOCK' | 'MIDDLE_BLOCK' | 'ISOLATED' = 'ISOLATED';
             if (isConnected && towersList.length > 1) {
                 pos = i === 0 ? 'FRONT_BLOCK' : i === towersList.length - 1 ? 'BACK_BLOCK' : 'MIDDLE_BLOCK';
             }
@@ -204,7 +204,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         e.preventDefault();
         if (formData.type === 'BUILDING' && enableMatrix) {
             // Especial handling for bulk via matrix
-            onSubmit({ ...formData, _bulkConfig: { matrix: towerMatrix, connectedTowers, connectionDirection } } as any);
+            onSubmit({ ...formData, _bulkConfig: { matrix: towerMatrix, connectedTowers, connectionDirection } } as Partial<Property> & { _bulkConfig: { matrix: TowerMatrixConfig[]; connectedTowers: boolean; connectionDirection: 'HORIZONTAL' | 'VERTICAL' } });
         } else {
             onSubmit(formData);
         }
@@ -362,7 +362,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Tipo</label>
                                     <select
                                         value={formData.type}
-                                        onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                                        onChange={(e) => setFormData({ ...formData, type: e.target.value as Property['type'] })}
                                         className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
                                     >
                                         <option value="APARTMENT">Apartamento</option>
@@ -376,7 +376,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Finalidade</label>
                                     <select
                                         value={formData.purpose || 'BOTH'}
-                                        onChange={(e) => setFormData({ ...formData, purpose: e.target.value as any })}
+                                        onChange={(e) => setFormData({ ...formData, purpose: e.target.value as Property['purpose'] })}
                                         className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
                                     >
                                         <option value="SALE">Apenas Venda</option>
@@ -513,7 +513,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                         prefix: 'Apto '
                                                     }
                                                 };
-                                                setTowerMatrix(prev => updateTowersGridCells([...prev, newTower as any], connectedTowers));
+                                                setTowerMatrix(prev => updateTowersGridCells([...prev, newTower as TowerMatrixConfig], connectedTowers));
                                             }}
                                             className="px-4 py-2 bg-white text-blue-600 rounded-xl font-bold flex items-center gap-2 border border-blue-200 hover:bg-blue-50 transition-all text-xs shadow-sm active:scale-95"
                                         >
@@ -553,7 +553,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                                 const newTM = [...towerMatrix];
                                                                 newTM[tIndex].numberingConfig = {
                                                                     ...(newTM[tIndex].numberingConfig || { startNumber: 101, prefix: 'Apto ' }),
-                                                                    type: e.target.value as any
+                                                                    type: e.target.value as 'FLOOR_BASED' | 'SEQUENTIAL'
                                                                 };
                                                                 setTowerMatrix(newTM);
                                                             }}
@@ -663,7 +663,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                         <select
                                                             value={tower.top_orientation || ''}
                                                             onChange={(e) => {
-                                                                const val = e.target.value as any;
+                                                                const val = e.target.value as TowerMatrixConfig['top_orientation'];
                                                                 setTowerMatrix(prev => {
                                                                     const newTM = [...prev];
                                                                     newTM[tIndex].top_orientation = val || undefined;
@@ -795,7 +795,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                                         <select
                                                                             value={cell.sun_orientation || ''}
                                                                             onChange={(e) => {
-                                                                                const val = e.target.value ? e.target.value as any : undefined;
+                                                                                const val = e.target.value ? e.target.value as GridCellConfig['sun_orientation'] : undefined;
                                                                                 const newTM = [...towerMatrix];
                                                                                 newTM[tIndex].gridCells[cIndex].sun_orientation = val;
                                                                                 // Marcar como manual para não ser sobrescrito pelo seletor de topo
@@ -890,7 +890,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                                             value={cell.sun_orientation || ''}
                                                                             onChange={(e) => {
                                                                                 const newTM = [...towerMatrix];
-                                                                                newTM[tIndex].gridCells[cIndex].sun_orientation = e.target.value ? e.target.value as any : undefined;
+                                                                                newTM[tIndex].gridCells[cIndex].sun_orientation = e.target.value ? e.target.value as GridCellConfig['sun_orientation'] : undefined;
                                                                                 setTowerMatrix(newTM);
                                                                             }}
                                                                             className="mt-1 w-full max-w-[90px] px-1 py-1.5 bg-white/50 border border-slate-200 rounded-lg text-[9px] font-bold text-slate-500 text-center outline-none focus:border-blue-400 transition-colors"
@@ -1057,7 +1057,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Mudar Status</label>
                                 <select
                                     value={formData.status}
-                                    onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                                    onChange={(e) => setFormData({ ...formData, status: e.target.value as PropertyStatus })}
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
                                 >
                                     <option value={PropertyStatus.AVAILABLE}>Disponível 🟢</option>
@@ -1072,7 +1072,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Cliente / Proprietário</label>
                                 <select
                                     value={formData.client_id || ''}
-                                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value || null as any })}
+                                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value || undefined })}
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
                                 >
                                     <option value="">Sem vínculo (Inventário)</option>
@@ -1090,7 +1090,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Posição no Pavimento</label>
                                     <select
                                         value={formData.position_type}
-                                        onChange={(e) => setFormData({ ...formData, position_type: e.target.value as any })}
+                                        onChange={(e) => setFormData({ ...formData, position_type: e.target.value as Property['position_type'] })}
                                         className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-xs"
                                     >
                                         <option value="LATERAL">Lateral</option>
@@ -1102,7 +1102,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Qualidade da Vista</label>
                                     <select
                                         value={formData.view_type}
-                                        onChange={(e) => setFormData({ ...formData, view_type: e.target.value as any })}
+                                        onChange={(e) => setFormData({ ...formData, view_type: e.target.value as Property['view_type'] })}
                                         className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-xs"
                                     >
                                         <option value="NONE">Sem Vista (Base)</option>
@@ -1114,7 +1114,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Orientação Solar</label>
                                     <select
                                         value={formData.sun_orientation}
-                                        onChange={(e) => setFormData({ ...formData, sun_orientation: e.target.value as any })}
+                                        onChange={(e) => setFormData({ ...formData, sun_orientation: e.target.value as Property['sun_orientation'] })}
                                         className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-xs"
                                     >
                                         <option value="NORTH">Norte (Melhor)</option>

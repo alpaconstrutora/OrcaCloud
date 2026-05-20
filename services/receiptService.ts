@@ -115,31 +115,31 @@ export const receiptService = {
         }));
     },
 
-    mapReceipt(r: any): PurchaseReceipt {
+    mapReceipt(r: Record<string, unknown>): PurchaseReceipt {
         return {
-            id: r.id,
-            orderId: r.order_id,
-            receivedAt: r.received_at,
-            status: r.status,
-            notes: r.notes,
-            photoPath: r.photo_path,
-            version: r.version ?? 1,
-            createdAt: r.created_at,
+            id: r.id as string,
+            orderId: r.order_id as string,
+            receivedAt: r.received_at as string,
+            status: r.status as PurchaseReceipt['status'],
+            notes: r.notes as string | undefined,
+            photoPath: r.photo_path as string | undefined,
+            version: (r.version as number) ?? 1,
+            createdAt: r.created_at as string,
             items: [],
         };
     },
 
-    mapReceiptItem(i: any): PurchaseReceiptItem {
+    mapReceiptItem(i: Record<string, unknown>): PurchaseReceiptItem {
         return {
-            id: i.id,
-            receiptId: i.receipt_id,
-            orderItemCode: i.order_item_code,
-            description: i.description,
-            unit: i.unit,
+            id: i.id as string,
+            receiptId: i.receipt_id as string,
+            orderItemCode: i.order_item_code as string,
+            description: i.description as string,
+            unit: i.unit as string,
             quantityOrdered: Number(i.quantity_ordered),
             quantityReceived: Number(i.quantity_received),
-            issue: i.issue ?? undefined,
-            notes: i.notes ?? undefined,
+            issue: i.issue as PurchaseReceiptItem['issue'] ?? undefined,
+            notes: i.notes as string | undefined ?? undefined,
         };
     },
 };

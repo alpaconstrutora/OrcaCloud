@@ -9,10 +9,62 @@ import {
     ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
     BarChart, Bar, Cell, Legend, PieChart, Pie
 } from 'recharts';
-import { 
-    ProjectSettings, FinancialInfo, PaymentInstallment, FinancialTransaction, 
-    PurchaseOrder, BudgetEntry 
+import {
+    ProjectSettings, FinancialInfo, PaymentInstallment, FinancialTransaction,
+    PurchaseOrder, BudgetEntry, Organization, PropertyDeal, Client
 } from '../types';
+
+// Tipos locais estendidos para dados que ganham campos extras em runtime
+type RichInstallment = PaymentInstallment & {
+    isCommercial?: boolean;
+    sourceProjectId?: string;
+};
+
+type RichTransaction = FinancialTransaction & {
+    dealType?: 'SALE' | 'RENTAL';
+    propertyId?: string;
+    propertyName?: string;
+    measurementId?: string;
+    isLinked?: boolean;
+    sourceProjectId?: string;
+    isOrder?: boolean;
+    financialStatus?: string;
+    orderNumber?: string;
+    fullOrderId?: string;
+};
+
+type RichPropertyDeal = PropertyDeal & { client_name?: string; property_name?: string };
+
+type CommercialProject = {
+    id: string;
+    name?: string;
+    isVirtual?: boolean;
+    settings: ProjectSettings;
+    budget?: BudgetEntry[];
+};
+
+type SatelliteProject = {
+    id: string;
+    settings: { financialInfo?: FinancialInfo };
+};
+
+type ConciliacaoEntry = {
+    date: string;
+    description: string;
+    value: number;
+    match?: PaymentInstallment | null;
+};
+
+type MonthFlow = { inc: number; exp: number; projInc?: number };
+
+interface KPICardProps {
+    title: string;
+    value: string | number;
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+    subtitle?: string;
+    trend?: 'over' | 'under';
+}
 import { projectService } from '../services/projectService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { orderService } from '../services/orderService';
@@ -48,9 +100,9 @@ const EXPENSE_CATEGORIES = [
 ];
 
 const getCategoryColor = (cat: string) => EXPENSE_CATEGORIES.find(c => c.value === cat)?.color || '#6b7280';
-const fmt = (v: any) => typeof v === 'number' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : v;
-const fmtShort = (v: any) => {
-    if (typeof v !== 'number') return v;
+const fmt = (v: unknown): string => typeof v === 'number' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : String(v ?? '');
+const fmtShort = (v: unknown): string => {
+    if (typeof v !== 'number') return String(v ?? '');
     if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
     if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(1)}k`;
     return fmt(v);
@@ -58,7 +110,7 @@ const fmtShort = (v: any) => {
 
 type TabKey = 'resumo' | 'receitas' | 'despesas' | 'fluxo' | 'rentabilidade' | 'extrato' | 'conciliacao';
 
-const KPICard = ({ title, value, icon: Icon, color, subtitle, trend }: any) => (
+const KPICard = ({ title, value, icon: Icon, color, subtitle, trend }: KPICardProps) => (
     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 transition-all hover:shadow-md group">
         <div className="flex justify-between items-start mb-3">
             <div className={`p-2.5 rounded-xl transition-colors ${color} group-hover:bg-opacity-80`}>
@@ -109,21 +161,21 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         window.addEventListener('payroll-synced', handler);
         return () => window.removeEventListener('payroll-synced', handler);
     }, [settings?.id]);
-    const [organization, setOrganization] = useState<any>(null);
-    const [commercialProject, setCommercialProject] = useState<any>(null);
-    const [commercialDeals, setCommercialDeals] = useState<any[]>([]);
+    const [organization, setOrganization] = useState<Organization | null>(null);
+    const [commercialProject, setCommercialProject] = useState<CommercialProject | null>(null);
+    const [commercialDeals, setCommercialDeals] = useState<PropertyDeal[]>([]);
     const [localDealTypeFilter, setLocalDealTypeFilter] = useState<'ALL' | 'SALE' | 'RENTAL'>(dealTypeFilter || 'ALL');
     const [payingInstallment, setPayingInstallment] = useState<{ id: string; date: string } | null>(null);
-    const [conciliacaoData, setConciliacaoData] = useState<any[] | null>(null);
-    const [clients, setClients] = useState<any[]>([]);
+    const [conciliacaoData, setConciliacaoData] = useState<ConciliacaoEntry[] | null>(null);
+    const [clients, setClients] = useState<Client[]>([]);
     const [linkedInstallments, setLinkedInstallments] = useState<PaymentInstallment[]>([]);
     const [selectedOrgId, setSelectedOrgId] = useState<string | 'ALL'>('ALL');
-    const [allOrgs, setAllOrgs] = useState<any[]>([]);
-    const [satelliteProjects, setSatelliteProjects] = useState<any[]>([]);
+    const [allOrgs, setAllOrgs] = useState<Organization[]>([]);
+    const [satelliteProjects, setSatelliteProjects] = useState<SatelliteProject[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
 
-        const handleGlobalSync = async (orgId: string, deals: any[]) => {
+        const handleGlobalSync = async (orgId: string, deals: PropertyDeal[]) => {
             if (isSyncing) return;
             setIsSyncing(true);
             console.log('[FINANCIAL] Forced/Auto Global Sync Triggered for Org:', orgId);
@@ -132,7 +184,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 let targetProject = await commercialFinanceService.getOrCreateCommercialProject(orgId);
                 if (!targetProject) throw new Error('Cofre comercial não localizado');
                 
-                let currentSettings = { ...targetProject.settings } as any;
+                let currentSettings = { ...targetProject.settings } as ProjectSettings;
 
                 // Sincronia Sequencial (Acúmulo em Memória) - EVITA CORRIDA DE DADOS
                 for (const deal of deals) {
@@ -143,6 +195,8 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                             ...currentSettings,
                             financialInfo: {
                                 ...currentSettings.financialInfo,
+                                totalValue: currentSettings.financialInfo?.totalValue ?? 0,
+                                paymentMethod: currentSettings.financialInfo?.paymentMethod ?? 'Parcelamento Próprio',
                                 installments: syncResult.installments,
                                 transactions: syncResult.transactions
                             }
@@ -276,9 +330,9 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
         // Se estamos em modo Gestão Comercial, buscar parcelas de todos os "Projetos Satélites"
         if (settings.name === 'Gestão Comercial') {
-            satelliteProjects.forEach((sat: any) => {
+            satelliteProjects.forEach((sat: SatelliteProject) => {
                 const satInstallments = (sat.settings?.financialInfo?.installments || [])
-                    .map((i: any) => ({ ...i, isCommercial: true, sourceProjectId: sat.id }));
+                    .map((i: PaymentInstallment) => ({ ...i, isCommercial: true, sourceProjectId: sat.id }));
                 list.push(...satInstallments);
             });
             
@@ -305,14 +359,12 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             const sName = (settings.name || '').toLowerCase().trim();
             const workingId = projectId || settings.id;
 
-            const linkedFromComm = comm.filter((i: any) => {
+            const linkedFromComm = comm.filter((i: RichInstallment) => {
                 const isIdMatch = workingId && (i.linkedProjectId === workingId || i.propertyId === workingId);
                 const pName = (i.propertyName || '').toLowerCase().trim();
                 const isNameMatch = sName !== '' && (pName === sName || pName.includes(sName) || sName.includes(pName));
-                
-                if (isIdMatch || isNameMatch) return true;
-                return false;
-            }).map((i: any) => ({ ...i, isCommercial: true, sourceProjectId: commercialProject.id }));
+                return isIdMatch || isNameMatch;
+            }).map((i: RichInstallment) => ({ ...i, isCommercial: true, sourceProjectId: commercialProject.id }));
             
             if (linkedFromComm.length > 0) {
                 console.log(`[FINANCE-DEBUG] Linked ${linkedFromComm.length} installments from Commercial Vault for project ${settings.name}`);
@@ -339,14 +391,14 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     const localTransactions = financialInfo.transactions || [];
 
     const orderExpenses = useMemo(() => orders.filter(o => o.status !== 'Cancelado').map(o => ({
-        id: o.id || o.number, date: o.created_at || o.deliveryDate || '', description: `[Pedido #${o.number}] ${(o as any).description || ''}`.trim(), category: (o as any).category || 'Material',
+        id: o.id ?? o.number ?? '', date: o.created_at || o.deliveryDate || '', description: `[Pedido #${o.number}]`.trim(), category: 'Material' as FinancialTransaction['category'],
         value: o.items.reduce((s, i) => s + (i.total || 0), 0), supplier: o.supplierName || '', isOrder: true,
-        financialStatus: o.isFinancialApproved ? 'PAGO' : 'PENDENTE', status: o.status, statusUpdatedAt: o.status_updated_at || o.created_at,
-        orderNumber: o.number, fullOrderId: o.id, type: 'EXPENSE'
-    })), [orders]);
+        financialStatus: o.isFinancialApproved ? 'PAGO' : 'PENDENTE', status: o.status as FinancialTransaction['status'], statusUpdatedAt: o.status_updated_at ?? o.created_at ?? '',
+        orderNumber: o.number ?? '', fullOrderId: o.id ?? '', type: 'EXPENSE' as FinancialTransaction['type']
+    } as RichTransaction)), [orders]);
 
     const transactions = useMemo(() => [
-        ...(budget || []).flatMap(b => (b as any).expenses || []).map(e => ({ ...e, type: 'EXPENSE', measurementId: e.measurementId || null, supplier: e.supplier || 'Geral' })),
+        ...(budget || []).flatMap(_b => ([] as RichTransaction[])),
         ...orderExpenses,
         ...localTransactions.map(t => ({ ...t, isLinked: false })),
         ...linkedTransactions.map(t => ({ ...t, isLinked: true }))
@@ -446,12 +498,12 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         if (settings.name === 'Gestão Comercial' && commercialProject) {
             try {
                 // SE FOR VIRTUAL (GLOBAL): Salvar nos sub-projetos reais
-                if ((commercialProject as any).isVirtual) {
+                if (commercialProject.isVirtual) {
                     console.log("[FINANCIAL] Virtual project detected. Performing 'Save-Through' to real projects...");
-                    
+
                     // Agrupar parcelas alteradas por projeto de origem
-                    const installmentsByProject: Record<string, any[]> = {};
-                    updatedInfo.installments.forEach((i: any) => {
+                    const installmentsByProject: Record<string, RichInstallment[]> = {};
+                    updatedInfo.installments.forEach((i: RichInstallment) => {
                         const pid = i.sourceProjectId;
                         if (pid) {
                             if (!installmentsByProject[pid]) installmentsByProject[pid] = [];
@@ -473,13 +525,13 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                             const updatesToApply = installmentsByProject[pid];
                             
                             // MESCLAGEM CIRÚRGICA: Atualiza apenas o que mudou, mantendo o restante
-                            const mergedInst = existingRealInst.map((oldI: any) => {
-                                const freshI = updatesToApply.find((newI: any) => newI.id === oldI.id);
+                            const mergedInst = existingRealInst.map((oldI: RichInstallment) => {
+                                const freshI = updatesToApply.find((newI: RichInstallment) => newI.id === oldI.id);
                                 return freshI ? { ...oldI, ...freshI } : oldI;
                             });
-                            
+
                             // Adicionar novas parcelas que por ventura foram criadas no modo virtual
-                            const newFromVirtual = updatesToApply.filter((newI: any) => !existingRealInst.some((oldI: any) => oldI.id === newI.id));
+                            const newFromVirtual = updatesToApply.filter((newI: RichInstallment) => !existingRealInst.some((oldI: RichInstallment) => oldI.id === newI.id));
                             if (newFromVirtual.length > 0) mergedInst.push(...newFromVirtual);
 
                             const updatedRealProject = {
@@ -500,6 +552,8 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     // MODO NORMAL: Salva o projeto único
                     const updatedProject = {
                         ...commercialProject,
+                        name: commercialProject.name ?? '',
+                        budget: commercialProject.budget ?? [],
                         settings: {
                             ...(commercialProject.settings || {}),
                             financialInfo: updatedInfo
@@ -576,7 +630,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
     const handleGenerateContract = (dealId: string) => {
         const deal = commercialDeals.find(d => d.id === dealId);
-        if (deal) exportService.generatePropertyContractPDF(deal, settings, organization);
+        if (deal) exportService.generatePropertyContractPDF(deal, settings, organization ?? undefined);
     };
 
     const handleImportStatement = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -587,7 +641,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         reader.onload = (event) => {
             const content = event.target?.result as string;
             const lines = content.split('\n');
-            const detectedTransactions: any[] = [];
+            const detectedTransactions: ConciliacaoEntry[] = [];
 
             lines.forEach(line => {
                 const valueMatch = line.match(/(\d+[,.]\d{2})/);
@@ -614,10 +668,10 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         reader.readAsText(file);
     };
 
-    const confirmConciliacao = (matches: any[]) => {
+    const confirmConciliacao = (matches: ConciliacaoEntry[]) => {
         const updated = (financialInfo.installments || []).map(inst => {
             const m = matches.find(x => x.match?.id === inst.id);
-            if (m) return { ...inst, status: 'PAID' as any, paymentDate: m.date };
+            if (m) return { ...inst, status: 'PAID' as PaymentInstallment['status'], paymentDate: m.date };
             return inst;
         });
         handleSaveMultiple({ installments: updated });
@@ -633,15 +687,15 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
         const isLocal = (financialInfo.installments || []).some(i => i.id === inst.id);
         if (isLocal) {
-            const updated = (financialInfo.installments || []).map(i => i.id === inst.id ? { ...i, status: newStatus as any, paymentDate: payDate } : i);
+            const updated = (financialInfo.installments || []).map(i => i.id === inst.id ? { ...i, status: newStatus as PaymentInstallment['status'], paymentDate: payDate } : i);
             await handleSaveMultiple({ installments: updated });
             shouldReconcile = true;
-        } else if ((inst as any).sourceProjectId) {
-            console.log(`[FINANCIAL] Remote Installment detected (${(inst as any).sourceProjectId}). Targeting remote project.`);
-            const { data: satProj } = await supabase.from('projects').select('*').eq('id', (inst as any).sourceProjectId).single();
+        } else if ((inst as RichInstallment).sourceProjectId) {
+            console.log(`[FINANCIAL] Remote Installment detected (${(inst as RichInstallment).sourceProjectId}). Targeting remote project.`);
+            const { data: satProj } = await supabase.from('projects').select('*').eq('id', (inst as RichInstallment).sourceProjectId).single();
             if (satProj) {
-                const satInsts = satProj.settings?.financialInfo?.installments || [];
-                const updatedSatInsts = satInsts.map((i: any) => i.id === inst.id ? { ...i, status: newStatus as any, paymentDate: payDate } : i);
+                const satInsts: RichInstallment[] = satProj.settings?.financialInfo?.installments || [];
+                const updatedSatInsts = satInsts.map(i => i.id === inst.id ? { ...i, status: newStatus as PaymentInstallment['status'], paymentDate: payDate } : i);
                 satProj.settings.financialInfo = { ...(satProj.settings.financialInfo || {}), installments: updatedSatInsts };
                 await projectService.saveProject(satProj);
                 setRefreshTrigger(p => p + 1);
@@ -650,8 +704,8 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         }
         
         // NOVO: Notificar o motor comercial sobre a mudança de status da parcela para acionar Liquidação Automática
-        if (shouldReconcile && (inst as any).dealId) {
-             commercialFinanceService.reconcileDealStatusWithFinance((inst as any).dealId).catch(console.error);
+        if (shouldReconcile && inst.dealId) {
+             commercialFinanceService.reconcileDealStatusWithFinance(inst.dealId).catch(console.error);
         }
     };
 
@@ -663,14 +717,14 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         let shouldReconcile = false;
 
         if (isLocal) {
-            const updated = (financialInfo.installments || []).map(i => i.id === id ? { ...i, status: 'PAID' as any, paymentDate: date } : i);
+            const updated = (financialInfo.installments || []).map(i => i.id === id ? { ...i, status: 'PAID' as PaymentInstallment['status'], paymentDate: date } : i);
             await handleSaveMultiple({ installments: updated });
             shouldReconcile = true;
-        } else if (item && (item as any).sourceProjectId) {
-            const { data: satProj } = await supabase.from('projects').select('*').eq('id', (item as any).sourceProjectId).single();
+        } else if (item && (item as RichInstallment).sourceProjectId) {
+            const { data: satProj } = await supabase.from('projects').select('*').eq('id', (item as RichInstallment).sourceProjectId).single();
             if (satProj) {
-                const satInsts = satProj.settings?.financialInfo?.installments || [];
-                const updatedSatInsts = satInsts.map((i: any) => i.id === id ? { ...i, status: 'PAID' as any, paymentDate: date } : i);
+                const satInsts: RichInstallment[] = satProj.settings?.financialInfo?.installments || [];
+                const updatedSatInsts = satInsts.map(i => i.id === id ? { ...i, status: 'PAID' as PaymentInstallment['status'], paymentDate: date } : i);
                 satProj.settings.financialInfo = { ...(satProj.settings.financialInfo || {}), installments: updatedSatInsts };
                 await projectService.saveProject(satProj);
                 setRefreshTrigger(p => p + 1);
@@ -679,17 +733,17 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         }
         
         // NOVO: Notificar o motor comercial sobre a mudança de status da parcela
-        if (shouldReconcile && item && (item as any).dealId) {
-             commercialFinanceService.reconcileDealStatusWithFinance((item as any).dealId).catch(console.error);
+        if (shouldReconcile && item && item.dealId) {
+             commercialFinanceService.reconcileDealStatusWithFinance(item.dealId).catch(console.error);
         }
     };
 
-    const toggleExpenseStatus = async (exp: any) => {
+    const toggleExpenseStatus = async (exp: RichTransaction) => {
         if (isSaving) return;
         if (exp.isOrder) {
             setIsSaving(true);
             const orderStatus = exp.financialStatus === 'PAGO' ? false : true;
-            await orderService.updateOrder(exp.fullOrderId, { isFinancialApproved: orderStatus });
+            await orderService.updateOrder(exp.fullOrderId!, { isFinancialApproved: orderStatus });
             setRefreshTrigger(p => p + 1);
             setIsSaving(false);
             return;
@@ -701,14 +755,14 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         
         const isLocal = (financialInfo.transactions || []).some(t => t.id === exp.id);
         if (isLocal) {
-            const updated = (financialInfo.transactions || []).map(t => t.id === exp.id ? { ...t, status: newStatus as any, paymentDate: payDate } : t);
+            const updated = (financialInfo.transactions || []).map(t => t.id === exp.id ? { ...t, status: newStatus as FinancialTransaction['status'], paymentDate: payDate } : t);
             await handleSaveMultiple({ transactions: updated });
         } else if (exp.sourceProjectId) {
             console.log(`[FINANCIAL] Remote Expense detected (${exp.sourceProjectId}).`);
             const { data: satProj } = await supabase.from('projects').select('*').eq('id', exp.sourceProjectId).single();
             if (satProj) {
-                const satTx = satProj.settings?.financialInfo?.transactions || [];
-                const updatedSatTx = satTx.map((t: any) => t.id === exp.id ? { ...t, status: newStatus as any, paymentDate: payDate } : t);
+                const satTx: RichTransaction[] = satProj.settings?.financialInfo?.transactions || [];
+                const updatedSatTx = satTx.map(t => t.id === exp.id ? { ...t, status: newStatus as FinancialTransaction['status'], paymentDate: payDate } : t);
                 satProj.settings.financialInfo = { ...(satProj.settings.financialInfo || {}), transactions: updatedSatTx };
                 await projectService.saveProject(satProj);
                 setRefreshTrigger(p => p + 1);
@@ -739,11 +793,12 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
     const groupedIncomes = useMemo(() => {
         if (incomeGroupBy === 'none') return null;
-        const groups: Record<string, any> = {};
+        type IncomeGroup = { title: string; subtitle?: string; items: RichInstallment[]; total: number; paid: number; netTotal?: number };
+        const groups: Record<string, IncomeGroup> = {};
         const list = [...displayInstallments];
         if (commercialProject && settings.name !== 'Gestão Comercial') {
             const comm = commercialProject.settings?.financialInfo?.installments || [];
-            list.push(...comm.filter((i: any) => (i.propertyId === settings.id || i.propertyName === settings.name) && (!dealTypeFilter || i.dealType === dealTypeFilter)));
+            list.push(...comm.filter((i: RichInstallment) => (i.propertyId === settings.id || i.propertyName === settings.name) && (!dealTypeFilter || i.dealType === dealTypeFilter)));
         }
         list.forEach(inst => {
             let key = 'others', title = 'Outros', subtitle = undefined;
@@ -780,7 +835,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         // a menos que desejado. Vamos manter apenas o que é explicitamente do tipo ou inferido.
         const manualFiltered = transactions.filter(t => {
             if (t.type !== 'EXPENSE' || t.status === 'CANCELLED') return false;
-            const dealType = (t as any).dealType;
+            const dealType = (t as RichTransaction).dealType;
             if (dealType) return dealType === effectiveDealTypeFilter;
 
             // Despesas gerais (sem dealType) aparecem em todos os filtros por enquanto
@@ -793,7 +848,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     const totalExpenses = filteredTotalExpenses;
 
     const cashFlowData = useMemo(() => {
-        const months: any = {};
+        const months: Record<string, MonthFlow> = {};
         // Receitas filtradas (displayInstallments já está filtrado)
         displayInstallments.filter(i => i.status === 'PAID' && i.paymentDate).forEach(i => {
             const m = i.paymentDate!.substring(0, 7);
@@ -806,7 +861,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             if (t.type !== 'EXPENSE' || t.status === 'CANCELLED') return false;
             if (effectiveDealTypeFilter === 'ALL' || settings.name !== 'Gestão Comercial') return true;
             const desc = (t.description || '').toLowerCase();
-            const dealType = (t as any).dealType;
+            const dealType = (t as RichTransaction).dealType;
             if (dealType) return dealType === effectiveDealTypeFilter;
             if (effectiveDealTypeFilter === 'SALE') return desc.includes('venda');
             if (effectiveDealTypeFilter === 'RENTAL') return desc.includes('aluguel') || desc.includes('locação');
@@ -834,7 +889,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         let projBal = 0;
 
         // Calcular saldo atual (realizado)
-        const result = Object.entries(months).sort().map(([m, d]: any) => {
+        const result = Object.entries(months).sort().map(([m, d]) => {
             bal += d.inc - d.exp;
             projBal = bal + (d.projInc || 0);
             return { name: m, receita: d.inc, despesa: d.exp, saldo: bal, projecao: projBal };
@@ -854,8 +909,9 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
         transactions.forEach(t => {
             if (t.type !== 'EXPENSE' || t.status === 'CANCELLED') return;
-            const key = (t as any).propertyId || (t as any).propertyName || 'Geral';
-            if (!properties[key]) properties[key] = { id: (t as any).propertyId || '', name: (t as any).propertyName || 'Geral', revenue: 0, expense: 0 };
+            const rt = t as RichTransaction;
+            const key = rt.propertyId || rt.propertyName || 'Geral';
+            if (!properties[key]) properties[key] = { id: rt.propertyId || '', name: rt.propertyName || 'Geral', revenue: 0, expense: 0 };
             properties[key].expense += t.value;
         });
 
@@ -882,13 +938,13 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             financialStatus: t.status === 'PAID' ? 'PAGO' : 'PENDENTE',
             orderNumber: '-',
             supplier: t.supplier || '-',
-            dealType: (t as any).dealType
+            dealType: (t as RichTransaction).dealType
         }));
         let oexp = [...orderExpenses];
 
         if (effectiveDealTypeFilter !== 'ALL' && settings.name === 'Gestão Comercial') {
             manual = manual.filter(t => {
-                const dealType = (t as any).dealType;
+                const dealType = (t as RichTransaction).dealType;
                 if (dealType) return dealType === effectiveDealTypeFilter;
                 return true; // Despesas sem tipo aparecem em todos os filtros
             });
@@ -898,12 +954,13 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         let list = [...manual, ...oexp];
         if (originFilter !== 'all') {
             list = list.filter(exp => {
-                const isContract = !!((exp as any).measurementId || (exp.description || '').toLowerCase().includes('medição') || (exp.description || '').toLowerCase().includes('contrato:'));
+                const re = exp as RichTransaction;
+                const isContract = !!(re.measurementId || (exp.description || '').toLowerCase().includes('medição') || (exp.description || '').toLowerCase().includes('contrato:'));
                 if (originFilter === 'Pedidos') return exp.isOrder;
                 if (originFilter === 'Contrato') return isContract;
-                if (originFilter === 'Venda') return (exp as any).dealType === 'SALE' && !isContract;
-                if (originFilter === 'Aluguel') return (exp as any).dealType === 'RENTAL' && !isContract;
-                if (originFilter === 'Geral') return !exp.isOrder && !isContract && !(exp as any).dealType && exp.category !== 'Folha de Pagamento' && exp.category !== 'Encargos Patronais' && exp.category !== 'Contribuições de Terceiros';
+                if (originFilter === 'Venda') return re.dealType === 'SALE' && !isContract;
+                if (originFilter === 'Aluguel') return re.dealType === 'RENTAL' && !isContract;
+                if (originFilter === 'Geral') return !exp.isOrder && !isContract && !re.dealType && exp.category !== 'Folha de Pagamento' && exp.category !== 'Encargos Patronais' && exp.category !== 'Contribuições de Terceiros';
                 if (originFilter === 'Folha de Pagamento') return exp.category === 'Folha de Pagamento' || exp.category === 'Encargos Patronais' || exp.category === 'Contribuições de Terceiros';
                 return true;
             });
@@ -917,7 +974,8 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     }, [transactions, orderExpenses, originFilter, categoryFilter, expenseSearchTerm, filterDateFrom, filterDateTo, effectiveDealTypeFilter, settings.name]);
 
     const unifiedStatement = useMemo(() => {
-        const entries: any[] = [];
+        type StatementEntry = { id: string; date: string; description: string; value: number; type: string; status: string; supplier_client: string; category: string };
+        const entries: StatementEntry[] = [];
 
         // Add Incomes (Installments)
         displayInstallments.forEach(inst => {
@@ -936,7 +994,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         // Add Expenses (Transactions & Orders)
         filteredExpenses.forEach(exp => {
             entries.push({
-                id: exp.id,
+                id: exp.id ?? '',
                 date: exp.date,
                 description: exp.description,
                 value: exp.value,
@@ -968,8 +1026,8 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
     const handleExport = (type: 'PDF' | 'EXCEL', tab: 'EXTRATO' | 'FLUXO') => {
         const data = tab === 'EXTRATO' ? filteredExpenses : cashFlowData;
-        if (type === 'PDF') exportService.generateFinancialPDF(data, settings, { organization, title: tab, fileName: `Relatorio_${tab}` }, tab);
-        else exportService.generateFinancialExcel(data, settings, { organization, fileName: `Relatorio_${tab}` }, tab);
+        if (type === 'PDF') exportService.generateFinancialPDF(data, settings, { organization: organization ?? undefined, title: tab, fileName: `Relatorio_${tab}` }, tab);
+        else exportService.generateFinancialExcel(data, settings, { organization: organization ?? undefined, fileName: `Relatorio_${tab}` }, tab);
     };
 
     const renderResumo = () => (
@@ -1056,7 +1114,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     <div className="flex gap-2">
                         {settings.name === 'Gestão Comercial' && (
                             <>
-                                <select value={incomeGroupBy} onChange={e => setIncomeGroupBy(e.target.value as any)} className="text-[10px] font-black uppercase tracking-widest bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200">
+                                <select value={incomeGroupBy} onChange={e => setIncomeGroupBy(e.target.value as 'none' | 'client' | 'property' | 'deal' | 'type')} className="text-[10px] font-black uppercase tracking-widest bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200">
                                     <option value="none">Sem Grupo</option>
                                     <option value="client">Cliente</option>
                                     <option value="property">Imóvel</option>
@@ -1067,7 +1125,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         )}
                         <select
                             value={localDealTypeFilter}
-                            onChange={e => setLocalDealTypeFilter(e.target.value as any)}
+                            onChange={e => setLocalDealTypeFilter(e.target.value as 'ALL' | 'SALE' | 'RENTAL')}
                             className="text-[10px] font-black uppercase tracking-widest bg-white px-3 py-1.5 rounded-xl border border-gray-200 text-gray-600 outline-none hover:bg-gray-50 transition-colors"
                         >
                             <option value="ALL">Todas as Receitas</option>
@@ -1094,7 +1152,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                             <input type="number" value={installmentForm.commissionRate || ''} onChange={e => setInstallmentForm({ ...installmentForm, commissionRate: parseFloat(e.target.value) || 0 })} placeholder="Comissão %" className="w-1/2 p-2 rounded-lg border border-gray-200 text-sm bg-white" />
                             <input type="text" value={installmentForm.brokerName || ''} onChange={e => setInstallmentForm({ ...installmentForm, brokerName: e.target.value })} placeholder="Corretor" className="w-1/2 p-2 rounded-lg border border-gray-200 text-sm bg-white" />
                         </div>
-                        <select value={installmentForm.dealId || ''} onChange={e => { const d = commercialDeals.find(x => x.id === e.target.value); setInstallmentForm({ ...installmentForm, dealId: e.target.value, dealType: d?.type, clientName: d?.client_name, propertyName: d?.property_name }); }} className="p-2 rounded-lg border border-gray-200 text-sm bg-white"><option value="">Vínculo?</option>{commercialDeals.map(d => <option key={d.id} value={d.id}>{d.property_name || 'Contrato'}</option>)}</select>
+                        <select value={installmentForm.dealId || ''} onChange={e => { const d = commercialDeals.find(x => x.id === e.target.value) as RichPropertyDeal | undefined; setInstallmentForm({ ...installmentForm, dealId: e.target.value, dealType: d?.type, clientName: d?.client_name, propertyName: d?.property_name }); }} className="p-2 rounded-lg border border-gray-200 text-sm bg-white"><option value="">Vínculo?</option>{commercialDeals.map(d => <option key={d.id} value={d.id}>{(d as RichPropertyDeal).property_name || 'Contrato'}</option>)}</select>
                         <div className="flex gap-1"><button onClick={handleSaveInstallment} className="p-2 bg-indigo-600 text-white rounded-lg"><Save className="w-4 h-4" /></button><button onClick={() => setIsAdding(false)} className="p-2 bg-white border border-gray-200 text-gray-400 rounded-lg"><X className="w-4 h-4" /></button></div>
                     </div>
                 )}
@@ -1115,7 +1173,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         {groupedIncomes ? groupedIncomes.map((g, gi) => (
                             <React.Fragment key={gi}>
                                 <tr className="bg-gray-50/50"><td colSpan={5} className="px-6 py-2 font-normal text-indigo-900 text-sm uppercase tracking-wider border-r border-gray-100 last:border-r-0">{g.title} {g.subtitle && <span className="text-sm text-gray-400 ml-2 font-normal">{g.subtitle}</span>}</td></tr>
-                                {g.items.map((i: any, idx: number) => (
+                                {g.items.map((i: RichInstallment, idx: number) => (
                                     <tr key={`${i.id || 'new'}-${gi}-${idx}`} className="hover:bg-blue-50/50 group transition-colors">
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-normal text-sm flex items-center gap-2 text-gray-700">
                                             {i.description
@@ -1145,7 +1203,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                                     </button>
                                                 )}
                                                 {i.status === 'PAID' && (
-                                                    <button onClick={() => exportService.generateReceiptPDF(i, settings, organization)} className="text-gray-400 hover:text-emerald-600" title="Gerar Recibo">
+                                                    <button onClick={() => exportService.generateReceiptPDF(i, settings, organization ?? undefined)} className="text-gray-400 hover:text-emerald-600" title="Gerar Recibo">
                                                         <FileText className="w-3.5 h-3.5" />
                                                     </button>
                                                 )}
@@ -1189,7 +1247,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                             </button>
                                         )}
                                         {i.status === 'PAID' && (
-                                            <button onClick={() => exportService.generateReceiptPDF(i, settings, organization)} className="text-gray-400 hover:text-emerald-600" title="Gerar Recibo">
+                                            <button onClick={() => exportService.generateReceiptPDF(i, settings, organization ?? undefined)} className="text-gray-400 hover:text-emerald-600" title="Gerar Recibo">
                                                 <FileText className="w-3.5 h-3.5" />
                                             </button>
                                         )}
@@ -1263,7 +1321,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                        {filteredExpenses.map((exp: any, idx: number) => (
+                        {filteredExpenses.map((exp: RichTransaction, idx: number) => (
                             <tr key={`${exp.id || 'new'}-${idx}`} className="hover:bg-blue-50/50 group transition-colors">
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-normal text-sm tracking-tight text-gray-700">
                                     {exp.description.split(' ').map((word: string) => word.startsWith('#') ? <span className="text-blue-600 font-mono text-sm font-normal">{word} </span> : word + ' ')}
@@ -1325,7 +1383,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 <ResponsiveContainer><AreaChart data={cashFlowData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis tickFormatter={fmtShort} /><Tooltip formatter={fmt} /><Area type="monotone" dataKey="saldo" stroke="#10b981" fill="#10b981" fillOpacity={0.1} /></AreaChart></ResponsiveContainer>
             </div>
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                <table className="w-full text-left text-sm"><thead className="bg-gray-50 text-gray-400 font-normal uppercase border-b border-gray-100"><tr><th className="px-4 py-2">MÊS</th><th className="px-4 py-2 text-right">RECEITA</th><th className="px-4 py-2 text-right">DESPESA</th><th className="px-4 py-2 text-right">SALDO ACUM.</th></tr></thead><tbody className="divide-y divide-gray-50">{cashFlowData.map((r: any, i: number) => <tr key={i} className="hover:bg-gray-50"><td className="px-4 py-2 font-normal">{r.name}</td><td className="px-4 py-2 text-right text-emerald-600 font-normal">{fmt(r.receita)}</td><td className="px-4 py-2 text-right text-red-500 font-normal">{fmt(r.despesa)}</td><td className={`px-4 py-2 text-right font-normal ${r.saldo >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{fmt(r.saldo)}</td></tr>)}</tbody></table>
+                <table className="w-full text-left text-sm"><thead className="bg-gray-50 text-gray-400 font-normal uppercase border-b border-gray-100"><tr><th className="px-4 py-2">MÊS</th><th className="px-4 py-2 text-right">RECEITA</th><th className="px-4 py-2 text-right">DESPESA</th><th className="px-4 py-2 text-right">SALDO ACUM.</th></tr></thead><tbody className="divide-y divide-gray-50">{cashFlowData.map((r, i: number) => <tr key={i} className="hover:bg-gray-50"><td className="px-4 py-2 font-normal">{r.name}</td><td className="px-4 py-2 text-right text-emerald-600 font-normal">{fmt(r.receita)}</td><td className="px-4 py-2 text-right text-red-500 font-normal">{fmt(r.despesa)}</td><td className={`px-4 py-2 text-right font-normal ${r.saldo >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{fmt(r.saldo)}</td></tr>)}</tbody></table>
             </div>
         </div>
     );
@@ -1548,7 +1606,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             {activeTab === 'fluxo' && renderFluxo()}
             {activeTab === 'rentabilidade' && renderRentabilidade()}
             { activeTab === 'extrato' && renderExtrato() }
-            { activeTab === 'conciliacao' && <BankReconciliation organizationId={selectedOrgId === 'ALL' ? undefined : (selectedOrgId || organizationId || settings.organizationId || organization?.id)} /> }
+            { activeTab === 'conciliacao' && <BankReconciliation organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} /> }
 
             {selectedOrderId && <FinancialOrderDetails orderId={selectedOrderId} onUpdate={() => setRefreshTrigger(p => p + 1)} onClose={() => setSelectedOrderId(null)} />}
 

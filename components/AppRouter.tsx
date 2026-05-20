@@ -1,6 +1,14 @@
 import React from 'react';
 import { Plus, FileSpreadsheet, TrendingUp } from 'lucide-react';
-import { ProfileGroup, ProjectSettings, BudgetEntry, Organization, Contract, Client } from '../types';
+import { ProfileGroup, UserProfile, ProjectSettings, BudgetEntry, Organization, Contract, Client } from '../types';
+import { Session } from '@supabase/supabase-js';
+import { ProjectData } from '../services/projectService';
+
+interface CurrentProfile {
+  group: ProfileGroup;
+  role: UserProfile;
+  email?: string;
+}
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 
 // Views
@@ -43,24 +51,25 @@ import DatabaseExplorer from './DatabaseExplorer';
 import QualityModule from './QualityModule';
 import BoletoManager from './BoletoManager';
 import ContasPagarManager from './ContasPagarManager';
+import { FiscalModule } from './fiscal/FiscalModule';
 
 export interface AppRouterProps {
   activeView: string;
   setActiveView: (view: string) => void;
-  currentProfile: any;
+  currentProfile: CurrentProfile;
   settingsWithId: ProjectSettings & { id?: string };
   budget: BudgetEntry[];
-  projects: any[];
+  projects: ProjectData[];
   organizations: Organization[];
   projectId: string | null;
-  session: any;
+  session: Session | null;
   activeOrganizationId: string | null;
   setActiveOrganizationId: (id: string | null) => void;
-  clientProfile: any;
-  investorProfile: any;
-  supplierProfile: any;
+  clientProfile: Client | null;
+  investorProfile: import('../types').Investor | null;
+  supplierProfile: import('../types').Supplier | null;
   clients: Client[];
-  setClientProfile: (profile: any) => void;
+  setClientProfile: (profile: Client | null) => void;
   favorites: string[];
   contractsVersion: number;
   setContractsVersion: React.Dispatch<React.SetStateAction<number>>;
@@ -103,10 +112,10 @@ export interface AppRouterProps {
   // Handlers
   handleNavigate: (link: string) => void;
   handleNewProject: (classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO') => void;
-  handleLoadProject: (id: string, targetView?: string | null) => Promise<any>;
+  handleLoadProject: (id: string, targetView?: string | null) => Promise<void>;
   handleLoadAndEditProject: (id: string) => Promise<void>;
   handleDuplicateProject: (id: string) => Promise<void>;
-  handleImportProject: (data: any) => Promise<void>;
+  handleImportProject: (data: { name: string; budget: BudgetEntry[]; settings?: Partial<ProjectSettings> }) => Promise<void>;
   handleExportProject: (id: string) => Promise<void>;
   handleDeleteProjectFromList: (id: string) => Promise<void>;
   handleDeleteOrganization: (id: string) => Promise<void>;
@@ -114,7 +123,7 @@ export interface AppRouterProps {
   handleSaveProject: (budget?: BudgetEntry[], settings?: ProjectSettings) => Promise<void>;
   handleUpdateSettings: (settings: ProjectSettings) => void;
   handleUpdateBudget: (budget: BudgetEntry[]) => void;
-  handleContractSubmit: (data: any) => Promise<void>;
+  handleContractSubmit: (data: Contract) => Promise<void>;
   toggleFavorite: (e: React.MouseEvent | React.TouchEvent, code: string) => void;
   fetchClients: () => void;
   setProjectId: (id: string | null) => void;
@@ -145,6 +154,10 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     toggleFavorite, fetchClients, setProjectId,
   } = props;
 
+  // Projects mapeados para formato compatível com todos os componentes (id garantido vindo do banco)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const typedProjects = projects.filter(p => p.id).map(p => p as any as (typeof p & { id: string }));
+
   // Force SupplyChainOrderDetails to remount (and refetch) after returning from edit
   const [orderDetailsKey, setOrderDetailsKey] = React.useState(0);
   const prevEditingOrderIdRef = React.useRef(editingOrderId);
@@ -165,7 +178,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         clientProfile={clientProfile}
         clients={clients}
         onClientSelect={(c: Client) => setClientProfile(c)}
-        activeTab={activeView as any}
+        activeTab={activeView as 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'financeiro' | 'suporte'}
       />
     );
   }
@@ -176,13 +189,13 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         budget={budget}
         profile={currentProfile}
         investorProfile={investorProfile}
-        activeTab={activeView === 'dashboard' ? 'dashboard' : activeView as any}
+        activeTab={activeView === 'dashboard' ? 'dashboard' : activeView as 'dashboard' | 'holdings' | 'opportunities' | 'reports'}
       />
     );
   }
   if (currentProfile.group === ProfileGroup.SUPPLIER) {
     const supplierTab = activeView === 'supplier-area' ? 'negotiations' : (activeView === 'orders' ? 'orders' : 'overview');
-    return <SupplierDashboard profile={currentProfile} supplierProfile={supplierProfile} onNavigate={handleNavigate} activeTab={supplierTab as any} />;
+    return <SupplierDashboard profile={currentProfile} supplierProfile={supplierProfile} onNavigate={handleNavigate} activeTab={supplierTab as 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents' | 'profile'} />;
   }
   if (currentProfile.group === ProfileGroup.BROKER) {
     const tabMap: Record<string, string> = {
@@ -191,7 +204,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       'broker-events': 'agenda', 'broker-chat': 'chat', 'broker-analytics': 'analytics',
       'broker-health': 'saude', 'broker-integrations': 'integracoes'
     };
-    return <BrokerPortal profile={currentProfile} activeTab={(tabMap[activeView] || 'estoque') as any} />;
+    return <BrokerPortal profile={currentProfile} activeTab={(tabMap[activeView] || 'estoque') as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'} />;
   }
 
   // ── Roteamento principal ─────────────────────────────────────────────────────
@@ -202,7 +215,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <ProjectOverview
             settings={settingsWithId}
             budget={budget}
-            projects={projects}
+            projects={typedProjects}
             onNavigate={setActiveView}
             onLoadProject={handleLoadProject}
           />
@@ -238,7 +251,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <FinancialSchedule
           settings={settingsWithId}
           budget={budget}
-          projects={projects}
+          projects={typedProjects}
           organizations={organizations}
           onLoadProject={handleLoadProject}
           onUpdateSettings={handleUpdateSettings}
@@ -271,9 +284,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
               </button>
             </div>
           </div>
-          <PlanningDashboard projects={projects} />
+          <PlanningDashboard projects={typedProjects} />
           <ProjectList
-            projects={projects}
+            projects={typedProjects}
             onLoadProject={handleLoadProject}
             onEditProject={handleLoadAndEditProject}
             onNewProject={handleNewProject}
@@ -303,7 +316,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Acompanhe e registre o dia a dia das suas obras com precisão.</p>
               </div>
             </div>
-            <DiaryDashboard projects={projects} />
+            <DiaryDashboard projects={typedProjects} />
             <div className="flex justify-end gap-4 pr-4">
               <button
                 onClick={() => setActiveView('labor-analytics')}
@@ -321,7 +334,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
               </button>
             </div>
             <ProjectList
-              projects={projects}
+              projects={typedProjects}
               onLoadProject={handleLoadProject}
               onEditProject={handleLoadAndEditProject}
               onNewProject={handleNewProject}
@@ -340,7 +353,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <ProjectDiaryManager
           settings={settingsWithId}
-          projects={projects}
+          projects={typedProjects}
           onLoadProject={handleLoadProject}
           onUpdateSettings={handleUpdateSettings}
           organizationId={activeOrganizationId || undefined}
@@ -355,7 +368,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <ProjectOverview
           settings={settingsWithId}
           budget={budget}
-          projects={projects}
+          projects={typedProjects}
           onNavigate={setActiveView}
           onLoadProject={handleLoadProject}
         />
@@ -388,10 +401,10 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'labor-rubrics':
     case 'labor-encargos':
     case 'labor-fiscal':
-      return <LaborModule activeOrganizationId={activeOrganizationId || undefined} projects={projects} activeSection={activeView} onChangeView={setActiveView} />;
+      return <LaborModule activeOrganizationId={activeOrganizationId || undefined} projects={typedProjects} activeSection={activeView} onChangeView={setActiveView} />;
 
     case 'labor-analytics':
-      return <LaborDashboard projects={projects} onBack={() => setActiveView('project-diary')} />;
+      return <LaborDashboard projects={typedProjects} onBack={() => setActiveView('project-diary')} />;
 
     case 'reports':
       if (settingsWithId.classification === 'DIARIO') {
@@ -477,6 +490,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         />
       );
 
+    case 'fiscal-nfe':
+      return <FiscalModule />;
+
     case 'automation':
       return <AutomationManager settings={settingsWithId} onUpdateSettings={handleUpdateSettings} organizationId={activeOrganizationId || undefined} />;
 
@@ -531,14 +547,14 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           budget={budget}
           profile={currentProfile}
           investorProfile={investorProfile}
-          activeTab={activeView === 'investor-area' ? 'dashboard' : activeView as any}
+          activeTab={activeView === 'investor-area' ? 'dashboard' : activeView as 'dashboard' | 'holdings' | 'opportunities' | 'reports'}
         />
       );
 
     case 'supplier-area':
     case 'orders': {
       const adminSupplierTab = activeView === 'supplier-area' ? 'negotiations' : (activeView === 'orders' ? 'orders' : 'overview');
-      return <SupplierDashboard profile={currentProfile} supplierProfile={supplierProfile} onNavigate={handleNavigate} activeTab={adminSupplierTab as any} />;
+      return <SupplierDashboard profile={currentProfile} supplierProfile={supplierProfile} onNavigate={handleNavigate} activeTab={adminSupplierTab as 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents' | 'profile'} />;
     }
 
     case 'broker-area':
@@ -559,14 +575,14 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         'broker-events': 'agenda', 'broker-chat': 'chat', 'broker-analytics': 'analytics',
         'broker-health': 'saude', 'broker-integrations': 'integracoes'
       };
-      return <BrokerPortal profile={currentProfile} activeTab={(brokerTabMap[activeView] || 'estoque') as any} organizationId={activeOrganizationId || undefined} />;
+      return <BrokerPortal profile={currentProfile} activeTab={(brokerTabMap[activeView] || 'estoque') as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'} organizationId={activeOrganizationId || undefined} />;
     }
 
     // ── Engenharia ─────────────────────────────────────────────────────────────
     case 'eng-obras':
       return (
         <ProjectList
-          projects={projects}
+          projects={typedProjects}
           onLoadProject={handleLoadProject}
           onEditProject={handleLoadAndEditProject}
           onNewProject={handleNewProject}
@@ -583,7 +599,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'eng-orcamentos':
       return (
         <ProjectList
-          projects={projects}
+          projects={typedProjects}
           onLoadProject={handleLoadProject}
           onEditProject={handleLoadAndEditProject}
           onNewProject={handleNewProject}
@@ -602,11 +618,11 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <OrganizationList
           organizations={organizations}
           onCreate={() => setIsCreatingOrganization(true)}
-          onEdit={(org: any) => { setEditingOrganizationId(org.id); setIsCreatingOrganization(true); }}
+          onEdit={(org: Organization) => { setEditingOrganizationId(org.id); setIsCreatingOrganization(true); }}
           onDelete={handleDeleteOrganization}
-          activeTab={managementTab as any}
+          activeTab={managementTab as 'organizations' | 'projects' | 'clients' | 'investors' | 'suppliers' | 'users' | 'accounts' | 'cost_centers' | 'chart_of_accounts' | 'settings'}
           onTabChange={setManagementTab}
-          projects={projects}
+          projects={typedProjects}
           onClientsChange={fetchClients}
           onLoadProject={handleLoadProject}
           onEditProject={handleLoadAndEditProject}
@@ -614,7 +630,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onDuplicateProject={handleDuplicateProject}
           onImportProject={handleImportProject}
           onExportProject={handleExportProject}
-          onSelect={(org: any) => setActiveOrganizationId(org?.id || null)}
+          onSelect={(org: Organization) => setActiveOrganizationId(org?.id || null)}
         />
       );
 
@@ -651,7 +667,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <ProjectOverview
             settings={settingsWithId}
             budget={budget}
-            projects={projects}
+            projects={typedProjects}
             onNavigate={setActiveView}
             onLoadProject={handleLoadProject}
           />

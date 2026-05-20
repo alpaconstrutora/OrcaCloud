@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { FinancialTransaction, PurchaseOrder, ProjectSettings, FinancialInfo } from '../types';
+import { FinancialTransaction, PurchaseOrderItem, ProjectSettings, FinancialInfo } from '../types';
 import { projectService } from './projectService';
 import { invoiceService } from './invoiceService';
 
@@ -40,7 +40,7 @@ export const financialService = {
         // Sync to internal_transactions table for reconciliation engine
         try {
             await supabase.from('internal_transactions').insert({
-                organization_id: settings.organizationId || (project as any).organization_id,
+                organization_id: settings.organizationId,
                 source_system: 'PROJECT',
                 reference_id: newTx.id,
                 transaction_date: newTx.date.split('T')[0],
@@ -75,7 +75,7 @@ export const financialService = {
         try {
             const project = await projectService.loadProject(projectId);
             if (project) {
-                orgId = (project.settings as any)?.organizationId || (project as any).organization_id;
+                orgId = (project.settings as ProjectSettings)?.organizationId;
             }
         } catch (e) {
             console.warn('[FINANCIAL-BATCH] Could not load project to determine orgId:', e);
@@ -160,7 +160,8 @@ export const financialService = {
             return;
         }
 
-        const order = orderRaw as any;
+        type DbOrder = { id: string; number: string; status: string; supplier_id?: string; project_id?: string; items: PurchaseOrderItem[]; actual_delivery_date?: string; delivery_date?: string; payment_method?: string; payment_term_type?: string; payment_installments?: number; payment_days?: number; bank_account?: string; cost_center?: string; chart_of_accounts?: string; };
+        const order = orderRaw as DbOrder;
 
         // Fetch supplier name separately
         let supplierName = 'Fornecedor não identificado';
@@ -188,6 +189,7 @@ export const financialService = {
         }
 
         // 4. Project loading
+        if (!order.project_id) return;
         const projectId = order.project_id;
         const project = await projectService.loadProject(projectId);
         if (!project) return;
@@ -221,7 +223,7 @@ export const financialService = {
         }
 
         // 6. Calculate Values and Terms
-        const total = order.items.reduce((acc: number, item: any) => acc + (item.total || 0), 0);
+        const total = order.items.reduce((acc: number, item: PurchaseOrderItem) => acc + (item.total || 0), 0);
         const baseDate = order.actual_delivery_date || order.delivery_date || new Date().toISOString();
         const paymentMethod = order.payment_method || 'Não inf.';
         const termType = order.payment_term_type || 'Vista';
@@ -310,10 +312,10 @@ export const financialService = {
         if (!project) return;
 
         const settings = project.settings as ProjectSettings;
-        const info = (settings as any).financialInfo; // Use any to avoid type check on missing property initially
+        const info = settings.financialInfo;
 
         // 5. Prevent Duplicates
-        const existingTx = info?.transactions?.filter((t: any) => t.measurementId === measurementId) || [];
+        const existingTx = info?.transactions?.filter(t => (t as FinancialTransaction & { measurementId?: string }).measurementId === measurementId) || [];
         if (existingTx.length > 0) {
             console.log(`[FINANCIAL] Measurement ${measurement.number} already synced. Skipping.`);
             return;
@@ -349,7 +351,7 @@ export const financialService = {
                 supplier: supplierName,
                 measurementId: measurementId,
                 notes: `Gerado da medição. Método: ${paymentMethod}.`
-            } as any);
+            });
         }
 
         console.log(`[FINANCIAL] Generated ${installmentsCount} forecast(s) for Measurement ${measurement.number}`);

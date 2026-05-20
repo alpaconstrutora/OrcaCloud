@@ -360,7 +360,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
     }, [searchTerm, searchCode, searchType, searchNature, searchGroup, searchDatabase, searchLocation, searchCharges, favorites, showOnlyFavorites, currentDatabase]);
 
     // Lógica para atualizar a composição (simulação no explorador)
-    const handleUpdateComposition = (updates: any, index: number) => {
+    const handleUpdateComposition = (updates: Partial<CompositionComponent>, index: number) => {
         if (!selectedItem || !selectedItem.composition) return;
 
         const newComposition = [...selectedItem.composition];
@@ -386,7 +386,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
     };
 
     // Função para resolver natureza do category ou nature field
-    const resolveNatureFromCategory = (item: any): string | null => {
+    const resolveNatureFromCategory = (item: SinapiItem | undefined | null): string | null => {
         const cat = (item?.category || '').toLowerCase();
         if (cat.includes('equipamento') || cat.includes('custos horários') || cat.includes('custos horarios')) return 'Equipamento';
         if (cat.includes('cálculos e parâmetros') || cat.includes('calculos e parametros') || cat.includes('encargos') || cat.includes('mão de obra') || cat.includes('mao de obra')) return 'Mão de Obra';
@@ -473,7 +473,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
             } else if (target === 'new_copy') {
                 const newItem = { ...selectedItem };
                 // Garante que é tratado como um novo item
-                delete (newItem as any).id; // Remove ID técnico se existir
+                delete (newItem as SinapiItem & { id?: string }).id; // Remove ID técnico se existir
 
                 // Gera um novo código se for SINAPI (pois não podemos sobrescrever SINAPI na base custom)
                 // Se já for custom, o usuário pode estar querendo criar uma cópia
@@ -620,7 +620,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
         setSelectedItem(newItem);
     };
 
-    const handleImportItems = async (items: any[]) => {
+    const handleImportItems = async (items: SinapiItem[]) => {
         if (!currentDatabase) return;
 
         // Ensure all items have the database ID
@@ -787,7 +787,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                 <select
                                     className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 text-gray-600 cursor-pointer min-w-[120px]"
                                     value={searchScope}
-                                    onChange={(e) => setSearchScope(e.target.value as any)}
+                                    onChange={(e) => setSearchScope(e.target.value as 'description' | 'category' | 'both')}
                                     title="Escopo da busca"
                                 >
                                     <option value="description">Descrição</option>
@@ -798,7 +798,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                 <select
                                     className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-blue-50 text-blue-700 border-blue-100 cursor-pointer min-w-[130px]"
                                     value={searchMode}
-                                    onChange={(e) => setSearchMode(e.target.value as any)}
+                                    onChange={(e) => setSearchMode(e.target.value as 'exact' | 'all-words')}
                                     title="Modo da busca"
                                 >
                                     <option value="exact">Frase Exata</option>

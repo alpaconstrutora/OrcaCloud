@@ -3,19 +3,22 @@ import { projectService } from '../services/projectService';
 import { FolderOpen, Calendar, Search, Loader2, Settings, FileSpreadsheet, Edit2, LayoutDashboard, Clock, AlertCircle, CheckCircle2, ChevronRight, Copy, Trash2 } from 'lucide-react';
 import { ProjectSchedule } from '../types';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ProjectSummarySettings = any;
+
 interface ProjectSummary {
     id: string;
     name: string;
-    updated_at: string;
-    created_at: string;
-    settings?: any;
+    updated_at?: string;
+    created_at?: string;
+    settings?: ProjectSummarySettings;
 }
 
 interface PlanningListProps {
     onLoadProject: (id: string, targetView?: string) => void;
     onEditProject: (id: string) => void;
     onDuplicateProject: (id: string) => void;
-    onDeleteProject: (item: any) => void;
+    onDeleteProject: (item: ProjectSummary) => void;
     onAddPlanning?: () => void;
     projects?: ProjectSummary[];
 }
@@ -37,7 +40,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
         setIsLoading(true);
         try {
             const data = await projectService.listProjects(undefined, undefined, true);
-            setProjects(data as any || []);
+            setProjects((data as ProjectSummary[]) || []);
         } catch (error) {
             console.error("Erro ao listar projetos para planejamento:", error);
         } finally {
@@ -66,10 +69,10 @@ const PlanningList: React.FC<PlanningListProps> = ({
         const siblingBudgets = projects.filter(p => p.settings?.linkedProjectId === linkedId && p.settings?.classification === 'ORCAMENTO');
 
         const uniqueBudgets: ProjectSummary[] = [];
-        if (directLinkedBudget) uniqueBudgets.push(directLinkedBudget as any);
+        if (directLinkedBudget) uniqueBudgets.push(directLinkedBudget);
         siblingBudgets.forEach(b => {
             if (!uniqueBudgets.some(ub => ub.id === b.id)) {
-                uniqueBudgets.push(b as any);
+                uniqueBudgets.push(b);
             }
         });
 
@@ -81,7 +84,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
             p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             p.settings?.client?.toLowerCase().includes(searchTerm.toLowerCase())
         )
-    ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+    ).sort((a, b) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime());
 
     const formatDate = (dateString?: string) => {
         if (!dateString) return '-';

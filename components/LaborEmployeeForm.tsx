@@ -4,10 +4,16 @@ import { Employee, ContractType, EmployeeStatus, laborService } from '../service
 import { payrollService, PayrollRubric } from '../services/payrollService';
 import { validateCPF } from '../lib/validators';
 
+interface OrganizationOption {
+    id: string;
+    name: string;
+    [key: string]: unknown;
+}
+
 interface LaborEmployeeFormProps {
     employee: Employee | null;
     orgId: string;
-    organizations: any[];
+    organizations: OrganizationOption[];
     onClose: () => void;
     onSaved: () => void;
 }
@@ -121,7 +127,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         loadInitialData();
     }, [isEditing, employee?.id]);
 
-    const setField = (key: keyof Employee, value: any) => setForm(prev => ({ ...prev, [key]: value }));
+    const setField = <K extends keyof Employee>(key: K, value: Employee[K]) => setForm(prev => ({ ...prev, [key]: value }));
     
     // Máscaras de Input (CPF e Telefone)
     const formatCPF = (value: string) => {

@@ -1,4 +1,4 @@
-import { DependencyType, ItemScheduleDetails, ConstraintType, Baseline, ReplanMode, ResourceRole, ResourceWorker, ResourceTeam, LevelingResult, LevelingIssue } from '../types';
+import { DependencyType, ItemScheduleDetails, ConstraintType, Baseline, ReplanMode, ResourceRole, ResourceWorker, ResourceTeam, LevelingResult, LevelingIssue, CompositionComponent } from '../types';
 
 /**
  * ═══════════════════════════════════════════════════════════════════
@@ -419,7 +419,7 @@ class CrewEngine {
     /**
      * Identifies if a composition component is a labor item based on a hierarchical check.
      */
-    static isLaborComp(c: any): boolean {
+    static isLaborComp(c: CompositionComponent): boolean {
         const unit = String(c.unit || '').toUpperCase();
         const desc = String(c.description || '').toLowerCase();
         const nature = String(c.nature || c.category || '').toLowerCase();
@@ -455,7 +455,7 @@ class CrewEngine {
      * Initializes effortCoefficient by summing labor items from a SINAPI composition.
      * Excludes items that are strictly "Encargos Complementares" (standalone costs).
      */
-    static deriveEffortFromComposition(composition: any[]): number {
+    static deriveEffortFromComposition(composition: CompositionComponent[]): number {
         let totalEffort = 0;
         let mainWorkerHH = 0;
 
@@ -496,7 +496,7 @@ class CrewEngine {
     /**
      * Derives total man-hours and estimated labor cost from a composition.
      */
-    static deriveTotalLaborFromComposition(composition: any[]): { effort: number, cost: number } {
+    static deriveTotalLaborFromComposition(composition: CompositionComponent[]): { effort: number, cost: number } {
         let effort = 0;
         let cost = 0;
 
@@ -743,21 +743,21 @@ export class SchedulingEngine {
     /**
      * Derives total man-hours and estimated labor cost from a composition.
      */
-    static deriveTotalLaborFromComposition(composition: any[]): { effort: number, cost: number } {
+    static deriveTotalLaborFromComposition(composition: CompositionComponent[]): { effort: number, cost: number } {
         return CrewEngine.deriveTotalLaborFromComposition(composition);
     }
 
     /**
      * Identifies if a composition component is a labor item.
      */
-    static isLaborItem(c: any): boolean {
+    static isLaborItem(c: CompositionComponent): boolean {
         return CrewEngine.isLaborComp(c);
     }
 
     /**
      * Derives just the effort coefficient (main worker HH) for duration calculation.
      */
-    static deriveEffortCoefficient(composition: any[]): number {
+    static deriveEffortCoefficient(composition: CompositionComponent[]): number {
         return CrewEngine.deriveEffortFromComposition(composition);
     }
 
@@ -996,10 +996,10 @@ export class SchedulingEngine {
     /**
      * Expose crew calculation helpers
      */
-    static isLaborComp(c: any): boolean {
+    static isLaborComp(c: CompositionComponent): boolean {
         return CrewEngine.isLaborComp(c);
     }
-    static deriveEffortFromComposition(composition: any[]): number {
+    static deriveEffortFromComposition(composition: CompositionComponent[]): number {
         return CrewEngine.deriveEffortFromComposition(composition);
     }
     static calculateDurationFromCrew(task: ItemScheduleDetails, qty?: number): number | null {

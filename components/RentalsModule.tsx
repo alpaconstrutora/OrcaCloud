@@ -2,6 +2,22 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X } from 'lucide-react';
 import { commercialService } from '../services/commercialService';
 import { Property, PropertyStatus, PropertyDeal, Client } from '../types';
+import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
+
+
+interface BulkConfig {
+    matrix?: TowerMatrixConfig[];
+    count?: number;
+    startingNumber?: number;
+    increment?: number;
+    prefix?: string;
+    connectedTowers?: boolean;
+    connectionDirection?: 'HORIZONTAL' | 'VERTICAL';
+}
+
+type PropertyFormData = Partial<Property> & {
+    _bulkConfig?: BulkConfig;
+};
 import { clientService } from '../services/clientService';
 import PropertyModal from './PropertyModal';
 import DealModal from './DealModal';
@@ -14,7 +30,7 @@ interface RentalsModuleProps {
 
 const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard'>(
-        (localStorage.getItem('rentals_active_tab') as any) || 'inventory'
+        (localStorage.getItem('rentals_active_tab') as 'inventory' | 'deals' | 'dashboard') || 'inventory'
     );
     const [properties, setProperties] = useState<Property[]>([]);
     const [deals, setDeals] = useState<PropertyDeal[]>([]);
@@ -81,7 +97,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     }, [selectedBuildingId, activeTab, sortConfig, viewMode]);
 
 
-    const handleSaveProperty = async (data: any) => {
+    const handleSaveProperty = async (data: PropertyFormData) => {
         if (!organizationId && !data.organization_id) {
             alert('Erro: Nenhuma organização ativa selecionada. Por favor, selecione uma empresa no menu lateral.');
             return;
@@ -91,7 +107,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             const { _bulkConfig, ...propertyData } = data;
 
             // Garantir que a organização está vinculada ao criar novo imóvel
-            const propertyToSave: any = {
+            const propertyToSave: Partial<Property> & { organization_id?: string } = {
                 ...propertyData,
                 organization_id: propertyData.organization_id || organizationId
             };
@@ -121,13 +137,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 let totalCount = 0;
                 const usedIds: string[] = [];
                 
-                _bulkConfig.matrix.forEach((tower: any) => {
+                _bulkConfig.matrix.forEach((tower: TowerMatrixConfig) => {
                     const floors = tower.floors || 0;
                     const gridCells = tower.gridCells || [];
-                    
+
                     for (let f = 1; f <= floors; f++) {
-                        gridCells.forEach((cell: any) => {
-                            const numCfg = tower.numberingConfig || { type: 'FLOOR_BASED', startNumber: 101, prefix: 'Apto ' };
+                        gridCells.forEach((cell: GridCellConfig) => {
+                            const numCfg: TowerNumberingConfig = tower.numberingConfig || { type: 'FLOOR_BASED', startNumber: 101, prefix: 'Apto ' };
                             let displayNum = 0;
                             if (numCfg.type === 'FLOOR_BASED') {
                                 const unitOffset = numCfg.startNumber % 100;
@@ -159,7 +175,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                 block: tower.name,
                                 floor: f,
                                 number: String(displayNum),
-                                position_type: cell.position_type || 'LATERAL',
+                                position_type: (cell.position_type === 'NONE' ? undefined : cell.position_type) || 'LATERAL',
                                 sun_orientation: cell.sun_orientation,
                                 price: propertyToSave.price || 0,
                                 initial_price: propertyToSave.initial_price || propertyToSave.price || 0,
@@ -177,8 +193,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 });
 
                 if (units.length > 0) {
-                    await commercialService.savePropertiesBatch(units as any);
-                    
+                    await commercialService.savePropertiesBatch(units);
+
                     // 2. Limpar unidades que NÃO estão mais na matriz e NÃO têm negócios
                     const unusedIds = existingUnits
                         .filter(u => u.id && !usedIds.includes(u.id))
@@ -198,10 +214,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 }
             } 
             // Fallback legado
-            else if (propertyToSave.type === 'BUILDING' && _bulkConfig && _bulkConfig.count > 0) {
+            else if (propertyToSave.type === 'BUILDING' && _bulkConfig && (_bulkConfig.count ?? 0) > 0) {
                 const units: Partial<Property>[] = [];
-                for (let i = 0; i < _bulkConfig.count; i++) {
-                    const unitNumber = _bulkConfig.startingNumber + (i * (_bulkConfig.increment || 1));
+                for (let i = 0; i < (_bulkConfig.count ?? 0); i++) {
+                    const unitNumber = (_bulkConfig.startingNumber ?? 1) + (i * (_bulkConfig.increment || 1));
                     units.push({
                         name: `${_bulkConfig.prefix}${unitNumber}`,
                         type: 'APARTMENT',
@@ -229,9 +245,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             setIsPropertyModalOpen(false);
             setEditingProperty(undefined);
             loadData();
-        } catch (err: any) {
-            console.error('[Commercial] Save Error:', err);
-            alert('Erro ao salvar imóvel: ' + (err.message || 'Erro desconhecido'));
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            console.error('[Commercial] Save Error:', error);
+            alert('Erro ao salvar imóvel: ' + error.message);
         }
     };
 

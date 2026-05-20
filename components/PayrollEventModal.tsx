@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Loader2, Edit2, Trash2, Check } from 'lucide-react';
-import { payrollService } from '../services/payrollService';
+import { payrollService, PayrollRun, PayrollRubric, PayrollEvent, PayrollItem, PayrollAuditLog, PayrollResultWithEmployee } from '../services/payrollService';
 import { payrollEngine } from '../services/payrollEngine';
-import { PayrollRun } from '../services/payrollService';
 import {
     suggestEventUnit,
     computeEventAmount,
@@ -14,9 +13,9 @@ interface PayrollEventModalProps {
     orgId: string;
     employeeId: string;
     employeeName: string;
-    rubrics: any[];
-    runEvents: any[];
-    results: any[];
+    rubrics: PayrollRubric[];
+    runEvents: PayrollEvent[];
+    results: PayrollResultWithEmployee[];
     executing: boolean;
     onClose: () => void;
     onEventSaved: () => Promise<void>;
@@ -27,8 +26,8 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
     rubrics, runEvents, results, executing,
     onClose, onEventSaved,
 }) => {
-    const [runItems, setRunItems]               = useState<any[]>([]);
-    const [eventHistory, setEventHistory]       = useState<any[]>([]);
+    const [runItems, setRunItems]               = useState<PayrollItem[]>([]);
+    const [eventHistory, setEventHistory]       = useState<PayrollAuditLog[]>([]);
     const [showEventHistory, setShowEventHistory] = useState(false);
     const [editingEvent, setEditingEvent]       = useState<string | null>(null);
     const [localExecuting, setLocalExecuting]   = useState(false);
@@ -110,7 +109,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                 await payrollService.updateEvent(editingEvent, {
                     description: eventDescription,
                     amount: eventAmount,
-                    unit: eventUnit as any,
+                    unit: eventUnit,
                     quantity: eventQuantity,
                     rubric_code: selectedRubricCode,
                 });
@@ -133,7 +132,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                     description: eventDescription || rubric.name,
                     reference_date: new Date().toISOString().split('T')[0],
                     quantity: eventQuantity,
-                    unit: eventUnit as any,
+                    unit: eventUnit,
                 });
             }
 
@@ -163,8 +162,8 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
         }
     };
 
-    const startEditing = (ev: any) => {
-        setEditingEvent(ev.id);
+    const startEditing = (ev: PayrollEvent) => {
+        setEditingEvent(ev.id ?? null);
         setSelectedRubricCode(ev.rubric_code || ev.code || '');
         setEventAmount(ev.amount);
         setEventDescription(ev.description || '');
@@ -226,7 +225,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Unidade</label>
                             <select
                                 value={eventUnit}
-                                onChange={e => setEventUnit(e.target.value as any)}
+                                onChange={e => setEventUnit(e.target.value as 'fixed' | 'days' | 'hours')}
                                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
                             >
                                 <option value="fixed">Valor (R$)</option>
@@ -303,7 +302,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                 <div key={log.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">
                                     <div className="flex justify-between items-center">
                                         <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">{log.action}</span>
-                                        <span className="text-[8px] font-bold text-slate-400">{new Date(log.created_at).toLocaleString('pt-BR')}</span>
+                                        <span className="text-[8px] font-bold text-slate-400">{new Date(log.created_at || 0).toLocaleString('pt-BR')}</span>
                                     </div>
                                     <p className="text-[11px] font-bold text-slate-700">{log.description}</p>
                                     <div className="flex items-center gap-2">
@@ -324,7 +323,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                             {autoItems.map(item => (
                                 <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-2xl border border-slate-100 opacity-60">
                                     <div>
-                                        <p className="text-[11px] font-black text-slate-700 uppercase">{item.code} - {item.description || item.code}</p>
+                                        <p className="text-[11px] font-black text-slate-700 uppercase">{item.code} - {(item as unknown as { description?: string }).description || item.code}</p>
                                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
                                             {item.type === 'informativa' ? 'Apenas Informativo' : 'Cálculo Automático'}
                                         </p>
@@ -349,7 +348,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                                 <p className="text-[11px] font-black text-slate-700 uppercase">{ev.rubric_code} - {ev.description || ev.rubric_code}</p>
                                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
                                                     {ev.type === 'provento' ? 'Provento' : ev.type === 'desconto' ? 'Desconto' : 'Informativa'}
-                                                    {ev.quantity > 0 && ` • ${ev.quantity.toLocaleString('pt-BR')} ${ev.unit === 'days' ? 'dias' : 'hrs'}`}
+                                                    {(ev.quantity ?? 0) > 0 && ` • ${(ev.quantity ?? 0).toLocaleString('pt-BR')} ${ev.unit === 'days' ? 'dias' : 'hrs'}`}
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-4">
@@ -368,7 +367,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                                         <button
                                                             onClick={() => {
                                                                 if (confirm('Deseja excluir este lançamento manual?')) {
-                                                                    handleDeleteEvent(ev.id);
+                                                                    handleDeleteEvent(ev.id!);
                                                                 }
                                                             }}
                                                             className="p-1.5 text-slate-300 hover:text-rose-500 transition-all rounded-lg hover:bg-rose-50"

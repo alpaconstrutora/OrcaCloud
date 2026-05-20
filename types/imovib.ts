@@ -189,7 +189,7 @@ export interface ImovibStudy {
     demand_deficit?: string;
     competitors_analysis?: string;
     vso_regional_percent?: number;
-    swot_analysis?: any;
+    swot_analysis?: Record<string, unknown>;
     target_audience?: string;
     land_cost?: number;
     revenue_downpayment_percent?: number;

@@ -20,7 +20,8 @@ export const supplierCategoryService = {
                 
                 let allCats: SupplierCategory[] = [];
                 for (const org of (orgs || [])) {
-                    const cats = (org.resources as any)?.supplierCategories || [];
+                    const resources = org.resources as { supplierCategories?: SupplierCategory[] } | null;
+                    const cats: SupplierCategory[] = resources?.supplierCategories || [];
                     if (organizationId) {
                         if (org.id === organizationId) allCats = [...allCats, ...cats];
                     } else {
@@ -35,7 +36,7 @@ export const supplierCategoryService = {
 
         let filtered = data || [];
         if (organizationId) {
-            filtered = filtered.filter((c: any) => !c.organization_id || c.organization_id === organizationId);
+            filtered = filtered.filter((c) => !c.organization_id || c.organization_id === organizationId);
         }
         return filtered.sort((a, b) => a.name.localeCompare(b.name));
     },
@@ -64,11 +65,11 @@ export const supplierCategoryService = {
                     .eq('id', targetOrgId)
                     .single();
                 
-                const resources = org?.resources as any || {};
-                const currentCategories = resources.supplierCategories || [];
-                const newCategory = { 
-                    ...category, 
-                    id: generateId(), 
+                const resources = (org?.resources as { supplierCategories?: SupplierCategory[] } | null) ?? {};
+                const currentCategories: SupplierCategory[] = (resources as { supplierCategories?: SupplierCategory[] }).supplierCategories || [];
+                const newCategory = {
+                    ...category,
+                    id: generateId(),
                     created_at: new Date().toISOString(),
                     organization_id: targetOrgId
                 };
@@ -112,8 +113,8 @@ export const supplierCategoryService = {
                     .eq('id', targetOrgId)
                     .single();
                 
-                const resources = org?.resources as any || {};
-                const currentCategories = resources.supplierCategories || [];
+                const resources = (org?.resources as { supplierCategories?: SupplierCategory[] } | null) ?? {};
+                const currentCategories: SupplierCategory[] = (resources as { supplierCategories?: SupplierCategory[] }).supplierCategories || [];
                 const newCats = categories.map(c => ({
                     ...c,
                     id: generateId(),
@@ -154,10 +155,10 @@ export const supplierCategoryService = {
                 
                 for (const org of (orgs || [])) {
                     if (organizationId && org.id !== organizationId) continue;
-                    
-                    const resources = org.resources as any;
-                    const cats = resources?.supplierCategories || [];
-                    const index = cats.findIndex((c: any) => c.id === id);
+
+                    const resources = org.resources as { supplierCategories?: SupplierCategory[] } | null;
+                    const cats: SupplierCategory[] = resources?.supplierCategories || [];
+                    const index = cats.findIndex((c) => c.id === id);
                     if (index !== -1) {
                         cats[index] = { ...cats[index], ...updates };
                         await supabase
@@ -193,11 +194,11 @@ export const supplierCategoryService = {
                 for (const org of (orgs || [])) {
                     if (organizationId && org.id !== organizationId) continue;
 
-                    const resources = org.resources as any;
-                    const cats = resources?.supplierCategories || [];
-                    const index = cats.findIndex((c: any) => c.id === id);
+                    const resources = org.resources as { supplierCategories?: SupplierCategory[] } | null;
+                    const cats: SupplierCategory[] = resources?.supplierCategories || [];
+                    const index = cats.findIndex((c) => c.id === id);
                     if (index !== -1) {
-                        const newCats = cats.filter((c: any) => c.id !== id);
+                        const newCats = cats.filter((c) => c.id !== id);
                         await supabase
                             .from('organizations')
                             .update({

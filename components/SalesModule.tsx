@@ -2,6 +2,22 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, MoreVertical, Edit, Trash2, LayoutGrid, List, ChevronRight, ChevronDown, X, BrainCircuit, Activity, Calculator, Percent, Target, ArrowUpDown, Mail, Phone, Briefcase } from 'lucide-react';
 import { commercialService } from '../services/commercialService';
 import { Property, PropertyStatus, PropertyDeal, Client, HedonicPricingConfig } from '../types';
+import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
+
+
+interface BulkConfig {
+    matrix?: TowerMatrixConfig[];
+    count?: number;
+    startingNumber?: number;
+    increment?: number;
+    prefix?: string;
+    connectedTowers?: boolean;
+    connectionDirection?: 'HORIZONTAL' | 'VERTICAL';
+}
+
+type PropertyFormData = Partial<Property> & {
+    _bulkConfig?: BulkConfig;
+};
 import { clientService } from '../services/clientService';
 import PropertyModal from './PropertyModal';
 import DealModal from './DealModal';
@@ -21,7 +37,7 @@ interface SalesModuleProps {
 
 const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'simulation' | 'brokers'>(
-        (localStorage.getItem('sales_active_tab') as any) || 'inventory'
+        (localStorage.getItem('sales_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'brokers') || 'inventory'
     );
     const [properties, setProperties] = useState<Property[]>([]);
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
@@ -104,7 +120,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     }, [selectedBuildingId]);
 
 
-    const handleSaveProperty = async (data: any) => {
+    const handleSaveProperty = async (data: PropertyFormData) => {
         if (!organizationId && !data.organization_id) {
             alert('Erro: Nenhuma organização ativa selecionada. Por favor, selecione uma empresa no menu lateral.');
             return;
@@ -114,11 +130,11 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             const { _bulkConfig, ...propertyData } = data;
 
             // Garantir que a organização está vinculada ao criar novo imóvel
-            const propertyToSave: any = {
+            const propertyToSave: Partial<Property> & { organization_id?: string } = {
                 ...propertyData,
                 organization_id: propertyData.organization_id || organizationId
             };
-            
+
             if (propertyToSave.type === 'BUILDING' && _bulkConfig && _bulkConfig.matrix) {
                 propertyToSave.specs = {
                     ...(propertyToSave.specs || {}),
@@ -144,13 +160,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 let totalCount = 0;
                 const usedIds: string[] = [];
                 
-                _bulkConfig.matrix.forEach((tower: any) => {
+                _bulkConfig.matrix.forEach((tower: TowerMatrixConfig) => {
                     const floors = tower.floors || 0;
                     const gridCells = tower.gridCells || [];
-                    
+
                     for (let f = 1; f <= floors; f++) {
-                        gridCells.forEach((cell: any) => {
-                            const numCfg = tower.numberingConfig || { type: 'FLOOR_BASED', startNumber: 101, prefix: 'Apto ' };
+                        gridCells.forEach((cell: GridCellConfig) => {
+                            const numCfg: TowerNumberingConfig = tower.numberingConfig || { type: 'FLOOR_BASED', startNumber: 101, prefix: 'Apto ' };
                             let displayNum = 0;
                             if (numCfg.type === 'FLOOR_BASED') {
                                 const unitOffset = numCfg.startNumber % 100;
@@ -181,7 +197,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 block: tower.name,
                                 floor: f,
                                 number: String(displayNum),
-                                position_type: cell.position_type || 'LATERAL',
+                                position_type: (cell.position_type === 'NONE' ? undefined : cell.position_type) || 'LATERAL',
                                 sun_orientation: cell.sun_orientation,
                                 price: propertyToSave.price || 0,
                                 initial_price: propertyToSave.initial_price || propertyToSave.price || 0,
@@ -199,8 +215,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 });
 
                 if (units.length > 0) {
-                    await commercialService.savePropertiesBatch(units as any);
-                    
+                    await commercialService.savePropertiesBatch(units);
+
                     // 2. Limpar unidades que NÃO estão mais na matriz e NÃO têm negócios
                     const unusedIds = existingUnits
                         .filter(u => u.id && !usedIds.includes(u.id))
@@ -222,11 +238,11 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 } else {
                     alert('Imóvel cadastrado com sucesso! (Nenhuma unidade gerada)');
                 }
-            } else if (propertyToSave.type === 'BUILDING' && _bulkConfig && _bulkConfig.count > 0) {
+            } else if (propertyToSave.type === 'BUILDING' && _bulkConfig && (_bulkConfig.count ?? 0) > 0) {
                 // Fallback legado
                 const units: Partial<Property>[] = [];
-                for (let i = 0; i < _bulkConfig.count; i++) {
-                    const unitNumber = _bulkConfig.startingNumber + (i * (_bulkConfig.increment || 1));
+                for (let i = 0; i < (_bulkConfig.count ?? 0); i++) {
+                    const unitNumber = (_bulkConfig.startingNumber ?? 1) + (i * (_bulkConfig.increment || 1));
                     units.push({
                         name: `${_bulkConfig.prefix}${unitNumber}`,
                         type: 'APARTMENT',
@@ -255,9 +271,10 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             setIsPropertyModalOpen(false);
             setEditingProperty(undefined);
             loadData();
-        } catch (err: any) {
-            console.error('[Commercial] Save Error:', err);
-            alert('Erro ao salvar imóvel: ' + (err.message || 'Erro desconhecido'));
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            console.error('[Commercial] Save Error:', error);
+            alert('Erro ao salvar imóvel: ' + error.message);
         }
     };
 
@@ -273,8 +290,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             setIsDealModalOpen(false);
             setEditingDeal(undefined);
             loadData();
-        } catch (err: any) {
-            alert('Erro ao registrar negócio: ' + (err.message || 'Erro desconhecido'));
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            alert('Erro ao registrar negócio: ' + error.message);
         }
     };
 
@@ -295,9 +313,10 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             alert(`${updatedUnits.length} unidades precificadas com sucesso usando Inteligência Hedônica!`);
             setIsPricingModalOpen(false);
             loadData();
-        } catch (err: any) {
-            console.error('[Pricing] Error applying hedonic pricing:', err);
-            alert('Erro ao aplicar precificação: ' + (err.message || 'Erro desconhecido'));
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            console.error('[Pricing] Error applying hedonic pricing:', error);
+            alert('Erro ao aplicar precificação: ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -309,8 +328,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 await commercialService.deleteDeal(id);
                 alert('Negociação excluída com sucesso!');
                 loadData();
-            } catch (err: any) {
-                alert(`IMPOSSÍVEL EXCLUIR: ${err.message || 'Erro de integridade'}`);
+            } catch (err: unknown) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                alert(`IMPOSSÍVEL EXCLUIR: ${error.message}`);
             }
         }
     };
@@ -321,8 +341,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 await commercialService.deleteProperty(id);
                 alert('Imóvel excluído!');
                 loadData();
-            } catch (err: any) {
-                alert('Erro ao excluir: ' + (err.message || 'Erro desconhecido'));
+            } catch (err: unknown) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                alert('Erro ao excluir: ' + error.message);
             }
         }
     };
@@ -342,8 +363,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             });
             alert(data.id ? 'Corretor atualizado!' : 'Corretor cadastrado!');
             loadData();
-        } catch (err: any) {
-            alert('Erro ao salvar corretor: ' + (err.message || 'Erro desconhecido'));
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            alert('Erro ao salvar corretor: ' + error.message);
         }
     };
 
@@ -353,8 +375,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 await brokerService.deleteProfile(id);
                 alert('Corretor excluído!');
                 loadData();
-            } catch (err: any) {
-                alert('Erro ao excluir: ' + (err.message || 'Erro desconhecido'));
+            } catch (err: unknown) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                alert('Erro ao excluir: ' + error.message);
             }
         }
     };
@@ -379,16 +402,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         });
 
         if (sortConfig) {
-            result.sort((a: any, b: any) => {
-                let aValue = a[sortConfig.key];
-                let bValue = b[sortConfig.key];
+            result.sort((a: Property, b: Property) => {
+                let aValue = (a as unknown as Record<string, unknown>)[sortConfig.key];
+                let bValue = (b as unknown as Record<string, unknown>)[sortConfig.key];
 
                 // Tratamento especial para números/nulos
                 if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'asc' ? Infinity : -Infinity;
                 if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'asc' ? Infinity : -Infinity;
 
-                if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+                if ((aValue as number) < (bValue as number)) return sortConfig.direction === 'asc' ? -1 : 1;
+                if ((aValue as number) > (bValue as number)) return sortConfig.direction === 'asc' ? 1 : -1;
                 return 0;
             });
         }
@@ -466,8 +489,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             alert(`${selectedProperties.length} imóveis atualizados com sucesso!`);
             setSelectedProperties([]);
             loadData();
-        } catch (err: any) {
-            alert('Erro na atualização em massa: ' + (err.message || 'Erro desconhecido'));
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            alert('Erro na atualização em massa: ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -1242,7 +1266,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 {/* Add New Deal Placeholder */}
                                 <button
                                     onClick={() => {
-                                        setEditingDeal({ id: '', property_id: '', client_id: '', type: 'SALE', value: 0, date: new Date().toISOString().split('T')[0], status: 'PENDING' } as any);
+                                        setEditingDeal({ id: '', property_id: '', client_id: '', type: 'SALE', value: 0, date: new Date().toISOString().split('T')[0], status: 'PENDING' } as PropertyDeal);
                                         setIsDealModalOpen(true);
                                     }}
                                     className="bg-gray-50 border-4 border-dashed border-gray-200 rounded-[2.5rem] p-10 flex flex-col items-center justify-center group hover:bg-white hover:border-blue-200 transition-all"
@@ -1345,7 +1369,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 </table>
                                 <button
                                     onClick={() => {
-                                        setEditingDeal({ type: 'SALE' } as any);
+                                        setEditingDeal({ type: 'SALE' } as PropertyDeal);
                                         setIsDealModalOpen(true);
                                     }}
                                     className="w-full py-8 bg-gray-50/50 hover:bg-gray-50 text-gray-400 font-black uppercase tracking-[0.3em] text-xs transition-all border-t border-gray-100 flex items-center justify-center gap-3 group"
@@ -1467,7 +1491,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 isOpen={isPropertyModalOpen}
                 onClose={() => { setIsPropertyModalOpen(false); setEditingProperty(undefined); }}
                 onSubmit={handleSaveProperty}
-                initialData={editingProperty || (selectedBuildingId ? { parent_id: selectedBuildingId, type: 'APARTMENT' } as any : undefined)}
+                initialData={editingProperty || (selectedBuildingId ? { parent_id: selectedBuildingId, type: 'APARTMENT' } as Property : undefined)}
                 defaultPurpose="SALE"
             />
 

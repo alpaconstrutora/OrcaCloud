@@ -9,7 +9,7 @@ import { organizationService } from '../services/organizationService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import MaterialSelectionModal from './MaterialSelectionModal';
 import DatabasePickerModal from './DatabasePickerModal';
-import { Supplier, BudgetEntry, SinapiType, SinapiItem, PaymentAccount, CostCenter, ChartOfAccount } from '../types';
+import { Supplier, BudgetEntry, SinapiType, SinapiItem, PaymentAccount, CostCenter, ChartOfAccount, CompositionComponent } from '../types';
 import { formatCurrency } from '../utils/financialMath';
 
 interface AvulsoItem { code: string; description: string; unit: string; quantity: number; unitPrice: number; }
@@ -24,7 +24,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const isEditing = !!editingOrderId;
     const [loading, setLoading] = React.useState(true);
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
-    const [projects, setProjects] = React.useState<any[]>([]);
+    const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
     const [accounts, setAccounts] = React.useState<PaymentAccount[]>([]);
     const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
     const [coa, setCoa] = React.useState<ChartOfAccount[]>([]);
@@ -47,7 +47,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const [selectedItems, setSelectedItems] = React.useState<Set<string>>(new Set());
     const [customQuantities, setCustomQuantities] = React.useState<Map<string, number>>(new Map());
     const [customPrices, setCustomPrices] = React.useState<Map<string, number>>(new Map());
-    const [selectedMaterialsData, setSelectedMaterialsData] = React.useState<Map<string, any>>(new Map());
+    const [selectedMaterialsData, setSelectedMaterialsData] = React.useState<Map<string, SinapiItem>>(new Map());
 
     // Composition Selection State
     const [selectedCompositionItem, setSelectedCompositionItem] = React.useState<BudgetEntry | null>(null);
@@ -70,7 +70,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 ]);
                 if (cancelled) return;
                 setSuppliers(suppliersList);
-                const orcamentos = projectsList.filter((p: any) => p.settings?.classification === 'ORCAMENTO' || p.settings?.classification === 'COST_ESTIMATION');
+                const orcamentos = projectsList.filter((p: { id: string; name: string; settings?: { classification?: string } }) => p.settings?.classification === 'ORCAMENTO' || p.settings?.classification === 'COST_ESTIMATION');
                 setProjects(orcamentos);
 
                 if (orgs && orgs.length > 0) {
@@ -116,19 +116,21 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     setCostCenter(existingOrder.costCenter || '');
                     setChartOfAccounts(existingOrder.chartOfAccounts || '');
                     // Separate avulso items from budget items
-                    const budgetOrderItems = existingOrder.items.filter((i: any) => !i.avulso);
-                    const avulsoOrderItems = existingOrder.items.filter((i: any) => i.avulso);
-                    setAvulsoItems(avulsoOrderItems.map((i: any) => ({
+                    type OrderItemWithAvulso = typeof existingOrder.items[number] & { avulso?: boolean };
+                    const allItems = existingOrder.items as OrderItemWithAvulso[];
+                    const budgetOrderItems = allItems.filter(i => !i.avulso);
+                    const avulsoOrderItems = allItems.filter(i => i.avulso);
+                    setAvulsoItems(avulsoOrderItems.map(i => ({
                         code: i.code, description: i.description, unit: i.unit,
                         quantity: i.quantity, unitPrice: i.unitPrice
                     })));
                     // Pre-select budget items from the order
-                    const itemCodes = new Set(budgetOrderItems.map((i: any) => i.code));
+                    const itemCodes = new Set(budgetOrderItems.map(i => i.code));
                     setSelectedItems(itemCodes);
                     // Pre-fill quantities and prices from the order
                     const quantities = new Map<string, number>();
                     const prices = new Map<string, number>();
-                    existingOrder.items.forEach((i: any) => {
+                    existingOrder.items.forEach((i) => {
                         if (i.quantity !== undefined) quantities.set(i.code, i.quantity);
                         if (i.unitPrice !== undefined) prices.set(i.code, i.unitPrice);
                     });
@@ -157,7 +159,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const [purchasedQuantities, setPurchasedQuantities] = React.useState<Map<string, number>>(new Map());
 
     // Helper to fetch and update prices for a budget
-    const fetchBudgetPrices = React.useCallback(async (budget: BudgetEntry[], settings: any) => {
+    const fetchBudgetPrices = React.useCallback(async (budget: BudgetEntry[], settings: { state?: string; socialChargesMode?: string } | null | undefined) => {
         const allCodes = new Set<string>();
         budget.forEach(item => {
             if (item.sinapiItem) {
@@ -298,8 +300,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
         // 2. Get items from materials data (compositions)
         const compositionItems = Array.from(selectedMaterialsData.values())
-            .filter((insumo: any) => selectedItems.has(insumo.code) && !budgetItems.some((bi: any) => bi.code === insumo.code))
-            .map((insumo: any) => {
+            .filter((insumo) => selectedItems.has(insumo.code) && !budgetItems.some((bi) => bi.code === insumo.code))
+            .map((insumo) => {
                 const code = insumo.code;
                 const qty = Number(customQuantities.get(code) || 0);
                 const price = customPrices.get(code) ?? Number(insumo.price || 0);
@@ -352,7 +354,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
             if (budgetItemId && projectData?.settings?.schedule?.itemSchedules) {
                 const scheduleItem = projectData.settings.schedule.itemSchedules.find(
-                    (s: any) => s.id === budgetItemId
+                    (s: { id?: string; startDate?: string }) => s.id === budgetItemId
                 );
                 if (scheduleItem?.startDate && !deliveryDate) {
                     setDeliveryDate(scheduleItem.startDate);
@@ -363,7 +365,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         setCustomQuantities(newQuantities);
     };
 
-    const handleCompositionSelection = (selectedInsumos: any[]) => {
+    const handleCompositionSelection = (selectedInsumos: (CompositionComponent & { selectedQuantity: number })[]) => {
         const newSelected = new Set(selectedItems);
         const newQuantities = new Map(customQuantities);
         const newData = new Map(selectedMaterialsData);
@@ -373,7 +375,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             newSelected.add(insumo.code);
             const currentQty = newQuantities.get(insumo.code) || 0;
             newQuantities.set(insumo.code, currentQty + insumo.selectedQuantity);
-            newData.set(insumo.code, insumo);
+            newData.set(insumo.code, insumo as unknown as SinapiItem);
             
             if (!customPrices.has(insumo.code) || customPrices.get(insumo.code) === 0) {
                 newCodesToFetch.push(insumo.code);
@@ -474,12 +476,13 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 });
             }
             onSave();
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error("Erro ao salvar pedido:", error);
-            if (error?.message?.startsWith('CONFLICT')) {
+            if (error.message?.startsWith('CONFLICT')) {
                 setFormError("Pedido foi modificado por outro usuário. Feche o formulário, recarregue e tente novamente.");
             } else {
-                const errorMessage = error.message || error.details || "Erro desconhecido";
+                const errorMessage = error.message || "Erro desconhecido";
                 setFormError(`Erro ao salvar o pedido: ${errorMessage}`);
             }
         } finally {
@@ -1012,7 +1015,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 };
 
 interface AvulsoItemModalProps {
-    projectData: any;
+    projectData: ProjectData | null;
     initial: AvulsoItem | null;
     onConfirm: (item: AvulsoItem) => void;
     onClose: () => void;

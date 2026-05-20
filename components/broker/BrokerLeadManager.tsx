@@ -180,7 +180,7 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                             </div>
                             <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Origem</label>
-                                <select value={newLead.origin} onChange={e => setNewLead(p => ({ ...p, origin: e.target.value as any }))}
+                                <select value={newLead.origin} onChange={e => setNewLead(p => ({ ...p, origin: e.target.value as BrokerLead['origin'] }))}
                                     className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm bg-white">
                                     {Object.entries(ORIGIN_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                                 </select>
@@ -347,7 +347,7 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                         <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Histórico de Interações</h4>
                         <div className="space-y-3">
                             {selectedLead.interactions?.map((interaction, i) => {
-                                const iconMap: Record<string, any> = {
+                                const iconMap: Record<string, React.ElementType> = {
                                     LIGACAO: Phone, VISITA: Calendar, EMAIL: Mail,
                                     WHATSAPP: MessageSquare, REUNIAO: Users, PROPOSTA: ChevronRight
                                 };

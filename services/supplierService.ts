@@ -27,8 +27,8 @@ export const supplierService = {
 
             if (error) throw error;
             return data as Supplier;
-        } catch (error: any) {
-            console.error("[SUPPLIER SERVICE] Error fetching supplier by email:", error.message);
+        } catch (error: unknown) {
+            console.error("[SUPPLIER SERVICE] Error fetching supplier by email:", error instanceof Error ? error.message : error);
             return null;
         }
     },
@@ -43,8 +43,8 @@ export const supplierService = {
 
             if (error) throw error;
             return data as Supplier;
-        } catch (error: any) {
-            console.error("[SUPPLIER SERVICE] Error fetching supplier by id:", error.message);
+        } catch (error: unknown) {
+            console.error("[SUPPLIER SERVICE] Error fetching supplier by id:", error instanceof Error ? error.message : error);
             return null;
         }
     },

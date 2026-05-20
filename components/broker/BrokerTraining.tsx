@@ -6,7 +6,7 @@ interface BrokerTrainingProps {
     brokerEmail: string;
 }
 
-const TYPE_CONFIG: Record<BrokerTrainingModule['type'], { icon: any; color: string; bg: string; label: string }> = {
+const TYPE_CONFIG: Record<BrokerTrainingModule['type'], { icon: React.ElementType; color: string; bg: string; label: string }> = {
     VIDEO: { icon: Video, color: 'text-red-600', bg: 'bg-red-50', label: 'Vídeo' },
     DOCUMENTO: { icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50', label: 'Documento' },
     QUIZ: { icon: Star, color: 'text-amber-600', bg: 'bg-amber-50', label: 'Quiz' },

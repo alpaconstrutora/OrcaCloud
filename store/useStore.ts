@@ -9,6 +9,7 @@ import {
     Investor,
     Supplier
 } from '../types';
+import { ProjectData } from '../services/projectService';
 import { projectService } from '../services/projectService';
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
@@ -17,8 +18,14 @@ import { supplierService } from '../services/supplierService';
 import { profileService } from '../services/profileService';
 import { INITIAL_PROJECT_SETTINGS, INITIAL_BUDGET } from '../constants';
 
+interface SessionData {
+    user?: { id: string; email?: string; [key: string]: unknown };
+    access_token?: string;
+    [key: string]: unknown;
+}
+
 interface AuthState {
-    session: any | null;
+    session: SessionData | null;
     loadingSession: boolean;
     currentProfile: {
         group: ProfileGroup;
@@ -34,7 +41,7 @@ interface AuthState {
     profileSynchronized: boolean;
     isRehydrating: boolean;
     activeClientId: string | undefined;
-    setSession: (session: any) => void;
+    setSession: (session: SessionData | null) => void;
     setLoadingSession: (loading: boolean) => void;
     setCurrentProfile: (profile: Partial<AuthState['currentProfile']>) => void;
     setSelectedLoginGroup: (group: ProfileGroup | null) => void;
@@ -57,7 +64,7 @@ interface UIState {
     isNotificationOpen: boolean;
     suppliesOrderMode: 'details' | 'logistics';
     setActiveView: (view: string) => void;
-    setManagementTab: (tab: any) => void;
+    setManagementTab: (tab: string) => void;
     setIsProjectModalOpen: (open: boolean, mode?: 'create' | 'edit') => void;
     setIsAIChatOpen: (open: boolean) => void;
     setIsNotificationOpen: (open: boolean) => void;
@@ -66,7 +73,7 @@ interface UIState {
 
 interface ProjectState {
     projectId: string | null;
-    projects: any[];
+    projects: ProjectData[];
     projectsLoading: boolean;
     organizations: Organization[];
     clients: Client[];
@@ -74,7 +81,7 @@ interface ProjectState {
     projectSettings: ProjectSettings | null;
     favorites: string[];
     setProjectId: (id: string | null) => void;
-    setProjects: (projects: any[]) => void;
+    setProjects: (projects: ProjectData[]) => void;
     setOrganizations: (orgs: Organization[]) => void;
     setClients: (clients: Client[]) => void;
     setBudget: (budget: BudgetEntry[]) => void;
@@ -183,7 +190,7 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
             // Se activeOrganizationId for null, buscamos todos os projetos permitidos via RLS
             // Se for explicitamente passado, filtramos por ele.
             const list = await projectService.listProjects(undefined, activeOrganizationId || undefined, true);
-            set({ projects: list });
+            set({ projects: list as unknown as ProjectData[] });
         } catch (err) {
             console.error("Error listing projects:", err);
             set({ projects: [] });

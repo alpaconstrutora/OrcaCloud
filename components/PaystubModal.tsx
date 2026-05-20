@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { payrollService, PayrollItem, PayrollResult, PayrollRun } from '../services/payrollService';
+import { payrollService, PayrollItem, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
 
 interface PaystubModalProps {
     orgId: string;
@@ -36,10 +36,10 @@ const formatMonthYear = (dateStr: string) => {
 };
 
 const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, onClose }) => {
-    const [result, setResult] = useState<any>(null);
-    const [items, setItems] = useState<any[]>([]);
-    const [events, setEvents] = useState<any[]>([]);
-    const [rubrics, setRubrics] = useState<any[]>([]);
+    const [result, setResult] = useState<PayrollResultWithEmployee | null>(null);
+    const [items, setItems] = useState<PayrollItem[]>([]);
+    const [events, setEvents] = useState<PayrollEvent[]>([]);
+    const [rubrics, setRubrics] = useState<PayrollRubric[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [run, setRun] = useState<PayrollRun | null>(null);
@@ -73,12 +73,12 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
             setRun(runData);
             setResult(resData);
             setRubrics(rubricsData);
-            const empEvents = eventsData.filter((e: any) => e.employee_id === employeeId);
+            const empEvents = eventsData.filter((e) => e.employee_id === employeeId);
             setEvents(empEvents);
             setItems(itemsData);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error loading paystub data:', err);
-            setError(err.message || 'Falha ao carregar dados do holerite.');
+            setError(err instanceof Error ? err.message : 'Falha ao carregar dados do holerite.');
         } finally {
             setLoading(false);
         }
@@ -112,7 +112,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
             });
 
             pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 2, canvas.height / 2);
-            const fileName = `Holerite_${result.employee?.name.replace(/\s+/g, '_')}_${run?.start_date}.pdf`;
+            const fileName = `Holerite_${result?.employee?.name.replace(/\s+/g, '_') ?? 'colaborador'}_${run?.start_date}.pdf`;
             pdf.save(fileName);
         } catch (err) {
             console.error('Erro ao gerar PDF:', err);
@@ -242,7 +242,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                                 </thead>
                                 <tbody className="text-xs">
                                     {[...items].sort((a, b) => {
-                                        const priority: any = { 'provento': 1, 'desconto': 2, 'informativa': 3, 'encargo': 3 };
+                                        const priority: Record<string, number> = { 'provento': 1, 'desconto': 2, 'informativa': 3, 'encargo': 3 };
                                         return (priority[a.type] || 9) - (priority[b.type] || 9);
                                     }).map((item, idx) => {
                                         const rubric = rubrics.find(r => r.code === item.code);

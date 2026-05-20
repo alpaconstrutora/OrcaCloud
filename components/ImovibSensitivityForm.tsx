@@ -67,7 +67,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
     };
 
     // Qualitative Risk Management (Saved in swot_analysis JSONB for simplicity)
-    const [riskNotes, setRiskNotes] = useState(study.swot_analysis?.risks || '');
+    const [riskNotes, setRiskNotes] = useState((study.swot_analysis?.risks as string) || '');
     const [isSaving, setIsSaving] = useState(false);
 
     const handleSaveRisks = async () => {

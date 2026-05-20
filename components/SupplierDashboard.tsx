@@ -169,7 +169,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         if (!activeOrderId) return;
         try {
             await orderService.updateOrder(activeOrderId, {
-                status: editingStatus as any,
+                status: editingStatus as PurchaseOrder['status'],
                 deliveryDate: editingDeliveryDate,
                 separationDate: editingSeparationDate,
                 shippedDate: editingShippedDate,
@@ -178,9 +178,9 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
             await loadOrders();
             setIsEditingLogistics(false);
             alert('Logística atualizada com sucesso!');
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error updating logistics:', error);
-            const message = error.message || '';
+            const message = error instanceof Error ? error.message : '';
             if (message.includes('check constraint')) {
                 alert('Erro: Staus não permitido. Por favor, certifique-se de que as migrações do banco de dados foram aplicadas.');
             } else if (message.includes('row-level security') || message.includes('RLS')) {
@@ -199,7 +199,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     { label: 'Negociações Ativas', val: '12', icon: <Clock className="w-5 h-5" />, color: 'indigo' },
                     { label: 'Cotações Pendentes', val: quotations.length.toString(), icon: <History className="w-5 h-5" />, color: 'amber' },
                     { label: 'Pedidos Pendentes', val: orders.filter(o => ['Rascunho', 'Enviado'].includes(o.status)).length.toString(), icon: <Package className="w-5 h-5" />, color: 'amber' },
-                    { label: 'Volume Faturado', val: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(orders.filter(o => o.status === 'Confirmado').reduce((sum, o) => sum + (o.items?.reduce((is: number, i: any) => is + (i.total || 0), 0) || 0), 0) / 1000) + 'k', icon: <DollarSign className="w-5 h-5" />, color: 'indigo' },
+                    { label: 'Volume Faturado', val: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(orders.filter(o => o.status === 'Confirmado').reduce((sum, o) => sum + (o.items?.reduce((is: number, i: { total?: number }) => is + (i.total || 0), 0) || 0), 0) / 1000) + 'k', icon: <DollarSign className="w-5 h-5" />, color: 'indigo' },
                 ].map((stat, i) => (
                     <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all group overflow-hidden relative">
                         <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500 text-gray-900">
@@ -332,7 +332,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 title={insight.title}
                                 content={insight.message}
                                 type={insight.type === 'warning' ? 'warning' : insight.type === 'opportunity' ? 'success' : 'info'}
-                                onAction={() => setActiveTab(insight.actionable?.target as any)}
+                                onAction={() => setActiveTab((insight.actionable?.target ?? 'overview') as typeof activeTab)}
                             />
                         ))}
                         {loadingAI && <div className="h-32 bg-gray-50 rounded-3xl animate-pulse" />}
@@ -562,7 +562,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 const order = orders.find(o => o.id === activeOrderId);
 
                 // Helper to map order status to Lifeline status
-                const getLifelineStatus = (status: string): any => {
+                const getLifelineStatus = (status: string): string => {
                     switch (status) {
                         case 'Confirmado': return 'CONFIRMED';
                         case 'Separação': return 'PREPARING';
@@ -575,7 +575,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 };
 
                 // Helper to map Lifeline status back to order status
-                const getOrderStatusFromLifeline = (lifelineStatus: string): any => {
+                const getOrderStatusFromLifeline = (lifelineStatus: string): string => {
                     switch (lifelineStatus) {
                         case 'CONFIRMED': return 'Confirmado';
                         case 'PREPARING': return 'Separação';
@@ -635,7 +635,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
                         <div className="py-12">
                             <OrderLifeline
-                                status={getLifelineStatus(isEditingLogistics ? editingStatus : (order?.status || ''))}
+                                status={getLifelineStatus(isEditingLogistics ? editingStatus : (order?.status || '')) as import('./OrderLifeline').OrderStatus}
                                 estimatedDelivery={isEditingLogistics ? editingDeliveryDate : (order?.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : 'A definir')}
                                 separationDate={isEditingLogistics ? editingSeparationDate : order?.separationDate}
                                 shippedDate={isEditingLogistics ? editingShippedDate : order?.shippedDate}
@@ -773,7 +773,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Valor Total</p>
                                             <span className="text-xl font-black text-gray-900">
                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                                    order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0
+                                                    order.items?.reduce((sum: number, item: { total?: number }) => sum + (item.total || 0), 0) || 0
                                                 )}
                                             </span>
                                         </div>
@@ -867,7 +867,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                                 </td>
                                                 <td className="px-8 py-5 text-right font-black text-gray-900 border-r border-gray-50">
                                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                                        order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0
+                                                        order.items?.reduce((sum: number, item: { total?: number }) => sum + (item.total || 0), 0) || 0
                                                     )}
                                                 </td>
                                                 <td className="px-8 py-5">
@@ -1087,7 +1087,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     ].map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
+                            onClick={() => setActiveTab(tab.id as typeof activeTab)}
                             className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black transition-all duration-300 uppercase tracking-widest ${activeTab === tab.id
                                 ? 'bg-white text-indigo-600 shadow-xl scale-105'
                                 : 'text-gray-400 hover:text-gray-600'

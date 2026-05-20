@@ -16,6 +16,13 @@ import ResolveEscalationModal     from './ResolveEscalationModal';
 import EditConditionModal         from './EditConditionModal';
 import ReviseActionPlanModal      from './ReviseActionPlanModal';
 
+interface ConditionEvent {
+  event_id: string;
+  occurred_at: string;
+  event_type: string;
+  aggregate_version: number;
+}
+
 type Modal =
   | 'classify'
   | 'assign_responsibility'
@@ -47,7 +54,7 @@ const ORIGIN_LABELS   = {
 const ConditionDetailPanel: React.FC<Props> = ({
   condition, currentActor, organizationId, onClose, onRefresh
 }) => {
-  const [history, setHistory]         = React.useState<any[]>([]);
+  const [history, setHistory]         = React.useState<ConditionEvent[]>([]);
   const [loadingHist, setLoadingHist] = React.useState(false);
   const [activeTab, setActiveTab]     = React.useState<'info' | 'evidence' | 'history'>('info');
   const [openModal, setOpenModal]     = React.useState<Modal | null>(null);
@@ -86,8 +93,8 @@ const ConditionDetailPanel: React.FC<Props> = ({
         startedBy:       currentActor,
       });
       onRefresh();
-    } catch (e: any) {
-      setActionError(e.message);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Erro ao iniciar reparo');
     } finally {
       setIsActing(false);
     }
@@ -105,8 +112,8 @@ const ConditionDetailPanel: React.FC<Props> = ({
         validatedBy:     currentActor,
       });
       onRefresh();
-    } catch (e: any) {
-      setActionError(e.message);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Erro ao validar');
     } finally {
       setIsActing(false);
     }
@@ -123,8 +130,8 @@ const ConditionDetailPanel: React.FC<Props> = ({
         closedBy:        currentActor,
       });
       onRefresh();
-    } catch (e: any) {
-      setActionError(e.message);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Erro ao encerrar');
     } finally {
       setIsActing(false);
     }

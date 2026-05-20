@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
-import { Contract, Supplier, CostCenter, ChartOfAccount } from '../types';
+import { Contract, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature } from '../types';
 import { supplierService } from '../services/supplierService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
@@ -49,7 +49,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         ...initialData
     });
 
-    const [projects, setProjects] = React.useState<any[]>([]);
+    const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
 
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
@@ -119,9 +119,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             const publicUrl = storageService.getPublicUrl('documents', path);
 
             setFormData(prev => ({ ...prev, signed_contract_url: publicUrl }));
-        } catch (error: any) {
-            console.error("Erro ao fazer upload do contrato:", error);
-            alert(`Erro ao fazer upload: ${error.message || 'Erro desconhecido'}`);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error("Erro ao fazer upload do contrato:", err);
+            alert(`Erro ao fazer upload: ${err.message || 'Erro desconhecido'}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -143,9 +144,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 payload.due_day = undefined;
             }
             await onSubmit(payload);
-        } catch (err: any) {
-            console.error("Erro ao processar contrato:", err);
-            setError(err.message || "Erro desconhecido ao salvar contrato.");
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            console.error("Erro ao processar contrato:", error);
+            setError(error.message || "Erro desconhecido ao salvar contrato.");
         } finally {
             setIsSubmitting(false);
         }
@@ -248,7 +250,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         <select
                                             required
                                             value={formData.status || 'Rascunho'}
-                                            onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                                            onChange={(e) => setFormData({ ...formData, status: e.target.value as ContractStatus })}
                                             className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                         >
                                             <option value="Rascunho">Rascunho</option>
@@ -330,7 +332,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     <select
                                         required
                                         value={formData.contract_type}
-                                        onChange={(e) => setFormData({ ...formData, contract_type: e.target.value as any })}
+                                        onChange={(e) => setFormData({ ...formData, contract_type: e.target.value as ContractType })}
                                         className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                     >
                                         <option value="Empreitada Global">Empreitada Global</option>
@@ -345,7 +347,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     <select
                                         required
                                         value={formData.nature}
-                                        onChange={(e) => setFormData({ ...formData, nature: e.target.value as any })}
+                                        onChange={(e) => setFormData({ ...formData, nature: e.target.value as ContractNature })}
                                         className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                     >
                                         <option value="Fornecimento">Fornecimento</option>
@@ -474,7 +476,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             <select
                                                 required
                                                 value={formData.billing_cycle || 'Mensal'}
-                                                onChange={(e) => setFormData({ ...formData, billing_cycle: e.target.value as any })}
+                                                onChange={(e) => setFormData({ ...formData, billing_cycle: e.target.value as 'Mensal' | 'Bimestral' | 'Semestral' | 'Anual' })}
                                                 className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                             >
                                                 <option value="Mensal">Mensal</option>

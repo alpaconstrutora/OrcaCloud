@@ -1,37 +1,43 @@
 import React, { useMemo } from 'react';
 import { AlertTriangle, Clock, ListTodo, Target } from 'lucide-react';
 
+interface ScheduleItem {
+    slack?: number;
+    duration: number;
+    [key: string]: unknown;
+}
+
+interface ScheduleResource {
+    [key: string]: unknown;
+}
+
+interface SchedulePeriod {
+    [key: string]: unknown;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SettingsLike = any;
 interface ProjectSummary {
     id: string;
     name: string;
-    updated_at: string;
-    created_at: string;
-    settings?: {
-        classification?: string;
-        budgetStatus?: string;
-        obraStatus?: string;
-        obraProgress?: number;
-        client?: string;
-        area?: number;
-        estimatedCost?: number;
-        schedule?: {
-            startDate?: string;
-            endDate?: string;
-            duration?: number;
-            itemSchedules?: any[];
-            resources?: any[];
-            distributions?: any;
-            periods?: any[];
-        };
-        [key: string]: any;
-    };
+    updated_at?: string;
+    created_at?: string;
+    settings?: SettingsLike;
 }
 
 interface PlanningDashboardProps {
     projects: ProjectSummary[];
 }
 
-const StatCard = ({ title, value, subtext, icon: Icon, color }: any) => (
+interface StatCardProps {
+    title: string;
+    value: string | number;
+    subtext?: string;
+    icon: React.ElementType;
+    color: string;
+}
+
+const StatCard = ({ title, value, subtext, icon: Icon, color }: StatCardProps) => (
     <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex items-start justify-between hover:shadow-md transition-all">
         <div>
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{title}</p>

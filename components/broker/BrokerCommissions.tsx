@@ -8,7 +8,7 @@ interface BrokerCommissionsProps {
     organizationId?: string;
 }
 
-const STATUS_CONFIG: Record<BrokerCommission['status'], { label: string; color: string; bg: string; icon: any }> = {
+const STATUS_CONFIG: Record<BrokerCommission['status'], { label: string; color: string; bg: string; icon: React.ElementType }> = {
     PENDENTE: { label: 'Pendente', color: 'text-gray-500', bg: 'bg-gray-50', icon: Clock },
     PARCIAL: { label: 'Parcial', color: 'text-amber-600', bg: 'bg-amber-50', icon: AlertCircle },
     LIBERADA: { label: 'Liberada', color: 'text-blue-600', bg: 'bg-blue-50', icon: CheckCircle2 },

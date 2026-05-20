@@ -1,16 +1,18 @@
 import React from 'react';
-import { projectService } from '../services/projectService';
+import { projectService, ProjectData } from '../services/projectService';
 import { FolderOpen, Calendar, Trash2, Search, Loader2, Settings, Plus, Copy, FileSpreadsheet, Edit2, LayoutDashboard, Table2, Lock, Unlock, BookOpen, Link2 } from 'lucide-react';
 
 import ExcelImportModal from './ExcelImportModal';
-import { BudgetEntry } from '../types';
+import { BudgetEntry, ProjectSettings } from '../types';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SettingsLike = any;
 interface ProjectSummary {
     id: string;
     name: string;
-    updated_at: string;
-    created_at: string;
-    settings?: any;
+    updated_at?: string;
+    created_at?: string;
+    settings?: SettingsLike;
     code?: string;
 }
 
@@ -180,10 +182,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     return a.name.localeCompare(b.name);
                 }
                 if (sortBy === 'recent') {
-                    return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
+                    return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
                 }
                 if (sortBy === 'oldest') {
-                    return new Date(a.updated_at || a.created_at).getTime() - new Date(b.updated_at || b.created_at).getTime();
+                    return new Date(a.updated_at || a.created_at || 0).getTime() - new Date(b.updated_at || b.created_at || 0).getTime();
                 }
                 if (sortBy === 'name-asc') {
                     return a.name.localeCompare(b.name);
@@ -485,7 +487,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                         {project.name}
                                                     </div>
                                                     <div className="text-xs text-gray-500 flex items-center gap-1">
-                                                        CR: {new Date(project.created_at).toLocaleDateString()}
+                                                        CR: {new Date(project.created_at || 0).toLocaleDateString()}
                                                     </div>
                                                 </div>
                                             </div>
@@ -630,10 +632,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 <div className="flex flex-col">
                                                     <div className="flex items-center gap-1 text-sm text-gray-600">
                                                         <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                                                        {new Date(project.updated_at || project.created_at).toLocaleDateString()}
+                                                        {new Date(project.updated_at || project.created_at || 0).toLocaleDateString()}
                                                     </div>
                                                     <span className="text-xs text-gray-400">
-                                                        {new Date(project.updated_at || project.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        {new Date(project.updated_at || project.created_at || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                     </span>
                                                 </div>
                                             )}
@@ -842,13 +844,13 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     <div className="space-y-2 pt-4 border-t border-gray-50">
                                         <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-400">Criado em:</span>
-                                            <span className="text-gray-600 font-medium">{new Date(project.created_at).toLocaleDateString()}</span>
+                                            <span className="text-gray-600 font-medium">{new Date(project.created_at || 0).toLocaleDateString()}</span>
                                         </div>
                                         <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-400">Atualizado em:</span>
                                             <div className="text-right">
-                                                <div className="text-gray-600 font-medium">{new Date(project.updated_at || project.created_at).toLocaleDateString()}</div>
-                                                <div className="text-[10px] text-gray-400">{new Date(project.updated_at || project.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                <div className="text-gray-600 font-medium">{new Date(project.updated_at || project.created_at || 0).toLocaleDateString()}</div>
+                                                <div className="text-[10px] text-gray-400">{new Date(project.updated_at || project.created_at || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                                             </div>
                                         </div>
                                     </div>

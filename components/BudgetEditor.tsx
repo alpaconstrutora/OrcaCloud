@@ -261,7 +261,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     // Migration Logic: Check if we need to migrate from Phase[] to WBSGroup[]
     // We check if the first item has 'phases' property. If NOT, it's the old structure.
     // However, due to TS types, we might need to cast or check structure at runtime.
-    const currentWBS = settings.wbs as any[];
+    const currentWBS = settings.wbs as (WBSGroup | WBSPhase)[];
 
     if (!currentWBS || currentWBS.length === 0) {
       const defaultWBS: WBSGroup[] = [
@@ -304,9 +304,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         setExpandedGroups(['01']);
       } else {
         // It's already new structure - Expand ALL by default
-        const allGroupIds = currentWBS.map((g: any) => g.id);
-        const allPhaseIds = currentWBS.flatMap((g: any) => g.phases.map((p: any) => p.id));
-        const allSubPhaseNames = currentWBS.flatMap((g: any) => g.phases.flatMap((p: any) => p.subPhases));
+        const wbsGroups = currentWBS as WBSGroup[];
+        const allGroupIds = wbsGroups.map((g) => g.id);
+        const allPhaseIds = wbsGroups.flatMap((g) => g.phases.map((p) => p.id));
+        const allSubPhaseNames = wbsGroups.flatMap((g) => g.phases.flatMap((p) => p.subPhases));
 
         setExpandedGroups(allGroupIds);
         setExpandedPhases(allPhaseIds);
@@ -1300,9 +1301,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       setTimeout(() => setNotification(null), 3000);
       setIsSaveDbModalOpen(false);
       setItemToSave(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Save error:", error);
-      alert(`Erro ao salvar item: ${error.message || JSON.stringify(error)}`);
+      const msg = error instanceof Error ? error.message : JSON.stringify(error);
+      alert(`Erro ao salvar item: ${msg}`);
     }
   };
 
@@ -1390,12 +1392,12 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const getNatureBreakdown = (entry: BudgetEntry) => {
     const breakdown = { material: 0, labor: 0, equipment: 0, other: 0 };
 
-    const traverse = (item: any, quantity: number) => {
+    const traverse = (item: CompositionComponent & { composition?: CompositionComponent[] }, quantity: number) => {
       if (!item) return;
 
       const itemType = (item.type || '') as string;
       const isComposition = itemType === 'COMPOSITION' || itemType === 'COMP' || itemType === 'SERVICE';
-      let composition = item.composition;
+      let composition: CompositionComponent[] | undefined = item.composition;
 
       if ((!composition || composition.length === 0) && isComposition) {
         const aux = auxiliaryItems.get(item.code);
@@ -1403,7 +1405,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       }
 
       if (isComposition && composition && composition.length > 0) {
-        composition.forEach((comp: any) => {
+        composition.forEach((comp) => {
           const compAux = auxiliaryItems.get(comp.code);
           traverse({
             code: comp.code,
@@ -1411,6 +1413,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             unit: comp.unit,
             price: comp.price,
             type: comp.type,
+            quantity: comp.quantity,
             nature: comp.nature,
             category: compAux?.category || comp.category
           }, quantity * comp.quantity);
@@ -1436,7 +1439,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     };
 
     if (entry.sinapiItem) {
-      traverse(entry.sinapiItem, entry.quantity);
+      traverse(entry.sinapiItem as unknown as CompositionComponent & { composition?: CompositionComponent[] }, entry.quantity);
     }
     return breakdown;
   };
@@ -2300,7 +2303,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <select
                         className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 text-gray-600 cursor-pointer min-w-[120px]"
                         value={searchScope}
-                        onChange={(e) => setSearchScope(e.target.value as any)}
+                        onChange={(e) => setSearchScope(e.target.value as 'description' | 'category' | 'both')}
                         title="Escopo da busca"
                       >
                         <option value="description">Descrição</option>
@@ -2311,7 +2314,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <select
                         className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-blue-50 text-blue-700 border-blue-100 cursor-pointer min-w-[130px]"
                         value={searchMode}
-                        onChange={(e) => setSearchMode(e.target.value as any)}
+                        onChange={(e) => setSearchMode(e.target.value as 'exact' | 'all-words')}
                         title="Modo da busca"
                       >
                         <option value="exact">Frase Exata</option>

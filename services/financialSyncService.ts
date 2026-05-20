@@ -6,14 +6,14 @@ export const financialSyncService = {
      * Sincroniza os dados financeiros do projeto (parcelas e transações manuais)
      * com a tabela central de transações internas para conciliação.
      */
-    async syncFinancialData(project: any, organizationId: string) {
+    async syncFinancialData(project: { name: string; settings?: ProjectSettings }, organizationId: string) {
         if (!project || !organizationId) return;
 
         const settings = project.settings as ProjectSettings;
         const info = settings.financialInfo;
         if (!info) return;
 
-        const internalTxs: any[] = [];
+        const internalTxs: Record<string, unknown>[] = [];
 
         // 1. Processar Parcelas (Receitas)
         if (info.installments && info.installments.length > 0) {
@@ -27,7 +27,7 @@ export const financialSyncService = {
                     direction: 'CREDIT',
                     description: inst.description || `Parcela - ${project.name}`,
                     entity_name: inst.clientName,
-                    category: (inst as any).category || 'Receita de Obra',
+                    category: (inst as unknown as Record<string, unknown>).category || 'Receita de Obra',
                     status: inst.status === 'PAID' ? 'CONCILIATED' : 'PENDING'
                 });
             });

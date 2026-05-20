@@ -28,7 +28,7 @@ import {
     AreaChart,
     Area
 } from 'recharts';
-import { ProjectSettings, UserProfile, BudgetEntry } from '../types';
+import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
 import { Investor, investorService } from '../services/investorService';
 import { calculateProjectProgress } from '../utils/projectUtils';
 import InvestmentSimulator from './InvestmentSimulator';
@@ -39,12 +39,39 @@ import { aiService, AIInsight } from '../services/aiService';
 import AIInsightCard from './AIInsightCard';
 import PaymentsPanel from './PaymentsPanel';
 import TaxReport from './TaxReport';
-import { marketDataService } from '../services/marketDataService';
+import { marketDataService, MarketIndexSeries } from '../services/marketDataService';
 import CUBMarketPanel from './CUBMarketPanel';
 import { Line } from 'recharts';
+import { ProjectData } from '../services/projectService';
+
+interface InvestorReport {
+    name: string;
+    date: string;
+    type: string;
+    url?: string;
+}
+
+interface HoldingItem {
+    id?: string;
+    name: string;
+    cota: string;
+    invested?: number;
+    equity: string | number;
+    currentValue?: number;
+    status: string;
+    yield: string;
+    progress: number;
+    location?: string;
+    yoc?: number;
+}
+
+interface DiaryEntryActivity {
+    itemId: string;
+    realizedQty?: number;
+}
 
 // Helper to calculate progress up to a specific date
-const calculateProgressUntilDate = (budget: any[], diaryEntries: any[], date: Date) => {
+const calculateProgressUntilDate = (budget: BudgetEntry[], diaryEntries: DiaryEntry[], date: Date) => {
     if (!budget || !diaryEntries) return 0;
 
     // Filter entries before or equal to date
@@ -54,7 +81,7 @@ const calculateProgressUntilDate = (budget: any[], diaryEntries: any[], date: Da
     const itemQty: Record<string, number> = {};
     validEntries.forEach(entry => {
         if (entry.status !== 'Recusado') {
-            entry.activities?.forEach((activity: any) => {
+            entry.activities?.forEach((activity: DiaryEntryActivity) => {
                 if (!itemQty[activity.itemId]) itemQty[activity.itemId] = 0;
                 itemQty[activity.itemId] += activity.realizedQty || 0;
             });
@@ -212,7 +239,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
             const fetchAI = async () => {
                 setLoadingAI(true);
                 try {
-                    const insight = await aiService.analyzePortfolio(investorData);
+                    const insight = await aiService.analyzePortfolio(investorData as unknown as { summary?: { equity?: number }; holdings?: unknown[] });
                     setAiInsight(insight);
                 } catch (e) {
                     console.error("AI Error", e);

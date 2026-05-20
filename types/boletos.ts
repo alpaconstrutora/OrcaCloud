@@ -104,8 +104,8 @@ export interface BoletoAuditoria {
     organization_id: string;
     acao: string;
     campo?: string;
-    valor_antes?: any;
-    valor_depois?: any;
+    valor_antes?: unknown;
+    valor_depois?: unknown;
     metodo: 'sistema' | 'usuario';
     usuario_email?: string;
     created_at: string;

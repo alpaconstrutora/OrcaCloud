@@ -131,7 +131,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             if (c?.organization_id) {
                 try {
                     const orgs = await organizationService.listOrganizations();
-                    const org = orgs.find((o: any) => o.id === c.organization_id);
+                    const org = orgs.find((o) => o.id === c.organization_id);
                     if (org) setOrganization(org);
                 } catch (err) {
                     console.error("Erro ao carregar organização:", err);
@@ -194,9 +194,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 organization,
                 projectSettings
             );
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Erro ao exportar relatório:", error);
-            notify(`Erro ao gerar PDF: ${error.message || 'Erro desconhecido'}`, "error");
+            notify(`Erro ao gerar PDF: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, "error");
         } finally {
             setExporting(false);
         }
@@ -349,9 +349,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 projectSettings
             );
             notify("PDF do contrato gerado com sucesso!", "success");
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Erro ao emitir contrato:", error);
-            notify(`Erro na operação: ${error.message || 'Erro desconhecido'}`, "error");
+            notify(`Erro na operação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, "error");
         } finally {
             setLoading(false);
         }
@@ -386,8 +386,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                     await webhookService.triggerContractSentWebhook(
                         contract,
-                        supplierData,
-                        projectSettings,
+                        supplierData ?? undefined,
+                        projectSettings ?? undefined,
                         false,
                         template
                     );
@@ -401,9 +401,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     await loadContractData();
                     setIsTemplateModalOpen(false);
                     notify("Contrato enviado via automação com sucesso!", "success");
-                } catch (error: any) {
+                } catch (error: unknown) {
                     console.error("Erro ao enviar contrato:", error);
-                    notify(`Erro na operação: ${error.message || 'Erro desconhecido'}`, "error");
+                    notify(`Erro na operação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, "error");
                 } finally {
                     setLoading(false);
                 }
@@ -584,7 +584,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 ]).map((tab) => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
+                        onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'utility_bills')}
                         className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all font-medium text-[12px] uppercase tracking-widest ${activeTab === tab.id
                             ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'

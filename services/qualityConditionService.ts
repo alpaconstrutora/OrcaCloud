@@ -15,6 +15,14 @@ import type {
   TaxonomyPathology,
   ConditionFilters,
   RpcResult,
+  FloorPlanPoint,
+  ConditionState,
+  Severity,
+  ProbableOrigin,
+  DataQualityScore,
+  ActorReference,
+  TaxonomyReference,
+  RelatedCondition,
   DetectConditionCommand,
   ClassifyConditionCommand,
   AssignResponsibilityCommand,
@@ -396,8 +404,21 @@ export const qualityConditionService = {
 // Mapper: snake_case do banco → camelCase dos tipos
 // ────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapRow(row: any): ConstructionCondition {
+type DbConditionRow = Record<string, unknown> & {
+  organization_id: string; id: string; asset_empreendimento_id: string;
+  asset_bloco_id?: string; asset_torre_id?: string; asset_unidade_id?: string;
+  asset_ambiente_id?: string; asset_componente_id?: string; asset_floor_plan_ref?: string;
+  provisional_taxonomy?: unknown; taxonomy?: unknown; state: string; severity: string;
+  origin: string; description?: string; quality_score?: unknown;
+  detected_at: string; detected_by: string; version: number;
+  related_conditions?: unknown[]; condition_evidence?: Record<string, unknown>[];
+  condition_action_plans?: Record<string, unknown>[];
+  condition_responsibilities?: Record<string, unknown>[];
+  condition_contestations?: Record<string, unknown>[];
+  condition_validations?: Record<string, unknown>[];
+  created_at: string; updated_at: string;
+};
+function mapRow(row: DbConditionRow): ConstructionCondition {
   return {
     organizationId:  row.organization_id,
     id:              row.id,
@@ -408,19 +429,19 @@ function mapRow(row: any): ConstructionCondition {
       unidadeId:        row.asset_unidade_id,
       ambienteId:       row.asset_ambiente_id,
       componenteId:     row.asset_componente_id,
-      floorPlanRef:     row.asset_floor_plan_ref,
+      floorPlanRef:     row.asset_floor_plan_ref as FloorPlanPoint | undefined,
     },
-    provisionalTaxonomy: row.provisional_taxonomy,
-    taxonomy:            row.taxonomy,
-    state:               row.state,
-    severity:            row.severity,
-    origin:              row.origin,
+    provisionalTaxonomy: row.provisional_taxonomy as TaxonomyReference | undefined,
+    taxonomy:            row.taxonomy as TaxonomyReference | undefined,
+    state:               row.state as ConditionState,
+    severity:            row.severity as Severity,
+    origin:              row.origin as ProbableOrigin,
     description:         row.description,
-    qualityScore:        row.quality_score,
+    qualityScore:        row.quality_score as DataQualityScore | undefined,
     detectedAt:          row.detected_at,
-    detectedBy:          row.detected_by,
+    detectedBy:          row.detected_by as unknown as ActorReference,
     version:             row.version,
-    relatedConditions:   row.related_conditions ?? [],
+    relatedConditions:   (row.related_conditions ?? []) as RelatedCondition[],
     evidence:            (row.condition_evidence ?? []).map(mapEvidence),
     actionPlan:          (row.condition_action_plans ?? []).find((p: any) => p.is_current)
                            ? mapActionPlan((row.condition_action_plans ?? []).find((p: any) => p.is_current))

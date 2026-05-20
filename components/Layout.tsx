@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -98,7 +98,7 @@ const Layout: React.FC<LayoutProps> = ({
     };
   }, [profile.email, profile.group, fetchUnreadCount]);
 
-  const NavItem = ({ id, icon: Icon, label, badge, forceFull, onClickOverride }: { id: string, icon: any, label: string, badge?: number, forceFull?: boolean, onClickOverride?: () => void }) => {
+  const NavItem = ({ id, icon: Icon, label, badge, forceFull, onClickOverride }: { id: string, icon: React.ElementType, label: string, badge?: number, forceFull?: boolean, onClickOverride?: () => void }) => {
     const isActive = activeView === id;
     const effectivelyCollapsed = isCollapsed && !forceFull;
 
@@ -145,7 +145,7 @@ const Layout: React.FC<LayoutProps> = ({
     );
   };
 
-  const NavDropdown = ({ label, icon: Icon, isOpen, onToggle, children, hasActiveChild }: { label: string, icon: any, isOpen: boolean, onToggle: () => void, children: React.ReactNode, hasActiveChild?: boolean }) => {
+  const NavDropdown = ({ label, icon: Icon, isOpen, onToggle, children, hasActiveChild }: { label: string, icon: React.ElementType, isOpen: boolean, onToggle: () => void, children: React.ReactNode, hasActiveChild?: boolean }) => {
     return (
       <div className="mb-1">
         <button
@@ -174,7 +174,7 @@ const Layout: React.FC<LayoutProps> = ({
     );
   };
 
-  const DropdownItem = ({ id, label, icon: Icon, badge }: { id: string, label: string, icon?: any, badge?: number }) => {
+  const DropdownItem = ({ id, label, icon: Icon, badge }: { id: string, label: string, icon?: React.ElementType, badge?: number }) => {
     const isActive = activeView === id;
     return (
       <button
@@ -297,6 +297,7 @@ const Layout: React.FC<LayoutProps> = ({
               />
               <NavItem id="financial-boletos" icon={FileText} label="Boletos" />
               <NavItem id="contas-a-pagar" icon={TrendingDown} label="Contas a Pagar" />
+              <NavItem id="fiscal-nfe" icon={Receipt} label="Fiscal & NF-e" />
               <NavItem id="automation" icon={Zap} label="Automação" />
 
               <NavGroup label="Comercial" />
@@ -464,28 +465,37 @@ const Layout: React.FC<LayoutProps> = ({
 
             {(activeView === 'analytic' || activeView === 'abc-curve' || activeView === 'parametric' || activeView === 'project-settings' || activeView === 'reports') && (
               <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 bg-blue-50/50 px-3 py-1.5 rounded-lg border border-blue-100/50">
-                <span className="text-[10px] md:text-xs font-bold text-blue-500 uppercase tracking-tighter">
-                  {(children as any)?.props?.settings?.classification === 'OBRA' ? 'Obra Atual' : 'Orçamento Atual'}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-gray-900 truncate max-w-[120px] md:max-w-xs">{projectName}</span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => onChangeView((children as any)?.props?.settings?.classification === 'OBRA' ? 'project-overview' : 'dashboard')}
-                      className="p-1 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors"
-                      title="Central do Projeto"
-                    >
-                      <LayoutDashboard className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => onChangeView('project-settings')}
-                      className="p-1 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"
-                      title={(children as any)?.props?.settings?.classification === 'OBRA' ? 'Configurações da Obra' : 'Configurações do Orçamento'}
-                    >
-                      <Settings className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+                {(() => {
+                  const childProps = React.isValidElement(children) ? (children.props as Record<string, unknown>) : {};
+                  const childSettings = childProps?.settings as Record<string, unknown> | undefined;
+                  const classification = childSettings?.classification as string | undefined;
+                  return (
+                    <>
+                      <span className="text-[10px] md:text-xs font-bold text-blue-500 uppercase tracking-tighter">
+                        {classification === 'OBRA' ? 'Obra Atual' : 'Orçamento Atual'}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-gray-900 truncate max-w-[120px] md:max-w-xs">{projectName}</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => onChangeView(classification === 'OBRA' ? 'project-overview' : 'dashboard')}
+                            className="p-1 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors"
+                            title="Central do Projeto"
+                          >
+                            <LayoutDashboard className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => onChangeView('project-settings')}
+                            className="p-1 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"
+                            title={classification === 'OBRA' ? 'Configurações da Obra' : 'Configurações do Orçamento'}
+                          >
+                            <Settings className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>

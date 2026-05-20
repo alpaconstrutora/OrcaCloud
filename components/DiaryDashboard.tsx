@@ -1,15 +1,14 @@
 import React, { useMemo } from 'react';
 import { BookOpen, AlertTriangle, Calendar, CheckCircle2 } from 'lucide-react';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SettingsLike = any;
 interface ProjectSummary {
     id: string;
     name: string;
-    updated_at: string;
-    created_at: string;
-    settings?: {
-        diaryEntries?: any[];
-        [key: string]: any;
-    };
+    updated_at?: string;
+    created_at?: string;
+    settings?: SettingsLike;
 }
 
 interface DiaryDashboardProps {

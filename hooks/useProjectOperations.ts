@@ -7,14 +7,14 @@ import { INITIAL_PROJECT_SETTINGS, INITIAL_BUDGET, BASE_CUB_RATES, CUB_STANDARDS
 
 interface UseProjectOperationsProps {
   organizations: Organization[];
-  projects: any[];
+  projects: { id: string; name: string; settings?: ProjectSettings }[];
   projectSettings: ProjectSettings | null;
   projectModalMode: 'create' | 'edit' | 'import';
   projectId: string | null;
   budget: BudgetEntry[];
   activeOrganizationId: string | null;
   activeView: string;
-  session: any;
+  session: { user?: { email?: string } } | null;
   fetchProjects: (orgs: Organization[]) => void;
   fetchOrganizations: () => void;
   setProjectSettings: (settings: ProjectSettings) => void;
@@ -53,19 +53,19 @@ export const useProjectOperations = ({
     setIsProjectModalOpen(true, 'edit');
   }, [projectSettings, setProjectModalInitialClassification, setIsProjectModalOpen]);
 
-  const handleUpsertProject = async (data: any) => {
+  const handleUpsertProject = async (data: Partial<ProjectSettings> & { organizationId?: string; code?: string }) => {
     setIsSaving(true);
     try {
       const baseRate = BASE_CUB_RATES[data.location as keyof typeof BASE_CUB_RATES] || 2000.00;
       const multiplier = CUB_STANDARDS_DATA[data.standard as keyof typeof CUB_STANDARDS_DATA]?.multiplier || 1.0;
       const estimatedCubRate = baseRate * multiplier;
-      const newSettings: ProjectSettings = {
+      const newSettings = {
         ...(projectModalMode === 'edit' ? projectSettings : INITIAL_PROJECT_SETTINGS),
         ...data,
         cubRate: estimatedCubRate,
         organizationId: data.organizationId || organizations[0]?.id,
         ...(data.code ? { code: data.code } : {})
-      };
+      } as ProjectSettings;
       if (projectModalMode === 'create') {
         const savedProject = await projectService.saveProject({
           name: newSettings.name,
@@ -111,9 +111,10 @@ export const useProjectOperations = ({
         if (!projectId) setProjectId(savedProject.id);
         if (!explicitBudget) alert(`Obra "${s?.name}" salva com sucesso na nuvem!`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao salvar obra:", error);
-      if (!explicitBudget) alert("Erro ao salvar obra: " + (error.message || "Erro desconhecido"));
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
+      if (!explicitBudget) alert("Erro ao salvar obra: " + message);
       throw error;
     } finally {
       setIsSaving(false);
@@ -170,7 +171,7 @@ export const useProjectOperations = ({
     }
   };
 
-  const handleImportProject = async (data: any) => {
+  const handleImportProject = async (data: { name: string; settings?: Partial<ProjectSettings>; budget: BudgetEntry[] }) => {
     setIsSaving(true);
     try {
       const savedProject = await projectService.saveProject({
@@ -229,7 +230,7 @@ export const useProjectOperations = ({
               if (linkedId) {
                 linkedData = await projectService.loadProject(linkedId);
               } else if (linkedName) {
-                const linkedProject = projects.find((p: any) => p.name === linkedName && (p.settings?.classification === 'ORCAMENTO' || p.settings?.classification === 'OBRA'));
+                const linkedProject = projects.find((p) => p.name === linkedName && (p.settings?.classification === 'ORCAMENTO' || p.settings?.classification === 'OBRA'));
                 if (linkedProject) {
                   linkedData = await projectService.loadProject(linkedProject.id);
                 }
@@ -292,7 +293,7 @@ export const useProjectOperations = ({
         setIsCreatingOrganization(false);
         setEditingOrganizationId(null);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       alert("Erro ao salvar organização.");
     } finally {
@@ -306,18 +307,19 @@ export const useProjectOperations = ({
         await organizationService.deleteOrganization(id);
         fetchOrganizations();
         showToast("Organização excluída com sucesso!", "success");
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Erro ao excluir organização:", error);
-        if (error.code === '23503') {
+        const pgError = error as { code?: string; message?: string };
+        if (pgError.code === '23503') {
             alert("Não é possível excluir esta organização pois existem dados vinculados a ela (Projetos, Colaboradores, Fornecedores, etc.).\n\nConsidere inativar a empresa ou remover os vínculos primeiro.");
         } else {
-            alert("Erro ao excluir organização: " + (error.message || "Erro desconhecido"));
+            alert("Erro ao excluir organização: " + (pgError.message || "Erro desconhecido"));
         }
       }
     }
   };
 
-  const handleContractSubmit = async (data: any) => {
+  const handleContractSubmit = async (data: Omit<Contract, 'id'> & { id?: string }) => {
     try {
       if (editingContract) {
         await contractService.updateContract(editingContract.id, data);

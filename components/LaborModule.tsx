@@ -444,7 +444,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                 <LaborEmployeeForm
                     employee={editingEmployee}
                     orgId={currentOrgId || activeOrganizationId || ''}
-                    organizations={organizations}
+                    organizations={organizations as unknown as { id: string; name: string; [key: string]: unknown }[]}
                     onClose={() => { setIsEmployeeFormOpen(false); setEditingEmployee(null); }}
                     onSaved={() => { setIsEmployeeFormOpen(false); setEditingEmployee(null); refetchAll(); }}
                 />

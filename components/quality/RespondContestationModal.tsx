@@ -74,8 +74,8 @@ const RespondContestationModal: React.FC<Props> = ({
       });
 
       onDone();
-    } catch (e: any) {
-      setError(e.message ?? 'Erro ao responder contestação');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao responder contestação');
       setIsSubmitting(false);
     }
   };
@@ -196,7 +196,7 @@ const RespondContestationModal: React.FC<Props> = ({
             Cancelar
           </button>
           <button
-            onClick={handleSubmit as any}
+            onClick={handleSubmit as React.MouseEventHandler<HTMLButtonElement>}
             disabled={isSubmitting || repairAccepted === null}
             className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50 transition-colors ${
               repairAccepted === false ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'

@@ -3,7 +3,77 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 // @ts-ignore
 import { saveAs } from 'file-saver';
-import { ProjectSettings, BudgetEntry } from '../types';
+import {
+    ProjectSettings, BudgetEntry, SinapiItem,
+    Organization, PaymentInstallment, PropertyDeal,
+    Contract, ContractItem, ContractAddendum, ContractMeasurement,
+} from '../types';
+
+// jsPDF extended with jspdf-autotable
+interface JsPDFWithAutoTable extends jsPDF {
+    lastAutoTable: { finalY: number };
+}
+
+// Row type for PDF budget tables (jspdf-autotable reads rowType via didParseCell)
+type PdfRowType = 'GROUP' | 'PHASE' | 'SUBPHASE' | 'ITEM';
+type PdfRow = string[] & { rowType?: PdfRowType };
+
+function makePdfRow(cells: string[], rowType?: PdfRowType): PdfRow {
+    const row = cells as PdfRow;
+    row.rowType = rowType;
+    return row;
+}
+
+// Typed rows for generateFinancialPDF / generateFinancialExcel
+interface ExtratoRow {
+    dueDate?: string;
+    date?: string;
+    description: string;
+    dealId?: string;
+    value: number;
+    status: string;
+}
+
+interface FluxoRow {
+    name: string;
+    receita: number;
+    despesa: number;
+    saldo: number;
+}
+
+// Typed rows for milestone/SCurve reports
+interface MilestoneRow {
+    label: string;
+    month: number;
+    value: number;
+    percentage: number;
+}
+
+interface SCurveRow {
+    month: number;
+    periodic: number;
+    cumulative: number;
+}
+
+interface RegionalDataRow {
+    state: string;
+    rate: number;
+}
+
+interface HistoricalDataRow {
+    date: string;
+    rate: number;
+}
+
+interface SensitivityData {
+    materials: number;
+    labor: number;
+}
+
+interface ComparisonData {
+    standard: string;
+    m2: number;
+}
 
 export const exportService = {
     generateViabilityReport(settings: ProjectSettings, financialData: { totalValue: number; items: BudgetEntry[] }, simulation: { bdi: number; profit: number; costPerM2: number }) {
@@ -47,7 +117,7 @@ export const exportService = {
         });
 
         // Summary Results
-        const currentY = (doc as any).lastAutoTable.finalY + 15;
+        const currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
         doc.setFontSize(14);
         doc.text('2. RESUMO FINANCEIRO (SIMULADO)', 15, currentY);
 
@@ -67,7 +137,7 @@ export const exportService = {
         });
 
         // Distribution
-        const distY = (doc as any).lastAutoTable.finalY + 15;
+        const distY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
         doc.setFontSize(14);
         doc.text('3. DISTRIBUIÇÃO POR ETAPA', 15, distY);
 
@@ -95,7 +165,7 @@ export const exportService = {
         doc.save(`Viabilidade_${settings.name.replace(/\s+/g, '_')}.pdf`);
     },
 
-    generateFinancialPDF(data: any[], settings: ProjectSettings, options: { organization?: any; title: string; fileName: string }, type: 'EXTRATO' | 'FLUXO') {
+    generateFinancialPDF(data: ExtratoRow[] | FluxoRow[], settings: ProjectSettings, options: { organization?: Organization; title: string; fileName: string }, type: 'EXTRATO' | 'FLUXO') {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -124,19 +194,19 @@ export const exportService = {
 
         // Table Content
         let tableHead: string[][] = [];
-        let tableBody: any[][] = [];
+        let tableBody: string[][] = [];
 
         if (type === 'EXTRATO') {
             tableHead = [['Data/Venc.', 'Descrição', 'Valor', 'Status']];
-            tableBody = data.map(item => [
-                new Date(item.dueDate || item.date).toLocaleDateString('pt-BR'),
+            tableBody = (data as ExtratoRow[]).map(item => [
+                new Date((item.dueDate || item.date) ?? '').toLocaleDateString('pt-BR'),
                 item.description + (item.dealId ? ` (#${item.dealId.substring(0, 8).toUpperCase()})` : ''),
                 new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.value),
                 item.status === 'PAID' ? 'PAGO' : 'PENDENTE'
             ]);
         } else {
             tableHead = [['Mês', 'Receita', 'Despesa', 'Saldo']];
-            tableBody = data.map(item => [
+            tableBody = (data as FluxoRow[]).map(item => [
                 item.name,
                 new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.receita),
                 new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.despesa),
@@ -155,7 +225,7 @@ export const exportService = {
         });
 
         // Footer
-        const finalY = (doc as any).lastAutoTable.finalY + 10;
+        const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
         doc.setFontSize(8);
         doc.setTextColor(100, 116, 139);
         doc.text('Relatório gerado via OrçaCloud Financial Suite.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
@@ -163,19 +233,19 @@ export const exportService = {
         doc.save(`${options.fileName}.pdf`);
     },
 
-    generateFinancialExcel(data: any[], settings: ProjectSettings, options: { organization?: any; fileName: string }, type: 'EXTRATO' | 'FLUXO') {
-        let exportData: any[] = [];
+    generateFinancialExcel(data: ExtratoRow[] | FluxoRow[], settings: ProjectSettings, options: { organization?: Organization; fileName: string }, type: 'EXTRATO' | 'FLUXO') {
+        let exportData: Record<string, string | number>[] = [];
 
         if (type === 'EXTRATO') {
-            exportData = data.map(item => ({
-                'Data/Vencimento': new Date(item.dueDate || item.date).toLocaleDateString('pt-BR'),
+            exportData = (data as ExtratoRow[]).map(item => ({
+                'Data/Vencimento': new Date((item.dueDate || item.date) ?? '').toLocaleDateString('pt-BR'),
                 'Descrição': item.description,
                 'ID Contrato': item.dealId || '-',
                 'Valor': item.value,
                 'Status': item.status === 'PAID' ? 'Pago' : 'Pendente'
             }));
         } else {
-            exportData = data.map(item => ({
+            exportData = (data as FluxoRow[]).map(item => ({
                 'Mês': item.name,
                 'Receita (R$)': item.receita,
                 'Despesa (R$)': item.despesa,
@@ -191,7 +261,7 @@ export const exportService = {
         saveAs(blob, `${options.fileName}.xlsx`);
     },
 
-    generateReceiptPDF(installment: any, settings: ProjectSettings, organization: any) {
+    generateReceiptPDF(installment: PaymentInstallment & { clientName?: string; propertyName?: string; paymentDate?: string }, settings: ProjectSettings, organization: Pick<Organization, 'name'> & Partial<Organization> | undefined) {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
         const fmtPrice = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -251,7 +321,7 @@ export const exportService = {
         doc.save(`Recibo_${(installment.id || '').substring(0, 8)}.pdf`);
     },
 
-    generatePropertyContractPDF(deal: any, settings: ProjectSettings, organization: any) {
+    generatePropertyContractPDF(deal: PropertyDeal & { client_name?: string; property_name?: string }, settings: ProjectSettings, organization: Organization | undefined) {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
         const margin = 20;
@@ -318,7 +388,7 @@ export const exportService = {
         doc.save(`Contrato_${deal.type}_${(deal.id || '').substring(0, 8)}.pdf`);
     },
 
-    async generatePDF(budget: BudgetEntry[], settings: ProjectSettings, options: { organization?: any; fileName: string; showNatureBreakdown?: boolean; auxiliaryItems?: Map<string, any> }, type: 'ANALYTIC' | 'SYNTHETIC' | 'INPUTS') {
+    async generatePDF(budget: BudgetEntry[], settings: ProjectSettings, options: { organization?: Organization; fileName: string; showNatureBreakdown?: boolean; auxiliaryItems?: Map<string, SinapiItem> }, type: 'ANALYTIC' | 'SYNTHETIC' | 'INPUTS') {
         const doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
         const primaryColor: [number, number, number] = [30, 64, 175]; // Blue 800
@@ -399,15 +469,15 @@ export const exportService = {
             margin: { left: 15 }
         });
 
-        currentY = (doc as any).lastAutoTable.finalY + 8;
+        currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 8;
 
         // 3. Build Table Structure
         const head = [['Item', 'Base', 'Código', 'Descrição', 'Unid', 'Qtd', 'Unitário', 'Total']];
-        const rawRows: any[] = [];
+        const rawRows: PdfRow[] = [];
 
         if (type === 'INPUTS') {
             budget.forEach((item, i) => {
-                const r: any = [
+                rawRows.push(makePdfRow([
                     (i + 1).toString(),
                     item.sinapiItem?.isOverride ? 'PRÓP.' : 'SINAPI',
                     item.sinapiItem?.code || '-',
@@ -416,9 +486,7 @@ export const exportService = {
                     item.quantity.toLocaleString('pt-BR'),
                     new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(item.sinapiItem?.price || 0),
                     new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(item.quantity * (item.sinapiItem?.price || 0))
-                ];
-                r.rowType = 'ITEM';
-                rawRows.push(r);
+                ], 'ITEM'));
             });
         } else {
             (settings.wbs || []).forEach((group, gIndex) => {
@@ -426,34 +494,28 @@ export const exportService = {
                 const groupItems = budget.filter(b => b.group === group.name);
                 const gTotal = calculateItemsTotal(groupItems);
 
-                const gRow: any = [gCode, '', '', cleanLabel(group.name).toUpperCase(), '', '', '', fmtMoney(gTotal)];
-                gRow.rowType = 'GROUP';
-                rawRows.push(gRow);
+                rawRows.push(makePdfRow([gCode, '', '', cleanLabel(group.name).toUpperCase(), '', '', '', fmtMoney(gTotal)], 'GROUP'));
 
                 (group.phases || []).forEach((phase, pIndex) => {
                     const pCode = `${gCode}.${String(pIndex + 1).padStart(2, '0')}`;
                     const phaseItems = budget.filter(b => b.group === group.name && b.phase === phase.name);
                     const pTotal = calculateItemsTotal(phaseItems);
 
-                    const pRow: any = [pCode, '', '', cleanLabel(phase.name).toUpperCase(), '', '', '', fmtMoney(pTotal)];
-                    pRow.rowType = 'PHASE';
-                    rawRows.push(pRow);
+                    rawRows.push(makePdfRow([pCode, '', '', cleanLabel(phase.name).toUpperCase(), '', '', '', fmtMoney(pTotal)], 'PHASE'));
 
                     (phase.subPhases || []).forEach((subPhase, spIndex) => {
                         const spCode = `${pCode}.${String(spIndex + 1).padStart(2, '0')}`;
                         const items = budget.filter(b => b.group === group.name && b.phase === phase.name && b.subPhase === subPhase);
                         const spTotal = calculateItemsTotal(items);
 
-                        const spRow: any = [spCode, '', '', cleanLabel(subPhase).toUpperCase(), '', '', '', fmtMoney(spTotal)];
-                        spRow.rowType = 'SUBPHASE';
-                        rawRows.push(spRow);
+                        rawRows.push(makePdfRow([spCode, '', '', cleanLabel(subPhase).toUpperCase(), '', '', '', fmtMoney(spTotal)], 'SUBPHASE'));
 
                         items.forEach((item, iIdx) => {
                             const itemBdi = item.bdi ?? (settings.bdi || 0);
                             const basePrice = item.sinapiItem?.price || 0;
                             const finalTotal = item.quantity * basePrice * (1 + itemBdi / 100);
 
-                            const iRow: any = [
+                            rawRows.push(makePdfRow([
                                 `${spCode}.${String(iIdx + 1).padStart(2, '0')}`,
                                 item.sinapiItem?.isOverride ? 'PRÓP.' : 'SINAPI',
                                 item.sinapiItem?.code || '-',
@@ -462,9 +524,7 @@ export const exportService = {
                                 item.quantity.toLocaleString('pt-BR'),
                                 new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(basePrice),
                                 new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(finalTotal)
-                            ];
-                            iRow.rowType = 'ITEM';
-                            rawRows.push(iRow);
+                            ], 'ITEM'));
                         });
                     });
                 });
@@ -489,7 +549,7 @@ export const exportService = {
                 7: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }
             },
             didParseCell: (data) => {
-                const rowType = (data.row.raw as any).rowType;
+                const rowType = (data.row.raw as PdfRow).rowType;
                 if (rowType === 'GROUP') {
                     data.cell.styles.fillColor = [30, 58, 138]; // Slate 800 equiv
                     data.cell.styles.textColor = [255, 255, 255];
@@ -518,8 +578,8 @@ export const exportService = {
         doc.save(`${options.fileName}.pdf`);
     },
 
-    generateExcel(budget: BudgetEntry[], settings: ProjectSettings, options: { organization?: any; fileName: string; showNatureBreakdown?: boolean; auxiliaryItems?: Map<string, any> }, type: 'ANALYTIC' | 'SYNTHETIC' | 'INPUTS') {
-        const excelRows: any[] = [];
+    generateExcel(budget: BudgetEntry[], settings: ProjectSettings, options: { organization?: Organization; fileName: string; showNatureBreakdown?: boolean; auxiliaryItems?: Map<string, SinapiItem> }, type: 'ANALYTIC' | 'SYNTHETIC' | 'INPUTS') {
+        const excelRows: Record<string, string | number>[] = [];
         
         const calculateItemsTotal = (items: BudgetEntry[]) => {
             return items.reduce((acc, item) => {
@@ -681,11 +741,11 @@ export const exportService = {
     },
 
     async generateContractFinancialReportPDF(
-        contract: any,
-        items: any[],
-        measurements: any[],
-        addendums: any[],
-        organization: any,
+        contract: Contract,
+        items: ContractItem[],
+        measurements: ContractMeasurement[],
+        addendums: ContractAddendum[],
+        organization: Organization | undefined,
         projectSettings: ProjectSettings
     ) {
         const doc = new jsPDF();
@@ -716,7 +776,7 @@ export const exportService = {
             ['Obra:', projectSettings.name],
             ['Contrato:', `${contract.number} - ${contract.title}`],
             ['Tipo/Natureza:', `${contract.contract_type} - ${contract.nature}`],
-            ['Vigência:', `${new Date(contract.start_date).toLocaleDateString()} a ${new Date(contract.end_date).toLocaleDateString()}`]
+            ['Vigência:', `${new Date(contract.start_date ?? '').toLocaleDateString()} a ${new Date(contract.end_date ?? '').toLocaleDateString()}`]
         ];
 
         autoTable(doc, {
@@ -728,7 +788,7 @@ export const exportService = {
         });
 
         // Financial Summary
-        const summaryY = (doc as any).lastAutoTable.finalY + 15;
+        const summaryY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.text('2. RESUMO FINANCEIRO', 15, summaryY);
@@ -754,7 +814,7 @@ export const exportService = {
         });
 
         // Measurements Table
-        const measurementsY = (doc as any).lastAutoTable.finalY + 15;
+        const measurementsY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.text('3. HISTÓRICO DE MEDIÇÕES', 15, measurementsY);
@@ -781,7 +841,7 @@ export const exportService = {
 
         // Addendums Table (if any)
         if (addendums.length > 0) {
-            const addendumsY = (doc as any).lastAutoTable.finalY + 15;
+            const addendumsY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
             doc.setFontSize(12);
             doc.setFont('helvetica', 'bold');
             doc.text('4. ADITIVOS CONTRATUAIS', 15, addendumsY);
@@ -808,8 +868,9 @@ export const exportService = {
         const allPhotos: { url: string; itemName: string; measurementNumber: number; date: string; qty: number }[] = [];
 
         measurements.forEach(m => {
-            const mItems = m.items || []; // We need to make sure items are passed
-            mItems.forEach((mi: any) => {
+            type MeasurementItem = { attachment_urls?: string[]; contract_item_description?: string; quantity_executed: number };
+            const mItems: MeasurementItem[] = ((m as ContractMeasurement & { items?: MeasurementItem[] }).items) || [];
+            mItems.forEach(mi => {
                 const urls = mi.attachment_urls || [];
                 urls.forEach((url: string) => {
                     if (!url.match(/\.(mp4|webm|ogg)$/i)) {
@@ -881,7 +942,7 @@ export const exportService = {
         }
 
         // Footer
-        const finalY = (doc as any).lastAutoTable.finalY + 20;
+        const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 20;
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
         doc.text('Este documento é um relatório gerencial emitido via plataforma OrçaCloud.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
@@ -890,9 +951,9 @@ export const exportService = {
     },
 
     async generateServiceContractPDF(
-        contract: any,
-        items: any[],
-        organization: any,
+        contract: Contract & { supplier?: { name: string }; supplierName?: string },
+        items: ContractItem[],
+        organization: Organization | undefined,
         projectSettings: ProjectSettings
     ) {
         const doc = new jsPDF();
@@ -959,13 +1020,13 @@ export const exportService = {
             margin: { left: margin, right: margin }
         });
 
-        y = (doc as any).lastAutoTable.finalY + 12;
+        y = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 12;
 
         // 4. Pagamento
         addSection('4. DO PAGAMENTO', `O valor total deste contrato é de ${fmt(contract.original_value)}. O pagamento será realizado via ${contract.payment_method || 'A combinar'}, em ${contract.payment_installments || 1} parcela(s)${contract.payment_days ? `, com prazo de ${contract.payment_days} dias` : ''}.`);
 
         // 5. Vigência
-        addSection('5. DA VIGÊNCIA', `O presente contrato terá vigência de ${new Date(contract.start_date).toLocaleDateString()} a ${new Date(contract.end_date).toLocaleDateString()}.`);
+        addSection('5. DA VIGÊNCIA', `O presente contrato terá vigência de ${new Date(contract.start_date ?? '').toLocaleDateString()} a ${new Date(contract.end_date ?? '').toLocaleDateString()}.`);
 
         // 6. Foro
         addSection('6. DO FORO', `As partes elegem o foro da comarca de ${organization?.address?.city || 'Brasil'} para dirimir quaisquer dúvidas oriundas deste contrato.`);
@@ -986,7 +1047,7 @@ export const exportService = {
         doc.save(`Contrato_${contract.number}_${contract.title.replace(/\s+/g, '_')}.pdf`);
     },
 
-    generateMilestoneReport(settings: ProjectSettings, curveData: any[], totalValue: number) {
+    generateMilestoneReport(settings: ProjectSettings, curveData: SCurveRow[], totalValue: number) {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
         const primaryColor: [number, number, number] = [79, 70, 229]; // Indigo 600
@@ -1032,7 +1093,7 @@ export const exportService = {
         ]);
 
         autoTable(doc, {
-            startY: (doc as any).lastAutoTable.finalY + 15,
+            startY: (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15,
             head: [['REF', 'MARCO DE MEDIÇÃO', 'VALOR ESTIMADO', '% DO TOTAL', 'STATUS']],
             body: tableBody,
             theme: 'grid',
@@ -1042,7 +1103,7 @@ export const exportService = {
         });
 
         // Footer
-        const finalY = (doc as any).lastAutoTable.finalY + 20;
+        const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 20;
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
         doc.text('Este documento é uma projeção financeira baseada em modelos estatísticos de Curva S.', pageWidth / 2, doc.internal.pageSize.getHeight() - 15, { align: 'center' });
@@ -1053,11 +1114,11 @@ export const exportService = {
     generateCompleteParametricPDF(
         settings: ProjectSettings,
         financialData: { totalValue: number; items: BudgetEntry[]; baseCub: number },
-        simulation: { bdi: number; profit: number; costPerM2: number; kFactor: number; bdiComposition: any },
-        quantitativeItems: any[],
-        sCurveData: any[],
-        milestones: any[],
-        intelData: { historicalData: any[]; regionalData: any[]; sensitivity: any; comparison: any }
+        simulation: { bdi: number; profit: number; costPerM2: number; kFactor: number; bdiComposition: { profit: number; admin: number; taxes: number; risk: number; insurance?: number; guarantee?: number } },
+        quantitativeItems: BudgetEntry[],
+        sCurveData: SCurveRow[],
+        milestones: MilestoneRow[],
+        intelData: { historicalData: HistoricalDataRow[]; regionalData: RegionalDataRow[]; sensitivity: SensitivityData; comparison: ComparisonData | null }
     ) {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -1096,7 +1157,7 @@ export const exportService = {
         });
 
         // 3. Detailed BDI Section
-        const bdiY = (doc as any).lastAutoTable.finalY + 15;
+        const bdiY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
         doc.setFontSize(14);
         doc.text('2. COMPOSIÇÃO DE BDI E TAXAS', 15, bdiY);
 
@@ -1115,7 +1176,7 @@ export const exportService = {
         });
 
         // 4. Financial Investment Summary
-        const investY = (doc as any).lastAutoTable.finalY + 15;
+        const investY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
         doc.setFontSize(14);
         doc.text('3. INVESTIMENTO ESTIMADO GLOBAL', 15, investY);
 
@@ -1236,7 +1297,7 @@ export const exportService = {
 
         // 6.3 Product Mix
         if (intelData.comparison) {
-            const mixY = (doc as any).lastAutoTable.finalY + 10;
+            const mixY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
             doc.setFontSize(12);
             doc.text('Estudo de Mix de Produto (Comparativo)', 15, mixY);
 
@@ -1305,7 +1366,7 @@ export const exportService = {
         ]);
 
         autoTable(doc, {
-            startY: (doc as any).lastAutoTable.finalY + 15,
+            startY: (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15,
             head: [['Período', 'Desembolso Mensal', 'Acumulado', '% Exec.']],
             body: sCurveTable,
             theme: 'striped',
@@ -1313,7 +1374,7 @@ export const exportService = {
         });
 
         // Footer
-        const finalY = (doc as any).lastAutoTable.finalY + 20;
+        const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 20;
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
         doc.text('Nota: Estimativa baseada em modelos paramétricos. OrçaCloud SaaS.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
@@ -1325,8 +1386,8 @@ export const exportService = {
         settings: ProjectSettings,
         totalValue: number,
         costPerM2: number,
-        milestones: any[],
-        organization: any
+        milestones: MilestoneRow[],
+        organization: Organization | undefined
     ) {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();

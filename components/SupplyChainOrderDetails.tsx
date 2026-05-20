@@ -1,6 +1,6 @@
 import React from 'react';
 import { Package, Truck, Printer, Pencil, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Upload, Plus, Loader2, MessageCircle, Zap, Trash2, Copy, AlertCircle, AlertTriangle } from 'lucide-react';
-import { PurchaseOrder, Invoice } from '../types';
+import { PurchaseOrder, Invoice, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
 import { receiptService, PurchaseReceipt } from '../services/receiptService';
 import { zApiService } from '../services/zApiService';
@@ -81,9 +81,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             setLoading(true);
             await orderService.updateOrder(orderId, { status: newStatus }, order?.version);
             await loadOrderData();
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error("Error updating order status:", error);
-            if (error?.message?.startsWith('CONFLICT')) {
+            if (error.message?.startsWith('CONFLICT')) {
                 notify("Pedido foi modificado por outro usuário. Recarregue a página.", "error");
             } else {
                 notify("Erro ao atualizar o status do pedido.", "error");
@@ -94,7 +95,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         }
     };
 
-    const handleStartEdit = (idx: number, item: any) => {
+    const handleStartEdit = (idx: number, item: PurchaseOrderItem) => {
         setEditingIndex(idx);
         setEditQty(item.quantity);
         setEditPrice(item.unitPrice);
@@ -120,7 +121,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             await orderService.updateOrder(orderId, { items: newItems }, freshOrder.version);
             setEditingIndex(null);
             await loadOrderData();
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error("Error saving item edit:", error);
             notify("Erro ao salvar alteração do item.", "error");
         } finally {
@@ -138,7 +140,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 const newItems = freshOrder.items.filter((_, i) => i !== idx);
                 await orderService.updateOrder(orderId, { items: newItems }, freshOrder.version);
                 await loadOrderData();
-            } catch (error: any) {
+            } catch (err: unknown) {
+                const error = err instanceof Error ? err : new Error(String(err));
                 console.error("Error deleting item:", error);
                 notify("Erro ao excluir item do pedido.", "error");
             } finally {
@@ -233,7 +236,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     setLoading(true);
                     await orderService.deleteOrder(order.id);
                     onBack();
-                } catch (error: any) {
+                } catch (err: unknown) {
+                    const error = err instanceof Error ? err : new Error(String(err));
                     console.error("Error deleting order:", error);
                     notify(`Erro ao excluir o pedido: ${error.message || 'Erro desconhecido'}`, "error");
                 } finally {
@@ -319,8 +323,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     notify('WhatsApp enviado com sucesso via Z-API!');
                     return;
                 }
-            } catch (err: any) {
-                notify(`Erro ao enviar WhatsApp: ${err.message}`, 'error');
+            } catch (err: unknown) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                notify(`Erro ao enviar WhatsApp: ${error.message}`, 'error');
                 return;
             } finally {
                 setIsSendingWhatsApp(false);
@@ -365,7 +370,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         projectData = await projectService.loadProject(order.projectId);
                     }
 
-                    await webhookService.triggerOrderSentWebhook(order, supplierData, projectData);
+                    await webhookService.triggerOrderSentWebhook(order, supplierData ?? undefined, projectData ?? undefined);
 
                     if (order.status === 'Rascunho') {
                         await orderService.updateOrder(order.id, { status: 'Enviado' }, order.version);
@@ -373,7 +378,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
                     await loadOrderData();
                     notify("Pedido enviado via automação com sucesso!");
-                } catch (error: any) {
+                } catch (err: unknown) {
+                    const error = err instanceof Error ? err : new Error(String(err));
                     console.error("Erro ao enviar pedido via webhook:", error);
                     notify(`Erro na operação: ${error.message || 'Erro desconhecido'}`, "error");
                 } finally {

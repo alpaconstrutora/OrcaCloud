@@ -73,7 +73,7 @@ export const invoiceService = {
 
         if (error) throw error;
 
-        return data.map((invoice: any) => ({
+        return data.map((invoice) => ({
             id: invoice.id,
             supplierId: invoice.supplier_id,
             orderId: invoice.order_id,
@@ -98,7 +98,7 @@ export const invoiceService = {
 
         if (error) throw error;
 
-        return data.map((invoice: any) => ({
+        return data.map((invoice) => ({
             id: invoice.id,
             supplierId: invoice.supplier_id,
             orderId: invoice.order_id,

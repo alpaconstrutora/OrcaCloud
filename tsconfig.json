@@ -50,6 +50,7 @@
   "exclude": [
     "node_modules",
     "dist",
+    "supabase/functions/**/*",
     "*.mjs",
     "*.cjs",
     "*.js",

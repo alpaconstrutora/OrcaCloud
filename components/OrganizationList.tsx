@@ -5,7 +5,7 @@ import {
     Activity, Users, Briefcase, UserPlus,
     TrendingUp, HandCoins, Filter, Truck
 } from 'lucide-react';
-import { Organization } from '../types';
+import { Organization, BudgetEntry } from '../types';
 import { useStore } from '../store/useStore';
 import ProjectList from './ProjectList';
 import OrganizationUsers from './OrganizationUsers';
@@ -28,14 +28,15 @@ interface OrganizationListProps {
     
     // Management Props
     activeTab: 'organizations' | 'projects' | 'clients' | 'investors' | 'suppliers' | 'users' | 'accounts' | 'cost_centers' | 'chart_of_accounts' | 'settings';
-    onTabChange: (tab: any) => void;
-    projects: any[];
+    onTabChange: (tab: string) => void;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    projects: { id: string; name: string; organizationId?: string; organization_id?: string; settings?: any }[];
     onClientsChange: () => void;
-    onLoadProject: (id: string, view: any) => void;
+    onLoadProject: (id: string, targetView?: string) => void;
     onEditProject: (id: string) => void;
-    onNewProject: (type: any) => void;
+    onNewProject: (classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO') => void;
     onDuplicateProject: (id: string) => void;
-    onImportProject: (data: any) => void;
+    onImportProject: (data: { name: string; budget: BudgetEntry[]; settings?: Record<string, unknown> }) => void;
     onExportProject: (id: string) => void;
 }
 
@@ -147,7 +148,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                 // If switching away from organizations, and no organization is active,
                                 // we might want to keep the current view or prompt.
                                 // But for now, just change the tab.
-                                onTabChange(tab.id as any);
+                                onTabChange(tab.id);
                             }}
                             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-lg shadow-blue-100' : 'text-gray-400 hover:text-gray-600'}`}
                         >
@@ -509,7 +510,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             if (!currentOrgId) return alert("Selecione uma empresa ativa ou clique em 'Detalhes' para gerenciar registros financeiros.");
                             
                             // Remover apenas campos gerados pelo servidor (id, created_at)
-                            const { id: _id, created_at: _ca, ...rest } = item as any;
+                            const { id: _id, created_at: _ca, ...rest } = item as { id?: string; created_at?: string; name: string; description?: string; bank?: string; branch?: string; account_number?: string; code?: string };
                             if (activeTab === 'accounts') {
                                 const payload = { name: rest.name, description: rest.description, bank: rest.bank, branch: rest.branch, account_number: rest.account_number };
                                 if (item.id) await financialRegistryService.updatePaymentAccount(item.id, payload);
@@ -519,7 +520,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                 if (item.id) await financialRegistryService.updateCostCenter(item.id, payload);
                                 else await financialRegistryService.createCostCenter({ ...payload, organization_id: currentOrgId });
                             } else {
-                                const payload = { name: rest.name, code: rest.code };
+                                const payload = { name: rest.name, code: rest.code ?? '' };
                                 if (item.id) await financialRegistryService.updateChartOfAccount(item.id, payload);
                                 else await financialRegistryService.createChartOfAccount({ ...payload, organization_id: currentOrgId });
                             }

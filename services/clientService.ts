@@ -1,22 +1,24 @@
 import { supabase } from '../lib/supabase';
 import { Client } from '../types';
 
+type DbClientRow = Record<string, unknown>;
+
 // Helper function to map DB snake_case to Frontend camelCase
-const mapToFrontendClient = (dbClient: any): Client => {
+const mapToFrontendClient = (dbClient: DbClientRow): Client => {
     return {
         ...dbClient,
-        clientDocuments: dbClient.client_documents,
-        financialInfo: dbClient.financial_info,
-        diaryEntries: dbClient.diary_entries || [],
-        scheduleInfo: dbClient.schedule_info || {},
-        aiInsight: dbClient.ai_insight || {},
-        visualGallery: dbClient.visual_gallery || []
-    };
+        clientDocuments: dbClient.client_documents as Client['clientDocuments'],
+        financialInfo: dbClient.financial_info as Client['financialInfo'],
+        diaryEntries: (dbClient.diary_entries || []) as Client['diaryEntries'],
+        scheduleInfo: (dbClient.schedule_info || {}) as Client['scheduleInfo'],
+        aiInsight: (dbClient.ai_insight || {}) as Client['aiInsight'],
+        visualGallery: (dbClient.visual_gallery || []) as Client['visualGallery']
+    } as Client;
 };
 
 // Helper function to map Frontend camelCase to DB snake_case
-const mapToDbClient = (client: Partial<Client>): any => {
-    const dbClient: any = { ...client };
+const mapToDbClient = (client: Partial<Client>): DbClientRow => {
+    const dbClient: DbClientRow = { ...client };
 
     if ('clientDocuments' in client) {
         dbClient.client_documents = client.clientDocuments;
@@ -141,8 +143,8 @@ export const clientService = {
 
             if (error) throw error;
             return data ? mapToFrontendClient(data) : null;
-        } catch (error: any) {
-            console.error("[CLIENT SERVICE] Error fetching client by email:", error.message);
+        } catch (error: unknown) {
+            console.error("[CLIENT SERVICE] Error fetching client by email:", error instanceof Error ? error.message : error);
             return null;
         }
     },
@@ -157,8 +159,8 @@ export const clientService = {
 
             if (error) throw error;
             return data ? mapToFrontendClient(data) : null;
-        } catch (error: any) {
-            console.error("[CLIENT SERVICE] Error fetching client by id:", error.message);
+        } catch (error: unknown) {
+            console.error("[CLIENT SERVICE] Error fetching client by id:", error instanceof Error ? error.message : error);
             return null;
         }
     }

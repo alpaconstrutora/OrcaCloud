@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Building2, Clock, Lock, CheckCircle2, AlertTriangle, Eye, MapPin, Sun, Edit, Tag, FileSignature, Wallet } from 'lucide-react';
-import type { Property, PropertyDeal } from '../../types';
+import type { Property, PropertyDeal, TowerMatrixConfig, GridCellConfig } from '../../types';
 
 interface PropertyUnitMapProps {
     units: Property[];
@@ -15,7 +15,7 @@ interface PropertyUnitMapProps {
     mode?: 'broker' | 'admin';
 }
 
-const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label: string; icon: any }> = {
+const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label: string; icon: React.ElementType }> = {
     'AVAILABLE': { color: 'text-emerald-700', bg: 'bg-emerald-50 hover:bg-emerald-100', border: 'border-emerald-200 hover:border-emerald-400', label: 'Disponível', icon: CheckCircle2 },
     'RESERVED': { color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', label: 'Reservado', icon: Clock },
     'SOLD': { color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', label: 'Vendido', icon: Lock },
@@ -41,7 +41,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
     const [groupingMode, setGroupingMode] = useState<'position' | 'orientation'>('position');
 
     // Dicionário de Status do Negócio
-    const DEAL_STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; icon: any }> = {
+    const DEAL_STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; icon: React.ElementType }> = {
         'IN_NEGOTIATION': { label: 'Em Negociação', bg: 'bg-gray-100', color: 'text-gray-600', icon: Clock },
         'PENDING': { label: 'Aguardando Assinatura', bg: 'bg-amber-100', color: 'text-amber-700', icon: FileSignature },
         'COMPLETED': { label: 'Vendido', bg: 'bg-red-100', color: 'text-red-700', icon: Wallet },
@@ -125,21 +125,23 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                 {/* Informações detalhadas do card (conforme imagem técnica) */}
                 <div className="flex flex-col items-center gap-0.5 mt-0.5">
                     <span className="text-[10px] font-bold text-gray-500">
-                        {unit.bedrooms || (unit as any).specs?.bedrooms || 0} dormitórios
+                        {unit.bedrooms || unit.specs?.bedrooms || 0} dormitórios
                     </span>
                     <span className={`text-[11px] font-black ${cfg.color}`}>{formatPrice(unitPrice)}</span>
                     <span className="text-[9px] font-bold text-gray-400">
-                        {formatPrice(unitPrice / ((unit as any).private_area || (unit as any).area || 1))}/m²
+                        {formatPrice(unitPrice / (unit.private_area || unit.area || 1))}/m²
                     </span>
-                    <span className="text-[10px] text-gray-400 font-bold">{(unit as any).private_area || (unit as any).area}m²</span>
-                    
+                    <span className="text-[10px] text-gray-400 font-bold">{unit.private_area || unit.area}m²</span>
+
                     {(() => {
-                        let orientation = (unit as any).sun_orientation || (unit as any).sun_position || (unit as any).specs?.sun_orientation;
-                        
+                        let orientation: string | undefined = unit.sun_orientation || unit.sun_position;
+                        if (!orientation) {
+                            orientation = unit.specs ? (unit.specs as Property['specs'] & { sun_orientation?: string }).sun_orientation : undefined;
+                        }
                         // Scanner de dados solar
                         if (!orientation) {
-                            const sunKey = Object.keys(unit).find(k => k.toLowerCase().includes('sun') && (unit as any)[k]);
-                            if (sunKey) orientation = (unit as any)[sunKey];
+                            const sunKey = Object.keys(unit).find(k => k.toLowerCase().includes('sun') && (unit as unknown as Record<string, unknown>)[k]);
+                            if (sunKey) orientation = String((unit as unknown as Record<string, unknown>)[sunKey]);
                         }
 
                         if (!orientation && !unit.position_type) return null;
@@ -354,7 +356,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                         );
                                                     })()}
                                                     
-                                                    {matrixConfig.map((t: any, tIndex: number) => {
+                                                    {matrixConfig.map((t: TowerMatrixConfig, tIndex: number) => {
                                                         const blockUnits = floorUnits.filter(u => (u.block || 'Geral') === t.name);
                                                         if (blockUnits.length === 0) return null;
 
@@ -375,7 +377,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                         className="grid gap-2 sm:gap-4 mt-2"
                                                                         style={{ gridTemplateColumns: `repeat(${t.unitsWidth || 1}, minmax(100px, 1fr))` }}
                                                                     >
-                                                                        {t.gridCells.map((cell: any, cIndex: number) => {
+                                                                        {t.gridCells.map((cell: GridCellConfig, cIndex: number) => {
                                                                             // Encontrar a unidade real baseada na célula do grid
                                                                             const realUnit = blockUnits.find(u => 
                                                                                 u.specs?.grid_x === cell.x && u.specs?.grid_y === cell.y
@@ -496,11 +498,11 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                             const positionOrder = { 'FRONT': 0, 'LATERAL': 1, 'BACK': 2, 'NONE': 3 };
                                                             const orientationOrder = { 'NORTH': 0, 'SOUTH': 1, 'EAST': 2, 'WEST': 3, 'MANUAL': 4 };
 
-                                                            const getUnitOrientation = (u: any) => {
-                                                                const o = (u as any).sun_orientation || (u as any).sun_position || (u as any).specs?.sun_orientation;
+                                                            const getUnitOrientation = (u: Property): string => {
+                                                                const o = u.sun_orientation || u.sun_position || (u.specs as Property['specs'] & { sun_orientation?: string })?.sun_orientation;
                                                                 if (!o) {
-                                                                    const k = Object.keys(u).find(key => key.toLowerCase().includes('sun') && (u as any)[key]);
-                                                                    return k ? (u as any)[k] : 'MANUAL';
+                                                                    const k = Object.keys(u).find(key => key.toLowerCase().includes('sun') && (u as unknown as Record<string, unknown>)[key]);
+                                                                    return k ? String((u as unknown as Record<string, unknown>)[k]) : 'MANUAL';
                                                                 }
                                                                 return o;
                                                             };

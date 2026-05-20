@@ -1,12 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import { payrollService, PayrollRun } from '../services/payrollService';
+import { payrollService, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
 import { payrollEngine } from '../services/payrollEngine';
 import { computeDateRange } from '../lib/payrollUIHelpers';
 import PayrollRunList from './PayrollRunList';
 import PayrollRunDetail from './PayrollRunDetail';
 import PayrollEventModal from './PayrollEventModal';
 import PaystubModal from './PaystubModal';
+
+// ── Local types ────────────────────────────────────────────────────────────────
+interface OrganizationItem {
+    id: string;
+    name: string;
+}
+
+declare global {
+    interface Window {
+        supabase: {
+            from: (table: string) => {
+                select: (columns: string) => Promise<{ data: OrganizationItem[] | null; error: unknown }>;
+            };
+        };
+    }
+}
 
 interface LaborPayrollProps {
     orgId: string;
@@ -15,10 +31,10 @@ interface LaborPayrollProps {
 const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
     // ── Data ──────────────────────────────────────────────────────────────────
     const [runs, setRuns]               = useState<PayrollRun[]>([]);
-    const [rubrics, setRubrics]         = useState<any[]>([]);
-    const [organizations, setOrganizations] = useState<any[]>([]);
-    const [results, setResults]         = useState<any[]>([]);
-    const [runEvents, setRunEvents]     = useState<any[]>([]);
+    const [rubrics, setRubrics]         = useState<PayrollRubric[]>([]);
+    const [organizations, setOrganizations] = useState<OrganizationItem[]>([]);
+    const [results, setResults]         = useState<PayrollResultWithEmployee[]>([]);
+    const [runEvents, setRunEvents]     = useState<PayrollEvent[]>([]);
 
     // ── UI state ──────────────────────────────────────────────────────────────
     const [loading, setLoading]         = useState(true);
@@ -52,7 +68,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
     // ── Loaders ───────────────────────────────────────────────────────────────
     const loadOrganizations = async () => {
         try {
-            const { data } = await (window as any).supabase.from('organizations').select('id, name');
+            const { data } = await window.supabase.from('organizations').select('id, name');
             setOrganizations(data || []);
         } catch (err) {
             console.error(err);
@@ -116,9 +132,9 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
         try {
             setExecuting(true);
             if (!orgId || orgId === 'all') {
-                await payrollEngine.runBulkPayroll(start, end, type as any, subtype);
+                await payrollEngine.runBulkPayroll(start, end, type as PayrollRun['type'], subtype);
             } else {
-                await payrollEngine.runPayroll(orgId, start, end, type as any, subtype);
+                await payrollEngine.runPayroll(orgId, start, end, type as PayrollRun['type'], subtype);
             }
             setShowNewRunModal(false);
             loadRuns();
@@ -156,9 +172,10 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                 }
             }
             alert(lines.join('\n'));
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(err);
-            alert(`Erro ao re-sincronizar financeiro:\n${err?.message || err}`);
+            const error = err instanceof Error ? err : new Error(String(err));
+            alert(`Erro ao re-sincronizar financeiro:\n${error.message}`);
         } finally {
             setExecuting(false);
         }
@@ -212,7 +229,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                 selectedRun.org_id,
                 selectedRun.start_date,
                 selectedRun.end_date,
-                selectedRun.type as any,
+                selectedRun.type,
                 selectedRun.subtype,
                 selectedRun.id,
             );
@@ -243,7 +260,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
         try {
             setExecuting(true);
             const copy = await payrollService.duplicateRun(id);
-            await payrollEngine.runPayroll(orgId, copy.start_date, copy.end_date, copy.type as any, copy.subtype);
+            await payrollEngine.runPayroll(orgId, copy.start_date, copy.end_date, copy.type, copy.subtype);
             loadRuns();
             alert('Folha duplicada com sucesso!');
         } catch (err) {

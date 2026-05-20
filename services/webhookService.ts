@@ -1,7 +1,76 @@
-import { PurchaseOrder, ContractTemplate, QuotationRequest, QuotationResponse } from '../types';
+import { PurchaseOrder, PurchaseOrderItem, ContractTemplate, QuotationRequest } from '../types';
 import { supabase } from '../lib/supabase';
 
 const MAKE_WEBHOOK_URL = import.meta.env.VITE_MAKE_WEBHOOK_URL || '';
+
+interface SettingsLike {
+    location?: string;
+    webhookUrl?: string;
+    contractWebhookUrl?: string;
+    billingWebhookUrl?: string;
+    organizationId?: string;
+    organization_id?: string;
+    financialInfo?: {
+        webhookUrl?: string;
+        contractWebhookUrl?: string;
+        billingWebhookUrl?: string;
+    };
+}
+
+interface WebhookProject extends SettingsLike {
+    id?: string;
+    name?: string;
+    projectId?: string;
+    settings?: SettingsLike;
+}
+
+interface WebhookSupplier {
+    id?: string;
+    supplierId?: string;
+    name?: string;
+    supplierName?: string;
+    email?: string;
+    supplierEmail?: string;
+    phone?: string;
+    supplierPhone?: string;
+    document?: string;
+}
+
+interface WebhookContract {
+    id: string;
+    number: string;
+    title: string;
+    contract_type?: string;
+    nature?: string;
+    original_value?: number;
+    start_date?: string;
+    end_date?: string;
+    status?: string;
+    payment_method?: string;
+    payment_installments?: number;
+    organization_id?: string;
+    project_id?: string;
+}
+
+interface BillingInstallment {
+    id: string;
+    value: number;
+    dueDate?: string;
+    due_date?: string;
+    description?: string;
+    clientName?: string;
+    propertyName?: string;
+    status: string;
+    project_id?: string;
+    organization_id?: string;
+}
+
+interface BillingRule {
+    id: string;
+    days: number;
+    triggerMode: string;
+    messageTemplate?: string;
+}
 
 interface WebhookPayload {
     event: string;
@@ -11,7 +80,7 @@ interface WebhookPayload {
         number: string;
         status: string;
         total: number;
-        items: any[];
+        items: PurchaseOrderItem[];
         notes?: string;
     };
     supplier?: {
@@ -37,15 +106,15 @@ export const webhookService = {
             });
             if (!response.ok) throw new Error(`Status: ${response.status}`);
             return true;
-        } catch (error: any) {
-            console.error('[WEBHOOK] Ping failed:', error);
-            throw error;
+        } catch (err: unknown) {
+            console.error('[WEBHOOK] Ping failed:', err);
+            throw err;
         }
     },
 
-    async triggerOrderSentWebhook(order: PurchaseOrder, supplier?: any, project?: any, isRetry = false) {
+    async triggerOrderSentWebhook(order: PurchaseOrder, supplier?: WebhookSupplier, project?: WebhookProject, isRetry = false) {
         // ... (existing logic for targetUrl)
-        const settings = project?.settings || project;
+        const settings: SettingsLike | undefined = project?.settings || project;
         const dynamicUrl = settings?.financialInfo?.webhookUrl || settings?.webhookUrl;
         const targetUrl = dynamicUrl || MAKE_WEBHOOK_URL;
 
@@ -66,13 +135,13 @@ export const webhookService = {
                 notes: order.notes
             },
             supplier: supplier ? {
-                name: supplier.name,
+                name: supplier.name || '',
                 email: supplier.email,
                 phone: supplier.phone
             } : undefined,
             project: project ? {
                 id: project.id,
-                name: project.name,
+                name: project.name || '',
                 location: project.settings?.location || project.location
             } : undefined
         };
@@ -90,8 +159,8 @@ export const webhookService = {
 
             // Log history
             const historyData = {
-                project_id: project?.id || project?.projectId || (order as any).project_id || (order as any).projectId,
-                organization_id: (order as any).organization_id || (order as any).organizationId || project?.organizationId || project?.organization_id || project?.settings?.organizationId,
+                project_id: project?.id || project?.projectId || order.projectId,
+                organization_id: project?.organizationId || project?.organization_id || project?.settings?.organizationId,
                 event_type: 'order_sent' as const,
                 reference_id: order.id,
                 reference_name: order.number,
@@ -100,13 +169,14 @@ export const webhookService = {
             };
             const { error: logError } = await supabase.from('automation_history').insert(historyData);
             if (logError) console.error('[WEBHOOK] Failed to log order success history:', logError);
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('[WEBHOOK] Failed to send order to Make.com:', error);
 
             // Log error
             const historyData = {
-                project_id: project?.id || project?.projectId || (order as any).project_id || (order as any).projectId,
-                organization_id: (order as any).organization_id || (order as any).organizationId || project?.organizationId || project?.organization_id || project?.settings?.organization_id,
+                project_id: project?.id || project?.projectId || order.projectId,
+                organization_id: project?.organizationId || project?.organization_id || project?.settings?.organizationId,
                 event_type: 'order_sent' as const,
                 reference_id: order.id,
                 reference_name: order.number,
@@ -121,8 +191,8 @@ export const webhookService = {
         }
     },
 
-    async triggerQuotationSentWebhook(quotation: QuotationRequest, suppliers: any[], project?: any) {
-        const settings = project?.settings || project;
+    async triggerQuotationSentWebhook(quotation: QuotationRequest, suppliers: WebhookSupplier[], project?: WebhookProject) {
+        const settings: SettingsLike | undefined = project?.settings || project;
         const dynamicUrl = settings?.financialInfo?.webhookUrl || settings?.webhookUrl;
         const targetUrl = dynamicUrl || MAKE_WEBHOOK_URL;
 
@@ -150,14 +220,14 @@ export const webhookService = {
                 paymentInstallments: quotation.paymentInstallments
             },
             suppliers: suppliers.map(s => ({
-                id: s.supplierId || s.id,
-                name: s.supplierName || s.name,
-                email: s.supplierEmail || s.email,
-                phone: s.supplierPhone || s.phone
+                id: s.supplierId ?? s.id,
+                name: s.supplierName ?? s.name ?? '',
+                email: s.supplierEmail ?? s.email,
+                phone: s.supplierPhone ?? s.phone
             })),
             project: project ? {
                 id: project.id,
-                name: project.name,
+                name: project.name || '',
                 location: project.settings?.location || project.location
             } : undefined
         };
@@ -183,7 +253,8 @@ export const webhookService = {
             };
             const { error: logError } = await supabase.from('automation_history').insert(historyData);
             if (logError) console.error('[WEBHOOK] Failed to log quotation success history:', logError);
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('[WEBHOOK] Failed to send quotation to Make.com:', error);
 
             // Log error
@@ -204,9 +275,9 @@ export const webhookService = {
         }
     },
 
-    async triggerContractSentWebhook(contract: any, supplier?: any, project?: any, isRetry = false, template?: ContractTemplate) {
+    async triggerContractSentWebhook(contract: WebhookContract, supplier?: WebhookSupplier, project?: WebhookProject, isRetry = false, template?: ContractTemplate) {
         // ... (existing logic for targetUrl fallback)
-        let settings = project?.settings || project;
+        let settings: SettingsLike | undefined = project?.settings || project;
         // ... (organization fallback logic)
 
         // If no settings provided, or no URL in settings, try to get from central config
@@ -284,7 +355,7 @@ export const webhookService = {
             } : undefined,
             project: project ? {
                 id: project.id,
-                name: project.name,
+                name: project.name || '',
                 location: project.location || project.settings?.location,
                 organizationId: project.organization_id || project.settings?.organizationId
             } : undefined
@@ -314,7 +385,8 @@ export const webhookService = {
 
             const { error: logError } = await supabase.from('automation_history').insert(historyData);
             if (logError) console.error('[WEBHOOK] Failed to log contract success history:', logError);
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('[WEBHOOK] Failed to send contract to Make.com:', error);
 
             // Log error
@@ -345,8 +417,8 @@ export const webhookService = {
             .replace(/{{projeto}}/g, data.projeto);
     },
 
-    async triggerBillingWebhook(item: { inst: any; rule: any }, project?: any) {
-        const settings = project?.settings || project;
+    async triggerBillingWebhook(item: { inst: BillingInstallment; rule: BillingRule }, project?: WebhookProject) {
+        const settings: SettingsLike | undefined = project?.settings || project;
         const billingUrl = settings?.financialInfo?.billingWebhookUrl || settings?.billingWebhookUrl;
 
         if (!billingUrl || billingUrl.includes('your-webhook-id')) {
@@ -386,7 +458,7 @@ export const webhookService = {
             },
             project: project ? {
                 id: project.id,
-                name: project.name,
+                name: project.name || '',
                 organizationId: project.organization_id || project.settings?.organizationId
             } : undefined
         };
@@ -413,7 +485,8 @@ export const webhookService = {
 
             const { error: logError } = await supabase.from('automation_history').insert(historyData);
             if (logError) console.error('[WEBHOOK] Failed to log billing success history:', logError);
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('[WEBHOOK] Failed to send billing to Make.com:', error);
 
             // Log error

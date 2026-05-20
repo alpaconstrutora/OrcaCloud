@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-declare const Deno: any;
+declare const Deno: { env: { get(key: string): string | undefined } };
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': Deno.env.get('FRONTEND_URL') ?? 'https://oxedkknreghxrgenyjiu.supabase.co',
@@ -70,7 +70,7 @@ serve(async (req: Request) => {
 
             if (rules.length === 0 || installments.length === 0) continue;
 
-            const pendingInsts = installments.filter((i: any) => i.status === 'PENDING' || i.status === 'PENDENTE');
+            const pendingInsts = installments.filter((i: Record<string, unknown>) => i.status === 'PENDING' || i.status === 'PENDENTE');
 
             for (const inst of pendingInsts) {
                 const dueDate = inst.dueDate || inst.due_date;
@@ -165,7 +165,7 @@ serve(async (req: Request) => {
                                 payload
                             });
                             totalSent++;
-                        } catch (err: any) {
+                        } catch (err: unknown) {
                             console.error(`Error triggering billing for projects ${project.id}:`, err);
                             // Log error
                             await supabaseClient.from('automation_history').insert({
@@ -175,7 +175,7 @@ serve(async (req: Request) => {
                                 reference_id: inst.id,
                                 reference_name: `${inst.clientName} - ${inst.description || 'Parcela'}`,
                                 status: 'error',
-                                error_message: err.message,
+                                error_message: err instanceof Error ? err.message : String(err),
                                 payload
                             });
                             totalErrors++;
@@ -192,10 +192,10 @@ serve(async (req: Request) => {
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in process-billing-ruler:", error);
         return new Response(
-            JSON.stringify({ error: error.message }),
+            JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
     }

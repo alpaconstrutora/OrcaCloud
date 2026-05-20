@@ -21,7 +21,10 @@ import {
     ResourceTeam,
     LevelingResult,
     HierarchyNode,
-    FinancialTransaction
+    FinancialTransaction,
+    Organization,
+    DiaryEntry,
+    DiaryActivity
 } from '../types';
 import { BaselineModal } from './schedule/BaselineModal';
 import { ConfigModal } from './schedule/ConfigModal';
@@ -96,11 +99,14 @@ import {
     ResponsiveContainer
 } from 'recharts';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ProjectRecord = { id: string; name?: string; settings?: any };
+
 interface FinancialScheduleProps {
     settings: ProjectSettings;
     budget: BudgetEntry[];
-    projects: any[];
-    organizations?: any[]; // Organization[] (using any to avoid complex import cycles for now)
+    projects: ProjectRecord[];
+    organizations?: Organization[];
     onLoadProject: (id: string, targetView?: string) => void;
     onUpdateSettings: (settings: ProjectSettings) => void;
     onBack?: () => void;
@@ -871,7 +877,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     }, [settings.schedule, settings.startDate, settings.endDate, lastSyncedScheduleJson]);
 
     const [orders, setOrders] = useState<PurchaseOrder[]>([]);
-    const [allDiaryEntries, setAllDiaryEntries] = useState<any[]>(settings.diaryEntries || []);
+    const [allDiaryEntries, setAllDiaryEntries] = useState<DiaryEntry[]>(settings.diaryEntries || []);
 
 
     useEffect(() => {
@@ -906,7 +912,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             return null;
                         }
                         const linkedId = currentSettings.linkedProjectId;
-                        const linked = linkedId ? projects.find((p: any) => p.id === linkedId) : null;
+                        const linked = linkedId ? projects.find((p) => p.id === linkedId) : null;
                         if (linked) return findObraId(linked.id, linked.settings);
                         return null;
                     };
@@ -978,8 +984,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
             // Physical Progress (Diary or Manual Sync)
             const task = schedule.itemSchedules?.find(s => s.id === item.id);
-            const diaryMaxEvolution = allDiaryEntries?.reduce((max, entry: any) => {
-                const activity = entry.activities?.find((a: any) => {
+            const diaryMaxEvolution = allDiaryEntries?.reduce((max, entry: DiaryEntry) => {
+                const activity = entry.activities?.find((a: DiaryActivity) => {
                     const matchId = a.itemId === item.id;
                     const matchDesc = a.description && item.sinapiItem?.description && a.description.trim() === item.sinapiItem.description.trim();
                     return matchId || matchDesc;
@@ -1028,9 +1034,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const pct = node.total > 0 ? (node.realizedTotal / node.total * 100) : 0;
 
                 if (daysUntilStart <= 30 && daysUntilStart >= -30 && pct < 100) {
-                    const leafItems: any[] = [];
+                    const leafItems: BudgetEntry[] = [];
                     const gatherLeaves = (n: HierarchyNode) => {
-                        if (n.type === 'item') leafItems.push(n.data);
+                        if (n.type === 'item' && n.data) leafItems.push(n.data);
                         else if (n.children) n.children.forEach(gatherLeaves);
                     };
                     gatherLeaves(node);
@@ -1276,8 +1282,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 // Also trigger persistence
                 persistSchedule(newSchedule);
                 return newSchedule;
-            } catch (err: any) {
-                alert(err.message || 'Erro ao recalcular cronograma');
+            } catch (err: unknown) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                alert(error.message || 'Erro ao recalcular cronograma');
                 return prev;
             }
         });
@@ -1365,8 +1372,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     alert(`Nivelamento concluído em ${result.iterations} iterações.Alguns gargalos persistem devido a restrições de prazo ou precedência que impedem novos deslocamentos.`);
                 }
             }
-        } catch (err: any) {
-            alert(err.message || 'Erro ao nivelar recursos');
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            alert(error.message || 'Erro ao nivelar recursos');
         }
     };
 
@@ -1403,12 +1411,12 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     if (roleIdx >= 0) {
                         const neededExtras = issue.required - issue.capacity;
                         for (let i = 0; i < neededExtras; i++) {
-                            const newWorker = {
-                                id: `extra - ${issue.resourceId} -${Date.now()} -${i} `,
+                            const newWorker: ResourceWorker = {
+                                id: `extra-${issue.resourceId}-${Date.now()}-${i}`,
                                 name: `${updatedResources.roles[roleIdx].name} (Adicional ${i + 1})`,
                                 roleId: issue.resourceId
                             };
-                            updatedResources.workers = [...updatedResources.workers, newWorker as any];
+                            updatedResources.workers = [...updatedResources.workers, newWorker];
                         }
                     }
                 }
@@ -1506,7 +1514,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         });
     };
 
-    const handleUpdateAllocation = (itemId: string, allocations: any[]) => {
+    const handleUpdateAllocation = (itemId: string, allocations: ResourceAllocation[]) => {
         setSchedule(prev => {
             const currentItems = prev.itemSchedules || [];
             const taskIdx = currentItems.findIndex(s => s.id === itemId);
@@ -1541,7 +1549,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const newSchedule = { ...prev, itemSchedules: calculated };
                 persistSchedule(newSchedule);
                 return newSchedule;
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error('Recalculate error:', err);
                 return { ...prev, itemSchedules: updatedSchedules };
             }
@@ -1549,7 +1557,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     };
 
     // ── Crew field update handler ──
-    const handleUpdateCrewField = (itemId: string, field: string, value: any) => {
+    const handleUpdateCrewField = (itemId: string, field: string, value: string | number | boolean) => {
         setSchedule(prev => {
             const currentItems = prev.itemSchedules || [];
             const taskIdx = currentItems.findIndex(s => s.id === itemId);
@@ -1569,7 +1577,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     helperProd: 0
                 };
 
-            (newTask as any)[field] = value;
+            (newTask as unknown as Record<string, unknown>)[field] = value;
 
             // Force autoDuration on any crew field change
             const crewFields = ['crewMainWorkers', 'crewHelpers', 'helperFactor', 'effortCoefficient',
@@ -1694,7 +1702,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const newSchedule = { ...prev, itemSchedules: calculated, resources: newResources };
                 onUpdateSettings({ ...settings, schedule: newSchedule });
                 return newSchedule;
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error('Recalculate error:', err);
                 return { ...prev, itemSchedules: updatedSchedules };
             }
@@ -1834,7 +1842,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const newSchedule = { ...prev, itemSchedules: calculated, resources: newResources };
                 onUpdateSettings({ ...settings, schedule: newSchedule });
                 return newSchedule;
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error('Recalculate error:', err);
                 return { ...prev, itemSchedules: fullList, resources: newResources };
             }
@@ -1870,7 +1878,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const newSchedule = { ...prev, itemSchedules: calculated };
                 onUpdateSettings({ ...settings, schedule: newSchedule });
                 return newSchedule;
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error('Recalculate error:', err);
                 return { ...prev, itemSchedules: updatedSchedules };
             }
@@ -2189,7 +2197,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const newSchedule = { ...prev, itemSchedules: calculated };
                 onUpdateSettings({ ...settings, schedule: newSchedule });
                 return newSchedule;
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error('Recalculate error:', err);
                 return { ...prev, itemSchedules: updatedSchedules };
             }
@@ -2236,7 +2244,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const newSchedule = { ...prev, itemSchedules: calculated };
                 onUpdateSettings({ ...settings, schedule: newSchedule });
                 return newSchedule;
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error('Recalculate error:', err);
                 return { ...prev, itemSchedules: updatedSchedules };
             }
@@ -2277,14 +2285,14 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const newSchedule = { ...prev, itemSchedules: calculated };
                 onUpdateSettings({ ...settings, schedule: newSchedule });
                 return newSchedule;
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error('Recalculate error:', err);
                 return { ...prev, itemSchedules: updatedSchedules };
             }
         });
     };
 
-    const handleUpdatePredecessorField = (itemId: string, field: 'uid' | 'type' | 'lag', value: any) => {
+    const handleUpdatePredecessorField = (itemId: string, field: 'uid' | 'type' | 'lag', value: string | number) => {
         setSchedule(prev => {
             const currentItems = prev.itemSchedules || [];
             const taskIdx = currentItems.findIndex(s => s.id === itemId);
@@ -2299,7 +2307,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
             if (field === 'uid') {
                 // Split possibly multiple UIDs: "4, 1"
-                const uids = value.split(/[,\s]+/).filter((u: string) => u.trim());
+                const uids = String(value).split(/[,\s]+/).filter((u: string) => u.trim());
                 const newPreds: Predecessor[] = [];
 
                 uids.forEach((u: string) => {
@@ -2345,7 +2353,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const newSchedule = { ...prev, itemSchedules: calculated };
                 onUpdateSettings({ ...settings, schedule: newSchedule });
                 return newSchedule;
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error('Recalculate error:', err);
                 return { ...prev, itemSchedules: updatedSchedules };
             }
@@ -2559,7 +2567,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     allDiaryEntries.forEach(entry => {
                         const entryDate = new Date(entry.date);
                         if (entryDate >= periodStart && entryDate < nextPeriodStart && entry.status !== 'Recusado') {
-                            const activity = entry.activities?.find((a: any) =>
+                            const activity = entry.activities?.find((a: DiaryActivity) =>
                                 a.itemId === item.id ||
                                 (a.description && item.sinapiItem?.description && a.description.trim() === item.sinapiItem.description.trim())
                             );
@@ -2808,7 +2816,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                     <YAxis yAxisId="left" tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)} k`} tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
                                     <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)} k`} tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
                                     <Tooltip
-                                        formatter={(value: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+                                        formatter={(value: unknown) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0)}
                                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                     />
                                     <Legend />
@@ -2981,7 +2989,23 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     idToUid={idToUid}
                     predecessors={schedule.itemSchedules?.find(s => s.id === predecessorModalTask)?.predecessors || []}
                     onClose={() => setPredecessorModalTask(null)}
-                    onUpdate={(newPreds: Predecessor[]) => predecessorModalTask && handleUpdateItemSchedule(predecessorModalTask, 'predecessors' as any, newPreds as any)}
+                    onUpdate={(newPreds: Predecessor[]) => {
+                        if (predecessorModalTask) {
+                            setSchedule(prev => {
+                                const currentItems = prev.itemSchedules || [];
+                                const taskIdx = currentItems.findIndex(s => s.id === predecessorModalTask);
+                                const updatedSchedules = [...currentItems];
+                                if (taskIdx >= 0) {
+                                    updatedSchedules[taskIdx] = { ...updatedSchedules[taskIdx], predecessors: newPreds };
+                                } else {
+                                    updatedSchedules.push({ id: predecessorModalTask, predecessors: newPreds });
+                                }
+                                const newSchedule = { ...prev, itemSchedules: updatedSchedules };
+                                persistSchedule(newSchedule);
+                                return newSchedule;
+                            });
+                        }
+                    }}
                 />
             )}
 

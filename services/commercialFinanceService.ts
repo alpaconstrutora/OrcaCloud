@@ -1,7 +1,16 @@
 import { supabase } from '../lib/supabase';
-import { PropertyDeal, ProjectSettings, PaymentInstallment } from '../types';
+import { PropertyDeal, ProjectSettings, PaymentInstallment, FinancialTransaction } from '../types';
 import { projectService } from './projectService';
 import { brokerService } from './brokerService';
+
+// Supabase project row as returned by .select('id, name, settings') / .select('*')
+interface CommercialProjectRow {
+    id: string;
+    name: string;
+    settings: ProjectSettings & { organizationId?: string };
+    isVirtual?: boolean;
+    created_at?: string;
+}
 
 export const commercialFinanceService = {
     /**
@@ -11,7 +20,7 @@ export const commercialFinanceService = {
      * @param targetOrganizationId ID da organização onde os dados devem ser salvos
      * @param currentSettings Configurações atuais do projeto (para acumulação sequencial)
      */
-    async syncDealToFinance(deal: PropertyDeal, targetOrganizationId?: string, currentSettings?: any, isGlobalSync: boolean = false) {
+    async syncDealToFinance(deal: PropertyDeal, targetOrganizationId?: string, currentSettings?: ProjectSettings, isGlobalSync: boolean = false) {
         const orgToUse = targetOrganizationId || deal.organization_id;
         console.log(`[COMMERCIAL-FINANCE] Processing Deal #${deal.id} for Org: ${orgToUse}`);
         
@@ -27,14 +36,14 @@ export const commercialFinanceService = {
 
         // Se estivermos salvando ativamente (comercial -> financeiro), limpamos vestígios globais primeiro.
         // Isso evita duplicidades se o deal foi movido de organização ou existe em projetos órfãos.
-        const globalStates: any[] = [];
+        const globalStates: PaymentInstallment[] = [];
         if (!isGlobalSync) {
             console.log(`[COMMERCIAL-FINANCE] Omniscient Purge for Deal #${deal.id.substring(0,8)}...`);
             const { data: allProj } = await supabase.from('projects').select('settings').eq('name', 'Gestão Comercial');
             allProj?.forEach(p => {
-                const insts = p.settings?.financialInfo?.installments;
+                const insts: PaymentInstallment[] | undefined = (p.settings as ProjectSettings)?.financialInfo?.installments;
                 if (insts) {
-                    const matches = insts.filter((i: any) => i.dealId === deal.id || (i.description || '').includes(deal.id.substring(0, 8)));
+                    const matches = insts.filter(i => i.dealId === deal.id || (i.description || '').includes(deal.id.substring(0, 8)));
                     globalStates.push(...matches);
                 }
             });
@@ -88,30 +97,24 @@ export const commercialFinanceService = {
         // 2B. ISOLAR LANÇAMENTOS
         // 2B. ISOLAR LANÇAMENTOS DO CONTRATO ATUAL PARA SUBSTITUIÇÃO
         // Esta é a parte crítica para evitar duplicidade: identificamos TUDO que pertence a este Deal
-        const thisDealInstallments = currentInstallments.filter((i: any) => {
-            const isSameDeal = i.dealId === deal.id;
+        const isDealInstallment = (i: PaymentInstallment): boolean => {
             const shortId = deal.id.substring(0, 8);
-            // 'isGhost' captura parcelas de versões antigas do sistema que não tinham dealId mas mantinham o rastro no texto
-            const isGhost = (i.description || '').includes(`Deal #${shortId}`) || (i.id || '').includes(shortId);
-            return isSameDeal || isGhost;
-        });
+            return i.dealId === deal.id || (i.description || '').includes(`Deal #${shortId}`) || (i.id || '').includes(shortId);
+        };
 
-        // PURGA: Removemos TUDO do deal atual do lote original. 
+        const thisDealInstallments = currentInstallments.filter(isDealInstallment);
+
+        // PURGA: Removemos TUDO do deal atual do lote original.
         // O que sobrar (otherInstallments) sāo parcelas de OUTRAS negociações que devem ser preservadas.
-        const otherInstallments = currentInstallments.filter((i: any) => {
-            const isSameDeal = i.dealId === deal.id;
-            const shortId = deal.id.substring(0, 8);
-            const isGhost = (i.description || '').includes(`Deal #${shortId}`) || (i.id || '').includes(shortId);
-            return !isSameDeal && !isGhost;
-        });
+        const otherInstallments = currentInstallments.filter(i => !isDealInstallment(i));
 
         const newInstallments: PaymentInstallment[] = [];
 
         const getStatus = (id: string, value: number, description: string, defStatus: string) => {
-            const ex = allExistingInstallments.find((oi: any) => 
-                oi.id === id || 
+            const ex = allExistingInstallments.find((oi: PaymentInstallment) =>
+                oi.id === id ||
                 (Math.abs(oi.value - value) < 0.01 && oi.description === description) ||
-                (oi.dealId === deal.id && oi.description.includes(description.substring(0, 15)))
+                (oi.dealId === deal.id && (oi.description || '').includes(description.substring(0, 15)))
             );
             return ex ? { status: ex.status, paymentDate: ex.paymentDate } : { status: defStatus, paymentDate: undefined };
         };
@@ -122,11 +125,11 @@ export const commercialFinanceService = {
             // Preservamos o histórico (parcelas customizadas, quebras manuais, edições do financeiro).
             // O Global Sync atua apenas como corretor de conectividade (metadata) e detector de calotes (cancelamentos).
             console.log(`[COMMERCIAL-FINANCE] Preserving ${thisDealInstallments.length} established installments for Deal #${deal.id.substring(0,8)}`);
-            thisDealInstallments.forEach((ex: any) => {
-                newInstallments.push({ 
-                    ...ex, 
-                    ...metadata, 
-                    status: (deal.status === 'CANCELLED' || deal.status === 'IN_NEGOTIATION') ? 'CANCELLED' : ex.status 
+            thisDealInstallments.forEach((ex: PaymentInstallment) => {
+                newInstallments.push({
+                    ...ex,
+                    ...metadata,
+                    status: (deal.status === 'CANCELLED' || deal.status === 'IN_NEGOTIATION') ? 'CANCELLED' : ex.status
                 });
             });
         } 
@@ -144,7 +147,7 @@ export const commercialFinanceService = {
                     description: dpDesc, 
                     dueDate: deal.date || new Date().toISOString().split('T')[0], 
                     value: Number(downPayment.toFixed(2)), 
-                    status: sd.status as any, 
+                    status: sd.status as PaymentInstallment['status'],
                     paymentDate: sd.paymentDate, 
                     ...metadata 
                 });
@@ -153,11 +156,11 @@ export const commercialFinanceService = {
             console.log(`[COMMERCIAL-FINANCE] Saving ${deal.custom_installments.length} CUSTOM installments${downPayment > 0 ? ' + Entrada' : ''} for Deal #${deal.id.substring(0,8)}`);
             deal.custom_installments.forEach((custom: PaymentInstallment) => {
                 const sd = getStatus(custom.id, custom.value, custom.description, custom.status);
-                newInstallments.push({ 
-                    ...custom, 
+                newInstallments.push({
+                    ...custom,
                     ...metadata,
                     paymentDate: sd.paymentDate,
-                    status: sd.status as any 
+                    status: sd.status as PaymentInstallment['status']
                 });
             });
         }
@@ -174,7 +177,7 @@ export const commercialFinanceService = {
                 const id = `tx-${deal.id}-dp`;
                 const desc = `Receita: ${deal.type === 'SALE' ? 'Venda' : 'Aluguel'} - Sinal (Entrada) - Deal #${deal.id.substring(0, 8)}`;
                 const sd = getStatus(id, downPayment, desc, 'PENDING');
-                newInstallments.push({ id, description: desc, dueDate: deal.date || new Date().toISOString().split('T')[0], value: Number(downPayment.toFixed(2)), status: sd.status as any, paymentDate: sd.paymentDate, ...metadata });
+                newInstallments.push({ id, description: desc, dueDate: deal.date || new Date().toISOString().split('T')[0], value: Number(downPayment.toFixed(2)), status: sd.status as PaymentInstallment['status'],paymentDate: sd.paymentDate, ...metadata });
             }
 
             // Adicionar Parcelas Regulares
@@ -185,7 +188,7 @@ export const commercialFinanceService = {
                     date.setMonth(date.getMonth() + i);
                     const desc = `Receita: ${deal.type === 'SALE' ? 'Venda' : 'Aluguel'} - Parcela ${i}/${installments} - Deal #${deal.id.substring(0, 8)}`;
                     const sd = getStatus(id, installmentValue, desc, 'PENDING');
-                    newInstallments.push({ ...metadata, id, description: desc, dueDate: date.toISOString().split('T')[0], value: Number(installmentValue.toFixed(2)), status: sd.status as any, paymentDate: sd.paymentDate });
+                    newInstallments.push({ ...metadata, id, description: desc, dueDate: date.toISOString().split('T')[0], value: Number(installmentValue.toFixed(2)), status: sd.status as PaymentInstallment['status'],paymentDate: sd.paymentDate });
                 }
             }
         }
@@ -222,39 +225,39 @@ export const commercialFinanceService = {
         // Se estiver em modo GLOBAL (ID nulo) e houver múltiplos projetos, vamos retornar um "projeto virtual" consolidado
         if (!organizationId && projects && projects.length > 1) {
             console.log(`[COMMERCIAL-FINANCE] Consolidating ${projects.length} commercial projects for global view.`);
-            
-            const consolidatedInstallments: any[] = [];
-            const consolidatedTransactions: any[] = [];
-            
+
+            const consolidatedInstallments: (PaymentInstallment & { sourceProjectId?: string })[] = [];
+            const consolidatedTransactions: (Record<string, unknown> & { sourceProjectId?: string })[] = [];
+
             // 1b. Limpar e consolidar individualmente cada projeto
             for (const p of projects) {
                 // EXECUTAR LIMPEZA NO FILHO: Remove lixos do banco de dados desse projeto individual
-                const cleanedP = await this.cleanupOrphanedInstallments(p);
-                
+                const cleanedP = await this.cleanupOrphanedInstallments(p as CommercialProjectRow);
+
                 const info = cleanedP.settings?.financialInfo;
                 if (info) {
                     if (info.installments) {
-                        info.installments.forEach((i: any) => {
+                        info.installments.forEach((i: PaymentInstallment) => {
                             // DEDUPLICAÇÃO POR BIOMETRIA DE LANÇAMENTO: Nome + Parcela + Valor
                             // Resolve casos onde existem dois contratos (IDs diferentes) para a mesma venda.
                             // Corrigimos i.title para i.description; 'title' vinha nulo e aglomerava parcelas do mesmo valor!
-                            const descr = i.description || i.title || 'sem-titulo';
-                            
+                            const descr = i.description || 'sem-titulo';
+
                             // NORMALIZAÇÃO DE DESCRIÇÃO: Remove prefixos como 'Receita: Venda - ' para agrupar versões diferentes
                             const normalizedDescr = descr
                                 .replace(/^Receita: (Venda|Aluguel) - /, '')
                                 .replace(/ - Deal #.{8}$/, '') // Remove sufixo de Deal ID se houver
                                 .trim();
 
-                            const compositeKey = `${i.entityName || i.dealId || 'manual'}-${normalizedDescr}-${i.value}`;
-                            
+                            const compositeKey = `${i.dealId || 'manual'}-${normalizedDescr}-${i.value}`;
+
                             const existingIndex = consolidatedInstallments.findIndex(existing => {
-                                const existDescr = (existing.description || existing.title || 'sem-titulo')
+                                const existDescr = (existing.description || 'sem-titulo')
                                     .replace(/^Receita: (Venda|Aluguel) - /, '')
                                     .replace(/ - Deal #.{8}$/, '')
                                     .trim();
 
-                                const existingKey = `${existing.entityName || existing.dealId || 'manual'}-${existDescr}-${existing.value}`;
+                                const existingKey = `${existing.dealId || 'manual'}-${existDescr}-${existing.value}`;
                                 return existingKey === compositeKey;
                             });
 
@@ -269,10 +272,10 @@ export const commercialFinanceService = {
                         });
                     }
                     if (info.transactions) {
-                        info.transactions.forEach((t: any) => {
-                            const compositeKey = `${t.dealId || 'manual'}-${t.title}-${t.value}-${t.date}`;
+                        info.transactions.forEach((t: Record<string, unknown>) => {
+                            const compositeKey = `${t['dealId'] || 'manual'}-${t['title']}-${t['value']}-${t['date']}`;
                             if (!consolidatedTransactions.some(existing => {
-                                const existingKey = `${existing.dealId || 'manual'}-${existing.title}-${existing.value}-${existing.date}`;
+                                const existingKey = `${existing['dealId'] || 'manual'}-${existing['title']}-${existing['value']}-${existing['date']}`;
                                 return existingKey === compositeKey;
                             })) {
                                 consolidatedTransactions.push({
@@ -316,7 +319,7 @@ export const commercialFinanceService = {
 
         if (orphanedProjects && orphanedProjects.length > 0) {
             // Filtra o que não tem organização vinculada no settings
-            const bestCandidate = orphanedProjects.find((p: any) => {
+            const bestCandidate = orphanedProjects.find((p: CommercialProjectRow) => {
                 const info = p.settings?.financialInfo;
                 const hasInstallments = info && info.installments && info.installments.length > 0;
                 const isOrphan = !p.settings?.organizationId;
@@ -438,13 +441,13 @@ export const commercialFinanceService = {
                 const installments = p.settings?.financialInfo?.installments;
                 if (!installments || !Array.isArray(installments)) continue;
 
-                const dealInstallments = installments.filter((i: any) => {
+                const dealInstallments = installments.filter((i: PaymentInstallment) => {
                     const isSameDeal = i.dealId === dealId;
                     const isGhost = (i.description || '').includes(`Deal #${shortId}`) || (i.id || '').includes(shortId);
                     return isSameDeal || isGhost;
                 });
 
-                const paidOnes = dealInstallments.filter((i: any) => i.status === 'PAID');
+                const paidOnes = dealInstallments.filter((i: PaymentInstallment) => i.status === 'PAID');
                 totalPaid += paidOnes.length;
             }
             
@@ -476,22 +479,22 @@ export const commercialFinanceService = {
             return;
         }
 
-        const projectsToUpdate: any[] = [];
+        const projectsToUpdate: CommercialProjectRow[] = [];
         let totalPaidFound = 0;
 
         // 2. Primeira Passagem: AUDITORIA GLOBAL PARA BLOQUEIO
         // Verifica TODOS os cofres antes de deletar qualquer coisa
         for (const proj of allProjects) {
-            const info = proj.settings?.financialInfo;
+            const info = (proj.settings as ProjectSettings)?.financialInfo;
             if (!info || !info.installments) continue;
-            
-            const dealInstallments = info.installments.filter((i: any) => i.dealId === dealId);
+
+            const dealInstallments = info.installments.filter((i: PaymentInstallment) => i.dealId === dealId);
             if (dealInstallments.length > 0) {
-                const hasPaid = dealInstallments.some((i: any) => i.status === 'PAID');
+                const hasPaid = dealInstallments.some((i: PaymentInstallment) => i.status === 'PAID');
                 if (hasPaid) totalPaidFound++;
                 
                 // Se encontrarmos o deal neste projeto, agendamos o projeto para edição na passagem 2
-                projectsToUpdate.push({ project: proj, dealInstallments });
+                projectsToUpdate.push(proj as CommercialProjectRow);
             }
         }
 
@@ -504,13 +507,13 @@ export const commercialFinanceService = {
         // Se chegamos aqui, todas as parcelas estão PENDENTES em todos os cofres do sistema
         console.log(`[COMMERCIAL-FINANCE] No paid installments found. Proceeding to securely purge Deal ${dealId} from ${projectsToUpdate.length} Vaults...`);
         
-        for (const target of projectsToUpdate) {
-            const proj = target.project;
+        for (const proj of projectsToUpdate) {
             const info = proj.settings.financialInfo;
-            
+            if (!info) continue;
+
             // Filtramos as parcelas e transações
-            const cleanInstallments = info.installments.filter((i: any) => i.dealId !== dealId);
-            const cleanTransactions = info.transactions ? info.transactions.filter((t: any) => t.dealId !== dealId) : [];
+            const cleanInstallments = (info.installments || []).filter((i: PaymentInstallment) => i.dealId !== dealId);
+            const cleanTransactions = (info.transactions || []).filter((t: FinancialTransaction & { dealId?: string }) => t.dealId !== dealId);
 
             proj.settings.financialInfo = {
                 ...info,
@@ -518,7 +521,7 @@ export const commercialFinanceService = {
                 transactions: cleanTransactions
             };
 
-            await projectService.saveProject(proj);
+            await projectService.saveProject(proj as unknown as Parameters<typeof projectService.saveProject>[0]);
             console.log(`[COMMERCIAL-FINANCE] Purged ghost installments from Project [${proj.name}]`);
         }
         
@@ -618,9 +621,9 @@ export const commercialFinanceService = {
 
         const consolidated: PaymentInstallment[] = [];
         projects?.forEach(p => {
-            const info = p.settings?.financialInfo;
+            const info = (p.settings as ProjectSettings)?.financialInfo;
             if (info && info.installments) {
-                const clientInsts = info.installments.filter((i: any) => i.clientId === clientId);
+                const clientInsts = info.installments.filter((i: PaymentInstallment) => i.clientId === clientId);
                 consolidated.push(...clientInsts);
             }
         });
@@ -647,11 +650,11 @@ export const commercialFinanceService = {
         }
 
         // 2. Coletar todas as parcelas deste deal, em todos os cofres do sistema
-        let dealInstallments: any[] = [];
+        let dealInstallments: PaymentInstallment[] = [];
         for (const proj of allProjects) {
-            const info = proj.settings?.financialInfo;
+            const info = (proj.settings as ProjectSettings)?.financialInfo;
             if (info && info.installments) {
-                const projInstalls = info.installments.filter((i: any) => i.dealId === dealId);
+                const projInstalls = info.installments.filter((i: PaymentInstallment) => i.dealId === dealId);
                 dealInstallments.push(...projInstalls);
             }
         }
@@ -662,7 +665,7 @@ export const commercialFinanceService = {
         }
 
         // 3. Verificar se TODAS estão pagas (Globalmente)
-        const allPaid = dealInstallments.length > 0 && dealInstallments.every((i: any) => i.status === 'PAGO');
+        const allPaid = dealInstallments.length > 0 && dealInstallments.every((i: PaymentInstallment) => i.status === 'PAID');
         const targetStatus = allPaid ? 'DONE' : 'WAITING_PAYMENT';
 
         console.log(`[COMMERCIAL-RECONCILE] Deal ${dealId}: All Paid? ${allPaid} (Found ${dealInstallments.length} global insts). Target: ${targetStatus}`);
@@ -714,7 +717,7 @@ export const commercialFinanceService = {
     /**
      * Limpa parcelas e transações órfãs (cujo dealId não existe mais em commercial_deals)
      */
-    async cleanupOrphanedInstallments(project: any) {
+    async cleanupOrphanedInstallments(project: CommercialProjectRow) {
         if (!project || !project.id || project.isVirtual) return project;
         
         const info = project.settings?.financialInfo;
@@ -725,8 +728,8 @@ export const commercialFinanceService = {
         
         // 1. Extrai IDs únicos de Deal (filtra apenas os que vieram do comercial)
         const allLocalIds = Array.from(new Set([
-            ...installments.map((i: any) => i.dealId),
-            ...transactions.map((t: any) => t.dealId)
+            ...installments.map((i: PaymentInstallment) => i.dealId),
+            ...(transactions as (FinancialTransaction & { dealId?: string })[]).map(t => t.dealId)
         ])).filter(Boolean);
 
         // Separa UUIDs válidos de 'lixos' (strings curtas ou mal-formatadas)
@@ -750,12 +753,12 @@ export const commercialFinanceService = {
         
         // 3. Filtra apenas o que é REALMENTE VÁLIDO
         // Se tem dealId: deve ser UUID válido E deve existir no banco
-        const validInstallments = installments.filter((i: any) => {
+        const validInstallments = installments.filter((i: PaymentInstallment) => {
             if (!i.dealId) return true; // Lançamento manual direto
             return validExistIds.has(i.dealId); // Remove se não é UUID ou se não existe no banco
         });
 
-        const validTransactions = transactions.filter((t: any) => {
+        const validTransactions = (transactions as (FinancialTransaction & { dealId?: string })[]).filter(t => {
             if (!t.dealId) return true;
             return validExistIds.has(t.dealId);
         });

@@ -2,7 +2,7 @@ export interface PaymentInstallment {
     id: string;
     dueDate: string;
     value: number;
-    status: 'PAID' | 'PENDING' | 'OVERDUE';
+    status: 'PAID' | 'PENDING' | 'OVERDUE' | 'CANCELLED';
     description: string;
     paymentDate?: string;
     receiptUrl?: string;
@@ -198,8 +198,8 @@ export interface ReconciliationRule {
     organization_id: string;
     name: string;
     priority: number;
-    conditions: any;
-    actions: any;
+    conditions: Record<string, unknown>;
+    actions: Record<string, unknown>;
     is_active: boolean;
     created_at?: string;
 }
@@ -210,7 +210,7 @@ export interface ReconciliationAuditLog {
     user_id?: string;
     event_type: 'IMPORT' | 'MATCH' | 'REJECT' | 'MANUAL_CREATE';
     target_id?: string;
-    payload?: any;
+    payload?: Record<string, unknown>;
     integrity_hash?: string;
     created_at?: string;
 }

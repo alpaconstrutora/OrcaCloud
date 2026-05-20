@@ -17,7 +17,7 @@ export const aiService = {
     /**
      * Simulates a portfolio analysis by an AI agent.
      */
-    async analyzePortfolio(investorData: any): Promise<AIInsight> {
+    async analyzePortfolio(investorData: { summary?: { equity?: number }; holdings?: unknown[] }): Promise<AIInsight> {
         // Simulated delay for "thinking" effect
         await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -45,16 +45,16 @@ export const aiService = {
     /**
      * Generates a technical opinion on a specific asset.
      */
-    async analyzeAsset(asset: any): Promise<string> {
+    async analyzeAsset(asset: { name?: string; yoc?: number; progress?: number }): Promise<string> {
         await new Promise(resolve => setTimeout(resolve, 1500));
 
-        return `O empreendimento **${asset.name}** apresenta um **Yield on Cost de ${asset.yoc * 100 || '12.5'}%**, o que é excelente para o setor. O progresso de ${asset.progress * 100}% está alinhado com o cronograma. Ponto de atenção: A valorização futura depende da entrega da infraestrutura municipal prevista para o próximo semestre.`;
+        return `O empreendimento **${asset.name}** apresenta um **Yield on Cost de ${(asset.yoc ?? 0) * 100 || '12.5'}%**, o que é excelente para o setor. O progresso de ${(asset.progress ?? 0) * 100}% está alinhado com o cronograma. Ponto de atenção: A valorização futura depende da entrega da infraestrutura municipal prevista para o próximo semestre.`;
     },
 
     /**
      * Ranks investment opportunities.
      */
-    async rankOpportunities(opportunities: any[]): Promise<any[]> {
+    async rankOpportunities<T extends Record<string, unknown>>(opportunities: T[]): Promise<(T & { aiScore: number })[]> {
         return opportunities.map(op => ({
             ...op,
             aiScore: Math.floor(Math.random() * 20) + 80 // Simulated score 80-100

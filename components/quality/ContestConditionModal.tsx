@@ -75,8 +75,8 @@ const ContestConditionModal: React.FC<Props> = ({
       });
 
       onDone();
-    } catch (e: any) {
-      setError(e.message ?? 'Erro ao registrar contestação');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao registrar contestação');
       setIsSubmitting(false);
     }
   };
@@ -163,7 +163,7 @@ const ContestConditionModal: React.FC<Props> = ({
           <button type="button" onClick={onClose} disabled={isSubmitting} className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={handleSubmit as any} disabled={isSubmitting} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50">
+          <button onClick={handleSubmit as React.MouseEventHandler<HTMLButtonElement>} disabled={isSubmitting} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50">
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             {isSubmitting ? 'Registrando...' : 'Registrar contestação'}
           </button>

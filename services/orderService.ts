@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { PurchaseOrder } from '../types';
+import { PurchaseOrder, PurchaseOrderItem, FinancialTransaction } from '../types';
 import { notificationService } from './notificationService';
 import { supplierService } from './supplierService';
 import { financialService } from './financialService';
@@ -11,6 +11,8 @@ import { discrepancyService } from './discrepancyService';
 import { notificationLogService } from './notificationLogService';
 import { zApiService } from './zApiService';
 import { appSettingsService } from './appSettingsService';
+
+type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; chart_of_accounts?: string; notes?: string; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
 
 export const orderService = {
     async createOrder(order: Omit<PurchaseOrder, 'id' | 'created_at' | 'updated_at'>) {
@@ -51,8 +53,8 @@ export const orderService = {
             try {
                 const supplierData = data.supplier_id ? await supplierService.getById(data.supplier_id) : undefined;
                 const projectData = data.project_id ? await projectService.loadProject(data.project_id) : undefined;
-                const fullOrder = this.mapDbOrderToType(data, {});
-                await webhookService.triggerOrderSentWebhook(fullOrder, supplierData, projectData);
+                const fullOrder = this.mapDbOrderToType(data as DbOrderRow, {});
+                await webhookService.triggerOrderSentWebhook(fullOrder, supplierData ?? undefined, projectData ?? undefined);
                 notificationLogService.log({
                     orderId: data.id,
                     channel: 'webhook',
@@ -61,13 +63,14 @@ export const orderService = {
                     status: 'sent',
                     metadata: { event: 'order_sent', supplier: supplierData?.name },
                 });
-            } catch (webhookError: any) {
+            } catch (webhookErr: unknown) {
+                const webhookError = webhookErr instanceof Error ? webhookErr : new Error(String(webhookErr));
                 console.error("[WEBHOOK] Failed to trigger on creation:", webhookError);
                 notificationLogService.log({
                     orderId: data.id,
                     channel: 'webhook',
                     status: 'failed',
-                    error: webhookError.message || String(webhookError),
+                    error: webhookError.message,
                     metadata: { event: 'order_sent' },
                 });
             }
@@ -129,7 +132,7 @@ export const orderService = {
 
         // Fetch projects separately — same reason: avoid implicit FK join 404
         const uniqueProjectIds = Array.from(new Set((orders || []).map(o => o.project_id).filter(Boolean)));
-        let projectMap: Record<string, { name: string; settings: any }> = {};
+        let projectMap: Record<string, { name: string; settings: { classification?: string; linkedProjectName?: string } }> = {};
         if (uniqueProjectIds.length > 0) {
             const { data: projs } = await supabase
                 .from('projects')
@@ -138,8 +141,9 @@ export const orderService = {
             if (projs) projs.forEach(p => { projectMap[p.id] = { name: p.name, settings: p.settings }; });
         }
 
+        type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; chart_of_accounts?: string; notes?: string; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
         // Map database columns to type
-        return (orders || []).map((item: any) => {
+        return (orders || []).map((item: DbOrderRow) => {
             const project = projectMap[item.project_id];
             return {
                 id: item.id,
@@ -285,13 +289,14 @@ export const orderService = {
                         });
                     }
                 }
-            } catch (notifyError: any) {
-                console.error("[NOTIFICATION SYSTEM] Failed to trigger notification:", notifyError.message || notifyError);
+            } catch (notifyErr: unknown) {
+                const notifyError = notifyErr instanceof Error ? notifyErr : new Error(String(notifyErr));
+                console.error("[NOTIFICATION SYSTEM] Failed to trigger notification:", notifyError.message);
                 notificationLogService.log({
                     orderId: data.id,
                     channel: 'email',
                     status: 'failed',
-                    error: notifyError.message || String(notifyError),
+                    error: notifyError.message,
                     metadata: { status: updates.status },
                 });
             }
@@ -311,8 +316,8 @@ export const orderService = {
                     const supplierData = data.supplier_id ? await supplierService.getById(data.supplier_id) : undefined;
                     const projectData = data.project_id ? await projectService.loadProject(data.project_id) : undefined;
 
-                    const fullOrder = this.mapDbOrderToType(data, {});
-                    await webhookService.triggerOrderSentWebhook(fullOrder, supplierData, projectData);
+                    const fullOrder = this.mapDbOrderToType(data as DbOrderRow, {});
+                    await webhookService.triggerOrderSentWebhook(fullOrder, supplierData ?? undefined, projectData ?? undefined);
                     notificationLogService.log({
                         orderId: data.id,
                         channel: 'webhook',
@@ -321,13 +326,14 @@ export const orderService = {
                         status: 'sent',
                         metadata: { event: 'order_sent', supplier: supplierData?.name },
                     });
-                } catch (webhookError: any) {
+                } catch (webhookErr: unknown) {
+                    const webhookError = webhookErr instanceof Error ? webhookErr : new Error(String(webhookErr));
                     console.error("[ORDER SERVICE] Make.com Webhook trigger failed:", webhookError);
                     notificationLogService.log({
                         orderId: data.id,
                         channel: 'webhook',
                         status: 'failed',
-                        error: webhookError.message || String(webhookError),
+                        error: webhookError.message,
                         metadata: { event: 'order_sent' },
                     });
                 }
@@ -341,8 +347,8 @@ export const orderService = {
                     if (supplierForWa?.phone) {
                         const projectForWa = data.project_id
                             ? await projectService.loadProject(data.project_id) : undefined;
-                        const orderTotal = (data.items || []).reduce(
-                            (s: number, i: any) => s + (i.total || 0), 0
+                        const orderTotal = (data.items as PurchaseOrderItem[] || []).reduce(
+                            (s: number, i: PurchaseOrderItem) => s + (i.total || 0), 0
                         );
                         const message = zApiService.buildOrderSentMessage({
                             supplierName: supplierForWa.name,
@@ -354,7 +360,7 @@ export const orderService = {
                         });
                         await zApiService.sendText(supplierForWa.phone, message, data.id);
                     }
-                } catch (waError: any) {
+                } catch (waError: unknown) {
                     console.error('[ZAPI] Auto WhatsApp send failed:', waError);
                     // error already logged inside zApiService.sendText
                 }
@@ -364,7 +370,7 @@ export const orderService = {
         return data;
     },
 
-    mapDbOrderToType(item: any, supplierMap: Record<string, string>): PurchaseOrder {
+    mapDbOrderToType(item: DbOrderRow, supplierMap: Record<string, string>): PurchaseOrder {
         return {
             id: item.id,
             number: item.number,
@@ -475,15 +481,15 @@ export const orderService = {
                 .single();
 
             if (project) {
-                const transactions: any[] = project.settings?.financialInfo?.transactions || [];
-                const linked = transactions.filter((t: any) => t.orderId === id);
+                const transactions: FinancialTransaction[] = project.settings?.financialInfo?.transactions || [];
+                const linked = transactions.filter(t => (t as FinancialTransaction & { orderId?: string }).orderId === id);
 
-                if (linked.some((t: any) => !['PENDING', 'CANCELLED'].includes(t.status))) {
+                if (linked.some(t => !['PENDING', 'CANCELLED'].includes(t.status))) {
                     throw new Error('Este pedido possui lançamentos financeiros já processados e não pode ser excluído.');
                 }
 
                 if (linked.length > 0) {
-                    const cleaned = transactions.filter((t: any) => t.orderId !== id);
+                    const cleaned = transactions.filter(t => (t as FinancialTransaction & { orderId?: string }).orderId !== id);
                     await supabase
                         .from('projects')
                         .update({

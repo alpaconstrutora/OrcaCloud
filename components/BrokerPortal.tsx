@@ -17,6 +17,7 @@ import { commercialService } from '../services/commercialService';
 import { brokerService } from '../services/brokerService';
 import { PropertyStatus, UserProfile, ProfileGroup } from '../types';
 import type { BrokerUnit, BrokerProposal, BrokerProfile } from '../types';
+import type { PropertyDeal } from '../types/imovib';
 
 type PortalTab = 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes';
 
@@ -26,7 +27,8 @@ interface BrokerPortalProps {
     organizationId?: string;
 }
 
-const StatCard = ({ title, value, subtext, icon: Icon, color }: any) => (
+interface StatCardProps { title: string; value: string | number; subtext?: string; icon: React.ElementType; color: string }
+const StatCard = ({ title, value, subtext, icon: Icon, color }: StatCardProps) => (
     <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex items-start justify-between hover:shadow-md transition-all">
         <div>
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{title}</p>
@@ -45,7 +47,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, color }: any) => (
     </div>
 );
 
-const TABS: { id: PortalTab; label: string; icon: any }[] = [
+const TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
     { id: 'estoque', label: 'Estoque', icon: LayoutGrid },
     { id: 'propostas', label: 'Propostas', icon: FileText },
     { id: 'leads', label: 'Leads', icon: Users },
@@ -69,7 +71,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
     const [units, setUnits] = useState<BrokerUnit[]>([]);
     const [loading, setLoading] = useState(true);
     const [proposals, setProposals] = useState<Partial<BrokerProposal>[]>([]);
-    const [commercialDeals, setCommercialDeals] = useState<any[]>([]);
+    const [commercialDeals, setCommercialDeals] = useState<PropertyDeal[]>([]);
     const [selectedUnit, setSelectedUnit] = useState<BrokerUnit | null>(null);
     const [showSimulator, setShowSimulator] = useState(false);
 
@@ -260,7 +262,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                             ].map((p) => (
                                 <button
                                     key={p.id}
-                                    onClick={() => setSelectedPurpose(p.id as any)}
+                                    onClick={() => setSelectedPurpose(p.id as 'SALE' | 'RENTAL' | 'BOTH')}
                                     className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedPurpose === p.id
                                         ? 'bg-white text-gray-900 shadow-sm'
                                         : 'text-gray-400 hover:text-gray-600'
@@ -314,7 +316,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                         p.status === 'REJEITADA' ? 'CANCELLED' : 
                                         'IN_NEGOTIATION'
                             }))
-                        ] as any}
+                        ] as unknown as PropertyDeal[]}
                         onSelectUnit={handleMakeProposal}
                         onReserveUnit={handleReserve}
                     />

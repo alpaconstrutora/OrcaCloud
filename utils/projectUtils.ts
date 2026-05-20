@@ -1,4 +1,20 @@
-import { BudgetEntry, DiaryEntry, ProjectSchedule, PurchaseOrder } from '../types';
+import { BudgetEntry, DiaryEntry, ProjectSchedule, PurchaseOrder, ProjectSettings, WBSGroup, WBSPhase, SchedulePeriod, ItemDistribution, ItemScheduleDetails } from '../types';
+
+interface PhaseEvent {
+    id: string;
+    name: string;
+    groupName: string;
+    date: Date;
+}
+
+interface PhaseScheduleEntry {
+    id: string;
+    name: string;
+    groupName: string;
+    startDate: Date;
+    endDate: Date;
+    subPhases: string[];
+}
 
 /**
  * Calculates the overall physical progress of a project based on budget items and diary entries.
@@ -46,24 +62,24 @@ export const calculateProjectProgress = (budget: BudgetEntry[], diaryEntries: Di
 /**
  * Calculates the earliest start date for construction phases based on item schedules or distributions.
  */
-export const calculateUpcomingPhases = (settings: any, budget: BudgetEntry[]) => {
+export const calculateUpcomingPhases = (settings: ProjectSettings, budget: BudgetEntry[]): PhaseEvent[] => {
     if (!settings.wbs || !settings.schedule) return [];
 
-    const schedule = settings.schedule;
-    const itemSchedules = schedule.itemSchedules || [];
-    const distributions = schedule.distributions || [];
-    const periods = schedule.periods || [];
+    const schedule: ProjectSchedule = settings.schedule;
+    const itemSchedules: ItemScheduleDetails[] = schedule.itemSchedules || [];
+    const distributions: ItemDistribution[] = schedule.distributions || [];
+    const periods: SchedulePeriod[] = schedule.periods || [];
 
     // Map periods for quick date lookup
     const periodDates: Record<string, string> = {};
-    periods.forEach((p: any) => {
+    periods.forEach((p: SchedulePeriod) => {
         periodDates[p.id] = p.date;
     });
 
-    const phaseEvents: any[] = [];
+    const phaseEvents: PhaseEvent[] = [];
 
-    settings.wbs.forEach((group: any) => {
-        group.phases.forEach((phase: any) => {
+    settings.wbs.forEach((group: WBSGroup) => {
+        group.phases.forEach((phase: WBSPhase) => {
             const phaseItems = budget.filter(item => item.group === group.name && item.phase === phase.name);
             let phaseStartDate: Date | null = null;
 
@@ -71,16 +87,16 @@ export const calculateUpcomingPhases = (settings: any, budget: BudgetEntry[]) =>
                 let itemStartDate: Date | null = null;
 
                 // 1. Check specific item schedule
-                const specificSched = itemSchedules.find((s: any) => s.id === item.id);
+                const specificSched = itemSchedules.find((s: ItemScheduleDetails) => s.id === item.id);
                 if (specificSched?.startDate) {
                     itemStartDate = new Date(specificSched.startDate);
                 } else {
                     // 2. Fallback to earliest distribution
-                    const itemDistributions = distributions.filter((d: any) => d.itemId === item.id && d.percentage > 0);
+                    const itemDistributions = distributions.filter((d: ItemDistribution) => d.itemId === item.id && d.percentage > 0);
                     if (itemDistributions.length > 0) {
                         // Find distribution in earliest period
                         let earliestPeriodDate: string | null = null;
-                        itemDistributions.forEach((d: any) => {
+                        itemDistributions.forEach((d: ItemDistribution) => {
                             const pDate = periodDates[d.periodId];
                             if (pDate && (!earliestPeriodDate || new Date(pDate) < new Date(earliestPeriodDate))) {
                                 earliestPeriodDate = pDate;
@@ -121,24 +137,24 @@ export const calculateUpcomingPhases = (settings: any, budget: BudgetEntry[]) =>
 /**
  * Calculates start and end dates for all construction phases based on item schedules or distributions.
  */
-export const getPhaseSchedule = (settings: any, budget: BudgetEntry[]) => {
+export const getPhaseSchedule = (settings: ProjectSettings, budget: BudgetEntry[]): PhaseScheduleEntry[] => {
     if (!settings.wbs || !settings.schedule) return [];
 
-    const schedule = settings.schedule;
-    const itemSchedules = schedule.itemSchedules || [];
-    const distributions = schedule.distributions || [];
-    const periods = schedule.periods || [];
+    const schedule: ProjectSchedule = settings.schedule;
+    const itemSchedules: ItemScheduleDetails[] = schedule.itemSchedules || [];
+    const distributions: ItemDistribution[] = schedule.distributions || [];
+    const periods: SchedulePeriod[] = schedule.periods || [];
 
     // Map periods for quick date lookup
     const periodDates: Record<string, string> = {};
-    periods.forEach((p: any) => {
+    periods.forEach((p: SchedulePeriod) => {
         periodDates[p.id] = p.date;
     });
 
-    const phaseSchedules: any[] = [];
+    const phaseSchedules: PhaseScheduleEntry[] = [];
 
-    settings.wbs.forEach((group: any) => {
-        group.phases.forEach((phase: any) => {
+    settings.wbs.forEach((group: WBSGroup) => {
+        group.phases.forEach((phase: WBSPhase) => {
             const phaseItems = budget.filter(item => item.group === group.name && item.phase === phase.name);
             let phaseStartDate: Date | null = null;
             let phaseEndDate: Date | null = null;
@@ -148,7 +164,7 @@ export const getPhaseSchedule = (settings: any, budget: BudgetEntry[]) => {
                 let itemEndDate: Date | null = null;
 
                 // 1. Check specific item schedule
-                const specificSched = itemSchedules.find((s: any) => s.id === item.id);
+                const specificSched = itemSchedules.find((s: ItemScheduleDetails) => s.id === item.id);
                 if (specificSched?.startDate) {
                     itemStartDate = new Date(specificSched.startDate);
                     if (specificSched.endDate) {
@@ -156,9 +172,9 @@ export const getPhaseSchedule = (settings: any, budget: BudgetEntry[]) => {
                     }
                 } else {
                     // 2. Fallback to distributions
-                    const itemDistributions = distributions.filter((d: any) => d.itemId === item.id && d.percentage > 0);
+                    const itemDistributions = distributions.filter((d: ItemDistribution) => d.itemId === item.id && d.percentage > 0);
                     if (itemDistributions.length > 0) {
-                        itemDistributions.forEach((d: any) => {
+                        itemDistributions.forEach((d: ItemDistribution) => {
                             const pDate = periodDates[d.periodId];
                             if (pDate) {
                                 const dDate = new Date(pDate);

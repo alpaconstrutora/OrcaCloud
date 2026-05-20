@@ -167,9 +167,9 @@ export const quotationService = {
         if (fetchError) throw fetchError;
 
         // 2. Calculate changes with robustness
-        const changes: any = {};
+        const changes: Record<string, unknown> = {};
         const itemsWithChanges = counterProposal.items.map(newItem => {
-            const oldItem = resp.items?.find((oi: any) => oi.code === newItem.code);
+            const oldItem = resp.items?.find((oi: { code: string; unitPrice?: number; unit_price?: number }) => oi.code === newItem.code);
             // Robustness: check both camelCase and snake_case in case of legacy data
             const oldPrice = Number(oldItem?.unitPrice ?? oldItem?.unit_price ?? 0);
             const newPrice = Number(newItem.unitPrice || 0);
@@ -182,7 +182,7 @@ export const quotationService = {
         if (itemsWithChanges.length > 0) changes.items = itemsWithChanges;
 
         // Safety check helper for value comparison
-        const hasChanged = (oldVal: any, newVal: any) => {
+        const hasChanged = (oldVal: unknown, newVal: unknown) => {
             if (newVal === undefined || newVal === null) return false;
             return oldVal !== newVal;
         };
@@ -248,8 +248,8 @@ export const quotationService = {
                 if (!resp.counter_proposal) throw new Error("No counter proposal found to accept");
                 const cp = resp.counter_proposal;
 
-                const updatedItems = resp.items.map((item: any) => {
-                    const counterItem = cp.items.find((ci: any) => ci.code === item.code);
+                const updatedItems = resp.items.map((item: { code: string; quantity: number; unitPrice?: number; unit_price?: number; [key: string]: unknown }) => {
+                    const counterItem = cp.items.find((ci: { code: string; unitPrice: number }) => ci.code === item.code);
                     if (counterItem) {
                         const unitPrice = counterItem.unitPrice;
                         return {
@@ -331,7 +331,7 @@ export const quotationService = {
             author: 'Fornecedor',
             changes: existing ? {
                 items: response.items.map(newItem => {
-                    const oldItem = existing.items.find((oi: any) => oi.code === newItem.code);
+                    const oldItem = existing.items.find((oi: { code: string; unitPrice?: number }) => oi.code === newItem.code);
                     if (oldItem && oldItem.unitPrice !== newItem.unitPrice) {
                         return { code: newItem.code, oldPrice: oldItem.unitPrice, newPrice: newItem.unitPrice };
                     }
@@ -431,7 +431,7 @@ export const quotationService = {
                 paymentTermType: responsesRaw.payment_term_type,
                 paymentDays: responsesRaw.payment_days,
                 paymentInstallments: responsesRaw.payment_installments,
-                items: responsesRaw.items.map((item: any) => ({
+                items: responsesRaw.items.map((item: { code: string; description: string; unit: string; quantity: number; unitPrice: number; total: number }) => ({
                     code: item.code,
                     description: item.description,
                     unit: item.unit,

@@ -72,8 +72,8 @@ const RequestActionModal: React.FC<Props> = ({
         requestedBy: currentActor,
       });
       onDone();
-    } catch (e: any) {
-      setError(e.message ?? 'Erro ao criar plano de ação');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao criar plano de ação');
       setIsSubmitting(false);
     }
   };
@@ -200,7 +200,7 @@ const RequestActionModal: React.FC<Props> = ({
             Cancelar
           </button>
           <button
-            onClick={handleSubmit as any}
+            onClick={handleSubmit as React.MouseEventHandler<HTMLButtonElement>}
             disabled={isSubmitting}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50"
           >

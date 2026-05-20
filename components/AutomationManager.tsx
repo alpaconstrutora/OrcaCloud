@@ -10,10 +10,26 @@ import {
     Loader2, Save, LayoutGrid, List, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { ProjectSettings, FinancialInfo, BillingRule } from '../types';
+import { ProjectSettings, FinancialInfo, BillingRule, PaymentInstallment, Client } from '../types';
 import { clientService } from '../services/clientService';
 import { commercialService } from '../services/commercialService';
 import { webhookService } from '../services/webhookService';
+import { PropertyDeal } from '../types/imovib';
+
+interface AutomationHistoryItem {
+    id: string;
+    created_at: string;
+    event_type: 'contract_sent' | 'order_sent' | 'billing_triggered';
+    reference_id?: string;
+    reference_name?: string;
+    status: 'success' | 'error';
+    error_message?: string;
+    payload?: unknown;
+    converted_at?: string;
+    converted_value?: number;
+    project_id?: string;
+    organization_id?: string;
+}
 
 interface AutomationManagerProps {
     settings: ProjectSettings;
@@ -24,15 +40,15 @@ interface AutomationManagerProps {
 const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdateSettings, organizationId }) => {
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'painel' | 'config' | 'ruler' | 'history'>(
-        (localStorage.getItem('automation_active_tab') as any) || 'ruler'
+        (localStorage.getItem('automation_active_tab') as 'painel' | 'config' | 'ruler' | 'history') || 'ruler'
     );
     const [viewMode, setViewMode] = useState<'grid' | 'list'>(
-        (localStorage.getItem('automation_view_mode') as any) || 'list'
+        (localStorage.getItem('automation_view_mode') as 'grid' | 'list') || 'list'
     );
-    const [automationHistory, setAutomationHistory] = useState<any[]>([]);
-    const [clients, setClients] = useState<any[]>([]);
-    const [commercialDeals, setCommercialDeals] = useState<any[]>([]);
-    const [selectedHistory, setSelectedHistory] = useState<any | null>(null);
+    const [automationHistory, setAutomationHistory] = useState<AutomationHistoryItem[]>([]);
+    const [clients, setClients] = useState<Client[]>([]);
+    const [commercialDeals, setCommercialDeals] = useState<PropertyDeal[]>([]);
+    const [selectedHistory, setSelectedHistory] = useState<AutomationHistoryItem | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
 
@@ -62,17 +78,17 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
 
     // Derived Ruler Installments - This is the reactive source of truth
     const readyInstallments = useMemo(() => {
-        const insts = (financialInfo.installments || []) as any[];
-        const rules = (financialInfo.billingRules || []) as BillingRule[];
-        const ready: { inst: any; rule: BillingRule }[] = [];
+        const insts: PaymentInstallment[] = financialInfo.installments || [];
+        const rules: BillingRule[] = financialInfo.billingRules || [];
+        const ready: { inst: PaymentInstallment; rule: BillingRule }[] = [];
 
         // Use Brazil/Sao Paulo timezone for "today"
         const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
-        const pendingInsts = insts.filter(i => i.status === 'PENDING' || i.status === 'PENDENTE');
+        const pendingInsts = insts.filter(i => i.status === 'PENDING' || (i.status as string) === 'PENDENTE');
 
         for (const inst of pendingInsts) {
-            const dueDate = inst.dueDate || inst.due_date;
+            const dueDate = inst.dueDate;
             if (!dueDate) continue;
 
             for (const rule of rules) {
@@ -176,32 +192,35 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
             setLoading(true);
             await webhookService.pingWebhook(url);
             alert('Conexão bem-sucedida!');
-        } catch (err: any) {
-            alert(`Falha na conexão: ${err.message}`);
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            alert(`Falha na conexão: ${error.message}`);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleRetryHistory = async (item: any) => {
+    const handleRetryHistory = async (item: AutomationHistoryItem) => {
         try {
             setLoading(true);
             const referenceData = commercialDeals.find(d => d.id === item.reference_id) || { id: item.reference_id, number: item.reference_name };
             if (item.event_type === 'order_sent') {
                 alert('Funcionalidade de reenvio de pedido disparada.');
             } else if (item.event_type === 'contract_sent') {
-                await webhookService.triggerContractSentWebhook(referenceData, null, settings, true);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await webhookService.triggerContractSentWebhook(referenceData as any, undefined, settings, true);
                 alert('Contrato reenviado com sucesso!');
             }
             fetchInitialData();
-        } catch (err: any) {
-            alert(`Erro no reenvio: ${err.message}`);
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            alert(`Erro no reenvio: ${error.message}`);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleSaveGlobal = (field: keyof FinancialInfo, value: any) => {
+    const handleSaveGlobal = (field: keyof FinancialInfo, value: FinancialInfo[keyof FinancialInfo]) => {
         setLocalFinancialInfo(prev => ({
             ...prev,
             [field]: value
@@ -417,13 +436,13 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                     {Object.entries(
                                         automationHistory
                                             .filter(h => h.status === 'error')
-                                            .reduce((acc: any, h) => {
+                                            .reduce<Record<string, number>>((acc, h) => {
                                                 const msg = (h.error_message || 'Erro Desconhecido').slice(0, 80);
                                                 acc[msg] = (acc[msg] || 0) + 1;
                                                 return acc;
                                             }, {})
                                     )
-                                        .sort((a: any, b: any) => (b[1] as number) - (a[1] as number))
+                                        .sort((a, b) => (b[1] as number) - (a[1] as number))
                                         .slice(0, 3)
                                         .map(([error, count], i) => (
                                             <div key={i} className="flex items-center gap-4 p-4 bg-red-50/50 rounded-2xl border border-red-100/50">
@@ -471,7 +490,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                         <h4 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest">{item.label}</h4>
                                     </div>
                                     <button
-                                        onClick={() => handleTestWebhook((financialInfo as any)[item.field])}
+                                        onClick={() => handleTestWebhook((financialInfo[item.field as keyof FinancialInfo] as string) || '')}
                                         className="p-2 hover:bg-gray-50 rounded-lg transition-colors text-gray-400 hover:text-blue-600"
                                         title="Testar Conexão"
                                     >
@@ -480,8 +499,8 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                 </div>
                                 <input
                                     type="text"
-                                    value={(financialInfo as any)[item.field] || ''}
-                                    onChange={e => handleSaveGlobal(item.field as any, e.target.value)}
+                                    value={(financialInfo[item.field as keyof FinancialInfo] as string) || ''}
+                                    onChange={e => handleSaveGlobal(item.field as keyof FinancialInfo, e.target.value)}
                                     placeholder="URL do Webhook..."
                                     className="w-full bg-gray-50 px-4 py-3 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white font-mono text-[12px] font-medium outline-none transition-all"
                                 />

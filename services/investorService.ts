@@ -39,8 +39,8 @@ export const investorService = {
 
             if (error) throw error;
             return data as Investor[];
-        } catch (error: any) {
-            console.warn("Could not list investors:", error.message);
+        } catch (error: unknown) {
+            console.warn("Could not list investors:", error instanceof Error ? error.message : error);
             return [];
         }
     },
@@ -87,8 +87,8 @@ export const investorService = {
 
             if (error) throw error;
             return data as Investor;
-        } catch (error: any) {
-            console.error("Error fetching investor by email:", error.message);
+        } catch (error: unknown) {
+            console.error("Error fetching investor by email:", error instanceof Error ? error.message : error);
             return null;
         }
     },
@@ -121,7 +121,7 @@ export const investorService = {
         }
 
         const prices: Record<string, number> = {};
-        data?.forEach((item: any) => {
+        data?.forEach((item: { code: string; price: number }) => {
             prices[item.code] = item.price;
         });
         return prices;
@@ -169,10 +169,10 @@ export const investorService = {
         const codesToFetch = new Set<string>();
         const itemsToProcess: { qty: number, code: string }[] = [];
 
-        nbrData.forEach((row: any, i: number) => {
+        nbrData.forEach((row: unknown[], i: number) => {
             if (i < 4 || !row[0]) return;
-            const desc = row[0];
-            const qty = row[4]; // R-8N Column
+            const desc = String(row[0] ?? '');
+            const qty = Number(row[4]) || 0; // R-8N Column
 
             // Simple pattern match
             const match = Object.keys(NBR_TO_SINAPI).find(key => desc.includes(key));
@@ -203,8 +203,8 @@ export const investorService = {
 
             if (error) throw error;
             return data || [];
-        } catch (error: any) {
-            console.warn("Error searching SINAPI:", error.message);
+        } catch (error: unknown) {
+            console.warn("Error searching SINAPI:", error instanceof Error ? error.message : error);
             return [];
         }
     }

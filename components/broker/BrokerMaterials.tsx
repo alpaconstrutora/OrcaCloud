@@ -6,7 +6,7 @@ interface BrokerMaterialsProps {
     organizationId: string;
 }
 
-const TYPE_CONFIG: Record<BrokerMaterial['type'], { label: string; icon: any; color: string; bg: string }> = {
+const TYPE_CONFIG: Record<BrokerMaterial['type'], { label: string; icon: React.ElementType; color: string; bg: string }> = {
     BOOK: { label: 'Book Digital', icon: BookOpen, color: 'text-indigo-600', bg: 'bg-indigo-50' },
     PLANTA: { label: 'Planta Baixa', icon: Map, color: 'text-blue-600', bg: 'bg-blue-50' },
     RENDER: { label: 'Render / Foto', icon: Camera, color: 'text-purple-600', bg: 'bg-purple-50' },
@@ -69,8 +69,8 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
             setIsMaterialModalOpen(false);
             setEditingMaterial(undefined);
             loadMaterials();
-        } catch (err: any) {
-            alert('Erro ao salvar material: ' + (err.message || 'Erro desconhecido'));
+        } catch (err: unknown) {
+            alert('Erro ao salvar material: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
         }
     };
 
@@ -79,8 +79,8 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
             try {
                 await brokerMaterialService.deleteMaterial(id);
                 loadMaterials();
-            } catch (err: any) {
-                alert('Erro ao excluir: ' + (err.message || 'Erro desconhecido'));
+            } catch (err: unknown) {
+                alert('Erro ao excluir: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
             }
         }
     };

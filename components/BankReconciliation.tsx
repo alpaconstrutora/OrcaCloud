@@ -30,28 +30,83 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
     const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
     const [internalTransactions, setInternalTransactions] = useState<InternalTransaction[]>([]);
-    const [suggestions, setSuggestions] = useState<any[]>([]);
-    const [matches, setMatches] = useState<any[]>([]);
+    // Tipos locais para dados do Supabase
+    type ReconciliationSuggestion = {
+        id: string;
+        bank_transaction_id: string;
+        candidate_internal_transaction_id: string | null;
+        confidence: number;
+        candidate_internal_transaction?: InternalTransaction | null;
+        [key: string]: unknown;
+    };
+    type ReconciliationMatch = {
+        id: string;
+        bank_transaction_id: string;
+        internal_transaction_id: string;
+        created_at: string;
+        bank_transaction?: BankTransaction | null;
+        internal_transaction?: InternalTransaction | null;
+        [key: string]: unknown;
+    };
+    type ReconciliationRule = {
+        id: string;
+        name: string;
+        priority: number;
+        is_active: boolean;
+        organization_id: string;
+        conditions: { type: string; field: string; value: string };
+        actions: { category: string; counterparty?: string };
+        created_at?: string;
+        [key: string]: unknown;
+    };
+    type AuditLogEntry = {
+        id: string;
+        organization_id: string;
+        action: string;
+        created_at: string;
+        [key: string]: unknown;
+    };
+    type CommercialMatch = {
+        id: string;
+        description: string;
+        amount: number;
+        transaction_date: string;
+        status: string;
+        type: string;
+        category: string;
+        isCommercial: boolean;
+        project_id: string;
+        original_id: string;
+        projectName: string;
+        direction?: string;
+        entity_name?: string;
+        organization_id?: string;
+        source_system?: string;
+        [key: string]: unknown;
+    };
+
+    const [suggestions, setSuggestions] = useState<ReconciliationSuggestion[]>([]);
+    const [matches, setMatches] = useState<ReconciliationMatch[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [activeView, setActiveView] = useState<'pending' | 'conciliated' | 'rules' | 'categories'>(
-        (localStorage.getItem('reconciliation_active_tab') as any) || 'rules'
+        (localStorage.getItem('reconciliation_active_tab') as 'pending' | 'conciliated' | 'rules' | 'categories') || 'rules'
     );
     const [rulesViewMode, setRulesViewMode] = useState<'grid' | 'list'>(
-        (localStorage.getItem('reconciliation_rules_view_mode') as any) || 'list'
+        (localStorage.getItem('reconciliation_rules_view_mode') as 'grid' | 'list') || 'list'
     );
     const [categoriesViewMode, setCategoriesViewMode] = useState<'grid' | 'list'>(
-        (localStorage.getItem('reconciliation_categories_view_mode') as any) || 'grid'
+        (localStorage.getItem('reconciliation_categories_view_mode') as 'grid' | 'list') || 'grid'
     );
     const [conciliatedViewMode, setConciliatedViewMode] = useState<'grid' | 'list'>(
-        (localStorage.getItem('reconciliation_conciliated_view_mode') as any) || 'list'
+        (localStorage.getItem('reconciliation_conciliated_view_mode') as 'grid' | 'list') || 'list'
     );
     const [pendentesViewMode, setPendentesViewMode] = useState<'grid' | 'list'>(
-        (localStorage.getItem('reconciliation_pendentes_view_mode') as any) || 'list'
+        (localStorage.getItem('reconciliation_pendentes_view_mode') as 'grid' | 'list') || 'list'
     );
     const [isImporting, setIsImporting] = useState(false);
-    const [rules, setRules] = useState<any[]>([]);
+    const [rules, setRules] = useState<ReconciliationRule[]>([]);
     const [masterSuppliers, setMasterSuppliers] = useState<string[]>([]);
-    const [auditLogs, setAuditLogs] = useState<any[]>([]);
+    const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [stats, setStats] = useState({
         automationRate: 0,
         manualMatches: 0,
@@ -481,22 +536,22 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                     .eq('organization_id', organizationId);
 
                 if (allProjData && allProjData.length > 0) {
-                    let commercialMatches: any[] = [];
+                    let commercialMatches: CommercialMatch[] = [];
                     allProjData.forEach(proj => {
-                        const txs = proj.settings?.financialInfo?.transactions || [];
+                        const txs: Array<Record<string, unknown>> = proj.settings?.financialInfo?.transactions || [];
                         const mappedCommercial = txs
-                            .filter((t: any) => (t.status === 'PENDING' || t.status === 'PENDENTE' || t.status === 'OPEN'))
-                            .map((t: any) => ({
-                                id: t.id, // ID local do JSON (ex: tx-972a9afa-p1)
-                                description: t.description || `Venda: ${t.category} (${proj.name})`,
-                                amount: parseFloat(String(t.value || t.amount || 0)),
-                                transaction_date: t.date || t.transaction_date,
+                            .filter((t) => (t['status'] === 'PENDING' || t['status'] === 'PENDENTE' || t['status'] === 'OPEN'))
+                            .map((t): CommercialMatch => ({
+                                id: String(t['id'] || ''),
+                                description: String(t['description'] || `Venda: ${String(t['category'] || '')} (${proj.name})`),
+                                amount: parseFloat(String(t['value'] || t['amount'] || 0)),
+                                transaction_date: String(t['date'] || t['transaction_date'] || ''),
                                 status: 'PENDING',
                                 type: 'INCOME',
-                                category: t.category,
+                                category: String(t['category'] || ''),
                                 isCommercial: true,
                                 project_id: proj.id,
-                                original_id: t.id,
+                                original_id: String(t['id'] || ''),
                                 projectName: proj.name
                             }));
                         
@@ -520,7 +575,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             if (activeView === 'pending' && bTxs && bTxs.length > 0) {
                 const bTxIds = bTxs.map(t => t.id);
                 const batchSize = 100;
-                let allSuggestions: any[] = [];
+                let allSuggestions: ReconciliationSuggestion[] = [];
                 
                 for (let i = 0; i < bTxIds.length; i += batchSize) {
                     const batch = bTxIds.slice(i, i + batchSize);
@@ -558,7 +613,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         }
     };
 
-    const handleEditRule = (rule: any) => {
+    const handleEditRule = (rule: ReconciliationRule) => {
         setEditingRuleId(rule.id);
         const cp = rule.actions.counterparty || '';
         const isSupplier = uniqueSuppliers.includes(cp);
@@ -635,7 +690,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             loadRules();
             loadStats();
             alert('Regra salva com sucesso!');
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('Error saving rule:', error);
             alert('Erro ao salvar regra: ' + (error.message || 'Erro de permissão ou conexão.'));
         }
@@ -656,7 +712,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             await bankReconciliationService.runMatchingEngine(selectedAccountId, orgToUse);
             await loadTransactions();
             alert('Todas as regras e automação aplicadas com sucesso!');
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('Error applying rules manually:', error);
             alert('Erro ao aplicar regras: ' + error.message);
         } finally {
@@ -687,7 +744,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             setActionFeedback({ message: `${ids.length} regra(s) aplicada(s) com sucesso!`, type: 'success' });
             setTimeout(() => setActionFeedback(null), 3000);
             setSelectedRuleIds(new Set());
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('Error applying selected rules:', error);
             alert('Erro ao aplicar regras selecionadas: ' + error.message);
         } finally {
@@ -728,7 +786,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             
             setActionFeedback({ message: 'Sugestão rejeitada!', type: 'success' });
             setTimeout(() => setActionFeedback(null), 2000);
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('Error rejecting rule:', error);
             alert('Erro ao rejeitar sugestão: ' + error.message);
         } finally {
@@ -771,7 +830,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             await loadTransactions();
             await loadStats();
             alert('Vínculo desfeito com sucesso!');
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('Error undoing match:', error);
             alert('Erro ao desfazer vínculo: ' + error.message);
         } finally {
@@ -807,7 +867,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             // 4. Recarregar transações no componente
             await loadTransactions();
             alert('Nomes de Clientes e Fornecedores atualizados com sucesso através da sincronização de projetos!');
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('Error in global sync:', error);
             alert('Erro ao sincronizar dados: ' + error.message);
         } finally {
@@ -864,7 +925,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             await loadTransactions();
             await loadStats();
             alert('Lançamento excluído com sucesso!');
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('Error deleting internal transaction:', error);
             alert(`Erro ao excluir lançamento: ${error.message}`);
         } finally {
@@ -954,7 +1016,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             await loadTransactions();
             await loadStats();
             alert('Lançamento realizado com sucesso!');
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('Error creating internal transaction:', error);
             alert(`Erro ao criar lançamento: ${error.message || 'Erro desconhecido'}`);
         } finally {
@@ -1005,18 +1068,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 let changed = false;
 
                 if (type === 'bank' && bId && ids.includes(bId)) {
-                    updatedM.bank_transaction = { ...m.bank_transaction, ...updatePayload };
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    updatedM.bank_transaction = { ...m.bank_transaction, ...updatePayload } as any;
                     changed = true;
                 }
                 if (type === 'internal' && iId && ids.includes(iId)) {
-                    updatedM.internal_transaction = { ...m.internal_transaction, category: newCategory };
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    updatedM.internal_transaction = { ...m.internal_transaction, category: newCategory } as any;
                     changed = true;
                 }
 
                 return changed ? updatedM : m;
             }));
 
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error(`Error bulk updating ${type} category:`, error);
             alert(`Erro ao atualizar categorias em lote: ${error.message}`);
         } finally {
@@ -1116,7 +1182,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             
             await loadTransactions();
             await loadStats();
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             alert('Erro na importação: ' + error.message);
         } finally {
             setIsImporting(false);
@@ -1150,7 +1217,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             await loadRules();
             await loadTransactions();
             alert(`Categoria renomeada de "${oldName}" para "${newName}"`);
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error('Error renaming category:', error);
             alert('Erro ao renomear categoria: ' + error.message);
         } finally {
@@ -1172,7 +1240,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             }
             await loadRules();
             await loadTransactions();
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             alert('Erro ao excluir categoria: ' + error.message);
         } finally {
             setIsLoading(false);
@@ -1199,7 +1268,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             }
             await loadRules();
             alert(`Categoria "${catName}" e suas regras foram duplicadas para "${newName}"`);
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             alert('Erro ao duplicar: ' + error.message);
         } finally {
             setIsLoading(false);
@@ -2980,7 +3050,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                 {log.event_type === 'RULE_MATCH' ? 'Automação Aplicada' : 'Ação de Usuário'}
                                             </p>
                                             <p className="text-[10px] text-gray-400 font-medium">
-                                                {log.payload?.rule_name ? `Regra: ${log.payload.rule_name}` : 'Conciliação manual efetuada'}
+                                                {(log.payload as { rule_name?: string })?.rule_name ? `Regra: ${(log.payload as { rule_name?: string }).rule_name}` : 'Conciliação manual efetuada'}
                                             </p>
                                         </div>
                                     </div>

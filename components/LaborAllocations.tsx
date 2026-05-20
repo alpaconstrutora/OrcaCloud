@@ -7,6 +7,30 @@ import { payrollService, Worksite, EmployeeAllocation } from '../services/payrol
 import { Employee } from '../services/laborService';
 import { getCodeLevelStyle, sortByCode } from '../utils/codeHierarchy';
 
+// ── Local types ────────────────────────────────────────────────────────────────
+interface CostCenter {
+    id: string;
+    name: string;
+    code?: string;
+}
+
+interface ChartOfAccount {
+    id: string;
+    name: string;
+    code: string;
+    type?: string;
+}
+
+interface ClosedPayrollResult {
+    run_id: string;
+    run_period: string;
+    run_type: string;
+    gross: number;
+    discounts: number;
+    net: number;
+    employer_cost: number;
+}
+
 interface LaborAllocationsProps {
     orgId: string;
     employees: Employee[];
@@ -23,9 +47,9 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
     const [copying, setCopying] = useState(false);
 
     // Novos estados para Lançamento Financeiro
-    const [closedResult, setClosedResult] = useState<any>(null);
-    const [costCenters, setCostCenters] = useState<any[]>([]);
-    const [chartOfAccounts, setChartOfAccounts] = useState<any[]>([]);
+    const [closedResult, setClosedResult] = useState<ClosedPayrollResult | null>(null);
+    const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+    const [chartOfAccounts, setChartOfAccounts] = useState<ChartOfAccount[]>([]);
     const [selectedCostCenter, setSelectedCostCenter] = useState('');
     const [selectedChartOfAccount, setSelectedChartOfAccount] = useState('');
     const [loadingData, setLoadingData] = useState(false);
@@ -95,8 +119,8 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
             setLoading(true);
             const [wData, cCenters, cAccounts] = await Promise.all([
                 payrollService.listWorksites(orgId),
-                (payrollService as any).listCostCenters(orgId),
-                (payrollService as any).listChartOfAccounts(orgId)
+                payrollService.listCostCenters(orgId),
+                payrollService.listChartOfAccounts(orgId)
             ]);
             setWorksites(wData);
             setCostCenters(cCenters || []);
@@ -142,12 +166,12 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
             })));
 
             // 2. Carregar resultado da última folha fechada para esse período
-            const result = await (payrollService as any).getLatestClosedResultForEmployee(orgId, empId, period);
+            const result = await payrollService.getLatestClosedResultForEmployee(orgId, empId, period);
             setClosedResult(result);
 
             // 3. Carregar itens de rubrica individualizada (ex: ADIANTAMENTO)
             if (result?.run_id) {
-                const items = await (payrollService as any).listIndividualizadoItemsForEmployee(result.run_id, empId);
+                const items = await payrollService.listIndividualizadoItemsForEmployee(result.run_id, empId);
                 setIndividualizadoItems(items || []);
             } else {
                 setIndividualizadoItems([]);
@@ -288,7 +312,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                         : lastDayOfMonth
                 }));
 
-            await (payrollService as any).syncEmployeeToFinance(
+            await payrollService.syncEmployeeToFinance(
                 closedResult.run_id,
                 selectedEmployee.id,
                 selectedEmployee.name,
@@ -542,7 +566,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                             <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
                                             {/* Valor selecionado */}
                                             {selectedCostCenter && !costCenterOpen && (() => {
-                                                const sel = costCenters.find((c: any) => c.name === selectedCostCenter);
+                                                const sel = costCenters.find((c: CostCenter) => c.name === selectedCostCenter);
                                                 return (
                                                     <div
                                                         onClick={() => { setCostCenterOpen(true); setCostCenterSearch(''); }}
@@ -582,11 +606,11 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                     {costCenterOpen && (
                                                         <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                                                             {sortByCode(costCenters)
-                                                                .filter((c: any) => {
+                                                                .filter((c) => {
                                                                     const q = costCenterSearch.toLowerCase();
                                                                     return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                 })
-                                                                .map((c: any) => {
+                                                                .map((c) => {
                                                                     const lvl = getCodeLevelStyle(c.code, 'slate');
                                                                     return (
                                                                     <button
@@ -606,7 +630,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                     );
                                                                 })
                                                             }
-                                                            {costCenters.filter((c: any) => {
+                                                            {costCenters.filter((c) => {
                                                                 const q = costCenterSearch.toLowerCase();
                                                                 return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                             }).length === 0 && (
@@ -623,7 +647,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                             <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
                                             {/* Valor selecionado */}
                                             {selectedChartOfAccount && !chartOpen && (() => {
-                                                const sel = chartOfAccounts.find((c: any) => c.name === selectedChartOfAccount);
+                                                const sel = chartOfAccounts.find((c: ChartOfAccount) => c.name === selectedChartOfAccount);
                                                 return (
                                                     <div
                                                         onClick={() => { setChartOpen(true); setChartSearch(''); }}
@@ -663,11 +687,11 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                     {chartOpen && (
                                                         <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                                                             {sortByCode(chartOfAccounts)
-                                                                .filter((c: any) => {
+                                                                .filter((c) => {
                                                                     const q = chartSearch.toLowerCase();
                                                                     return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                 })
-                                                                .map((c: any) => {
+                                                                .map((c) => {
                                                                     const lvl = getCodeLevelStyle(c.code, 'slate');
                                                                     return (
                                                                     <button
@@ -687,7 +711,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                     );
                                                                 })
                                                             }
-                                                            {chartOfAccounts.filter((c: any) => {
+                                                            {chartOfAccounts.filter((c) => {
                                                                 const q = chartSearch.toLowerCase();
                                                                 return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                             }).length === 0 && (
@@ -715,7 +739,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                             <div className="space-y-1.5" ref={encargoCostCenterRef}>
                                                 <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
                                                 {selectedEncargoCostCenter && !encargoCostCenterOpen && (() => {
-                                                    const sel = costCenters.find((c: any) => c.name === selectedEncargoCostCenter);
+                                                    const sel = costCenters.find((c: CostCenter) => c.name === selectedEncargoCostCenter);
                                                     return (
                                                         <div
                                                             onClick={() => { setEncargoCostCenterOpen(true); setEncargoCostCenterSearch(''); }}
@@ -754,11 +778,11 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                         {encargoCostCenterOpen && (
                                                             <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                                                                 {sortByCode(costCenters)
-                                                                    .filter((c: any) => {
+                                                                    .filter((c) => {
                                                                         const q = encargoCostCenterSearch.toLowerCase();
                                                                         return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                     })
-                                                                    .map((c: any) => {
+                                                                    .map((c) => {
                                                                         const lvl = getCodeLevelStyle(c.code, 'slate');
                                                                         return (
                                                                         <button
@@ -778,7 +802,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                         );
                                                                     })
                                                                 }
-                                                                {costCenters.filter((c: any) => { const q = encargoCostCenterSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
+                                                                {costCenters.filter((c) => { const q = encargoCostCenterSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
                                                                     <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
                                                                 )}
                                                             </div>
@@ -791,7 +815,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                             <div className="space-y-1.5" ref={encargoChartRef}>
                                                 <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
                                                 {selectedEncargoChartOfAccount && !encargoChartOpen && (() => {
-                                                    const sel = chartOfAccounts.find((c: any) => c.name === selectedEncargoChartOfAccount);
+                                                    const sel = chartOfAccounts.find((c: ChartOfAccount) => c.name === selectedEncargoChartOfAccount);
                                                     return (
                                                         <div
                                                             onClick={() => { setEncargoChartOpen(true); setEncargoChartSearch(''); }}
@@ -830,11 +854,11 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                         {encargoChartOpen && (
                                                             <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                                                                 {sortByCode(chartOfAccounts)
-                                                                    .filter((c: any) => {
+                                                                    .filter((c) => {
                                                                         const q = encargoChartSearch.toLowerCase();
                                                                         return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                     })
-                                                                    .map((c: any) => {
+                                                                    .map((c) => {
                                                                         const lvl = getCodeLevelStyle(c.code, 'slate');
                                                                         return (
                                                                         <button
@@ -854,7 +878,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                         );
                                                                     })
                                                                 }
-                                                                {chartOfAccounts.filter((c: any) => { const q = encargoChartSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
+                                                                {chartOfAccounts.filter((c) => { const q = encargoChartSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
                                                                     <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
                                                                 )}
                                                             </div>
@@ -880,7 +904,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                             <div className="space-y-1.5" ref={terceiroCostCenterRef}>
                                                 <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
                                                 {selectedTerceiroCostCenter && !terceiroCostCenterOpen && (() => {
-                                                    const sel = costCenters.find((c: any) => c.name === selectedTerceiroCostCenter);
+                                                    const sel = costCenters.find((c: CostCenter) => c.name === selectedTerceiroCostCenter);
                                                     return (
                                                         <div
                                                             onClick={() => { setTerceiroCostCenterOpen(true); setTerceiroCostCenterSearch(''); }}
@@ -919,11 +943,11 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                         {terceiroCostCenterOpen && (
                                                             <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                                                                 {sortByCode(costCenters)
-                                                                    .filter((c: any) => {
+                                                                    .filter((c) => {
                                                                         const q = terceiroCostCenterSearch.toLowerCase();
                                                                         return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                     })
-                                                                    .map((c: any) => {
+                                                                    .map((c) => {
                                                                         const lvl = getCodeLevelStyle(c.code, 'slate');
                                                                         return (
                                                                         <button
@@ -943,7 +967,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                         );
                                                                     })
                                                                 }
-                                                                {costCenters.filter((c: any) => { const q = terceiroCostCenterSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
+                                                                {costCenters.filter((c) => { const q = terceiroCostCenterSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
                                                                     <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
                                                                 )}
                                                             </div>
@@ -956,7 +980,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                             <div className="space-y-1.5" ref={terceiroChartRef}>
                                                 <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
                                                 {selectedTerceiroChartOfAccount && !terceiroChartOpen && (() => {
-                                                    const sel = chartOfAccounts.find((c: any) => c.name === selectedTerceiroChartOfAccount);
+                                                    const sel = chartOfAccounts.find((c: ChartOfAccount) => c.name === selectedTerceiroChartOfAccount);
                                                     return (
                                                         <div
                                                             onClick={() => { setTerceiroChartOpen(true); setTerceiroChartSearch(''); }}
@@ -995,11 +1019,11 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                         {terceiroChartOpen && (
                                                             <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                                                                 {sortByCode(chartOfAccounts)
-                                                                    .filter((c: any) => {
+                                                                    .filter((c) => {
                                                                         const q = terceiroChartSearch.toLowerCase();
                                                                         return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                                                                     })
-                                                                    .map((c: any) => {
+                                                                    .map((c) => {
                                                                         const lvl = getCodeLevelStyle(c.code, 'slate');
                                                                         return (
                                                                         <button
@@ -1019,7 +1043,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                         );
                                                                     })
                                                                 }
-                                                                {chartOfAccounts.filter((c: any) => { const q = terceiroChartSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
+                                                                {chartOfAccounts.filter((c) => { const q = terceiroChartSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
                                                                     <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
                                                                 )}
                                                             </div>

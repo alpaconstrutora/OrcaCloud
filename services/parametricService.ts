@@ -41,7 +41,7 @@ export const parametricService = {
                     price: allocatedValue,
                     type: SinapiType.SERVICE,
                     category: 'Estimativa',
-                    nature: nature as any
+                    nature: nature as SinapiItem['nature']
                 };
 
                 newBudget.push({
@@ -193,10 +193,10 @@ export const parametricService = {
         // Manual De-duplication: Keep the most recent record (by created_at) for each reference_date
         const uniqueMonths = new Map<string, { date: string; rate: number; created: string }>();
 
-        data.forEach((row: any) => {
-            const dateStr = row.reference_date || '';
-            const rate = parseFloat(row[standardKey]) || 0;
-            const created = row.created_at;
+        (data as unknown as Record<string, unknown>[]).forEach((row) => {
+            const dateStr = String(row.reference_date || '');
+            const rate = parseFloat(String(row[standardKey])) || 0;
+            const created = String(row.created_at || '');
 
             // If we don't have this date yet, OR this one is more recent than what we have
             if (!uniqueMonths.has(dateStr) || new Date(created) > new Date(uniqueMonths.get(dateStr)!.created)) {
@@ -233,10 +233,10 @@ export const parametricService = {
 
         if (error || !data) return [];
 
-        return data.map((row: any) => ({
-            state: row.state,
-            rate: parseFloat(row[standardKey]) || 0
-        })).sort((a: any, b: any) => b.rate - a.rate);
+        return (data as unknown as Record<string, unknown>[]).map((row) => ({
+            state: String(row.state || ''),
+            rate: parseFloat(String(row[standardKey])) || 0
+        })).sort((a, b) => b.rate - a.rate);
     },
 
     /**
@@ -245,8 +245,8 @@ export const parametricService = {
     calculateSensitivity(baseItems: BudgetEntry[], variations: { materials: number; labor: number }): BudgetEntry[] {
         return baseItems.map(item => {
             let multiplier = 1;
-            if ((item.sinapiItem.nature as any) === 'Materiais') multiplier = 1 + (variations.materials / 100);
-            if ((item.sinapiItem.nature as any) === 'Mão de Obra') multiplier = 1 + (variations.labor / 100);
+            if ((item.sinapiItem.nature as string) === 'Materiais') multiplier = 1 + (variations.materials / 100);
+            if ((item.sinapiItem.nature as string) === 'Mão de Obra') multiplier = 1 + (variations.labor / 100);
 
             return {
                 ...item,

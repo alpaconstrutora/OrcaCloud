@@ -18,6 +18,7 @@ import { usePersistenceSync } from './hooks/usePersistenceSync';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useProjectOperations } from './hooks/useProjectOperations';
 import AppRouter from './components/AppRouter';
+import { PWAInstallPrompt, OfflineIndicator } from './components/PWAInstallPrompt';
 
 const App: React.FC = () => {
   const {
@@ -334,6 +335,10 @@ const App: React.FC = () => {
         organizationId={activeOrganizationId || undefined}
         initialData={editingContract || undefined}
       />
+
+      {/* PWA */}
+      <OfflineIndicator />
+      <PWAInstallPrompt />
 
       {/* Toast global */}
       {localToast && (

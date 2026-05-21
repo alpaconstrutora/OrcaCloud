@@ -12,3 +12,4 @@ export * from "./broker";
 export * from "./imovib";
 export * from "./common";
 export * from "./fiscal";
+export * from "./operational-control";

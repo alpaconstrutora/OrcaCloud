@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -238,6 +238,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavGroup label="Engenharia" />
               <NavItem id="eng-obras" icon={Building2} label="Obras" />
               <NavItem id="eng-orcamentos" icon={FolderOpen} label="Orçamentos" />
+              <NavItem id="operacional" icon={ClipboardList} label="Controle Operacional" />
               <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" />
               <NavItem id="explorer" icon={BookOpen} label="Composições" />
               <NavDropdown

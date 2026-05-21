@@ -52,6 +52,7 @@ import QualityModule from './QualityModule';
 import BoletoManager from './BoletoManager';
 import ContasPagarManager from './ContasPagarManager';
 import { FiscalModule } from './fiscal/FiscalModule';
+import OperacionalModule from './OperacionalModule';
 
 export interface AppRouterProps {
   activeView: string;
@@ -657,6 +658,20 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
           onUpdateBudget={handleUpdateBudget}
+        />
+      );
+
+    // ── Controle Operacional ────────────────────────────────────────────────────
+    case 'operacional':
+    case 'operacional-dashboard':
+    case 'operacional-diary':
+      return (
+        <OperacionalModule
+          activeOrganizationId={activeOrganizationId ?? undefined}
+          projectId={projectId}
+          projects={typedProjects}
+          activeSection={activeView}
+          onChangeView={setActiveView}
         />
       );
 

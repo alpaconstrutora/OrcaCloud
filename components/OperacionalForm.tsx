@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Save, X, Loader2, AlertCircle, ChevronDown, Search, Link2, Unlink } from 'lucide-react'
+import { Save, X, Loader2, AlertCircle, ChevronDown, Search, Link2, Unlink, CalendarDays } from 'lucide-react'
 import { workOrderService } from '../services/workOrderService'
 import { supabase } from '../lib/supabase'
-import type { WorkOrderType, WorkOrderPriority, BudgetItemRef } from '../types/operational-control'
+import type { WorkOrderType, WorkOrderPriority, BudgetItemRef, PlanningItemRef } from '../types/operational-control'
 import type { BudgetEntry } from '../types'
+import type { ItemScheduleDetails } from '../types/schedule'
 
 interface Team { id: string; name: string }
 interface Employee { id: string; name: string; role: string | null }
@@ -129,6 +130,185 @@ const BudgetPickerModal: React.FC<{
   )
 }
 
+// ── Planning Item Picker Modal ────────────────────────────────────────────────
+interface PlanningProject { id: string; name: string; settings: any; budget: any }
+interface PlanningActivityRow {
+  itemScheduleId: string
+  description: string
+  phase?: string
+  plannedStart?: string
+  plannedEnd?: string
+  budgetedValue?: number
+}
+
+const PlanningPickerModal: React.FC<{
+  orgId: string
+  onSelect: (ref: PlanningItemRef) => void
+  onClose: () => void
+}> = ({ orgId, onSelect, onClose }) => {
+  const [projects, setProjects] = useState<PlanningProject[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState('')
+  const [activities, setActivities] = useState<PlanningActivityRow[]>([])
+  const [search, setSearch] = useState('')
+  const [loadingProjects, setLoadingProjects] = useState(true)
+
+  useEffect(() => {
+    supabase
+      .from('projects')
+      .select('id, name, settings, budget')
+      .eq('org_id', orgId)
+      .eq('classification', 'PLANEJAMENTO')
+      .order('name')
+      .then(({ data }) => {
+        setProjects(data ?? [])
+        setLoadingProjects(false)
+      })
+  }, [orgId])
+
+  useEffect(() => {
+    if (!selectedProjectId) { setActivities([]); return }
+    const proj = projects.find(p => p.id === selectedProjectId)
+    if (!proj) return
+
+    const itemSchedules: ItemScheduleDetails[] = proj.settings?.schedule?.itemSchedules ?? []
+    const budgetArr: BudgetEntry[] = Array.isArray(proj.budget) ? proj.budget : []
+
+    const rows: PlanningActivityRow[] = itemSchedules
+      .map(s => {
+        const entry = budgetArr.find((b: BudgetEntry) => b.id === s.id)
+        if (!entry) return null
+        return {
+          itemScheduleId: s.id,
+          description: entry.sinapiItem.description,
+          phase: entry.phase,
+          plannedStart: s.startDate,
+          plannedEnd: s.endDate,
+          budgetedValue: s.budgetedValue,
+        }
+      })
+      .filter(Boolean) as PlanningActivityRow[]
+
+    setActivities(rows)
+  }, [selectedProjectId, projects])
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase()
+    if (!q) return activities
+    return activities.filter(a =>
+      a.description.toLowerCase().includes(q) ||
+      (a.phase ?? '').toLowerCase().includes(q)
+    )
+  }, [activities, search])
+
+  const selectedProject = projects.find(p => p.id === selectedProjectId)
+
+  const fmtDate = (d?: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : '—'
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+          <h3 className="text-lg font-black text-slate-900">Vincular atividade do planejamento</h3>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 border-b border-slate-50 flex gap-3">
+          {loadingProjects ? (
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <Loader2 className="w-4 h-4 animate-spin" /> Carregando projetos...
+            </div>
+          ) : projects.length === 0 ? (
+            <p className="text-sm text-slate-400">Nenhum projeto de planejamento encontrado nesta organização.</p>
+          ) : (
+            <select
+              value={selectedProjectId}
+              onChange={e => { setSelectedProjectId(e.target.value); setSearch('') }}
+              className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+            >
+              <option value="">Selecione o projeto de planejamento...</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
+        </div>
+
+        {selectedProjectId && (
+          <div className="px-4 py-3 border-b border-slate-50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar atividade..."
+                autoFocus
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="overflow-y-auto flex-1">
+          {!selectedProjectId ? (
+            <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+              <CalendarDays className="w-8 h-8 mb-2 opacity-40" />
+              <p className="font-bold text-sm">Selecione um projeto de planejamento</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+              <p className="font-bold text-sm">Nenhuma atividade encontrada</p>
+              {activities.length === 0 && (
+                <p className="text-xs mt-1">Projeto sem atividades programadas</p>
+              )}
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {filtered.map(act => (
+                <button
+                  key={act.itemScheduleId}
+                  onClick={() => onSelect({
+                    planningProjectId: selectedProjectId,
+                    planningProjectName: selectedProject?.name ?? '',
+                    itemScheduleId: act.itemScheduleId,
+                    itemDescription: act.description,
+                    phase: act.phase,
+                    plannedStart: act.plannedStart,
+                    plannedEnd: act.plannedEnd,
+                    budgetedValue: act.budgetedValue,
+                  })}
+                  className="w-full flex items-start justify-between px-5 py-3.5 hover:bg-violet-50 transition-colors text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate">{act.description}</p>
+                    {act.phase && (
+                      <p className="text-xs text-slate-500 mt-0.5">{act.phase}</p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0 ml-4 text-xs text-slate-500">
+                    <p>{fmtDate(act.plannedStart)} → {fmtDate(act.plannedEnd)}</p>
+                    {act.budgetedValue != null && (
+                      <p className="font-black text-violet-700 mt-0.5">
+                        {act.budgetedValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                      </p>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {selectedProjectId && (
+          <div className="p-4 border-t border-slate-100 text-xs text-slate-400 text-center">
+            {filtered.length} de {activities.length} atividades
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main Form ─────────────────────────────────────────────────────────────────
 const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSave, onCancel }) => {
   const isEditing = Boolean(workOrderId)
@@ -140,6 +320,8 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
   const [budgetItems, setBudgetItems] = useState<BudgetEntry[]>([])
   const [selectedBudgetItem, setSelectedBudgetItem] = useState<BudgetItemRef | null>(null)
   const [showBudgetPicker, setShowBudgetPicker] = useState(false)
+  const [selectedPlanningItem, setSelectedPlanningItem] = useState<PlanningItemRef | null>(null)
+  const [showPlanningPicker, setShowPlanningPicker] = useState(false)
 
   const [loading, setLoading] = useState(isEditing)
   const [saving, setSaving] = useState(false)
@@ -209,11 +391,26 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
       if (wo.budget_item_ref) {
         setSelectedBudgetItem(wo.budget_item_ref as BudgetItemRef)
       }
+      if (wo.planning_item_ref) {
+        setSelectedPlanningItem(wo.planning_item_ref as PlanningItemRef)
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro ao carregar OE')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handlePlanningSelect = (ref: PlanningItemRef) => {
+    setSelectedPlanningItem(ref)
+    // Auto-fill dates and phase from planning activity if not already set
+    setForm(f => ({
+      ...f,
+      phase: f.phase || ref.phase || '',
+      plannedStartDate: f.plannedStartDate || ref.plannedStart || '',
+      plannedEndDate: f.plannedEndDate || ref.plannedEnd || '',
+    }))
+    setShowPlanningPicker(false)
   }
 
   const handleBudgetSelect = (item: BudgetEntry) => {
@@ -259,6 +456,7 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
         predecessorId: form.predecessorId || undefined,
         checklistTemplateId: form.checklistTemplateId || undefined,
         budgetItemRef: selectedBudgetItem ?? undefined,
+        planningItemRef: selectedPlanningItem ?? undefined,
       }
 
       let savedId: string
@@ -378,6 +576,65 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
             >
               <Link2 className="w-4 h-4" />
               {budgetItems.length > 0 ? 'Selecionar item do orçamento' : 'Sem itens de orçamento disponíveis'}
+            </button>
+          )}
+        </div>
+
+        {/* Section: Planejamento */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Vínculo com Planejamento</p>
+          </div>
+
+          {selectedPlanningItem ? (
+            <div className="flex items-start justify-between p-4 bg-violet-50 border border-violet-100 rounded-xl">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black text-violet-900 truncate">{selectedPlanningItem.itemDescription}</p>
+                <div className="flex items-center gap-3 mt-1 text-xs text-violet-700">
+                  {selectedPlanningItem.phase && <span>{selectedPlanningItem.phase}</span>}
+                  <span className="font-bold">
+                    {selectedPlanningItem.plannedStart
+                      ? new Date(selectedPlanningItem.plannedStart + 'T00:00:00').toLocaleDateString('pt-BR')
+                      : '—'}
+                    {' → '}
+                    {selectedPlanningItem.plannedEnd
+                      ? new Date(selectedPlanningItem.plannedEnd + 'T00:00:00').toLocaleDateString('pt-BR')
+                      : '—'}
+                  </span>
+                  {selectedPlanningItem.budgetedValue != null && (
+                    <span>
+                      {selectedPlanningItem.budgetedValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-violet-500 mt-1">{selectedPlanningItem.planningProjectName}</p>
+              </div>
+              <div className="flex items-center gap-2 ml-4 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowPlanningPicker(true)}
+                  className="text-xs font-black text-violet-600 hover:text-violet-800 px-2 py-1 hover:bg-violet-100 rounded-lg transition-colors"
+                >
+                  Trocar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlanningItem(null)}
+                  className="text-xs font-bold text-slate-400 hover:text-red-500 px-2 py-1 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
+                >
+                  <Unlink className="w-3 h-3" />
+                  Desvincular
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowPlanningPicker(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-violet-300 text-violet-600 hover:border-violet-500 hover:bg-violet-50 rounded-xl text-sm font-bold transition-colors cursor-pointer"
+            >
+              <CalendarDays className="w-4 h-4" />
+              Selecionar atividade do cronograma
             </button>
           )}
         </div>
@@ -637,6 +894,15 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
           items={budgetItems}
           onSelect={handleBudgetSelect}
           onClose={() => setShowBudgetPicker(false)}
+        />
+      )}
+
+      {/* Planning Picker Modal */}
+      {showPlanningPicker && (
+        <PlanningPickerModal
+          orgId={orgId}
+          onSelect={handlePlanningSelect}
+          onClose={() => setShowPlanningPicker(false)}
         />
       )}
     </div>

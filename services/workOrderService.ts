@@ -109,6 +109,7 @@ export const workOrderService = {
         predecessor_id: input.predecessorId ?? null,
         checklist_template_id: input.checklistTemplateId ?? null,
         budget_item_ref: input.budgetItemRef ?? null,
+        planning_item_ref: input.planningItemRef ?? null,
         status: 'planned',
       })
       .select()
@@ -149,6 +150,7 @@ export const workOrderService = {
         predecessor_id: input.predecessorId,
         checklist_template_id: input.checklistTemplateId,
         budget_item_ref: input.budgetItemRef,
+        planning_item_ref: input.planningItemRef,
       })
       .eq('id', id)
       .select()

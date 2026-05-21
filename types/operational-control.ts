@@ -68,6 +68,21 @@ export interface BudgetItemRef {
 }
 
 // ────────────────────────────────────────────────────────────
+// Referência de atividade de planejamento (snapshot — não FK)
+// ────────────────────────────────────────────────────────────
+
+export interface PlanningItemRef {
+  planningProjectId: string
+  planningProjectName: string
+  itemScheduleId: string      // = BudgetEntry.id no projeto de planejamento
+  itemDescription: string     // nome da atividade (BudgetEntry.sinapiItem.description)
+  phase?: string
+  plannedStart?: string
+  plannedEnd?: string
+  budgetedValue?: number
+}
+
+// ────────────────────────────────────────────────────────────
 // Entidades DB (espelho das tabelas)
 // ────────────────────────────────────────────────────────────
 
@@ -113,6 +128,7 @@ export interface WorkOrder {
   type: WorkOrderType
 
   budgetItemRef: BudgetItemRef | null
+  planningItemRef: PlanningItemRef | null
 
   status: WorkOrderStatus
   statusBeforeBlock: WorkOrderStatus | null
@@ -336,6 +352,7 @@ export interface CreateWorkOrderInput {
   predecessorId?: string
   checklistTemplateId?: string
   budgetItemRef?: BudgetItemRef
+  planningItemRef?: PlanningItemRef
 }
 
 export interface UpdateWorkOrderInput {
@@ -354,6 +371,7 @@ export interface UpdateWorkOrderInput {
   predecessorId?: string
   checklistTemplateId?: string
   budgetItemRef?: BudgetItemRef
+  planningItemRef?: PlanningItemRef
 }
 
 export interface TransitionStatusInput {

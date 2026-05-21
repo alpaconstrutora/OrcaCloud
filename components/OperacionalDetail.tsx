@@ -374,6 +374,69 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                   } />
                 </>
               )}
+              {wo.planning_item_ref && (() => {
+                const p = wo.planning_item_ref as {
+                  planningProjectName: string
+                  itemDescription: string
+                  plannedStart?: string
+                  plannedEnd?: string
+                  budgetedValue?: number
+                }
+                const actualStart = wo.actual_start_date as string | null
+                const actualEnd = wo.actual_end_date as string | null
+                const planStart = p.plannedStart ? new Date(p.plannedStart + 'T00:00:00') : null
+                const planEnd = p.plannedEnd ? new Date(p.plannedEnd + 'T00:00:00') : null
+                const realStart = actualStart ? new Date(actualStart + 'T00:00:00') : null
+                const realEnd = actualEnd ? new Date(actualEnd + 'T00:00:00') : null
+                const startSlip = planStart && realStart ? Math.round((realStart.getTime() - planStart.getTime()) / 86400000) : null
+                const endSlip = planEnd && realEnd ? Math.round((realEnd.getTime() - planEnd.getTime()) / 86400000) : null
+                return (
+                  <div className="col-span-2 md:col-span-3 border-t border-slate-100 pt-4 mt-2">
+                    <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-3">Vínculo com Planejamento</p>
+                    <div className="bg-violet-50 border border-violet-100 rounded-xl p-4 space-y-3">
+                      <div>
+                        <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Atividade</p>
+                        <p className="text-sm font-black text-violet-900">{p.itemDescription}</p>
+                        <p className="text-xs text-violet-500">{p.planningProjectName}</p>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div>
+                          <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Início Planejado (Crono)</p>
+                          <p className="text-sm font-bold text-violet-800">{fmtDate(p.plannedStart ?? null)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Fim Planejado (Crono)</p>
+                          <p className="text-sm font-bold text-violet-800">{fmtDate(p.plannedEnd ?? null)}</p>
+                        </div>
+                        {startSlip !== null && (
+                          <div>
+                            <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Desvio Início</p>
+                            <p className={`text-sm font-black ${startSlip > 0 ? 'text-red-600' : startSlip < 0 ? 'text-emerald-600' : 'text-slate-600'}`}>
+                              {startSlip > 0 ? `+${startSlip}d` : startSlip < 0 ? `${startSlip}d` : 'Em dia'}
+                            </p>
+                          </div>
+                        )}
+                        {endSlip !== null && (
+                          <div>
+                            <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Desvio Fim</p>
+                            <p className={`text-sm font-black ${endSlip > 0 ? 'text-red-600' : endSlip < 0 ? 'text-emerald-600' : 'text-slate-600'}`}>
+                              {endSlip > 0 ? `+${endSlip}d` : endSlip < 0 ? `${endSlip}d` : 'Em dia'}
+                            </p>
+                          </div>
+                        )}
+                        {p.budgetedValue != null && (
+                          <div>
+                            <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Valor Orçado (Crono)</p>
+                            <p className="text-sm font-black text-violet-800">
+                              {p.budgetedValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )}
 

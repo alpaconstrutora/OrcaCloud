@@ -52,9 +52,13 @@ const ProjectSelector: React.FC<{
     ? projects.filter(p => p.settings?.organizationId === orgId)
     : projects
 
-  const obras = filtered.filter(p =>
-    (p as { settings?: { classification?: string } }).settings?.classification === 'OBRA'
-  )
+  const obras = filtered.filter(p => {
+    const s = (p as { settings?: { classification?: string; isSystemProject?: boolean; standard?: string; location?: string } }).settings
+    return s?.classification === 'OBRA'
+      && !s?.isSystemProject
+      && s?.standard !== 'Vendas'
+      && s?.location !== 'Sistema'
+  })
 
   if (!obras.length) {
     return (

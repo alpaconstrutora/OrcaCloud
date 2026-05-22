@@ -358,6 +358,7 @@ export const commercialFinanceService = {
                 referenceMonth: new Date().toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }),
                 socialChargesMode: 'Nenhum',
                 classification: 'OBRA',
+                isSystemProject: true,
                 organizationId, // Isola o novo projeto
                 financialInfo: {
                     totalValue: 0,

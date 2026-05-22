@@ -70,7 +70,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 ]);
                 if (cancelled) return;
                 setSuppliers(suppliersList);
-                const obras = projectsList.filter((p: { id: string; name: string; settings?: { classification?: string } }) => !p.settings?.classification || p.settings.classification === 'OBRA');
+                const obras = projectsList.filter((p: { id: string; name: string; settings?: { classification?: string } }) =>
+                    p.name !== 'Gestão Comercial' &&
+                    (!p.settings?.classification || p.settings.classification === 'OBRA')
+                );
                 setProjects(obras);
 
                 if (orgs && orgs.length > 0) {

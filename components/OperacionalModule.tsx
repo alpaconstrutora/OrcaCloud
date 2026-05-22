@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   ClipboardList, LayoutDashboard, BookOpen,
-  ChevronRight, Building2, Loader2
+  ChevronRight, Building2, Loader2, LayoutGrid, List
 } from 'lucide-react'
 import OperacionalList from './OperacionalList'
 import OperacionalDetail from './OperacionalDetail'
@@ -46,6 +46,8 @@ const ProjectSelector: React.FC<{
   orgId?: string
   onSelect: (id: string) => void
 }> = ({ projects, selectedId, orgId, onSelect }) => {
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards')
+
   const filtered = orgId
     ? projects.filter(p => p.settings?.organizationId === orgId)
     : projects
@@ -67,30 +69,76 @@ const ProjectSelector: React.FC<{
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-black text-slate-900">Selecione uma Obra</h2>
-        <p className="text-sm text-slate-400 mt-1">Para acessar o Controle Operacional selecione a obra</p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {obras.map(p => (
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-slate-900">Selecione uma Obra</h2>
+          <p className="text-sm text-slate-400 mt-1">Para acessar o Controle Operacional selecione a obra</p>
+        </div>
+        <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden flex-shrink-0">
           <button
-            key={p.id}
-            onClick={() => onSelect(p.id)}
-            className={`text-left p-5 rounded-2xl border-2 transition-all hover:shadow-md active:scale-[0.98]
-              ${selectedId === p.id
-                ? 'border-blue-600 bg-blue-50'
-                : 'border-slate-100 bg-white hover:border-blue-200'}`}
+            onClick={() => setViewMode('cards')}
+            title="Visualização em cards"
+            className={`flex items-center px-3 py-2.5 transition-all ${
+              viewMode === 'cards' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'
+            }`}
           >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-black text-slate-900">{p.name}</p>
-                <p className="text-xs text-slate-400 mt-1 font-medium">Obra</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-slate-300 mt-0.5" />
-            </div>
+            <LayoutGrid className="w-4 h-4" />
           </button>
-        ))}
+          <button
+            onClick={() => setViewMode('list')}
+            title="Visualização em linha"
+            className={`flex items-center px-3 py-2.5 transition-all border-l border-slate-200 ${
+              viewMode === 'list' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <List className="w-4 h-4" />
+          </button>
+        </div>
       </div>
+
+      {viewMode === 'cards' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {obras.map(p => (
+            <button
+              key={p.id}
+              onClick={() => onSelect(p.id)}
+              className={`text-left p-5 rounded-2xl border-2 transition-all hover:shadow-md active:scale-[0.98]
+                ${selectedId === p.id
+                  ? 'border-blue-600 bg-blue-50'
+                  : 'border-slate-100 bg-white hover:border-blue-200'}`}
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-black text-slate-900">{p.name}</p>
+                  <p className="text-xs text-slate-400 mt-1 font-medium">Obra</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-slate-300 mt-0.5" />
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm divide-y divide-slate-50">
+          {obras.map(p => (
+            <button
+              key={p.id}
+              onClick={() => onSelect(p.id)}
+              className={`w-full text-left px-5 py-3.5 flex items-center justify-between gap-3 transition-colors hover:bg-blue-50/50 active:bg-blue-100/50 ${
+                selectedId === p.id ? 'bg-blue-50' : ''
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <Building2 className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-900 text-sm truncate">{p.name}</p>
+                  <p className="text-[10px] text-slate-400 font-medium">Obra</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

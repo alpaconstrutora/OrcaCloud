@@ -243,7 +243,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         <Building2 className="w-4 h-4 text-slate-400" />
                         <select
                             value={selectedOrgId || ''}
-                            onChange={(e) => setSelectedOrgId(e.target.value === '' ? undefined : e.target.value)}
+                            onChange={(e) => setSelectedOrgId(e.target.value)}
                             className="text-xs font-bold text-slate-600 outline-none bg-transparent min-w-[180px]"
                         >
                             <option value="">Todas as Organizações</option>
@@ -422,7 +422,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'payroll' && (
                         <LaborPayroll
-                            orgId={selectedOrgId !== undefined ? selectedOrgId : (activeOrganizationId || 'all')}
+                            orgId={selectedOrgId === undefined ? (activeOrganizationId || 'all') : (selectedOrgId || 'all')}
                         />
                     )}
                     {activeTab === 'rubrics' && <LaborRubrics />}

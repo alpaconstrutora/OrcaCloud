@@ -309,6 +309,16 @@ const PlanningPickerModal: React.FC<{
   )
 }
 
+// ── Field wrapper ─────────────────────────────────────────────────────────────
+const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode; colSpan?: number }> = ({ label, required, children, colSpan }) => (
+  <div className={colSpan === 2 ? 'col-span-2' : colSpan === 3 ? 'col-span-3' : ''}>
+    <label className="text-xs font-black text-slate-500 uppercase tracking-wide">
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <div className="mt-1">{children}</div>
+  </div>
+)
+
 // ── Main Form ─────────────────────────────────────────────────────────────────
 const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSave, onCancel }) => {
   const isEditing = Boolean(workOrderId)
@@ -479,15 +489,6 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
       setSaving(false)
     }
   }
-
-  const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode; colSpan?: number }> = ({ label, required, children, colSpan }) => (
-    <div className={colSpan === 2 ? 'col-span-2' : colSpan === 3 ? 'col-span-3' : ''}>
-      <label className="text-xs font-black text-slate-500 uppercase tracking-wide">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <div className="mt-1">{children}</div>
-    </div>
-  )
 
   const inputCls = "w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
   const selectCls = inputCls + " appearance-none"

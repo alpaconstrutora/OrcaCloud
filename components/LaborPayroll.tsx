@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { payrollService, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
 import { payrollEngine } from '../services/payrollEngine';
 import { computeDateRange } from '../lib/payrollUIHelpers';
@@ -14,15 +15,6 @@ interface OrganizationItem {
     name: string;
 }
 
-declare global {
-    interface Window {
-        supabase: {
-            from: (table: string) => {
-                select: (columns: string) => Promise<{ data: OrganizationItem[] | null; error: unknown }>;
-            };
-        };
-    }
-}
 
 interface LaborPayrollProps {
     orgId: string;
@@ -58,7 +50,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
     useEffect(() => {
         loadRuns();
         loadRubrics();
-        if (orgId === 'all') loadOrganizations();
+        loadOrganizations();
     }, [orgId, typeFilter, monthFilter, yearFilter, localOrgId]);
 
     useEffect(() => {
@@ -68,11 +60,10 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
     // ── Loaders ───────────────────────────────────────────────────────────────
     const loadOrganizations = async () => {
         try {
-            const { data } = await window.supabase.from('organizations').select('id, name');
+            const { data } = await supabase.from('organizations').select('id, name');
             setOrganizations(data || []);
         } catch (err) {
             console.error(err);
-            setLoadError('Não foi possível carregar a lista de organizações.');
         }
     };
 

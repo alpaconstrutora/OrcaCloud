@@ -610,6 +610,25 @@ export const laborService = {
         return data;
     },
 
+    async updateDocument(
+        id: string,
+        updates: Pick<EmployeeDocument, 'category' | 'title' | 'expiry_date' | 'notes'>
+    ): Promise<EmployeeDocument> {
+        const { data, error } = await supabase
+            .from('employee_documents')
+            .update({
+                category: updates.category,
+                title: updates.title,
+                expiry_date: updates.expiry_date || null,
+                notes: updates.notes
+            })
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
     async deleteDocument(id: string, filePath: string): Promise<void> {
         // 1. Delete from Database
         const { error: dbError } = await supabase

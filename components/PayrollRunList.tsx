@@ -116,64 +116,84 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
             </div>
         </div>
 
-        {/* Grid de Runs */}
-        <div className="grid grid-cols-1 gap-4">
+        {/* Tabela de Runs */}
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+            {/* Cabeçalho */}
+            <div className="grid grid-cols-[120px_1fr_1fr_140px_40px] gap-0 border-b border-slate-100 bg-slate-50 px-4 py-2">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Status</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Período</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Organização</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 text-right">Valor Total</span>
+                <span />
+            </div>
+
             {runs.length === 0 ? (
-                <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center">
-                    <History className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-black text-slate-400 uppercase">Nenhum ciclo encontrado</h3>
-                    <p className="text-sm text-slate-400 font-medium">Clique em "Nova Folha" para iniciar o cálculo do período</p>
+                <div className="py-16 text-center">
+                    <History className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                    <h3 className="text-sm font-black text-slate-400 uppercase">Nenhum ciclo encontrado</h3>
+                    <p className="text-xs text-slate-400 font-medium mt-1">Clique em "Nova Folha" para iniciar o cálculo do período</p>
                 </div>
             ) : (
-                runs.map(run => (
-                    <div
-                        key={run.id}
-                        onClick={() => onSelectRun(run)}
-                        className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row items-center gap-6 group cursor-pointer"
-                    >
-                        <div className="flex items-center gap-4 flex-1">
-                            <div className={`p-4 rounded-2xl ${run.status === 'FECHADO' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                                <Calendar className="w-6 h-6" />
+                runs.map((run, idx) => {
+                    const orgName = organizations.find(o => o.id === run.org_id)?.name ?? '—';
+                    const isClosed = run.status === 'FECHADO';
+                    const hasWarning = run.validation_logs && run.validation_logs.length > 0;
+                    return (
+                        <div
+                            key={run.id}
+                            onClick={() => onSelectRun(run)}
+                            className={`grid grid-cols-[120px_1fr_1fr_140px_40px] gap-0 items-center px-4 py-3 cursor-pointer group transition-colors hover:bg-slate-50 ${idx !== 0 ? 'border-t border-slate-100' : ''}`}
+                        >
+                            {/* Status */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tighter ${isClosed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                    {run.status}
+                                </span>
+                                {hasWarning && (
+                                    <AlertTriangle size={12} className="text-rose-500 shrink-0" />
+                                )}
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px] font-black uppercase tracking-tighter border border-slate-200">
+                                    {run.type}{run.subtype ? ` · ${run.subtype}` : ''}
+                                </span>
                             </div>
-                            <div>
-                                <h4 className="text-lg font-black text-slate-900">
-                                    Período de {formatDate(run.start_date)}
-                                </h4>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Fim: {formatDate(run.end_date)}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tighter ${run.status === 'FECHADO' ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}>
-                                        {run.status}
-                                    </span>
-                                    {run.validation_logs && run.validation_logs.length > 0 && (
-                                        <span className="px-2 py-0.5 bg-rose-100 text-rose-600 rounded-md text-[9px] font-black uppercase tracking-tighter border border-rose-200 flex items-center gap-1">
-                                            <AlertTriangle size={10} /> Inconsistente
-                                        </span>
-                                    )}
-                                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px] font-black uppercase tracking-tighter border border-slate-200">
-                                        {run.type} {run.subtype ? `- ${run.subtype}` : ''}
-                                    </span>
-                                </div>
+
+                            {/* Período */}
+                            <div className="flex items-center gap-2 min-w-0">
+                                <Calendar className={`w-3.5 h-3.5 shrink-0 ${isClosed ? 'text-emerald-500' : 'text-amber-500'}`} />
+                                <span className="text-sm font-bold text-slate-700 truncate">
+                                    {formatDate(run.start_date)}
+                                    <span className="text-slate-400 font-medium mx-1">→</span>
+                                    {formatDate(run.end_date)}
+                                </span>
+                            </div>
+
+                            {/* Organização */}
+                            <span className="text-sm font-medium text-slate-600 truncate pr-4">{orgName}</span>
+
+                            {/* Valor Total */}
+                            <span className="text-sm font-black text-slate-400 text-right tabular-nums">—</span>
+
+                            {/* Ações */}
+                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={e => { e.stopPropagation(); onDuplicateRun(run.id); }}
+                                    className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                                    title="Duplicar"
+                                >
+                                    <History className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                    onClick={e => { e.stopPropagation(); onDeleteRun(run.id); }}
+                                    className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                                    title="Excluir"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:translate-x-0.5 transition-transform" />
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                                onClick={e => { e.stopPropagation(); onDuplicateRun(run.id); }}
-                                className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
-                                title="Duplicar Ciclo"
-                            >
-                                <History className="w-5 h-5" />
-                            </button>
-                            <button
-                                onClick={e => { e.stopPropagation(); onDeleteRun(run.id); }}
-                                className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
-                                title="Excluir Ciclo"
-                            >
-                                <Trash2 className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                ))
+                    );
+                })
             )}
         </div>
     </div>

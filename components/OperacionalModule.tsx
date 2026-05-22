@@ -58,6 +58,7 @@ const ProjectSelector: React.FC<{
       && !s?.isSystemProject
       && s?.standard !== 'Vendas'
       && s?.location !== 'Sistema'
+      && p.name !== 'Gestão Comercial'
   })
 
   if (!obras.length) {

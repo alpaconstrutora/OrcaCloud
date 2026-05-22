@@ -53,8 +53,8 @@ const ProjectSelector: React.FC<{
     : projects
 
   const obras = filtered.filter(p =>
-    (p as { classification?: string }).classification === 'OBRA' ||
-    !((p as { classification?: string }).classification)
+    (p as { settings?: { classification?: string } }).settings?.classification === 'OBRA' ||
+    !(p as { settings?: { classification?: string } }).settings?.classification
   )
 
   if (!obras.length) {

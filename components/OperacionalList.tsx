@@ -3,7 +3,8 @@ import {
   Plus, Search, Filter, AlertTriangle, AlertCircle,
   Clock, CheckCircle2, XCircle, Loader2, ChevronDown,
   Lock, PlayCircle, Eye, ArrowRight, MoreVertical,
-  TrendingUp, DollarSign, Zap, ClipboardList
+  TrendingUp, DollarSign, Zap, ClipboardList,
+  LayoutGrid, List
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { WorkOrderStatus, WorkOrderPriority } from '../types/operational-control'
@@ -114,6 +115,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
   const [statusFilter, setStatusFilter] = useState<WorkOrderStatus | 'all'>('all')
   const [phaseFilter, setPhaseFilter] = useState<string>('all')
   const [overdueOnly, setOverdueOnly] = useState(false)
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards')
 
   const load = async () => {
     setIsLoading(true)
@@ -256,6 +258,28 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
           Atrasadas
         </button>
 
+        {/* View mode toggle */}
+        <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <button
+            onClick={() => setViewMode('cards')}
+            title="Visualização em cards"
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-black transition-all ${
+              viewMode === 'cards' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            title="Visualização em linha"
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-black transition-all border-l border-slate-200 ${
+              viewMode === 'list' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <List className="w-4 h-4" />
+          </button>
+        </div>
+
         <button
           onClick={onCreateNew}
           className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/20 active:scale-95"
@@ -291,7 +315,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
         })}
       </div>
 
-      {/* Table */}
+      {/* List / Cards */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-100 h-48">
           <ClipboardList className="w-10 h-10 text-slate-200 mb-2" />
@@ -306,7 +330,72 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
             </button>
           )}
         </div>
+      ) : viewMode === 'cards' ? (
+        /* ── Cards view ── */
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map(wo => {
+            const overdue = isOverdue(wo)
+            const openNcs = (wo.non_conformances ?? []).filter(nc => nc.status !== 'closed').length
+            const { color: pColor } = PRIORITY_CONFIG[wo.priority] ?? PRIORITY_CONFIG.normal
+
+            return (
+              <div
+                key={wo.id}
+                onClick={() => onViewDetail(wo.id)}
+                className={`bg-white rounded-2xl border shadow-sm cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] flex flex-col gap-3 p-4 ${
+                  overdue ? 'border-red-200 bg-red-50/20' : 'border-slate-100'
+                }`}
+              >
+                {/* Card header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {wo.code && (
+                      <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                        {wo.code}
+                      </span>
+                    )}
+                    {openNcs > 0 && (
+                      <span className="text-[10px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                        {openNcs} NC
+                      </span>
+                    )}
+                  </div>
+                  <Zap className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${pColor}`} />
+                </div>
+
+                {/* Title */}
+                <div>
+                  <p className="text-sm font-bold text-slate-900 leading-snug line-clamp-2">{wo.title}</p>
+                  {wo.phase && (
+                    <p className="text-[10px] font-medium text-slate-400 mt-0.5">{wo.phase}</p>
+                  )}
+                </div>
+
+                {/* Progress */}
+                <ProgressBar pct={wo.completion_pct} />
+
+                {/* Footer */}
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-50">
+                  <StatusBadge status={wo.status} />
+                  <div className={`flex items-center gap-1 text-[10px] font-bold ${overdue ? 'text-red-600' : 'text-slate-400'}`}>
+                    {overdue && <AlertTriangle className="w-3 h-3" />}
+                    <Clock className="w-3 h-3" />
+                    {fmtDate(wo.planned_end_date)}
+                  </div>
+                </div>
+
+                {(wo.team || wo.actual_total_cost > 0) && (
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium -mt-1">
+                    <span>{wo.team ? (wo.team as { name: string }).name : ''}</span>
+                    <span className="font-bold text-slate-600">{fmtCurrency(wo.actual_total_cost)}</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       ) : (
+        /* ── List/inline view ── */
         <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full">

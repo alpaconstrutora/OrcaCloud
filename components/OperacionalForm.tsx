@@ -354,7 +354,11 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
       supabase.from('labor_teams').select('id, name').order('name'),
       supabase.from('employees').select('id, name, role').order('name'),
       supabase.from('oe_checklist_templates').select('id, name, service_type').eq('org_id', orgId).eq('active', true).order('name'),
-      supabase.from('work_orders').select('id, code, title').eq('project_id', projectId).neq('id', workOrderId ?? '').order('code'),
+      (() => {
+        let q = supabase.from('work_orders').select('id, code, title').eq('project_id', projectId)
+        if (workOrderId) q = q.neq('id', workOrderId)
+        return q.order('code')
+      })(),
       supabase.from('projects').select('budget').eq('id', projectId).single(),
     ])
     if (teamsRes.data) setTeams(teamsRes.data)

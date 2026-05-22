@@ -70,8 +70,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 ]);
                 if (cancelled) return;
                 setSuppliers(suppliersList);
-                const orcamentos = projectsList.filter((p: { id: string; name: string; settings?: { classification?: string } }) => p.settings?.classification === 'ORCAMENTO' || p.settings?.classification === 'COST_ESTIMATION');
-                setProjects(orcamentos);
+                const obras = projectsList.filter((p: { id: string; name: string; settings?: { classification?: string } }) => !p.settings?.classification || p.settings.classification === 'OBRA');
+                setProjects(obras);
 
                 if (orgs && orgs.length > 0) {
                     const orgId = orgs[0].id;
@@ -568,7 +568,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Obra / Orçamento</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Obra</label>
                                         <select
                                             value={selectedProjectId}
                                             onChange={(e) => setSelectedProjectId(e.target.value)}

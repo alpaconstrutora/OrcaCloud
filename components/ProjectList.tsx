@@ -455,9 +455,13 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Planejamento Vinculado</th>
                                         </>
                                     )}
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Cliente</th>
+                                    {!isObraContext && (
+                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Cliente</th>
+                                    )}
                                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Clima' : 'Atualização'}</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Status Diário' : 'Status Orç.'}</th>
+                                    {(!isObraContext || isDiaryContext) && (
+                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Status Diário' : 'Status Orç.'}</th>
+                                    )}
                                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Total Registros' : 'Status Obra'}</th>
                                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Bloqueio</th>
                                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
@@ -604,15 +608,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </td>
                                             </>
                                         )}
-                                        <td className="px-6 py-4">
-                                            {(activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)) ? (
-                                                <span className="text-sm text-gray-600 font-medium">
-                                                    {activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings.client)}
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs text-gray-400 italic">-</span>
-                                            )}
-                                        </td>
+                                        {!isObraContext && (
+                                            <td className="px-6 py-4">
+                                                {(activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)) ? (
+                                                    <span className="text-sm text-gray-600 font-medium">
+                                                        {activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings.client)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400 italic">-</span>
+                                                )}
+                                            </td>
+                                        )}
                                         <td className="px-6 py-4">
                                             {isDiaryContext ? (
                                                 <div className="flex items-center gap-2">
@@ -640,28 +646,30 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-6 py-4">
-                                            {isDiaryContext ? (
-                                                (project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (
-                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700">
-                                                        Atualizado
-                                                    </span>
+                                        {(!isObraContext || isDiaryContext) && (
+                                            <td className="px-6 py-4">
+                                                {isDiaryContext ? (
+                                                    (project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700">
+                                                            Atualizado
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gray-100 text-gray-500">
+                                                            Sem Registros
+                                                        </span>
+                                                    )
                                                 ) : (
-                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gray-100 text-gray-500">
-                                                        Sem Registros
-                                                    </span>
-                                                )
-                                            ) : (
-                                                project.settings?.budgetStatus ? (
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider
-                                                ${project.settings.budgetStatus === 'Fechado' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                        {project.settings.budgetStatus}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-xs text-gray-400 italic">-</span>
-                                                )
-                                            )}
-                                        </td>
+                                                    project.settings?.budgetStatus ? (
+                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider
+                                                    ${project.settings.budgetStatus === 'Fechado' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                            {project.settings.budgetStatus}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400 italic">-</span>
+                                                    )
+                                                )}
+                                            </td>
+                                        )}
                                         <td className="px-6 py-4">
                                             {isDiaryContext ? (
                                                 <div className="flex items-center gap-1.5">
@@ -800,7 +808,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             <FolderOpen className="w-6 h-6" />
                                         </div>
                                         <div className="flex flex-col items-end gap-2">
-                                            {project.settings?.budgetStatus && (
+                                            {!isObraContext && project.settings?.budgetStatus && (
                                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider
                                                 ${project.settings.budgetStatus === 'Fechado' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
                                                     {project.settings.budgetStatus}
@@ -837,9 +845,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             {project.name}
                                         </h3>
                                     </div>
-                                    <p className="text-sm text-gray-500 mt-1 mb-4 flex items-center gap-1.5 font-medium">
-                                        {project.settings?.client || 'Cliente não definido'}
-                                    </p>
+                                    {!isObraContext && (
+                                        <p className="text-sm text-gray-500 mt-1 mb-4 flex items-center gap-1.5 font-medium">
+                                            {project.settings?.client || 'Cliente não definido'}
+                                        </p>
+                                    )}
 
                                     <div className="space-y-2 pt-4 border-t border-gray-50">
                                         <div className="flex items-center justify-between text-xs">

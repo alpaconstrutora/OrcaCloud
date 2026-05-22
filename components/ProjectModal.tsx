@@ -41,6 +41,7 @@ interface NewProjectData {
   responsibleTeam?: string;
   code?: string;
   organizationId?: string;
+  tipo?: 'Reforma' | 'Manutenção' | 'Greenfield' | 'Administração' | 'Condomínio';
 }
 
 interface ProjectModalProps {
@@ -97,7 +98,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     classification: 'ORCAMENTO',
     startDate: '',
     endDate: '',
-    responsibleTeam: ''
+    responsibleTeam: '',
+    tipo: undefined
   });
 
 
@@ -207,7 +209,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
           classification: initialClassification || 'ORCAMENTO',
           startDate: '',
           endDate: '',
-          responsibleTeam: ''
+          responsibleTeam: '',
+          tipo: undefined
         });
         setLinkedProjectId(null);
       }
@@ -291,7 +294,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
         classification: initialClassification || 'ORCAMENTO',
         startDate: '',
         endDate: '',
-        responsibleTeam: ''
+        responsibleTeam: '',
+        tipo: undefined
       });
       setLinkedProjectId(null);
     }
@@ -708,6 +712,21 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
                 <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-6">
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Obra</label>
+                    <select
+                      className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm"
+                      value={formData.tipo || ''}
+                      onChange={(e) => setFormData({ ...formData, tipo: e.target.value as any || undefined })}
+                    >
+                      <option value="">Selecione o tipo...</option>
+                      <option value="Reforma">Reforma</option>
+                      <option value="Manutenção">Manutenção</option>
+                      <option value="Greenfield">Greenfield</option>
+                      <option value="Administração">Administração</option>
+                      <option value="Condomínio">Condomínio</option>
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Status da Obra</label>
                     <select
                       className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm"
@@ -819,9 +838,20 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                                     <button
                                       type="button"
                                       onClick={() => {
+                                        if (p.settings?.classification === 'OBRA' && formData.classification === 'ORCAMENTO') {
+                                          const jaVinculado = projects.filter(proj =>
+                                            (proj.settings?.classification === 'ORCAMENTO' || !proj.settings?.classification) &&
+                                            (proj.settings?.linkedProjectId === p.id || proj.settings?.linkedProjectName === p.name) &&
+                                            proj.id !== initialData?.id
+                                          );
+                                          if (jaVinculado.length > 0) {
+                                            alert(`A obra "${p.name}" já possui o orçamento "${jaVinculado[0].name}" vinculado. Cada obra pode ter no máximo um orçamento vinculado.`);
+                                            return;
+                                          }
+                                        }
                                         setFormData({
                                           ...formData,
-                                          name: formData.classification === 'PLANEJAMENTO' ? formData.name : p.name, // Keep planning name if already set
+                                          name: formData.classification === 'PLANEJAMENTO' ? formData.name : p.name,
                                           client: p.settings?.client || '',
                                           clientId: p.settings?.clientId,
                                           location: p.settings?.location || 'SP',

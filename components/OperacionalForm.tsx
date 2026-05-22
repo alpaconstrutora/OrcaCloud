@@ -156,8 +156,8 @@ const PlanningPickerModal: React.FC<{
     supabase
       .from('projects')
       .select('id, name, settings, budget')
-      .eq('org_id', orgId)
-      .eq('classification', 'PLANEJAMENTO')
+      .filter('settings->>organizationId', 'eq', orgId)
+      .filter('settings->>classification', 'eq', 'PLANEJAMENTO')
       .order('name')
       .then(({ data }) => {
         setProjects(data ?? [])

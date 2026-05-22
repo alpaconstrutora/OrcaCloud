@@ -31,6 +31,7 @@ export interface ProjectSettings {
     organizationId?: string;
     code?: string;
     classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO';
+    isSystemProject?: boolean;
     lastCubUpdate?: Date;
     customCubRates?: Record<string, Record<string, number>>;
     kFactor?: number;

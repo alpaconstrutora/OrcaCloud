@@ -15,6 +15,7 @@ interface PayrollRunListProps {
     monthFilter: string;
     yearFilter: string;
     localOrgId: string;
+    runTotals: Record<string, number>;
     onTypeFilter: (v: string) => void;
     onMonthFilter: (v: string) => void;
     onYearFilter: (v: string) => void;
@@ -26,9 +27,19 @@ interface PayrollRunListProps {
     onRefresh: () => void;
 }
 
+const fmtBRL = (v: number) =>
+    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const TYPE_LABELS: Record<string, string> = {
+    mensal: 'Mensal',
+    ferias: 'Férias',
+    decimo_terceiro: '13º',
+    rescisao: 'Rescisão',
+};
+
 const PayrollRunList: React.FC<PayrollRunListProps> = ({
     runs, orgId, organizations, loading,
-    typeFilter, monthFilter, yearFilter, localOrgId,
+    typeFilter, monthFilter, yearFilter, localOrgId, runTotals,
     onTypeFilter, onMonthFilter, onYearFilter, onLocalOrgId,
     onSelectRun, onDeleteRun, onDuplicateRun, onNewRun, onRefresh,
 }) => (
@@ -119,11 +130,12 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
         {/* Tabela de Runs */}
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
             {/* Cabeçalho */}
-            <div className="grid grid-cols-[120px_1fr_1fr_140px_40px] gap-0 border-b border-slate-100 bg-slate-50 px-4 py-2">
-                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Status</span>
+            <div className="grid grid-cols-[1fr_1fr_140px_90px_100px_40px] gap-0 border-b border-slate-100 bg-slate-50 px-4 py-2">
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Período</span>
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Organização</span>
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 text-right">Valor Total</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Tipo</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Status</span>
                 <span />
             </div>
 
@@ -142,21 +154,8 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                         <div
                             key={run.id}
                             onClick={() => onSelectRun(run)}
-                            className={`grid grid-cols-[120px_1fr_1fr_140px_40px] gap-0 items-center px-4 py-3 cursor-pointer group transition-colors hover:bg-slate-50 ${idx !== 0 ? 'border-t border-slate-100' : ''}`}
+                            className={`grid grid-cols-[1fr_1fr_140px_90px_100px_40px] gap-0 items-center px-4 py-3 cursor-pointer group transition-colors hover:bg-slate-50 ${idx !== 0 ? 'border-t border-slate-100' : ''}`}
                         >
-                            {/* Status */}
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tighter ${isClosed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                    {run.status}
-                                </span>
-                                {hasWarning && (
-                                    <AlertTriangle size={12} className="text-rose-500 shrink-0" />
-                                )}
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px] font-black uppercase tracking-tighter border border-slate-200">
-                                    {run.type}{run.subtype ? ` · ${run.subtype}` : ''}
-                                </span>
-                            </div>
-
                             {/* Período */}
                             <div className="flex items-center gap-2 min-w-0">
                                 <Calendar className={`w-3.5 h-3.5 shrink-0 ${isClosed ? 'text-emerald-500' : 'text-amber-500'}`} />
@@ -171,7 +170,26 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                             <span className="text-sm font-medium text-slate-600 truncate pr-4">{orgName}</span>
 
                             {/* Valor Total */}
-                            <span className="text-sm font-black text-slate-400 text-right tabular-nums">—</span>
+                            <span className="text-sm font-black text-right tabular-nums pr-2 text-slate-700">
+                                {runTotals[run.id] != null ? fmtBRL(runTotals[run.id]) : <span className="text-slate-300">—</span>}
+                            </span>
+
+                            {/* Tipo */}
+                            <div className="flex justify-center">
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px] font-black uppercase tracking-tighter border border-slate-200">
+                                    {TYPE_LABELS[run.type] ?? run.type}{run.subtype ? ` · ${run.subtype}` : ''}
+                                </span>
+                            </div>
+
+                            {/* Status */}
+                            <div className="flex items-center justify-center gap-1">
+                                <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tighter ${isClosed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                    {run.status}
+                                </span>
+                                {hasWarning && (
+                                    <AlertTriangle size={12} className="text-rose-500 shrink-0" />
+                                )}
+                            </div>
 
                             {/* Ações */}
                             <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -648,6 +648,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           userId={session?.user?.id || ''}
           userName={session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || ''}
           userRole={currentProfile?.role}
+          obras={typedProjects
+            .filter(p => p.settings?.classification === 'OBRA' && p.name !== 'Gestão Comercial')
+            .map(p => ({ id: p.id, name: p.name }))}
         />
       );
 

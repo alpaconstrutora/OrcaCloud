@@ -474,6 +474,21 @@ export const payrollService = {
         return data as FiscalRange[];
     },
 
+    // --- Totais por ciclo (para listagem) ---
+    async getRunsTotals(runIds: string[]): Promise<Record<string, number>> {
+        if (runIds.length === 0) return {};
+        const { data, error } = await supabase
+            .from('payroll_results')
+            .select('payroll_run_id, employer_cost')
+            .in('payroll_run_id', runIds);
+        if (error) throw error;
+        const totals: Record<string, number> = {};
+        for (const row of (data || [])) {
+            totals[row.payroll_run_id] = (totals[row.payroll_run_id] || 0) + (row.employer_cost || 0);
+        }
+        return totals;
+    },
+
     // --- Resultados e Itens ---
     async listResultsByRun(runId: string) {
         const { data, error } = await supabase

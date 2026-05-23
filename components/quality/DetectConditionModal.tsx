@@ -11,15 +11,16 @@ interface Project { id: string; name: string; }
 
 interface Props {
   organizationId: string;
+  obras?: Project[];
   currentActor: ActorReference;
   onClose: () => void;
   onCreated: (conditionId: string) => void;
 }
 
 const DetectConditionModal: React.FC<Props> = ({
-  organizationId, currentActor, onClose, onCreated
+  organizationId, obras: obrasProp, currentActor, onClose, onCreated
 }) => {
-  const [projects, setProjects]          = React.useState<Project[]>([]);
+  const [obras, setObras]                = React.useState<Project[]>(obrasProp ?? []);
   const [systems, setSystems]            = React.useState<TaxonomySystem[]>([]);
   const [pathologies, setPathologies]    = React.useState<TaxonomyPathology[]>([]);
   const [isSubmitting, setIsSubmitting]  = React.useState(false);
@@ -38,15 +39,20 @@ const DetectConditionModal: React.FC<Props> = ({
   const [geoRef, setGeoRef]                   = React.useState<GeolocationCoordinates | null>(null);
 
   React.useEffect(() => {
-    // Load obras from this organization
-    supabase
-      .from('projects')
-      .select('id, name')
-      .filter('settings->>organizationId', 'eq', organizationId)
-      .filter('settings->>classification', 'eq', 'OBRA')
-      .order('name')
-      .then(({ data }) => setProjects(data ?? []));
-
+    // Se a prop vier preenchida usa ela; senão busca do banco (mesmo padrão do ProjectList)
+    const filter = (list: Project[]) => list.filter(p => p.name !== 'Gestão Comercial');
+    if (obrasProp && obrasProp.length > 0) {
+      setObras(filter(obrasProp));
+    } else if (organizationId) {
+      supabase
+        .from('projects')
+        .select('id, name')
+        .or(`settings->>organizationId.eq.${organizationId},settings->>organizationId.is.null`)
+        .filter('settings->>classification', 'eq', 'OBRA')
+        .neq('name', 'Gestão Comercial')
+        .order('name')
+        .then(({ data }) => setObras(data ?? []));
+    }
     qualityConditionService.getTaxonomySystems().then(setSystems).catch(() => {});
   }, [organizationId]);
 
@@ -179,11 +185,11 @@ const DetectConditionModal: React.FC<Props> = ({
                   required
                 >
                   <option value="">Selecionar obra...</option>
-                  {projects.map(p => (
+                  {obras.map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
-                {projects.length === 0 && (
+                {obras.length === 0 && (
                   <p className="text-xs text-amber-600 mt-1">
                     Nenhuma obra encontrada nesta organização.
                   </p>

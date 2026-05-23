@@ -27,6 +27,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
     const [organizations, setOrganizations] = useState<OrganizationItem[]>([]);
     const [results, setResults]         = useState<PayrollResultWithEmployee[]>([]);
     const [runEvents, setRunEvents]     = useState<PayrollEvent[]>([]);
+    const [runTotals, setRunTotals]     = useState<Record<string, number>>({});
 
     // ── UI state ──────────────────────────────────────────────────────────────
     const [loading, setLoading]         = useState(true);
@@ -90,6 +91,12 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                 end,
             );
             setRuns(data);
+            if (data.length > 0) {
+                const totals = await payrollService.getRunsTotals(data.map(r => r.id));
+                setRunTotals(totals);
+            } else {
+                setRunTotals({});
+            }
         } catch (err) {
             console.error(err);
             setLoadError('Não foi possível carregar as folhas de pagamento.');
@@ -310,6 +317,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                     monthFilter={monthFilter}
                     yearFilter={yearFilter}
                     localOrgId={localOrgId}
+                    runTotals={runTotals}
                     onTypeFilter={setTypeFilter}
                     onMonthFilter={setMonthFilter}
                     onYearFilter={setYearFilter}

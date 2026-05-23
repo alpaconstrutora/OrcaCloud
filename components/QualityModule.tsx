@@ -11,11 +11,14 @@ import type {
 import DetectConditionModal from './quality/DetectConditionModal';
 import ConditionDetailPanel from './quality/ConditionDetailPanel';
 
+interface ObraRef { id: string; name: string; }
+
 interface QualityModuleProps {
   organizationId: string;
   userId: string;
   userName: string;
   userRole?: string;
+  obras?: ObraRef[];
 }
 
 // ────────────────────────────────────────────────────────────
@@ -79,7 +82,7 @@ function QualityScoreBar({ score }: { score?: number }) {
 // ────────────────────────────────────────────────────────────
 
 const QualityModule: React.FC<QualityModuleProps> = ({
-  organizationId, userId, userName, userRole
+  organizationId, userId, userName, userRole, obras = []
 }) => {
   const [conditions, setConditions]         = React.useState<ConstructionCondition[]>([]);
   const [isLoading, setIsLoading]           = React.useState(true);
@@ -98,6 +101,11 @@ const QualityModule: React.FC<QualityModuleProps> = ({
   }), [userId, userName, userRole]);
 
   const loadConditions = React.useCallback(async () => {
+    if (!organizationId) {
+      setConditions([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
@@ -271,6 +279,7 @@ const QualityModule: React.FC<QualityModuleProps> = ({
       {isDetectOpen && (
         <DetectConditionModal
           organizationId={organizationId}
+          obras={obras}
           currentActor={currentActor}
           onClose={() => setIsDetectOpen(false)}
           onCreated={(id) => {

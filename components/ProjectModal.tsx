@@ -841,6 +841,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                                         if (p.settings?.classification === 'OBRA' && formData.classification === 'ORCAMENTO') {
                                           const jaVinculado = projects.filter(proj =>
                                             (proj.settings?.classification === 'ORCAMENTO' || !proj.settings?.classification) &&
+                                            !proj.code && !proj.settings?.code &&
                                             (proj.settings?.linkedProjectId === p.id || proj.settings?.linkedProjectName === p.name) &&
                                             proj.id !== initialData?.id
                                           );

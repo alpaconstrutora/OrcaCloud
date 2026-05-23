@@ -256,7 +256,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
     };
 
     const getLinkedBudgets = (obraId: string) => {
-        return projects.filter(p => (p.settings?.linkedProjectId === obraId || p.settings?.linkedProjectName === projects.find(op => op.id === obraId)?.name) && p.settings?.classification !== 'OBRA');
+        const obra = projects.find(op => op.id === obraId);
+        return projects.filter(p =>
+            (p.settings?.linkedProjectId === obraId || p.settings?.linkedProjectName === obra?.name) &&
+            (p.settings?.classification === 'ORCAMENTO' || !p.settings?.classification) &&
+            !p.code && !p.settings?.code
+        );
     };
 
     // Retorna uma Obra com o mesmo cliente que poderia ser vinculada a este Orçamento (sem link atual)

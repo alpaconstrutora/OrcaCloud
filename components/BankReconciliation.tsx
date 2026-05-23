@@ -4,7 +4,7 @@ import {
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
     Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X, Tag,
-    LayoutGrid, List
+    LayoutGrid, List, Users
 } from 'lucide-react';
 import { 
     BankTransaction, 
@@ -1152,6 +1152,63 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         }
     };
 
+    const handleBulkUpdateEntityName = async (type: 'bank' | 'internal', newEntityName: string) => {
+        const ids = Array.from(type === 'bank' ? selectedBankTxIds : selectedInternalTxIds);
+        if (ids.length === 0) return;
+
+        setIsLoading(true);
+        try {
+            const table = type === 'bank' ? 'bank_transactions' : 'internal_transactions';
+
+            const { error } = await supabase
+                .from(table)
+                .update({ entity_name: newEntityName })
+                .in('id', ids);
+
+            if (error) throw error;
+
+            if (type === 'bank') {
+                setBankTransactions(prev => prev.map(tx =>
+                    ids.includes(tx.id) ? { ...tx, entity_name: newEntityName } : tx
+                ));
+                setSelectedBankTxIds(new Set());
+            } else {
+                setInternalTransactions(prev => prev.map(tx =>
+                    ids.includes(tx.id) ? { ...tx, entity_name: newEntityName } : tx
+                ));
+                setSelectedInternalTxIds(new Set());
+            }
+
+            setActionFeedback({ message: `${ids.length} itens atualizados com sucesso!`, type: 'success' });
+            setTimeout(() => setActionFeedback(null), 3000);
+
+            setMatches(prev => prev.map(m => {
+                const bId = m.bank_transaction?.id;
+                const iId = m.internal_transaction?.id;
+                let updatedM = { ...m };
+                let changed = false;
+                if (type === 'bank' && bId && ids.includes(bId)) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    updatedM.bank_transaction = { ...m.bank_transaction, entity_name: newEntityName } as any;
+                    changed = true;
+                }
+                if (type === 'internal' && iId && ids.includes(iId)) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    updatedM.internal_transaction = { ...m.internal_transaction, entity_name: newEntityName } as any;
+                    changed = true;
+                }
+                return changed ? updatedM : m;
+            }));
+
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            console.error(`Error bulk updating ${type} entity_name:`, error);
+            alert(`Erro ao atualizar fornecedor/cliente em lote: ${error.message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleUpdateInternalCategory = async (txId: string, newCategory: string) => {
         try {
             const { error } = await supabase
@@ -2198,6 +2255,63 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                             const sel = document.getElementById('bulk-cat-select') as HTMLSelectElement;
                                             if (!sel?.value) { alert('Selecione uma categoria.'); return; }
                                             handleBulkUpdateCategory('internal', sel.value);
+                                        }}
+                                        className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                                    >
+                                        Internos ({internalCount})
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="w-px h-8 bg-white/20 mx-1" />
+
+                        <div className="flex items-center gap-2">
+                            <div className="relative group">
+                                <Users className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-purple-400 transition-colors" />
+                                <select
+                                    id="bulk-entity-select"
+                                    defaultValue=""
+                                    className="bg-white/10 border border-white/20 text-white text-[11px] font-black pl-9 pr-8 py-2.5 rounded-2xl uppercase tracking-wider cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all appearance-none min-w-[200px] hover:bg-white/20"
+                                >
+                                    <option value="" disabled className="text-gray-900 bg-white">Fornecedor/cliente em lote...</option>
+                                    {uniqueClients.length > 0 && (
+                                        <optgroup label="Clientes" className="text-gray-900 bg-white">
+                                            {uniqueClients.map(c => (
+                                                <option key={`c-${c}`} value={c} className="text-gray-900 bg-white font-bold">{c}</option>
+                                            ))}
+                                        </optgroup>
+                                    )}
+                                    {uniqueSuppliers.length > 0 && (
+                                        <optgroup label="Fornecedores" className="text-gray-900 bg-white">
+                                            {uniqueSuppliers.map(s => (
+                                                <option key={`s-${s}`} value={s} className="text-gray-900 bg-white font-bold">{s}</option>
+                                            ))}
+                                        </optgroup>
+                                    )}
+                                </select>
+                            </div>
+
+                            <div className="flex items-center bg-white/5 p-1 rounded-2xl border border-white/10">
+                                {bankCount > 0 && (
+                                    <button
+                                        onClick={() => {
+                                            const sel = document.getElementById('bulk-entity-select') as HTMLSelectElement;
+                                            if (!sel?.value) { alert('Selecione um fornecedor ou cliente.'); return; }
+                                            handleBulkUpdateEntityName('bank', sel.value);
+                                        }}
+                                        className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                                    >
+                                        Extratos ({bankCount})
+                                    </button>
+                                )}
+                                {bankCount > 0 && internalCount > 0 && <div className="w-px h-4 bg-white/10 mx-1" />}
+                                {internalCount > 0 && (
+                                    <button
+                                        onClick={() => {
+                                            const sel = document.getElementById('bulk-entity-select') as HTMLSelectElement;
+                                            if (!sel?.value) { alert('Selecione um fornecedor ou cliente.'); return; }
+                                            handleBulkUpdateEntityName('internal', sel.value);
                                         }}
                                         className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
                                     >

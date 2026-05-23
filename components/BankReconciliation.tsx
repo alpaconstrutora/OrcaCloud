@@ -107,6 +107,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [rules, setRules] = useState<ReconciliationRule[]>([]);
     const [masterSuppliers, setMasterSuppliers] = useState<string[]>([]);
     const [masterClients, setMasterClients] = useState<string[]>([]);
+    const [masterEmployees, setMasterEmployees] = useState<string[]>([]);
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [stats, setStats] = useState({
         automationRate: 0,
@@ -285,12 +286,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         internalTransactions.filter(tx => tx.direction === 'DEBIT').forEach(tx => {
             if (tx.entity_name) ents.add(tx.entity_name);
         });
-        // Incluir counterparty_names históricos de extratos DEBIT
         bankTransactions.filter(tx => tx.direction === 'DEBIT').forEach(tx => {
             if (tx.counterparty_name) ents.add(tx.counterparty_name);
         });
         return Array.from(ents).sort();
     }, [internalTransactions, bankTransactions, masterSuppliers]);
+
+    // Credores = fornecedores + colaboradores ativos (para extratos de débito)
+    const uniqueCredores = useMemo(() => {
+        const ents = new Set<string>();
+        uniqueSuppliers.forEach(s => ents.add(s));
+        masterEmployees.forEach(e => ents.add(e));
+        return Array.from(ents).sort();
+    }, [uniqueSuppliers, masterEmployees]);
 
     const uniqueBankClients = useMemo(() => {
         const ents = new Set<string>();
@@ -335,6 +343,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         if (effectiveOrgId) {
             loadSuppliers(effectiveOrgId);
             loadClients(effectiveOrgId);
+            loadEmployees(effectiveOrgId);
         }
     }, [effectiveOrgId]);
 
@@ -467,6 +476,20 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             }
         } catch (error) {
             console.error('Error loading master suppliers:', error);
+        }
+    };
+
+    const loadEmployees = async (orgId: string) => {
+        try {
+            const { data } = await supabase
+                .from('employees')
+                .select('name')
+                .eq('org_id', orgId)
+                .eq('status', 'ATIVO')
+                .order('name', { ascending: true });
+            if (data) setMasterEmployees(data.map(e => e.name));
+        } catch (error) {
+            console.error('Error loading employees:', error);
         }
     };
 
@@ -2289,7 +2312,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                     defaultValue=""
                                     className="bg-white/10 border border-white/20 text-white text-[11px] font-black pl-9 pr-8 py-2.5 rounded-2xl uppercase tracking-wider cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all appearance-none min-w-[200px] hover:bg-white/20"
                                 >
-                                    <option value="" disabled className="text-gray-900 bg-white">Fornecedor/cliente em lote...</option>
+                                    <option value="" disabled className="text-gray-900 bg-white">Credor/cliente em lote...</option>
                                     {uniqueClients.length > 0 && (
                                         <optgroup label="Clientes" className="text-gray-900 bg-white">
                                             {uniqueClients.map(c => (
@@ -2297,10 +2320,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                             ))}
                                         </optgroup>
                                     )}
-                                    {uniqueSuppliers.length > 0 && (
-                                        <optgroup label="Fornecedores" className="text-gray-900 bg-white">
-                                            {uniqueSuppliers.map(s => (
-                                                <option key={`s-${s}`} value={s} className="text-gray-900 bg-white font-bold">{s}</option>
+                                    {uniqueCredores.length > 0 && (
+                                        <optgroup label="Credores" className="text-gray-900 bg-white">
+                                            {uniqueCredores.map(s => (
+                                                <option key={`cr-${s}`} value={s} className="text-gray-900 bg-white font-bold">{s}</option>
                                             ))}
                                         </optgroup>
                                     )}
@@ -2854,7 +2877,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         {/* Seletor de Cliente / Fornecedor */}
                                                         <div className="flex flex-col" onClick={(e) => e.stopPropagation()}>
                                                             <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest mb-0.5">
-                                                                {tx.direction === 'DEBIT' ? 'Fornecedor' : 'Cliente'}
+                                                                {tx.direction === 'DEBIT' ? 'Credor' : 'Cliente'}
                                                             </span>
                                                             <select
                                                                 value={tx.counterparty_name || ''}
@@ -2867,10 +2890,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                 }`}
                                                             >
                                                                 <option value="">— selecionar</option>
-                                                                {tx.counterparty_name && ![...uniqueSuppliers, ...uniqueClients, ...uniqueBankClients].includes(tx.counterparty_name) && (
+                                                                {tx.counterparty_name && ![...uniqueCredores, ...uniqueClients, ...uniqueBankClients].includes(tx.counterparty_name) && (
                                                                     <option value={tx.counterparty_name}>{tx.counterparty_name}</option>
                                                                 )}
-                                                                {(tx.direction === 'DEBIT' ? uniqueSuppliers : [...new Set([...uniqueClients, ...uniqueBankClients])].sort()).map(name => (
+                                                                {(tx.direction === 'DEBIT' ? uniqueCredores : [...new Set([...uniqueClients, ...uniqueBankClients])].sort()).map(name => (
                                                                     <option key={name} value={name}>{name}</option>
                                                                 ))}
                                                             </select>

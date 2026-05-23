@@ -281,15 +281,26 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     const uniqueSuppliers = useMemo(() => {
         const ents = new Set<string>();
-        // Adicionar fornecedores cadastrados oficialmente (Master Data)
         masterSuppliers.forEach(s => ents.add(s));
-        
-        // Adicionar fornecedores das transações históricas (Transacional)
         internalTransactions.filter(tx => tx.direction === 'DEBIT').forEach(tx => {
             if (tx.entity_name) ents.add(tx.entity_name);
         });
+        // Incluir counterparty_names históricos de extratos DEBIT
+        bankTransactions.filter(tx => tx.direction === 'DEBIT').forEach(tx => {
+            if (tx.counterparty_name) ents.add(tx.counterparty_name);
+        });
         return Array.from(ents).sort();
-    }, [internalTransactions, masterSuppliers]);
+    }, [internalTransactions, bankTransactions, masterSuppliers]);
+
+    const uniqueBankClients = useMemo(() => {
+        const ents = new Set<string>();
+        masterClients.forEach(c => ents.add(c));
+        // Incluir counterparty_names históricos de extratos CREDIT
+        bankTransactions.filter(tx => tx.direction === 'CREDIT').forEach(tx => {
+            if (tx.counterparty_name) ents.add(tx.counterparty_name);
+        });
+        return Array.from(ents).sort();
+    }, [bankTransactions, masterClients]);
 
     const [showInternalTxModal, setShowInternalTxModal] = useState(false);
     const [actionFeedback, setActionFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null);
@@ -2856,7 +2867,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                 }`}
                                                             >
                                                                 <option value="">— selecionar</option>
-                                                                {(tx.direction === 'DEBIT' ? masterSuppliers : masterClients).map(name => (
+                                                                {(tx.direction === 'DEBIT' ? uniqueSuppliers : uniqueBankClients).map(name => (
                                                                     <option key={name} value={name}>{name}</option>
                                                                 ))}
                                                             </select>

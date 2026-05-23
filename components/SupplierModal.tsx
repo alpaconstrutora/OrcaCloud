@@ -22,105 +22,68 @@ const DEFAULT_CATEGORIES = [
 ];
 
 const ESTADOS_BR = [
-    { sigla: 'AC', nome: 'Acre' },
-    { sigla: 'AL', nome: 'Alagoas' },
-    { sigla: 'AP', nome: 'Amapá' },
-    { sigla: 'AM', nome: 'Amazonas' },
-    { sigla: 'BA', nome: 'Bahia' },
-    { sigla: 'CE', nome: 'Ceará' },
-    { sigla: 'DF', nome: 'Distrito Federal' },
-    { sigla: 'ES', nome: 'Espírito Santo' },
-    { sigla: 'GO', nome: 'Goiás' },
-    { sigla: 'MA', nome: 'Maranhão' },
-    { sigla: 'MT', nome: 'Mato Grosso' },
-    { sigla: 'MS', nome: 'Mato Grosso do Sul' },
-    { sigla: 'MG', nome: 'Minas Gerais' },
-    { sigla: 'PA', nome: 'Pará' },
-    { sigla: 'PB', nome: 'Paraíba' },
-    { sigla: 'PR', nome: 'Paraná' },
-    { sigla: 'PE', nome: 'Pernambuco' },
-    { sigla: 'PI', nome: 'Piauí' },
-    { sigla: 'RJ', nome: 'Rio de Janeiro' },
-    { sigla: 'RN', nome: 'Rio Grande do Norte' },
-    { sigla: 'RS', nome: 'Rio Grande do Sul' },
-    { sigla: 'RO', nome: 'Rondônia' },
-    { sigla: 'RR', nome: 'Roraima' },
-    { sigla: 'SC', nome: 'Santa Catarina' },
-    { sigla: 'SP', nome: 'São Paulo' },
-    { sigla: 'SE', nome: 'Sergipe' },
+    { sigla: 'AC', nome: 'Acre' }, { sigla: 'AL', nome: 'Alagoas' },
+    { sigla: 'AP', nome: 'Amapá' }, { sigla: 'AM', nome: 'Amazonas' },
+    { sigla: 'BA', nome: 'Bahia' }, { sigla: 'CE', nome: 'Ceará' },
+    { sigla: 'DF', nome: 'Distrito Federal' }, { sigla: 'ES', nome: 'Espírito Santo' },
+    { sigla: 'GO', nome: 'Goiás' }, { sigla: 'MA', nome: 'Maranhão' },
+    { sigla: 'MT', nome: 'Mato Grosso' }, { sigla: 'MS', nome: 'Mato Grosso do Sul' },
+    { sigla: 'MG', nome: 'Minas Gerais' }, { sigla: 'PA', nome: 'Pará' },
+    { sigla: 'PB', nome: 'Paraíba' }, { sigla: 'PR', nome: 'Paraná' },
+    { sigla: 'PE', nome: 'Pernambuco' }, { sigla: 'PI', nome: 'Piauí' },
+    { sigla: 'RJ', nome: 'Rio de Janeiro' }, { sigla: 'RN', nome: 'Rio Grande do Norte' },
+    { sigla: 'RS', nome: 'Rio Grande do Sul' }, { sigla: 'RO', nome: 'Rondônia' },
+    { sigla: 'RR', nome: 'Roraima' }, { sigla: 'SC', nome: 'Santa Catarina' },
+    { sigla: 'SP', nome: 'São Paulo' }, { sigla: 'SE', nome: 'Sergipe' },
     { sigla: 'TO', nome: 'Tocantins' },
 ];
 
 function maskCNPJ(value: string): string {
-    const digits = value.replace(/\D/g, '').slice(0, 14);
-    return digits
-        .replace(/^(\d{2})(\d)/, '$1.$2')
-        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-        .replace(/\.(\d{3})(\d)/, '.$1/$2')
-        .replace(/(\d{4})(\d)/, '$1-$2');
+    const d = value.replace(/\D/g, '').slice(0, 14);
+    return d.replace(/^(\d{2})(\d)/, '$1.$2')
+            .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+            .replace(/\.(\d{3})(\d)/, '.$1/$2')
+            .replace(/(\d{4})(\d)/, '$1-$2');
 }
 
 function maskCPF(value: string): string {
-    const digits = value.replace(/\D/g, '').slice(0, 11);
-    return digits
-        .replace(/^(\d{3})(\d)/, '$1.$2')
-        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
-        .replace(/\.(\d{3})(\d)/, '.$1-$2');
+    const d = value.replace(/\D/g, '').slice(0, 11);
+    return d.replace(/^(\d{3})(\d)/, '$1.$2')
+            .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+            .replace(/\.(\d{3})(\d)/, '.$1-$2');
 }
+
+const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all bg-white';
+const inputWithIconCls = 'pl-9 ' + inputCls;
+const labelCls = 'block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1';
 
 export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
     const { activeOrganizationId } = useStore();
     const [dynamicCategories, setDynamicCategories] = React.useState<string[]>(DEFAULT_CATEGORIES);
     const [organizations, setOrganizations] = React.useState<Organization[]>([]);
-    const [formData, setFormData] = React.useState<Omit<Supplier, 'id' | 'created_at'>>({
-        name: '',
-        contact_name: '',
-        email: '',
-        phone: '',
-        document: '',
-        type: 'PJ',
-        category: DEFAULT_CATEGORIES[0],
-        street: '',
-        number: '',
-        neighborhood: '',
-        address: '',
-        city: '',
-        state: '',
-        organization_id: null
+
+    const emptyForm = (): Omit<Supplier, 'id' | 'created_at'> => ({
+        name: '', contact_name: '', email: '', phone: '', document: '',
+        type: 'PJ', category: DEFAULT_CATEGORIES[0],
+        street: '', number: '', neighborhood: '', address: '', city: '', state: '',
+        organization_id: activeOrganizationId || null
     });
 
+    const [formData, setFormData] = React.useState(emptyForm());
+    const set = (patch: Partial<typeof formData>) => setFormData(f => ({ ...f, ...patch }));
+
     const handleDocumentChange = (value: string) => {
-        const masked = formData.type === 'PJ' ? maskCNPJ(value) : maskCPF(value);
-        setFormData({ ...formData, document: masked });
-    };
-
-    const handleTypeChange = (type: 'PF' | 'PJ') => {
-        setFormData({ ...formData, type, document: '' });
-    };
-
-    const loadCategories = async () => {
-        try {
-            const cats = await supplierCategoryService.listCategories(activeOrganizationId || undefined);
-            setDynamicCategories(cats.length > 0 ? cats.map(c => c.name) : DEFAULT_CATEGORIES);
-        } catch {
-            setDynamicCategories(DEFAULT_CATEGORIES);
-        }
-    };
-
-    const loadOrganizations = async () => {
-        try {
-            const orgs = await organizationService.listOrganizations();
-            setOrganizations(orgs);
-        } catch {
-            setOrganizations([]);
-        }
+        set({ document: formData.type === 'PJ' ? maskCNPJ(value) : maskCPF(value) });
     };
 
     React.useEffect(() => {
-        if (isOpen) {
-            loadCategories();
-            loadOrganizations();
-        }
+        if (!isOpen) return;
+        supplierCategoryService.listCategories(activeOrganizationId || undefined)
+            .then(cats => setDynamicCategories(cats.length > 0 ? cats.map(c => c.name) : DEFAULT_CATEGORIES))
+            .catch(() => setDynamicCategories(DEFAULT_CATEGORIES));
+        organizationService.listOrganizations()
+            .then(setOrganizations)
+            .catch(() => setOrganizations([]));
     }, [isOpen, activeOrganizationId]);
 
     React.useEffect(() => {
@@ -132,7 +95,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 phone: initialData.phone || '',
                 document: initialData.document || '',
                 type: initialData.type,
-                category: initialData.category || 'Materiais de Construção',
+                category: initialData.category || DEFAULT_CATEGORIES[0],
                 street: initialData.street || initialData.address || '',
                 number: initialData.number || '',
                 neighborhood: initialData.neighborhood || '',
@@ -142,114 +105,106 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 organization_id: initialData.organization_id || null
             });
         } else {
-            setFormData({
-                name: '',
-                contact_name: '',
-                email: '',
-                phone: '',
-                document: '',
-                type: 'PJ',
-                category: 'Materiais de Construção',
-                street: '',
-                number: '',
-                neighborhood: '',
-                address: '',
-                city: '',
-                state: '',
-                organization_id: activeOrganizationId || null
-            });
+            setFormData(emptyForm());
         }
     }, [initialData, isOpen, activeOrganizationId]);
 
     if (!isOpen) return null;
 
-    const docPlaceholder = formData.type === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00';
-    const docLabel = formData.type === 'PJ' ? 'CNPJ' : 'CPF';
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const payload = {
+        onSubmit({
             ...formData,
             address: [formData.street, formData.number, formData.neighborhood].filter(Boolean).join(', ')
-        };
-        onSubmit(payload);
+        });
     };
 
+    const docLabel = formData.type === 'PJ' ? 'CNPJ' : 'CPF';
+    const docPlaceholder = formData.type === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00';
+
     return (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-12">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}></div>
-            <div className="relative bg-white rounded-[2.5rem] shadow-2xl w-full h-full flex flex-col animate-in fade-in zoom-in-95 duration-300 overflow-hidden border border-gray-200">
-                <div className="flex justify-between items-center px-12 py-8 border-b border-gray-100 bg-gray-50/50 shrink-0">
+        <div className="fixed inset-0 z-50 flex">
+            {/* Overlay */}
+            <div
+                className="flex-1 bg-black/30 backdrop-blur-sm"
+                onClick={onClose}
+            />
+
+            {/* Painel lateral direito */}
+            <div className="w-[480px] h-full bg-white rounded-l-[2rem] shadow-2xl flex flex-col overflow-hidden border-l border-gray-100 animate-in slide-in-from-right duration-300">
+
+                {/* Header */}
+                <div className="flex items-center justify-between px-7 py-5 border-b border-gray-100 bg-gray-50/60 shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-blue-50 rounded-2xl text-blue-600 shadow-sm shadow-blue-100">
-                            <Truck className="w-6 h-6" />
+                        <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
+                            <Truck className="w-5 h-5" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-black text-gray-900 leading-none">
+                            <h2 className="text-base font-black text-gray-900 leading-none">
                                 {initialData ? 'Editar Registro' : 'Novo Fornecedor'}
                             </h2>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Gestão de Parceiros</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Gestão de Parceiros</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-white hover:shadow-md border border-transparent hover:border-gray-100 rounded-full transition-all duration-200">
-                        <X className="w-5 h-5 text-gray-400" />
+                    <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-all">
+                        <X className="w-4 h-4 text-gray-400" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-12 space-y-6">
+                {/* Formulário */}
+                <form id="supplier-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-7 py-5 space-y-4">
 
-                    {/* Razão Social / Nome */}
-                    <div className="space-y-1.5">
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Razão Social / Nome</label>
-                        <div className="relative group">
-                            <Truck className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    {/* Razão Social */}
+                    <div>
+                        <label className={labelCls}>Razão Social / Nome *</label>
+                        <div className="relative">
+                            <Truck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                             <input
-                                type="text"
-                                required
+                                type="text" required
                                 placeholder="Ex: Alpa Construtora Ltda"
-                                className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
+                                className={inputWithIconCls}
                                 value={formData.name}
-                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                onChange={e => set({ name: e.target.value })}
                             />
                         </div>
                     </div>
 
                     {/* Nome do Contato */}
-                    <div className="space-y-1.5">
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Nome do Contato</label>
-                        <div className="relative group">
-                            <User className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <div>
+                        <label className={labelCls}>Nome do Contato</label>
+                        <div className="relative">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                             <input
                                 type="text"
                                 placeholder="Ex: João da Silva"
-                                className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
+                                className={inputWithIconCls}
                                 value={formData.contact_name}
-                                onChange={e => setFormData({ ...formData, contact_name: e.target.value })}
+                                onChange={e => set({ contact_name: e.target.value })}
                             />
                         </div>
                     </div>
 
                     {/* Tipo + Documento */}
-                    <div className="grid grid-cols-2 gap-5">
-                        <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Tipo Identificação</label>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className={labelCls}>Tipo</label>
                             <select
-                                className="w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-white font-bold text-gray-700 appearance-none cursor-pointer"
+                                className={inputCls + ' cursor-pointer'}
                                 value={formData.type}
-                                onChange={e => handleTypeChange(e.target.value as 'PF' | 'PJ')}
+                                onChange={e => set({ type: e.target.value as 'PF' | 'PJ', document: '' })}
                             >
                                 <option value="PJ">🏢 Pessoa Jurídica</option>
                                 <option value="PF">👤 Pessoa Física</option>
                             </select>
                         </div>
-                        <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">{docLabel}</label>
-                            <div className="relative group">
-                                <FileText className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        <div>
+                            <label className={labelCls}>{docLabel}</label>
+                            <div className="relative">
+                                <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                 <input
                                     type="text"
                                     placeholder={docPlaceholder}
-                                    className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-mono font-bold text-gray-900"
+                                    className={inputWithIconCls + ' font-mono'}
                                     value={formData.document}
                                     onChange={e => handleDocumentChange(e.target.value)}
                                 />
@@ -257,154 +212,159 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                         </div>
                     </div>
 
-                    {/* Categoria */}
-                    <div className="space-y-1.5">
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Categoria de Atuação</label>
-                        <div className="relative group">
-                            <Tag className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                            <select
-                                className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-white font-bold text-gray-700 appearance-none cursor-pointer"
-                                value={formData.category}
-                                onChange={e => setFormData({ ...formData, category: e.target.value })}
-                            >
-                                {dynamicCategories.map(cat => (
-                                    <option key={cat} value={cat}>{cat}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Organização */}
-                    <div className="space-y-1.5">
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Organização</label>
-                        <div className="relative group">
-                            <Building2 className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                            <select
-                                className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-white font-bold text-gray-700 appearance-none cursor-pointer"
-                                value={formData.organization_id || ''}
-                                onChange={e => setFormData({ ...formData, organization_id: e.target.value ? e.target.value : null })}
-                            >
-                                <option value="">🌐 Todas as Organizações</option>
-                                {organizations.map(org => (
-                                    <option key={org.id} value={org.id}>{org.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
                     {/* E-mail + Telefone */}
-                    <div className="grid grid-cols-2 gap-5">
-                        <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">E-mail Comercial</label>
-                            <div className="relative group">
-                                <Mail className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className={labelCls}>E-mail</label>
+                            <div className="relative">
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                 <input
                                     type="email"
                                     placeholder="comercial@empresa.com"
-                                    className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
+                                    className={inputWithIconCls}
                                     value={formData.email}
-                                    onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                    onChange={e => set({ email: e.target.value })}
                                 />
                             </div>
                         </div>
-                        <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">WhatsApp / Telefone</label>
-                            <div className="relative group">
-                                <Phone className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        <div>
+                            <label className={labelCls}>WhatsApp / Telefone</label>
+                            <div className="relative">
+                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                 <input
                                     type="text"
                                     placeholder="(00) 0 0000-0000"
-                                    className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
+                                    className={inputWithIconCls}
                                     value={formData.phone}
-                                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                    onChange={e => set({ phone: e.target.value })}
                                 />
                             </div>
                         </div>
                     </div>
 
-                    {/* Endereço: Rua */}
-                    <div className="space-y-1.5">
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Rua / Logradouro</label>
-                        <div className="relative group">
-                            <MapPin className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                            <input
-                                type="text"
-                                placeholder="Rua Exemplo"
-                                className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
-                                value={formData.street}
-                                onChange={e => setFormData({ ...formData, street: e.target.value })}
-                            />
+                    {/* Categoria + Organização */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className={labelCls}>Categoria</label>
+                            <div className="relative">
+                                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                                <select
+                                    className={inputWithIconCls + ' cursor-pointer'}
+                                    value={formData.category}
+                                    onChange={e => set({ category: e.target.value })}
+                                >
+                                    {dynamicCategories.map(cat => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label className={labelCls}>Organização</label>
+                            <div className="relative">
+                                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                                <select
+                                    className={inputWithIconCls + ' cursor-pointer'}
+                                    value={formData.organization_id || ''}
+                                    onChange={e => set({ organization_id: e.target.value || null })}
+                                >
+                                    <option value="">🌐 Todas</option>
+                                    {organizations.map(org => (
+                                        <option key={org.id} value={org.id}>{org.name}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                     </div>
 
+                    {/* Divisor endereço */}
+                    <div className="flex items-center gap-2 pt-1">
+                        <MapPin className="w-3.5 h-3.5 text-gray-300" />
+                        <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Endereço</span>
+                        <div className="flex-1 h-px bg-gray-100" />
+                    </div>
+
+                    {/* Rua */}
+                    <div>
+                        <label className={labelCls}>Rua / Logradouro</label>
+                        <input
+                            type="text"
+                            placeholder="Rua Exemplo"
+                            className={inputCls}
+                            value={formData.street}
+                            onChange={e => set({ street: e.target.value })}
+                        />
+                    </div>
+
                     {/* Número + Bairro */}
-                    <div className="grid grid-cols-2 gap-5">
-                        <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Número</label>
+                    <div className="grid grid-cols-5 gap-3">
+                        <div className="col-span-2">
+                            <label className={labelCls}>Número</label>
                             <input
                                 type="text"
-                                placeholder="123 ou S/N"
-                                className="w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
+                                placeholder="123 / S/N"
+                                className={inputCls}
                                 value={formData.number}
-                                onChange={e => setFormData({ ...formData, number: e.target.value })}
+                                onChange={e => set({ number: e.target.value })}
                             />
                         </div>
-                        <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Bairro</label>
+                        <div className="col-span-3">
+                            <label className={labelCls}>Bairro</label>
                             <input
                                 type="text"
                                 placeholder="Centro"
-                                className="w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
+                                className={inputCls}
                                 value={formData.neighborhood}
-                                onChange={e => setFormData({ ...formData, neighborhood: e.target.value })}
+                                onChange={e => set({ neighborhood: e.target.value })}
                             />
                         </div>
                     </div>
 
                     {/* Cidade + UF */}
-                    <div className="grid grid-cols-2 gap-5">
-                        <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Cidade</label>
+                    <div className="grid grid-cols-5 gap-3">
+                        <div className="col-span-3">
+                            <label className={labelCls}>Cidade</label>
                             <input
                                 type="text"
                                 placeholder="São Paulo"
-                                className="w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
+                                className={inputCls}
                                 value={formData.city}
-                                onChange={e => setFormData({ ...formData, city: e.target.value })}
+                                onChange={e => set({ city: e.target.value })}
                             />
                         </div>
-                        <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Estado (UF)</label>
+                        <div className="col-span-2">
+                            <label className={labelCls}>Estado (UF)</label>
                             <select
-                                className="w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-white font-bold text-gray-700 appearance-none cursor-pointer"
+                                className={inputCls + ' cursor-pointer'}
                                 value={formData.state}
-                                onChange={e => setFormData({ ...formData, state: e.target.value })}
+                                onChange={e => set({ state: e.target.value })}
                             >
-                                <option value="">Selecione</option>
-                                {ESTADOS_BR.map(estado => (
-                                    <option key={estado.sigla} value={estado.sigla}>{estado.sigla} — {estado.nome}</option>
+                                <option value="">UF</option>
+                                {ESTADOS_BR.map(e => (
+                                    <option key={e.sigla} value={e.sigla}>{e.sigla} — {e.nome}</option>
                                 ))}
                             </select>
                         </div>
                     </div>
-
-                    {/* Botões */}
-                    <div className="flex gap-4 pt-6">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 px-6 py-4 border-2 border-transparent text-gray-400 hover:text-gray-600 font-bold text-sm transition-all"
-                        >
-                            Descartar
-                        </button>
-                        <button
-                            type="submit"
-                            className="flex-[2] px-6 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 hover:shadow-blue-200 font-black text-sm uppercase tracking-widest active:scale-95"
-                        >
-                            {initialData ? 'Confirmar Ajustes' : 'Efetuar Cadastro'}
-                        </button>
-                    </div>
                 </form>
+
+                {/* Footer fixo com botões */}
+                <div className="shrink-0 flex gap-3 px-7 py-4 border-t border-gray-100 bg-gray-50/60">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex-1 px-4 py-2.5 text-sm font-bold text-gray-400 hover:text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
+                    >
+                        Descartar
+                    </button>
+                    <button
+                        type="submit"
+                        form="supplier-form"
+                        className="flex-[2] px-4 py-2.5 bg-gray-900 text-white text-sm rounded-xl hover:bg-blue-600 transition-all shadow-lg font-black uppercase tracking-widest active:scale-95"
+                    >
+                        {initialData ? 'Confirmar Ajustes' : 'Efetuar Cadastro'}
+                    </button>
+                </div>
             </div>
         </div>
     );

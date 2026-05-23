@@ -1245,6 +1245,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                 step="any"
                                 value={form.quantity}
                                 onChange={(e) => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))}
+                                onFocus={(e) => e.target.select()}
                                 className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                             />
                         </div>

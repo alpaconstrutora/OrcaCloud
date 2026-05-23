@@ -74,6 +74,7 @@ const App: React.FC = () => {
 
   const [isImportModalOpenPlanning, setIsImportModalOpenPlanning] = React.useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = React.useState(false);
+  const [ordersVersion, setOrdersVersion] = React.useState(0);
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(
     localStorage.getItem('app_selected_order_id')
   );
@@ -261,6 +262,7 @@ const App: React.FC = () => {
         setEditingContract={setEditingContract}
         isCreatingOrder={isCreatingOrder}
         setIsCreatingOrder={setIsCreatingOrder}
+        ordersVersion={ordersVersion}
         isCreatingQuotation={isCreatingQuotation}
         setIsCreatingQuotation={setIsCreatingQuotation}
         isCreatingContract={isCreatingContract}
@@ -322,7 +324,7 @@ const App: React.FC = () => {
       {isCreatingOrder && (
         <SupplyChainOrderForm
           onBack={() => { setIsCreatingOrder(false); setEditingOrderId(null); }}
-          onSave={() => { setIsCreatingOrder(false); setEditingOrderId(null); }}
+          onSave={() => { setIsCreatingOrder(false); setEditingOrderId(null); setOrdersVersion(v => v + 1); }}
           editingOrderId={editingOrderId}
         />
       )}

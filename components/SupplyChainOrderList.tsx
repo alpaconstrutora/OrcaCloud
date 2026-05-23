@@ -8,9 +8,10 @@ interface SupplyChainOrderListProps {
     onCreateNew: () => void;
     onViewDetails: (orderId: string) => void;
     onViewLogistics: (orderId: string) => void;
+    version?: number;
 }
 
-const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew, onViewDetails, onViewLogistics }) => {
+const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew, onViewDetails, onViewLogistics, version }) => {
     const [orders, setOrders] = React.useState<any[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [sortBy, setSortBy] = React.useState<string>('date-desc');
@@ -42,7 +43,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             }
         })();
         return () => { cancelled = true; };
-    }, []);
+    }, [version]);
 
     const loadOrders = async () => {
         try {

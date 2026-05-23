@@ -94,6 +94,7 @@ export interface AppRouterProps {
   setEditingContract: (contract: Contract | null) => void;
   isCreatingOrder: boolean;
   setIsCreatingOrder: (val: boolean) => void;
+  ordersVersion: number;
   isCreatingQuotation: boolean;
   setIsCreatingQuotation: (val: boolean) => void;
   isCreatingContract: boolean;
@@ -140,7 +141,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     pendingSupplierOrderViewMode, setPendingSupplierOrderViewMode,
     selectedQuotationId, setSelectedQuotationId, editingQuotationId, setEditingQuotationId,
     selectedContractId, setSelectedContractId, editingContract, setEditingContract,
-    isCreatingOrder, setIsCreatingOrder, isCreatingQuotation, setIsCreatingQuotation,
+    isCreatingOrder, setIsCreatingOrder, ordersVersion, isCreatingQuotation, setIsCreatingQuotation,
     isCreatingContract, setIsCreatingContract,
     isImportModalOpenPlanning, setIsImportModalOpenPlanning,
     isCreatingImovibStudy, setIsCreatingImovibStudy,
@@ -438,6 +439,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onCreateNew={() => setIsCreatingOrder(true)}
           onViewDetails={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('details'); }}
           onViewLogistics={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('logistics'); }}
+          version={ordersVersion}
         />
       );
 

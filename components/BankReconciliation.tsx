@@ -530,10 +530,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
             // --- PONTE COMERCIAL (VARREDURA TOTAL DE PROJETOS) ---
             try {
+                const orgForProj = effectiveOrgId || organizationId;
+                if (!orgForProj) throw new Error('organization_id ausente');
                 const { data: allProjData } = await supabase
                     .from('projects')
                     .select('id, name, settings, organization_id')
-                    .eq('organization_id', organizationId);
+                    .eq('organization_id', orgForProj);
 
                 if (allProjData && allProjData.length > 0) {
                     let commercialMatches: CommercialMatch[] = [];

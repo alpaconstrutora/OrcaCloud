@@ -108,6 +108,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [masterSuppliers, setMasterSuppliers] = useState<string[]>([]);
     const [masterClients, setMasterClients] = useState<string[]>([]);
     const [masterEmployees, setMasterEmployees] = useState<string[]>([]);
+    const [managedCategories, setManagedCategories] = useState<string[]>([]);
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [stats, setStats] = useState({
         automationRate: 0,
@@ -239,19 +240,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         });
     }, [matches, matchSortOrder, flowFilter]);
 
-    const uniqueCategories = useMemo(() => {
-        const cats = new Set<string>();
-        rules.forEach(r => {
-            if (r.actions?.category) cats.add(r.actions.category);
-        });
-        bankTransactions.forEach(tx => {
-            if (tx.category) cats.add(tx.category);
-        });
-        internalTransactions.forEach(tx => {
-            if (tx.category) cats.add(tx.category);
-        });
-        return Array.from(cats).sort();
-    }, [rules, bankTransactions, internalTransactions]);
+    // Fonte de verdade: financial_categories. O useMemo abaixo é apenas um alias ordenado.
+    const uniqueCategories = useMemo(() => [...managedCategories].sort(), [managedCategories]);
 
     const getLocalDateISO = () => {
         const now = new Date();
@@ -345,6 +335,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             loadSuppliers(effectiveOrgId);
             loadClients(effectiveOrgId);
             loadEmployees(effectiveOrgId);
+            loadManagedCategories(effectiveOrgId);
         }
     }, [effectiveOrgId]);
 
@@ -477,6 +468,41 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             }
         } catch (error) {
             console.error('Error loading master suppliers:', error);
+        }
+    };
+
+    const loadManagedCategories = async (orgId: string) => {
+        try {
+            const { data, error } = await supabase
+                .from('financial_categories')
+                .select('name')
+                .eq('organization_id', orgId)
+                .order('name', { ascending: true });
+            if (error) throw error;
+            if (data && data.length > 0) {
+                setManagedCategories(data.map(c => c.name));
+            } else {
+                // Seed inicial: coletar categorias existentes em regras e transações
+                const { data: ruleCats } = await supabase
+                    .from('reconciliation_rules')
+                    .select('actions')
+                    .eq('organization_id', orgId);
+                const { data: intCats } = await supabase
+                    .from('internal_transactions')
+                    .select('category')
+                    .eq('organization_id', orgId)
+                    .not('category', 'is', null);
+                const cats = new Set<string>();
+                ruleCats?.forEach((r: { actions?: { category?: string } }) => { if (r.actions?.category) cats.add(r.actions.category); });
+                intCats?.forEach((t: { category?: string }) => { if (t.category) cats.add(t.category); });
+                if (cats.size > 0) {
+                    const rows = Array.from(cats).map(name => ({ organization_id: orgId, name }));
+                    await supabase.from('financial_categories').upsert(rows, { onConflict: 'organization_id,name' });
+                    setManagedCategories(Array.from(cats).sort());
+                }
+            }
+        } catch (error) {
+            console.error('Error loading financial categories:', error);
         }
     };
 
@@ -1375,56 +1401,76 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     };
 
     // Mocks for initial visual state if empty
+    const handleAddCategory = async (name: string) => {
+        const orgId = effectiveOrgId || organizationId;
+        if (!name.trim() || !orgId) return;
+        try {
+            const { error } = await supabase
+                .from('financial_categories')
+                .insert({ organization_id: orgId, name: name.trim() });
+            if (error) throw error;
+            setManagedCategories(prev => [...prev, name.trim()].sort());
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
+            alert('Erro ao adicionar categoria: ' + msg);
+        }
+    };
+
     const handleRenameCategory = async (oldName: string, newName: string) => {
         if (!newName || oldName === newName) return;
+        const orgId = effectiveOrgId || organizationId;
         setIsLoading(true);
         try {
-            // 1. Atualizar regras
+            // 1. Atualizar tabela mestra
+            const { error: catErr } = await supabase
+                .from('financial_categories')
+                .update({ name: newName })
+                .eq('organization_id', orgId)
+                .eq('name', oldName);
+            if (catErr) throw catErr;
+
+            // 2. Propagar para regras
             const rulesToUpdate = rules.filter(r => r.actions?.category === oldName);
             for (const rule of rulesToUpdate) {
-                const { error } = await supabase
+                await supabase
                     .from('reconciliation_rules')
                     .update({ actions: { ...rule.actions, category: newName } })
                     .eq('id', rule.id);
-                if (error) throw error;
             }
 
-            // 2. Atualizar transações internas manuais
+            // 3. Propagar para transações internas
             await supabase
                 .from('internal_transactions')
                 .update({ category: newName })
-                .eq('organization_id', effectiveOrgId || organizationId)
+                .eq('organization_id', orgId)
                 .eq('category', oldName);
 
+            setManagedCategories(prev => prev.map(c => c === oldName ? newName : c).sort());
             await loadRules();
             await loadTransactions();
-            alert(`Categoria renomeada de "${oldName}" para "${newName}"`);
         } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.error('Error renaming category:', error);
-            alert('Erro ao renomear categoria: ' + error.message);
+            const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
+            alert('Erro ao renomear categoria: ' + msg);
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleDeleteCategory = async (catName: string) => {
-        if (!confirm(`Deseja realmente excluir a categoria "${catName}"? As regras associadas ficarão sem categoria definida.`)) return;
+        if (!confirm(`Deseja realmente excluir "${catName}" da lista de categorias? As transações que usam essa categoria não serão alteradas.`)) return;
+        const orgId = effectiveOrgId || organizationId;
         setIsLoading(true);
         try {
-            const rulesToUpdate = rules.filter(r => r.actions?.category === catName);
-            for (const rule of rulesToUpdate) {
-                const { error } = await supabase
-                    .from('reconciliation_rules')
-                    .update({ actions: { ...rule.actions, category: '' } })
-                    .eq('id', rule.id);
-                if (error) throw error;
-            }
-            await loadRules();
-            await loadTransactions();
+            const { error } = await supabase
+                .from('financial_categories')
+                .delete()
+                .eq('organization_id', orgId)
+                .eq('name', catName);
+            if (error) throw error;
+            setManagedCategories(prev => prev.filter(c => c !== catName));
         } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            alert('Erro ao excluir categoria: ' + error.message);
+            const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
+            alert('Erro ao excluir categoria: ' + msg);
         } finally {
             setIsLoading(false);
         }
@@ -1433,29 +1479,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const handleDuplicateCategory = async (catName: string) => {
         const newName = prompt('Novo nome para a categoria duplicada:', `${catName} (Cópia)`);
         if (!newName) return;
-
-        setIsLoading(true);
-        try {
-            const rulesToDuplicate = rules.filter(r => r.actions?.category === catName);
-            for (const rule of rulesToDuplicate) {
-                const { id, created_at, ...ruleData } = rule;
-                const { error } = await supabase
-                    .from('reconciliation_rules')
-                    .insert({
-                        ...ruleData,
-                        name: `${rule.name} (Cópia)`,
-                        actions: { ...rule.actions, category: newName }
-                    });
-                if (error) throw error;
-            }
-            await loadRules();
-            alert(`Categoria "${catName}" e suas regras foram duplicadas para "${newName}"`);
-        } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            alert('Erro ao duplicar: ' + error.message);
-        } finally {
-            setIsLoading(false);
-        }
+        await handleAddCategory(newName);
     };
 
     const renderCategories = () => (
@@ -1482,7 +1506,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                             <LayoutGrid className="w-4 h-4" />
                         </button>
                     </div>
-                    <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase">{uniqueCategories.length} Categorias em uso</span>
+                    <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase">{uniqueCategories.length} Categorias</span>
+                    <button
+                        onClick={() => {
+                            const name = prompt('Nome da nova categoria:');
+                            if (name) handleAddCategory(name);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        Nova categoria
+                    </button>
                 </div>
             </div>
 

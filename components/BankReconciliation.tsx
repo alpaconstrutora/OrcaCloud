@@ -534,8 +534,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 if (!orgForProj) throw new Error('organization_id ausente');
                 const { data: allProjData } = await supabase
                     .from('projects')
-                    .select('id, name, settings, organization_id')
-                    .eq('organization_id', orgForProj);
+                    .select('id, name, settings')
+                    .filter('settings->>organizationId', 'eq', orgForProj);
 
                 if (allProjData && allProjData.length > 0) {
                     let commercialMatches: CommercialMatch[] = [];

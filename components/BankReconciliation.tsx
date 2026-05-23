@@ -471,6 +471,23 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         }
     };
 
+    const syncCategoriesFromTransactions = async (orgId: string) => {
+        const [{ data: ruleCats }, { data: intCats }, { data: bankCats }] = await Promise.all([
+            supabase.from('reconciliation_rules').select('actions').eq('organization_id', orgId),
+            supabase.from('internal_transactions').select('category').eq('organization_id', orgId).not('category', 'is', null),
+            supabase.from('bank_transactions').select('category').eq('organization_id', orgId).not('category', 'is', null),
+        ]);
+        const cats = new Set<string>();
+        ruleCats?.forEach((r: { actions?: { category?: string } }) => { if (r.actions?.category) cats.add(r.actions.category); });
+        intCats?.forEach((t: { category?: string }) => { if (t.category) cats.add(t.category); });
+        bankCats?.forEach((t: { category?: string }) => { if (t.category) cats.add(t.category); });
+        if (cats.size > 0) {
+            const rows = Array.from(cats).map(name => ({ organization_id: orgId, name }));
+            await supabase.from('financial_categories').upsert(rows, { onConflict: 'organization_id,name' });
+        }
+        return cats;
+    };
+
     const loadManagedCategories = async (orgId: string) => {
         try {
             const { data, error } = await supabase
@@ -482,27 +499,28 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             if (data && data.length > 0) {
                 setManagedCategories(data.map(c => c.name));
             } else {
-                // Seed inicial: coletar categorias existentes em regras e transações
-                const { data: ruleCats } = await supabase
-                    .from('reconciliation_rules')
-                    .select('actions')
-                    .eq('organization_id', orgId);
-                const { data: intCats } = await supabase
-                    .from('internal_transactions')
-                    .select('category')
-                    .eq('organization_id', orgId)
-                    .not('category', 'is', null);
-                const cats = new Set<string>();
-                ruleCats?.forEach((r: { actions?: { category?: string } }) => { if (r.actions?.category) cats.add(r.actions.category); });
-                intCats?.forEach((t: { category?: string }) => { if (t.category) cats.add(t.category); });
-                if (cats.size > 0) {
-                    const rows = Array.from(cats).map(name => ({ organization_id: orgId, name }));
-                    await supabase.from('financial_categories').upsert(rows, { onConflict: 'organization_id,name' });
-                    setManagedCategories(Array.from(cats).sort());
-                }
+                // Seed inicial: todas as fontes
+                const cats = await syncCategoriesFromTransactions(orgId);
+                setManagedCategories(Array.from(cats).sort());
             }
         } catch (error) {
             console.error('Error loading financial categories:', error);
+        }
+    };
+
+    const handleSyncCategories = async () => {
+        const orgId = effectiveOrgId || organizationId;
+        if (!orgId) return;
+        setIsLoading(true);
+        try {
+            await syncCategoriesFromTransactions(orgId);
+            await loadManagedCategories(orgId);
+            setActionFeedback({ message: 'Categorias sincronizadas com sucesso!', type: 'success' });
+            setTimeout(() => setActionFeedback(null), 3000);
+        } catch (err) {
+            console.error('Error syncing categories:', err);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -1507,6 +1525,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                         </button>
                     </div>
                     <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase">{uniqueCategories.length} Categorias</span>
+                    <button
+                        onClick={handleSyncCategories}
+                        disabled={isLoading}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all"
+                        title="Importar categorias já usadas em transações e regras"
+                    >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        Sincronizar
+                    </button>
                     <button
                         onClick={() => {
                             const name = prompt('Nome da nova categoria:');

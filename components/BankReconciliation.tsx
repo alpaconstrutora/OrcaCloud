@@ -518,7 +518,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     };
 
     const handleSyncCategories = async () => {
-        const orgId = organizationId;
+        const orgId = organizationId || effectiveOrgId;
         if (!orgId) return;
         setIsLoading(true);
         try {
@@ -1429,7 +1429,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     // Mocks for initial visual state if empty
     const handleAddCategory = async (name: string) => {
-        const orgId = organizationId;
+        const orgId = organizationId || effectiveOrgId;
         if (!name.trim() || !orgId) return;
         try {
             const { error } = await supabase
@@ -1445,7 +1445,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     const handleRenameCategory = async (oldName: string, newName: string) => {
         if (!newName || oldName === newName) return;
-        const orgId = organizationId;
+        const orgId = organizationId || effectiveOrgId;
         setIsLoading(true);
         try {
             // 1. Atualizar tabela mestra
@@ -1485,7 +1485,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     const handleDeleteCategory = async (catName: string) => {
         if (!confirm(`Deseja realmente excluir "${catName}" da lista de categorias? As transações que usam essa categoria não serão alteradas.`)) return;
-        const orgId = organizationId;
+        const orgId = organizationId || effectiveOrgId;
         setIsLoading(true);
         try {
             const { error } = await supabase

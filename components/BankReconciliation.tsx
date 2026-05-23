@@ -446,7 +446,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             const { data } = await supabase
                 .from('clients')
                 .select('name')
-                .eq('organization_id', orgId)
+                .or(`organization_id.eq.${orgId},organization_id.is.null`)
                 .order('name', { ascending: true });
             if (data) setMasterClients(data.map(c => c.name));
         } catch (error) {

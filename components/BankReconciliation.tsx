@@ -2867,7 +2867,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                 }`}
                                                             >
                                                                 <option value="">— selecionar</option>
-                                                                {(tx.direction === 'DEBIT' ? uniqueSuppliers : uniqueBankClients).map(name => (
+                                                                {tx.counterparty_name && ![...uniqueSuppliers, ...uniqueClients, ...uniqueBankClients].includes(tx.counterparty_name) && (
+                                                                    <option value={tx.counterparty_name}>{tx.counterparty_name}</option>
+                                                                )}
+                                                                {(tx.direction === 'DEBIT' ? uniqueSuppliers : [...new Set([...uniqueClients, ...uniqueBankClients])].sort()).map(name => (
                                                                     <option key={name} value={name}>{name}</option>
                                                                 ))}
                                                             </select>

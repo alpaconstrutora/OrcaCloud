@@ -63,7 +63,7 @@ export function FiscalModule() {
 
   if (!activeOrganizationId) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: '#0d0f12', color: '#8b92a4' }}>
+      <div className="flex items-center justify-center h-full text-gray-400 text-sm">
         Selecione uma organização para acessar o módulo fiscal.
       </div>
     );
@@ -73,87 +73,77 @@ export function FiscalModule() {
     <>
       <style dangerouslySetInnerHTML={{ __html: FISCAL_CSS }} />
       <div className="fiscal-root">
-        {/* Sidebar */}
-        <div className="f-sidebar">
-          <div className="f-logo">
-            <div className="f-logo-mark">Orça<span>Cloud</span></div>
-            <div className="f-logo-sub">Módulo Fiscal</div>
-          </div>
-
-          <nav className="f-nav">
-            <div className="f-nav-section">Pipeline NF-e</div>
-            {nav.map(n => (
-              <div
-                key={n.id}
-                className={`f-nav-item ${page === n.id ? 'active' : ''}`}
-                onClick={() => setPage(n.id)}
-              >
-                {n.icon} {n.label}
-              </div>
-            ))}
-          </nav>
-
-          <div className="f-sidebar-footer">
-            <div className="f-health-card">
-              <div className="f-health-title">Pipeline health</div>
-              <div className="f-health-row">
-                <span className="f-health-label">Taxa sucesso</span>
-                <span className="f-health-val" style={{ color: rate >= 80 ? 'var(--fgreen)' : rate >= 50 ? 'var(--famber)' : 'var(--fred)' }}>
-                  {health ? `${rate}%` : '—'}
-                </span>
-              </div>
-              <div className="f-health-row">
-                <span className="f-health-label">Dead letter</span>
-                <span className="f-health-val" style={{ color: (health?.dead_letter ?? 0) > 0 ? 'var(--fred)' : 'var(--fgreen)' }}>
-                  {health?.dead_letter ?? '—'}
-                </span>
-              </div>
-              <div className="f-health-row">
-                <span className="f-health-label">Na fila</span>
-                <span className="f-health-val" style={{ color: 'var(--ftext2)' }}>
-                  {health?.queued ?? '—'}
-                </span>
+        <div className="f-main">
+          {/* Header */}
+          <div className="f-module-header">
+            <div className="f-module-title-row">
+              <div>
+                <h1 className="f-module-title">Módulo Fiscal</h1>
+                <p className="f-module-sub">Pipeline de NF-e e classificação de documentos</p>
               </div>
               {health && (
-                <div className="f-progress-bar" style={{ marginTop: 8 }}>
-                  <div
-                    className="f-progress-fill"
-                    style={{ width: `${rate}%`, background: rate >= 80 ? 'var(--fgreen)' : 'var(--famber)' }}
-                  />
+                <div className="f-health-chips">
+                  <span className="f-health-chip">
+                    <span className="f-health-chip-dot" style={{ background: rate >= 80 ? 'var(--fgreen)' : rate >= 50 ? 'var(--famber)' : 'var(--fred)' }} />
+                    Sucesso {rate}%
+                  </span>
+                  {(health.dead_letter ?? 0) > 0 && (
+                    <span className="f-health-chip f-health-chip-warn">
+                      ⚠ {health.dead_letter} dead letter
+                    </span>
+                  )}
+                  {(health.queued ?? 0) > 0 && (
+                    <span className="f-health-chip">
+                      {health.queued} na fila
+                    </span>
+                  )}
                 </div>
               )}
             </div>
-          </div>
-        </div>
 
-        {/* Main content */}
-        <div className="f-main">
-          {page === 'upload' && (
-            <FiscalUpload
-              organizationId={activeOrganizationId}
-              userId={session?.user?.id ?? ''}
-              onToast={showToast}
-              onNavigate={setPage}
-            />
-          )}
-          {page === 'documents' && (
-            <FiscalDocuments
-              organizationId={activeOrganizationId}
-              onToast={showToast}
-            />
-          )}
-          {page === 'admin' && (
-            <FiscalJobs
-              organizationId={activeOrganizationId}
-              onToast={showToast}
-            />
-          )}
-          {page === 'rules' && (
-            <FiscalRules
-              organizationId={activeOrganizationId}
-              onToast={showToast}
-            />
-          )}
+            {/* Tabs */}
+            <div className="f-tabs">
+              {nav.map(n => (
+                <button
+                  key={n.id}
+                  className={`f-tab ${page === n.id ? 'active' : ''}`}
+                  onClick={() => setPage(n.id)}
+                >
+                  {n.icon} {n.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="f-tab-content">
+            {page === 'upload' && (
+              <FiscalUpload
+                organizationId={activeOrganizationId}
+                userId={session?.user?.id ?? ''}
+                onToast={showToast}
+                onNavigate={setPage}
+              />
+            )}
+            {page === 'documents' && (
+              <FiscalDocuments
+                organizationId={activeOrganizationId}
+                onToast={showToast}
+              />
+            )}
+            {page === 'admin' && (
+              <FiscalJobs
+                organizationId={activeOrganizationId}
+                onToast={showToast}
+              />
+            )}
+            {page === 'rules' && (
+              <FiscalRules
+                organizationId={activeOrganizationId}
+                onToast={showToast}
+              />
+            )}
+          </div>
         </div>
       </div>
 

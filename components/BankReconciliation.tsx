@@ -491,8 +491,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         intCats?.forEach((t: { category?: string }) => { if (t.category) cats.add(t.category); });
         bankCats?.forEach((t: { category?: string }) => { if (t.category) cats.add(t.category); });
         if (cats.size > 0) {
-            const rows = Array.from(cats).map(name => ({ organization_id: orgId, name }));
-            await supabase.from('financial_categories').upsert(rows, { onConflict: 'organization_id,name' });
+            const rows = Array.from(cats).map(name => ({ name }));
+            await supabase.from('financial_categories').upsert(rows, { onConflict: 'name' });
         }
         return cats;
     };
@@ -502,13 +502,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             const { data, error } = await supabase
                 .from('financial_categories')
                 .select('name')
-                .eq('organization_id', orgId)
                 .order('name', { ascending: true });
             if (error) throw error;
             if (data && data.length > 0) {
                 setManagedCategories(data.map(c => c.name));
             } else {
-                // Seed inicial: todas as fontes
+                // Seed inicial: todas as fontes da org atual
                 const cats = await syncCategoriesFromTransactions(orgId);
                 setManagedCategories(Array.from(cats).sort());
             }
@@ -1429,12 +1428,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     // Mocks for initial visual state if empty
     const handleAddCategory = async (name: string) => {
-        const orgId = organizationId || effectiveOrgId;
-        if (!name.trim() || !orgId) return;
+        if (!name.trim()) return;
         try {
             const { error } = await supabase
                 .from('financial_categories')
-                .insert({ organization_id: orgId, name: name.trim() });
+                .insert({ name: name.trim() });
             if (error) throw error;
             setManagedCategories(prev => [...prev, name.trim()].sort());
         } catch (err: unknown) {
@@ -1452,7 +1450,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             const { error: catErr } = await supabase
                 .from('financial_categories')
                 .update({ name: newName })
-                .eq('organization_id', orgId)
                 .eq('name', oldName);
             if (catErr) throw catErr;
 
@@ -1491,7 +1488,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             const { error } = await supabase
                 .from('financial_categories')
                 .delete()
-                .eq('organization_id', orgId)
                 .eq('name', catName);
             if (error) throw error;
             setManagedCategories(prev => prev.filter(c => c !== catName));

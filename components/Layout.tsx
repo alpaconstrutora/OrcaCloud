@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -36,9 +36,65 @@ const Layout: React.FC<LayoutProps> = ({
 }) => {
   const { logout } = useStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-  const [isDarkMode, setIsDarkMode] = React.useState(true); // Default to dark for sidebar aesthetic
+  const [isDarkMode, setIsDarkMode] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem('sidebar_theme');
+    return stored ? stored === 'dark' : true;
+  });
+  React.useEffect(() => {
+    localStorage.setItem('sidebar_theme', isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
+
+  const t = isDarkMode
+    ? {
+        shell: 'bg-[#1a1a1a] text-white border-white/5',
+        searchWrap: 'bg-[#262626] border-transparent focus-within:border-white/10',
+        searchText: 'text-gray-200 placeholder:text-gray-500',
+        searchIcon: 'text-gray-500',
+        itemText: 'text-gray-300',
+        itemHover: 'hover:text-white hover:bg-white/5',
+        itemActive: 'bg-white/10 text-white',
+        itemIcon: 'text-gray-400 group-hover:text-gray-200',
+        itemIconActive: 'text-white',
+        groupLabel: 'text-gray-500',
+        divider: 'bg-white/5',
+        dropdownBorder: 'border-white/5',
+        dropdownGroupLabel: 'text-gray-600',
+        footerBorder: 'border-white/5',
+        userName: 'text-white',
+        userEmail: 'text-gray-500',
+        signOut: 'text-gray-400 hover:text-white hover:bg-white/5',
+        toggleTrack: 'bg-orange-500',
+        badgeBgRing: 'border-[#1a1a1a]',
+        sunIcon: 'text-gray-500',
+        moonIcon: 'text-orange-400',
+      }
+    : {
+        shell: 'bg-white text-gray-800 border-gray-200',
+        searchWrap: 'bg-gray-100 border-transparent focus-within:border-gray-300',
+        searchText: 'text-gray-800 placeholder:text-gray-400',
+        searchIcon: 'text-gray-400',
+        itemText: 'text-gray-700',
+        itemHover: 'hover:text-gray-900 hover:bg-gray-100',
+        itemActive: 'bg-gray-200/70 text-gray-900',
+        itemIcon: 'text-gray-500 group-hover:text-gray-700',
+        itemIconActive: 'text-gray-900',
+        groupLabel: 'text-gray-400',
+        divider: 'bg-gray-200',
+        dropdownBorder: 'border-gray-200',
+        dropdownGroupLabel: 'text-gray-400',
+        footerBorder: 'border-gray-200',
+        userName: 'text-gray-900',
+        userEmail: 'text-gray-500',
+        signOut: 'text-gray-500 hover:text-gray-900 hover:bg-gray-100',
+        toggleTrack: 'bg-orange-500',
+        badgeBgRing: 'border-white',
+        sunIcon: 'text-orange-400',
+        moonIcon: 'text-gray-400',
+      };
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
   React.useEffect(() => { if (activeView.startsWith('labor-')) setIsLaborOpen(true); }, [activeView]);
   const [unreadCount, setUnreadCount] = React.useState(0);
@@ -112,35 +168,33 @@ const Layout: React.FC<LayoutProps> = ({
           }
           setIsMobileMenuOpen(false);
         }}
-        className={`flex items-center w-full py-2.5 text-sm font-semibold transition-all duration-200 rounded-xl mb-1 group relative
-          ${isActive
-            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-            : 'text-gray-400 hover:text-white hover:bg-white/5'}
-          ${effectivelyCollapsed ? 'justify-center px-0' : 'justify-between px-4'}`}
+        className={`flex items-center w-full py-2 text-sm font-medium transition-colors duration-150 rounded-lg mb-0.5 group relative
+          ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}
+          ${effectivelyCollapsed ? 'justify-center px-0' : 'justify-between px-3'}`}
         title={effectivelyCollapsed ? label : undefined}
       >
         <div className={`flex items-center ${effectivelyCollapsed ? 'justify-center' : ''}`}>
-          <Icon className={`w-5 h-5 transition-colors ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-blue-400'} ${!effectivelyCollapsed ? 'mr-3' : ''}`} />
+          <Icon className={`w-4 h-4 transition-colors ${isActive ? t.itemIconActive : t.itemIcon} ${!effectivelyCollapsed ? 'mr-3' : ''}`} strokeWidth={2} />
           {!effectivelyCollapsed && <span>{label}</span>}
         </div>
         {!effectivelyCollapsed && badge !== undefined && (
-          <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${isActive ? 'bg-white text-blue-600' : 'bg-blue-600/20 text-blue-400'}`}>
+          <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500/20 text-orange-500'}`}>
             {badge}
           </span>
         )}
         {effectivelyCollapsed && badge !== undefined && (
-          <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full border-2 border-[#0B1727]" />
+          <div className={`absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full border-2 ${t.badgeBgRing}`} />
         )}
       </button>
     );
   };
 
   const NavGroup = ({ label, forceFull }: { label: string, forceFull?: boolean }) => {
-    if (isCollapsed && !forceFull) return <div className="h-px bg-white/5 my-4 mx-4" />;
+    if (isCollapsed && !forceFull) return <div className={`h-px ${t.divider} my-4 mx-4`} />;
 
     return (
-      <div className="px-4 mt-6 mb-2">
-        <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{label}</span>
+      <div className="px-3 mt-4 mb-1.5">
+        <span className={`text-[11px] font-semibold uppercase tracking-wider ${t.groupLabel}`}>{label}</span>
       </div>
     );
   };
@@ -150,15 +204,12 @@ const Layout: React.FC<LayoutProps> = ({
       <div className="mb-1">
         <button
           onClick={onToggle}
-          className={`flex items-center w-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 rounded-xl justify-between group
-            ${hasActiveChild
-              ? 'text-white bg-white/8 hover:bg-white/10'
-              : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }
+          className={`flex items-center w-full px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-lg justify-between group
+            ${hasActiveChild ? t.itemActive : `${t.itemText} ${t.itemHover}`}
             ${isCollapsed ? 'justify-center' : ''}`}
         >
           <div className="flex items-center">
-            <Icon className={`w-5 h-5 mr-3 transition-colors ${hasActiveChild ? 'text-blue-400' : 'text-gray-500 group-hover:text-blue-400'} ${isCollapsed ? 'mr-0' : ''}`} />
+            <Icon className={`w-4 h-4 mr-3 transition-colors ${hasActiveChild ? t.itemIconActive : t.itemIcon} ${isCollapsed ? 'mr-0' : ''}`} strokeWidth={2} />
             {!isCollapsed && <span>{label}</span>}
           </div>
           {!isCollapsed && (
@@ -166,7 +217,7 @@ const Layout: React.FC<LayoutProps> = ({
           )}
         </button>
         {isOpen && !isCollapsed && (
-          <div className="mt-1 ml-4 pl-4 border-l border-white/5 space-y-0.5">
+          <div className={`mt-1 ml-4 pl-4 border-l ${t.dropdownBorder} space-y-0.5`}>
             {children}
           </div>
         )}
@@ -179,13 +230,13 @@ const Layout: React.FC<LayoutProps> = ({
     return (
       <button
         onClick={() => { onChangeView(id); setIsMobileMenuOpen(false); }}
-        className={`flex items-center w-full px-4 py-2 text-xs font-bold transition-all duration-200 rounded-lg
-          ${isActive ? 'text-blue-400 bg-blue-400/10' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+        className={`flex items-center w-full px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-lg
+          ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}`}
       >
-        {Icon && <Icon className="w-3.5 h-3.5 mr-2 shrink-0" />}
+        {Icon && <Icon className="w-4 h-4 mr-3 shrink-0" strokeWidth={2} />}
         <span className="flex-1 text-left">{label}</span>
         {badge !== undefined && badge > 0 && (
-          <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-black ml-1 ${isActive ? 'bg-blue-400/20 text-blue-300' : 'bg-red-500/80 text-white'}`}>{badge}</span>
+          <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ml-1 ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500 text-white'}`}>{badge}</span>
         )}
       </button>
     );
@@ -193,38 +244,49 @@ const Layout: React.FC<LayoutProps> = ({
 
   const DropdownGroupLabel = ({ label }: { label: string }) => (
     <div className="px-4 pt-3 pb-1">
-      <span className="text-[9px] font-black text-gray-600 uppercase tracking-[0.15em]">{label}</span>
+      <span className={`text-[9px] font-black uppercase tracking-[0.15em] ${t.dropdownGroupLabel}`}>{label}</span>
     </div>
   );
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans relative">
       {/* Sidebar - Desktop */}
-      <aside className={`hidden md:flex flex-col bg-[#0B1727] text-white border-r border-white/5 shadow-2xl relative z-20 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-72'}`}>
+      <aside className={`hidden md:flex flex-col border-r shadow-2xl relative z-20 transition-all duration-300 ease-in-out ${t.shell} ${isCollapsed ? 'w-20' : 'w-72'}`}>
         {/* Collapse Toggle */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3 top-10 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-30"
+          className="absolute -right-3 top-10 w-6 h-6 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-30"
         >
           {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
 
         {/* Header Logo */}
-        <div className={`flex items-center h-20 relative overflow-hidden group ${isCollapsed ? 'justify-center' : 'px-8'}`}>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          <div className={`bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 relative z-10 transition-all duration-300 group-hover:scale-110 ${isCollapsed ? 'w-10 h-10' : 'w-10 h-10 mr-3'}`}>
-            <Building2 className="w-6 h-6 text-white" />
+        <div className={`flex items-center h-16 relative overflow-hidden ${isCollapsed ? 'justify-center' : 'px-4 pt-4'}`}>
+          <div className={`bg-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20 relative z-10 ${isCollapsed ? 'w-9 h-9' : 'w-8 h-8 mr-2.5'}`}>
+            <Building2 className="w-5 h-5 text-white" strokeWidth={2.5} />
           </div>
           {!isCollapsed && (
-            <div className="flex flex-col relative z-10 text-nowrap">
-              <span className="text-xl font-black tracking-tight text-white leading-none">OrçaCloud</span>
-              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mt-1">SaaS Pro</span>
-            </div>
+            <span className={`text-base font-semibold tracking-tight ${t.userName}`}>OrçaCloud</span>
           )}
         </div>
 
+        {/* Search */}
+        {!isCollapsed && (
+          <div className="px-3 pt-3 pb-2">
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${t.searchWrap}`}>
+              <Search className={`w-4 h-4 ${t.searchIcon}`} strokeWidth={2} />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={`flex-1 bg-transparent outline-none text-sm ${t.searchText}`}
+                placeholder="Buscar..."
+              />
+            </div>
+          </div>
+        )}
+
         {/* Navigation */}
-        <nav className={`flex-1 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-4'} py-4`}>
+        <nav className={`flex-1 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-3'} py-2`}>
           {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR') && (
             <>
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
@@ -371,36 +433,66 @@ const Layout: React.FC<LayoutProps> = ({
           )}
 
           <NavGroup label="Sistema" />
+          <NavItem id="notifications-center" icon={Bell} label="Notificações" badge={unreadCount > 0 ? unreadCount : undefined} />
           <NavItem id="settings" icon={Settings} label="Configurações" />
         </nav>
 
-        {/* Footer Actions */}
-        <div className={`p-6 bg-black/20 border-t border-white/5 space-y-4 ${isCollapsed ? 'p-2' : ''}`}>
-          {!isCollapsed && (
-            <div className="flex items-center justify-between px-2">
-              <div className="flex items-center gap-3">
-                <Sun className={`w-4 h-4 transition-colors ${!isDarkMode ? 'text-blue-400' : 'text-gray-500'}`} />
-                <span className="text-xs font-bold text-gray-400">Modo Escuro</span>
+        {/* Footer - User profile */}
+        <div className={`border-t ${t.footerBorder} ${isCollapsed ? 'p-2' : 'px-3 py-3'}`}>
+          {isCollapsed ? (
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-200 to-amber-500" />
+              <button
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className={`p-2 rounded-lg transition-colors ${t.signOut}`}
+                title={isDarkMode ? 'Tema claro' : 'Tema escuro'}
+              >
+                {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={() => supabase.auth.signOut().finally(() => logout())}
+                className={`p-2 rounded-lg transition-colors ${t.signOut}`}
+                title="Sair"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-200 to-amber-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-semibold truncate ${t.userName}`}>
+                      {profile.email?.split('@')[0] ?? 'Usuário'}
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-orange-500 text-white px-1.5 py-0.5 rounded">PRO</span>
+                  </div>
+                  <div className={`text-xs truncate ${t.userEmail}`}>{profile.email ?? profile.role}</div>
+                </div>
+                <button
+                  onClick={() => supabase.auth.signOut().finally(() => logout())}
+                  className={`p-2 rounded-lg transition-colors shrink-0 ${t.signOut}`}
+                  title="Sair"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
               <button
                 onClick={() => setIsDarkMode(!isDarkMode)}
-                className={`w-10 h-5 rounded-full relative transition-colors duration-300 focus:outline-none ${isDarkMode ? 'bg-blue-600' : 'bg-gray-700'}`}
+                className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition-colors ${t.signOut}`}
+                title="Alternar tema"
               >
-                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all duration-300 ${isDarkMode ? 'left-6' : 'left-1'}`} />
+                <span className="flex items-center gap-2 text-xs font-medium">
+                  {isDarkMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                  {isDarkMode ? 'Tema escuro' : 'Tema claro'}
+                </span>
+                <span className={`w-8 h-4 rounded-full relative transition-colors ${t.toggleTrack}`}>
+                  <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isDarkMode ? 'left-4' : 'left-0.5'}`} />
+                </span>
               </button>
-            </div>
+            </>
           )}
-
-          <button
-            onClick={() => {
-              supabase.auth.signOut().finally(() => logout());
-            }}
-            className={`w-full group flex items-center justify-center gap-3 p-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl transition-all duration-300 border border-white/5 hover:border-white/10 ${isCollapsed ? 'px-0 py-4' : ''}`}
-            title={isCollapsed ? "Sair da Conta" : undefined}
-          >
-            <LogOut className={`w-4 h-4 transition-transform group-hover:-translate-x-1 ${isCollapsed ? 'w-5 h-5' : ''}`} />
-            {!isCollapsed && <span className="text-sm font-black uppercase tracking-widest">Sair da Conta</span>}
-          </button>
         </div>
       </aside>
 
@@ -408,17 +500,17 @@ const Layout: React.FC<LayoutProps> = ({
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setIsMobileMenuOpen(false)}></div>
-          <aside className="relative flex flex-col w-72 bg-[#0B1727] h-full shadow-2xl animate-in slide-in-from-left duration-300">
-            <div className="flex items-center justify-between h-20 px-8 border-b border-white/5">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <Building2 className="w-5 h-5 text-white" />
+          <aside className={`relative flex flex-col w-72 h-full shadow-2xl animate-in slide-in-from-left duration-300 ${t.shell}`}>
+            <div className={`flex items-center justify-between h-16 px-4 border-b ${t.footerBorder}`}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+                  <Building2 className="w-5 h-5 text-white" strokeWidth={2.5} />
                 </div>
-                <span className="text-lg font-black text-white">OrçaCloud</span>
+                <span className={`text-base font-semibold ${t.userName}`}>OrçaCloud</span>
               </div>
               <button
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="p-2 text-gray-400 hover:text-white transition-colors"
+                className={`p-2 transition-colors ${t.signOut}`}
               >
                 <X className="w-6 h-6" />
               </button>

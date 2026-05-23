@@ -115,22 +115,23 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     return (
         <div className="space-y-8">
             {/* Header with Global Tabs */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm gap-6">
-                <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center p-3 shadow-lg shadow-blue-500/20">
+            <div className="flex flex-col md:flex-row md:items-center justify-between bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-lg gap-6 relative overflow-hidden">
+                <div className="absolute inset-y-0 right-0 w-1/2 opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle at right, rgba(96,165,250,0.4) 0%, transparent 60%)' }} />
+                <div className="flex items-center gap-4 relative">
+                    <div className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center p-3 shadow-lg shadow-blue-500/30">
                         <Building2 className="w-6 h-6" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Minha Organização</h1>
-                        <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">
-                            {activeOrganizationId 
-                                ? `Filtro Ativo: ${organizations.find(o => o.id === activeOrganizationId)?.name}` 
+                        <h1 className="text-2xl font-black text-white tracking-tight uppercase">Minha Organização</h1>
+                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                            {activeOrganizationId
+                                ? `Filtro Ativo: ${organizations.find(o => o.id === activeOrganizationId)?.name}`
                                 : 'Visão Consolidada Global'}
                         </p>
                     </div>
                 </div>
-                
-                <div className="flex bg-gray-50 p-1.5 rounded-2xl border border-gray-100 overflow-x-auto scrollbar-hide max-w-full">
+
+                <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide max-w-full relative">
                     {[
                         { id: 'organizations', label: 'Empresas', icon: Building2 },
                         { id: 'projects', label: 'Projetos', icon: Briefcase },
@@ -141,21 +142,19 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         { id: 'accounts', label: 'Contas', icon: Building2 },
                         { id: 'cost_centers', label: 'Centros', icon: Filter },
                         { id: 'chart_of_accounts', label: 'Plano', icon: HandCoins }
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => {
-                                // If switching away from organizations, and no organization is active,
-                                // we might want to keep the current view or prompt.
-                                // But for now, just change the tab.
-                                onTabChange(tab.id);
-                            }}
-                            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-lg shadow-blue-100' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            <tab.icon className="w-4 h-4" />
-                            {tab.label}
-                        </button>
-                    ))}
+                    ].map(tab => {
+                        const isActive = activeTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => onTabChange(tab.id)}
+                                className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${isActive ? 'bg-slate-700/80 text-white shadow-inner ring-1 ring-white/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
+                            >
+                                <tab.icon className="w-4 h-4" />
+                                {tab.label}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 

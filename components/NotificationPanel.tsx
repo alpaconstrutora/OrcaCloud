@@ -203,12 +203,19 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ email, onClose, o
                 )}
             </div>
 
-            <div className="p-4 border-t border-gray-50 bg-gray-50/30 text-center">
+            <div className="p-4 border-t border-gray-50 bg-gray-50/30 flex items-center justify-between">
                 <button
                     onClick={loadNotifications}
-                    className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-700 transition-colors"
+                    className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors"
                 >
-                    Atualizar Lista
+                    Atualizar
+                </button>
+                <button
+                    onClick={() => { onNavigate?.('notifications-center'); onClose(); }}
+                    className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors flex items-center gap-1"
+                >
+                    Ver todas
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                 </button>
             </div>
         </div>

@@ -53,6 +53,7 @@ import BoletoManager from './BoletoManager';
 import ContasPagarManager from './ContasPagarManager';
 import { FiscalModule } from './fiscal/FiscalModule';
 import OperacionalModule from './OperacionalModule';
+import NotificationsCenter from './NotificationsCenter';
 
 export interface AppRouterProps {
   activeView: string;
@@ -521,6 +522,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onViewStudy={(id: string) => setViewingImovibStudyId(id)}
         />
       );
+
+    case 'notifications-center':
+      return <NotificationsCenter profile={currentProfile} onNavigate={handleNavigate} />;
 
     case 'settings':
       return <Settings />;

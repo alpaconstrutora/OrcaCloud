@@ -324,6 +324,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
+    const [competencia, setCompetencia] = useState<string>('');
     const [selectedBankTxId, setSelectedBankTxId] = useState<string | null>(null);
 
     // Determina a organização efetiva (da prop ou da conta selecionada)
@@ -2122,28 +2123,63 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                         </button>
                     </div>
 
+                    {/* Filtro de competência mensal */}
+                    <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
+                        <div className="flex flex-col">
+                            <label className="text-[8px] font-black text-indigo-400 uppercase ml-1 mb-0.5">Competência</label>
+                            <input
+                                type="month"
+                                value={competencia}
+                                onChange={(e) => {
+                                    const val = e.target.value; // "YYYY-MM"
+                                    setCompetencia(val);
+                                    if (val) {
+                                        const [y, m] = val.split('-').map(Number);
+                                        const lastDay = new Date(y, m, 0).getDate();
+                                        setStartDate(`${val}-01`);
+                                        setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
+                                    } else {
+                                        setStartDate('');
+                                        setEndDate('');
+                                    }
+                                }}
+                                className="bg-transparent border-none text-[10px] font-black text-indigo-700 focus:ring-0 p-0"
+                            />
+                        </div>
+                        {competencia && (
+                            <button
+                                onClick={() => { setCompetencia(''); setStartDate(''); setEndDate(''); }}
+                                className="p-1.5 text-indigo-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                title="Limpar competência"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Filtro de período livre */}
                     <div className="flex gap-2 items-center bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
                         <div className="flex flex-col">
                             <label className="text-[8px] font-black text-gray-400 uppercase ml-1 mb-0.5">Início</label>
-                            <input 
+                            <input
                                 type="date"
                                 value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
+                                onChange={(e) => { setStartDate(e.target.value); setCompetencia(''); }}
                                 className="bg-transparent border-none text-[10px] font-black text-gray-900 focus:ring-0 p-0 uppercase"
                             />
                         </div>
                         <div className="w-[1px] h-6 bg-gray-200 mx-1" />
                         <div className="flex flex-col">
                             <label className="text-[8px] font-black text-gray-400 uppercase ml-1 mb-0.5">Fim</label>
-                            <input 
+                            <input
                                 type="date"
                                 value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
+                                onChange={(e) => { setEndDate(e.target.value); setCompetencia(''); }}
                                 className="bg-transparent border-none text-[10px] font-black text-gray-900 focus:ring-0 p-0 uppercase"
                             />
                         </div>
-                        {(startDate || endDate) && (
-                            <button 
+                        {(startDate || endDate) && !competencia && (
+                            <button
                                 onClick={() => { setStartDate(''); setEndDate(''); }}
                                 className="ml-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                                 title="Limpar Filtros"

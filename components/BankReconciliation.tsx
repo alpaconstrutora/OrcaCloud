@@ -328,6 +328,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     useEffect(() => {
         loadAccounts();
         loadRules();
+        // Categorias são org-globais: carregam uma vez com a org da prop
+        if (organizationId) loadManagedCategories(organizationId);
     }, [organizationId]);
 
     useEffect(() => {
@@ -335,7 +337,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             loadSuppliers(effectiveOrgId);
             loadClients(effectiveOrgId);
             loadEmployees(effectiveOrgId);
-            loadManagedCategories(effectiveOrgId);
         }
     }, [effectiveOrgId]);
 
@@ -509,7 +510,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     };
 
     const handleSyncCategories = async () => {
-        const orgId = effectiveOrgId || organizationId;
+        const orgId = organizationId;
         if (!orgId) return;
         setIsLoading(true);
         try {
@@ -1420,7 +1421,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     // Mocks for initial visual state if empty
     const handleAddCategory = async (name: string) => {
-        const orgId = effectiveOrgId || organizationId;
+        const orgId = organizationId;
         if (!name.trim() || !orgId) return;
         try {
             const { error } = await supabase
@@ -1436,7 +1437,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     const handleRenameCategory = async (oldName: string, newName: string) => {
         if (!newName || oldName === newName) return;
-        const orgId = effectiveOrgId || organizationId;
+        const orgId = organizationId;
         setIsLoading(true);
         try {
             // 1. Atualizar tabela mestra
@@ -1476,7 +1477,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     const handleDeleteCategory = async (catName: string) => {
         if (!confirm(`Deseja realmente excluir "${catName}" da lista de categorias? As transações que usam essa categoria não serão alteradas.`)) return;
-        const orgId = effectiveOrgId || organizationId;
+        const orgId = organizationId;
         setIsLoading(true);
         try {
             const { error } = await supabase

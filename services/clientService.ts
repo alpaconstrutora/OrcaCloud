@@ -50,26 +50,20 @@ const mapToDbClient = (client: Partial<Client>): DbClientRow => {
 
 export const clientService = {
     async listClients(organizationId?: string) {
-        // Obter campos. Usamos '*' temporariamente para evitar erro 42703 se organization_id não existir ainda
         let query = supabase
             .from('clients')
-            .select('*');
-        
+            .select('*, organizations:organization_id(name)');
+
         if (organizationId) {
-            // Se organizationId for fornecido, tentamos filtrar. 
-            // Nota: Se a coluna não existir, o Supabase retornará erro aqui também.
             query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
         }
 
         let { data, error } = await query.order('name', { ascending: true });
-        
-        // Se houver erro de coluna inexistente (42703) e estávamos filtrando, tentamos sem o filtro
+
+        // Fallback se a coluna organization_id ainda não existir no banco
         if (error && error.code === '42703' && organizationId) {
             console.warn("[CLIENT SERVICE] organization_id column missing, falling back to global list.");
-            const retry = await supabase
-                .from('clients')
-                .select('*')
-                .order('name', { ascending: true });
+            const retry = await supabase.from('clients').select('*').order('name', { ascending: true });
             data = retry.data;
             error = retry.error;
         }
@@ -78,7 +72,13 @@ export const clientService = {
             console.error("Supabase Error on listClients:", error);
             throw error;
         }
-        return (data || []).map(mapToFrontendClient);
+
+        return (data || []).map((row: any) => ({
+            ...mapToFrontendClient(row),
+            organization_name: row.organization_id
+                ? (row.organizations?.name || null)
+                : 'Todas as Organizações'
+        }));
     },
 
     async saveClient(client: Partial<Client>) {

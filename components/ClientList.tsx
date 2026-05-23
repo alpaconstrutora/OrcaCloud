@@ -187,6 +187,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 <tr>
                                     <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Cliente</th>
                                     <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Tipo</th>
+                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Organização</th>
                                     <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Contato</th>
                                     <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Documento</th>
                                     <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Obra Vinculada</th>
@@ -213,6 +214,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                         'bg-gray-50 text-gray-400 border-gray-100'
                                                 }`}>
                                                 {client.category || 'Não definido'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="text-xs font-semibold text-gray-700">
+                                                {client.organization_name || '-'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
@@ -343,6 +349,10 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                             </div>
                                         )}
                                         <div className="flex items-center justify-between text-[11px] pt-2">
+                                            <span className="text-gray-400 uppercase tracking-widest font-bold">Organização</span>
+                                            <span className="text-gray-900 font-semibold">{client.organization_name || '-'}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[11px]">
                                             <span className="text-gray-400 uppercase tracking-widest font-bold">Documento</span>
                                             <span className="text-gray-900 font-bold bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{client.document || '-'}</span>
                                         </div>

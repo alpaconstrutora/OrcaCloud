@@ -22,6 +22,7 @@ export interface Client {
     city?: string;
     state?: string;
     category?: 'Vendas' | 'Locação' | 'Serviços';
+    organization_name?: string;
     organization_id?: string;
     created_at?: string;
     clientDocuments?: {

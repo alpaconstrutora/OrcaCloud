@@ -23,6 +23,7 @@ interface BankReconciliationProps {
 
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const categoriesLoadedForOrg = useRef<string | null>(null);
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
     const [selectedBankTxIds, setSelectedBankTxIds] = useState<Set<string>>(new Set());
     const [selectedInternalTxIds, setSelectedInternalTxIds] = useState<Set<string>>(new Set());
@@ -328,8 +329,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     useEffect(() => {
         loadAccounts();
         loadRules();
-        // Categorias são org-globais: carregam uma vez com a org da prop
-        if (organizationId) loadManagedCategories(organizationId);
     }, [organizationId]);
 
     useEffect(() => {
@@ -337,6 +336,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             loadSuppliers(effectiveOrgId);
             loadClients(effectiveOrgId);
             loadEmployees(effectiveOrgId);
+            // Carrega categorias uma única vez por org (não re-carrega ao trocar de conta)
+            if (categoriesLoadedForOrg.current !== effectiveOrgId) {
+                categoriesLoadedForOrg.current = effectiveOrgId;
+                loadManagedCategories(effectiveOrgId);
+            }
         }
     }, [effectiveOrgId]);
 

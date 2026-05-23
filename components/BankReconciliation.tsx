@@ -106,6 +106,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [isImporting, setIsImporting] = useState(false);
     const [rules, setRules] = useState<ReconciliationRule[]>([]);
     const [masterSuppliers, setMasterSuppliers] = useState<string[]>([]);
+    const [masterClients, setMasterClients] = useState<string[]>([]);
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [stats, setStats] = useState({
         automationRate: 0,
@@ -128,7 +129,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [bankCategoryFilter, setBankCategoryFilter] = useState('');
     const [internalCategoryFilter, setInternalCategoryFilter] = useState('');
     const [bankSortOrder, setBankSortOrder] = useState<'desc' | 'asc'>('desc');
+    const [bankSortField, setBankSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'counterparty'>('date');
     const [internalSortOrder, setInternalSortOrder] = useState<'desc' | 'asc'>('desc');
+    const [internalSortField, setInternalSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'entity'>('date');
     const [matchSortOrder, setMatchSortOrder] = useState<'desc' | 'asc'>('desc');
     const [flowFilter, setFlowFilter] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
     const [importingMessage, setImportingMessage] = useState<string | null>(null);
@@ -152,11 +155,29 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             );
         }
         return filtered.sort((a, b) => {
-            const dateA = new Date(a.transaction_date).getTime();
-            const dateB = new Date(b.transaction_date).getTime();
-            return bankSortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+            let valA: string | number = '';
+            let valB: string | number = '';
+            if (bankSortField === 'date') {
+                valA = new Date(a.transaction_date).getTime();
+                valB = new Date(b.transaction_date).getTime();
+            } else if (bankSortField === 'amount') {
+                valA = a.amount;
+                valB = b.amount;
+            } else if (bankSortField === 'description') {
+                valA = (a.description_normalized || a.description_raw || '').toLowerCase();
+                valB = (b.description_normalized || b.description_raw || '').toLowerCase();
+            } else if (bankSortField === 'category') {
+                valA = (a.category || '').toLowerCase();
+                valB = (b.category || '').toLowerCase();
+            } else if (bankSortField === 'counterparty') {
+                valA = (a.counterparty_name || '').toLowerCase();
+                valB = (b.counterparty_name || '').toLowerCase();
+            }
+            if (valA < valB) return bankSortOrder === 'asc' ? -1 : 1;
+            if (valA > valB) return bankSortOrder === 'asc' ? 1 : -1;
+            return 0;
         });
-    }, [bankTransactions, bankSortOrder, bankSearch, bankCategoryFilter, flowFilter]);
+    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, flowFilter]);
 
     const sortedInternalTransactions = useMemo(() => {
         let filtered = [...internalTransactions];
@@ -177,11 +198,29 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             );
         }
         return filtered.sort((a, b) => {
-            const dateA = new Date(a.transaction_date).getTime();
-            const dateB = new Date(b.transaction_date).getTime();
-            return internalSortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+            let valA: string | number = '';
+            let valB: string | number = '';
+            if (internalSortField === 'date') {
+                valA = new Date(a.transaction_date).getTime();
+                valB = new Date(b.transaction_date).getTime();
+            } else if (internalSortField === 'amount') {
+                valA = a.amount;
+                valB = b.amount;
+            } else if (internalSortField === 'description') {
+                valA = (a.description || '').toLowerCase();
+                valB = (b.description || '').toLowerCase();
+            } else if (internalSortField === 'category') {
+                valA = (a.category || '').toLowerCase();
+                valB = (b.category || '').toLowerCase();
+            } else if (internalSortField === 'entity') {
+                valA = (a.entity_name || '').toLowerCase();
+                valB = (b.entity_name || '').toLowerCase();
+            }
+            if (valA < valB) return internalSortOrder === 'asc' ? -1 : 1;
+            if (valA > valB) return internalSortOrder === 'asc' ? 1 : -1;
+            return 0;
         });
-    }, [internalTransactions, internalSortOrder, internalSearch, internalCategoryFilter, flowFilter]);
+    }, [internalTransactions, internalSortOrder, internalSortField, internalSearch, internalCategoryFilter, flowFilter]);
 
     const sortedMatches = useMemo(() => {
         let filtered = [...matches];
@@ -279,8 +318,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     useEffect(() => {
         loadAccounts();
         loadRules();
-        loadSuppliers();
     }, [organizationId]);
+
+    useEffect(() => {
+        if (effectiveOrgId) {
+            loadSuppliers(effectiveOrgId);
+            loadClients(effectiveOrgId);
+        }
+    }, [effectiveOrgId]);
 
     // Persistência da aba ativa
     useEffect(() => {
@@ -384,13 +429,27 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         }
     };
 
-    const loadSuppliers = async () => {
+    const loadClients = async (orgId: string) => {
+        try {
+            const { data } = await supabase
+                .from('clients')
+                .select('name')
+                .eq('organization_id', orgId)
+                .order('name', { ascending: true });
+            if (data) setMasterClients(data.map(c => c.name));
+        } catch (error) {
+            console.error('Error loading clients:', error);
+        }
+    };
+
+    const loadSuppliers = async (orgId: string) => {
         try {
             const { data, error } = await supabase
                 .from('suppliers')
                 .select('name')
+                .or(`organization_id.eq.${orgId},organization_id.is.null`)
                 .order('name', { ascending: true });
-            
+
             if (error) throw error;
             if (data) {
                 setMasterSuppliers(data.map(s => s.name));
@@ -401,11 +460,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     };
 
     const loadAuditLogs = async () => {
+        if (!effectiveOrgId) return;
         try {
             const { data, error } = await supabase
                 .from('reconciliation_audit_log')
                 .select('*')
-                .eq('organization_id', organizationId)
+                .eq('organization_id', effectiveOrgId)
                 .order('created_at', { ascending: false })
                 .limit(20);
             if (error) throw error;
@@ -1120,6 +1180,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         } catch (error) {
             console.error('Error updating internal category:', error);
             alert('Erro ao atualizar categoria.');
+        }
+    };
+
+    const handleUpdateBankCounterparty = async (txId: string, name: string) => {
+        try {
+            const { error } = await supabase
+                .from('bank_transactions')
+                .update({ counterparty_name: name || null })
+                .eq('id', txId);
+            if (error) throw error;
+            setBankTransactions(prev => prev.map(tx =>
+                tx.id === txId ? { ...tx, counterparty_name: name || undefined } : tx
+            ));
+        } catch (error) {
+            console.error('Error updating counterparty:', error);
         }
     };
 
@@ -2441,7 +2516,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                 Extrato Bancário
                             </h4>
                             <div className="flex items-center gap-2">
-                                <select 
+                                <select
                                     value={bankCategoryFilter}
                                     onChange={(e) => setBankCategoryFilter(e.target.value)}
                                     className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 cursor-pointer text-gray-400"
@@ -2451,11 +2526,32 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                         <option key={cat} value={cat}>{cat}</option>
                                     ))}
                                 </select>
+                                <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-full px-3 py-1.5">
+                                    <ArrowUpDown className="w-3 h-3 text-gray-400 shrink-0" />
+                                    <select
+                                        value={bankSortField}
+                                        onChange={(e) => setBankSortField(e.target.value as typeof bankSortField)}
+                                        className="text-[10px] font-bold bg-transparent focus:outline-none cursor-pointer text-gray-400 appearance-none"
+                                    >
+                                        <option value="date">Data</option>
+                                        <option value="amount">Valor</option>
+                                        <option value="description">Descrição</option>
+                                        <option value="category">Categoria</option>
+                                        <option value="counterparty">Cliente/Fornecedor</option>
+                                    </select>
+                                    <button
+                                        onClick={() => setBankSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
+                                        className="ml-1 text-gray-400 hover:text-blue-600 transition-colors"
+                                        title={bankSortOrder === 'desc' ? 'Decrescente' : 'Crescente'}
+                                    >
+                                        {bankSortOrder === 'desc' ? '↓' : '↑'}
+                                    </button>
+                                </div>
                                 <div className="relative">
                                     <Search className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                    <input 
-                                        type="text" 
-                                        placeholder="Filtro..." 
+                                    <input
+                                        type="text"
+                                        placeholder="Filtro..."
                                         value={bankSearch}
                                         onChange={(e) => setBankSearch(e.target.value)}
                                         className="pl-8 pr-4 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 w-24 focus:w-32 transition-all"
@@ -2464,7 +2560,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                             </div>
                         </div>
 
-                        <div className={`bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : ''}`}>
+                        <div className={`min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : 'bg-transparent'}`}>
                             {bankTransactions.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center p-12 text-center py-32 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
                                     <div className="w-20 h-20 bg-gray-50 text-gray-200 rounded-3xl flex items-center justify-center mb-6">
@@ -2474,38 +2570,29 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                     <p className="text-xs text-gray-400 max-w-[200px]">Importe um arquivo OFX, CSV ou CNAB para iniciar a conciliação.</p>
                                 </div>
                             ) : (
-                                <div className={pendentesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "divide-y divide-gray-50"}>
-                                    {/* Column Headers only for list mode */}
-                                    {pendentesViewMode === 'list' && (
-                                        <div className="grid grid-cols-[32px_2fr_1fr_110px_110px_120px] gap-4 px-6 py-3 bg-gray-50/50 border-b border-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none items-center font-outfit">
-                                            <div className="flex justify-center">
-                                                <input 
-                                                    type="checkbox"
-                                                    title="Selecionar todos"
-                                                    className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                    checked={sortedBankTransactions.length > 0 && sortedBankTransactions.every(tx => selectedBankTxIds.has(tx.id))}
-                                                    onChange={(e) => {
-                                                        if (e.target.checked) {
-                                                            setSelectedBankTxIds(new Set([...selectedBankTxIds, ...sortedBankTransactions.map(tx => tx.id)]));
-                                                        } else {
-                                                            const next = new Set(selectedBankTxIds);
-                                                            sortedBankTransactions.forEach(tx => next.delete(tx.id));
-                                                            setSelectedBankTxIds(next);
-                                                        }
-                                                    }}
-                                                />
-                                            </div>
-                                            <div>Descrição do Extrato</div>
-                                            <div>Cliente / Fornecedor</div>
-                                            <div className="text-center">Categoria</div>
-                                            <div 
-                                                className="flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors justify-center"
-                                                onClick={() => setBankSortOrder(bankSortOrder === 'desc' ? 'asc' : 'desc')}
-                                            >
-                                                Data
-                                                <ArrowUpDown className="w-3 h-3" />
-                                            </div>
-                                            <div className="text-right">Valor</div>
+                                <div className={pendentesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "flex flex-col gap-3 p-3"}>
+
+                                    {pendentesViewMode === 'list' && sortedBankTransactions.length > 0 && (
+                                        <div className="flex items-center gap-3 px-4 py-2">
+                                            <input
+                                                type="checkbox"
+                                                className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                checked={sortedBankTransactions.every(tx => selectedBankTxIds.has(tx.id))}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedBankTxIds(new Set([...selectedBankTxIds, ...sortedBankTransactions.map(tx => tx.id)]));
+                                                    } else {
+                                                        const next = new Set(selectedBankTxIds);
+                                                        sortedBankTransactions.forEach(tx => next.delete(tx.id));
+                                                        setSelectedBankTxIds(next);
+                                                    }
+                                                }}
+                                            />
+                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                                {sortedBankTransactions.every(tx => selectedBankTxIds.has(tx.id))
+                                                    ? `${sortedBankTransactions.length} selecionados`
+                                                    : `Selecionar todos visíveis (${sortedBankTransactions.length})`}
+                                            </span>
                                         </div>
                                     )}
 
@@ -2601,108 +2688,114 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     )}
                                                 </div>
                                             ) : (
-                                                <div 
+                                                <div
                                                     onClick={() => setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)}
-                                                    className={`p-6 hover:bg-blue-50/30 transition-all cursor-pointer grid grid-cols-[32px_2fr_1fr_110px_110px_120px] gap-4 items-center z-10 relative ${selectedBankTxId === tx.id ? 'bg-blue-50 border-2 border-blue-500 shadow-lg scale-[1.02]' : 'bg-white'}`}
+                                                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col gap-3 z-10 relative hover:shadow-md ${selectedBankTxId === tx.id ? 'bg-blue-50 border-blue-400 shadow-lg ring-2 ring-blue-500/10 scale-[1.01]' : 'bg-white border-gray-100 shadow-sm'}`}
                                                 >
-                                                    <div className="flex justify-center" onClick={(e) => e.stopPropagation()}>
-                                                        <input 
-                                                            type="checkbox"
-                                                            className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                            checked={selectedBankTxIds.has(tx.id)}
-                                                            onChange={(e) => {
-                                                                const next = new Set(selectedBankTxIds);
-                                                                if (e.target.checked) next.add(tx.id);
-                                                                else next.delete(tx.id);
-                                                                setSelectedBankTxIds(next);
-                                                            }}
-                                                        />
-                                                    </div>
-                                                    <div className="flex items-center gap-4 min-w-0">
-                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                            {tx.direction === 'DEBIT' ? <ArrowRightLeft className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                                                    {/* Linha 1: checkbox + ícone + descrição */}
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div onClick={(e) => e.stopPropagation()}>
+                                                            <input
+                                                                type="checkbox"
+                                                                className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                checked={selectedBankTxIds.has(tx.id)}
+                                                                onChange={(e) => {
+                                                                    const next = new Set(selectedBankTxIds);
+                                                                    if (e.target.checked) next.add(tx.id);
+                                                                    else next.delete(tx.id);
+                                                                    setSelectedBankTxIds(next);
+                                                                }}
+                                                            />
                                                         </div>
-                                                        <div className="flex flex-col gap-0.5 min-w-0 flex-1 overflow-hidden">
-                                                            <div className="flex items-center gap-2">
-                                                                <p className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors uppercase break-words" title={tx.description_normalized || tx.description_raw}>
-                                                                    {tx.description_normalized || tx.description_raw}
-                                                                </p>
-                                                                {tx.status === 'RULE_APPLIED' && (
-                                                                    <span className="shrink-0 flex items-center gap-1 text-[8px] font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase">
-                                                                        <Zap className="w-2 h-2" /> Automático
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                                                            {tx.direction === 'DEBIT' ? <ArrowRightLeft className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                                                         </div>
-                                                    </div>
-
-                                                    <div className="min-w-0">
-                                                        <p className="text-[11px] font-black text-gray-900 uppercase truncate">
-                                                            {tx.counterparty_name || '-'}
+                                                        <p className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors uppercase truncate flex-1" title={tx.description_normalized || tx.description_raw}>
+                                                            {tx.description_normalized || tx.description_raw}
                                                         </p>
-                                                        {tx.counterparty_name && (
-                                                            <span className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter">Identificado</span>
+                                                        {tx.status === 'RULE_APPLIED' && (
+                                                            <span className="shrink-0 flex items-center gap-1 text-[8px] font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase">
+                                                                <Zap className="w-2 h-2" /> Automático
+                                                            </span>
                                                         )}
                                                     </div>
 
-                                                    <div className="flex justify-center">
-                                                        <select 
-                                                            value={tx.category || ''}
-                                                            onChange={(e) => {
-                                                                e.stopPropagation();
-                                                                handleUpdateBankCategory(tx.id, e.target.value);
-                                                            }}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className={`text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center min-w-[100px] ${
-                                                                tx.category 
-                                                                    ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200' 
-                                                                    : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
-                                                            }`}
-                                                        >
-                                                            <option value="">Pendente</option>
-                                                            {uniqueCategories.map(cat => (
-                                                                <option key={cat} value={cat}>{cat}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
+                                                    {/* Linha 2: Fornecedor/Cliente / Categoria / Data / Valor */}
+                                                    <div className="flex items-center gap-3 pl-10 flex-wrap">
+                                                        {/* Seletor de Cliente / Fornecedor */}
+                                                        <div className="flex flex-col" onClick={(e) => e.stopPropagation()}>
+                                                            <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest mb-0.5">
+                                                                {tx.direction === 'DEBIT' ? 'Fornecedor' : 'Cliente'}
+                                                            </span>
+                                                            <select
+                                                                value={tx.counterparty_name || ''}
+                                                                onChange={(e) => { e.stopPropagation(); handleUpdateBankCounterparty(tx.id, e.target.value); }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className={`text-[10px] font-black uppercase border-b border-dashed bg-transparent focus:outline-none cursor-pointer transition-colors max-w-[130px] ${
+                                                                    tx.counterparty_name
+                                                                        ? 'text-gray-700 border-gray-300'
+                                                                        : 'text-gray-400 border-gray-200'
+                                                                }`}
+                                                            >
+                                                                <option value="">— selecionar</option>
+                                                                {(tx.direction === 'DEBIT' ? masterSuppliers : masterClients).map(name => (
+                                                                    <option key={name} value={name}>{name}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
 
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
-                                                        <span className="text-[10px] font-black text-gray-400 uppercase">
-                                                            {formatDateBR(tx.transaction_date)}
-                                                        </span>
-                                                    </div>
+                                                        <div onClick={(e) => e.stopPropagation()}>
+                                                            <select
+                                                                value={tx.category || ''}
+                                                                onChange={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateBankCategory(tx.id, e.target.value);
+                                                                }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
+                                                                    tx.category
+                                                                        ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200'
+                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
+                                                                }`}
+                                                            >
+                                                                <option value="">Categoria</option>
+                                                                {uniqueCategories.map(cat => (
+                                                                    <option key={cat} value={cat}>{cat}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
 
-                                                    <div className="text-right flex flex-col items-end gap-2">
-                                                        <div>
+                                                        <div className="flex items-center gap-1 ml-auto">
+                                                            <Calendar className="w-3 h-3 text-gray-300 shrink-0" />
+                                                            <span className="text-[10px] font-black text-gray-400 uppercase">
+                                                                {formatDateBR(tx.transaction_date)}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="flex flex-col items-end gap-1">
                                                             <p className={`text-sm font-black ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
                                                                 {tx.direction === 'DEBIT' ? '-' : '+'} {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tx.amount)}
                                                             </p>
-                                                            <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest leading-none">{tx.status}</span>
+                                                            {tx.status === 'RULE_APPLIED' ? (
+                                                                <div className="flex gap-1.5">
+                                                                    <button
+                                                                        className="text-[9px] font-black text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-2 py-1 rounded-lg uppercase tracking-widest transition-all"
+                                                                        onClick={(e) => { e.stopPropagation(); handleRejectRule(tx.id); }}
+                                                                        title="Rejeitar Automático"
+                                                                    >
+                                                                        <X className="w-3 h-3" />
+                                                                    </button>
+                                                                    <button
+                                                                        className="text-[9px] font-black text-white bg-purple-600 px-3 py-1 rounded-lg uppercase tracking-widest hover:bg-purple-700 transition-all"
+                                                                        onClick={(e) => { e.stopPropagation(); handleConfirmMatch(tx.id); }}
+                                                                    >
+                                                                        Aceitar
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">{tx.status}</span>
+                                                            )}
                                                         </div>
-                                                        {tx.status === 'RULE_APPLIED' && (
-                                                            <div className="flex gap-1.5 shrink-0">
-                                                                <button 
-                                                                    className="text-[9px] font-black text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-2 py-1 rounded-lg uppercase tracking-widest transition-all"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleRejectRule(tx.id);
-                                                                    }}
-                                                                    title="Rejeitar Automático"
-                                                                >
-                                                                    <X className="w-3 h-3" />
-                                                                </button>
-                                                                <button 
-                                                                    className="text-[9px] font-black text-white bg-purple-600 px-3 py-1 rounded-lg uppercase tracking-widest hover:bg-purple-700 transition-all font-sans"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleConfirmMatch(tx.id);
-                                                                    }}
-                                                                >
-                                                                    Aceitar Identificação
-                                                                </button>
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 </div>
                                             )}
@@ -2773,7 +2866,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                             {sortedInternalTransactions.length > 0 && sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id)) ? 'Todos Selecionados' : 'Selecionar Tudo'}
                                         </button>
                                     )}
-                                    <select 
+                                    <select
                                         value={internalCategoryFilter}
                                         onChange={(e) => setInternalCategoryFilter(e.target.value)}
                                         className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/10 cursor-pointer text-gray-400"
@@ -2783,11 +2876,32 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                             <option key={cat} value={cat}>{cat}</option>
                                         ))}
                                     </select>
+                                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-full px-3 py-1.5">
+                                        <ArrowUpDown className="w-3 h-3 text-gray-400 shrink-0" />
+                                        <select
+                                            value={internalSortField}
+                                            onChange={(e) => setInternalSortField(e.target.value as typeof internalSortField)}
+                                            className="text-[10px] font-bold bg-transparent focus:outline-none cursor-pointer text-gray-400 appearance-none"
+                                        >
+                                            <option value="date">Data</option>
+                                            <option value="amount">Valor</option>
+                                            <option value="description">Descrição</option>
+                                            <option value="category">Categoria</option>
+                                            <option value="entity">Cliente/Fornecedor</option>
+                                        </select>
+                                        <button
+                                            onClick={() => setInternalSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
+                                            className="ml-1 text-gray-400 hover:text-emerald-600 transition-colors"
+                                            title={internalSortOrder === 'desc' ? 'Decrescente' : 'Crescente'}
+                                        >
+                                            {internalSortOrder === 'desc' ? '↓' : '↑'}
+                                        </button>
+                                    </div>
                                     <div className="relative">
                                         <Search className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                        <input 
-                                            type="text" 
-                                            placeholder="Filtro..." 
+                                        <input
+                                            type="text"
+                                            placeholder="Filtro..."
                                             value={internalSearch}
                                             onChange={(e) => setInternalSearch(e.target.value)}
                                             className="pl-8 pr-4 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/10 w-24 focus:w-32 transition-all"
@@ -2820,7 +2934,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                 </div>
                         </div>
 
-                        <div className={`bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : ''}`}>
+                        <div className={`min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : 'bg-transparent'}`}>
                             {internalTransactions.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center p-12 text-center py-32 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
                                     <div className="w-20 h-20 bg-gray-50 text-gray-200 rounded-3xl flex items-center justify-center mb-6">
@@ -2832,38 +2946,29 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                     </p>
                                 </div>
                             ) : (
-                                <div className={pendentesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "divide-y divide-gray-50"}>
-                                    {/* Column Headers only for list mode */}
-                                    {pendentesViewMode === 'list' && (
-                                        <div className="grid grid-cols-[32px_2fr_1fr_110px_110px_120px] gap-4 px-6 py-3 bg-gray-50/50 border-b border-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                             <div className="flex justify-center">
-                                                 <input 
-                                                     type="checkbox"
-                                                     title="Selecionar todos"
-                                                     className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                                                     checked={sortedInternalTransactions.length > 0 && sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id))}
-                                                     onChange={(e) => {
-                                                         if (e.target.checked) {
-                                                             setSelectedInternalTxIds(new Set([...selectedInternalTxIds, ...sortedInternalTransactions.map(tx => tx.id)]));
-                                                         } else {
-                                                             const next = new Set(selectedInternalTxIds);
-                                                             sortedInternalTransactions.forEach(tx => next.delete(tx.id));
-                                                             setSelectedInternalTxIds(next);
-                                                         }
-                                                     }}
-                                                 />
-                                             </div>
-                                            <div>Descrição</div>
-                                            <div>Cliente/Fornecedor</div>
-                                            <div className="text-center">Categoria</div>
-                                            <div 
-                                                className="flex items-center gap-2 cursor-pointer hover:text-emerald-600 transition-colors justify-center"
-                                                onClick={() => setInternalSortOrder(internalSortOrder === 'desc' ? 'asc' : 'desc')}
-                                            >
-                                                Data
-                                                <ArrowUpDown className="w-3 h-3" />
-                                            </div>
-                                            <div className="text-right">Valor</div>
+                                <div className={pendentesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "flex flex-col gap-3 p-3"}>
+
+                                    {pendentesViewMode === 'list' && sortedInternalTransactions.length > 0 && (
+                                        <div className="flex items-center gap-3 px-4 py-2">
+                                            <input
+                                                type="checkbox"
+                                                className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                                checked={sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id))}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedInternalTxIds(new Set([...selectedInternalTxIds, ...sortedInternalTransactions.map(tx => tx.id)]));
+                                                    } else {
+                                                        const next = new Set(selectedInternalTxIds);
+                                                        sortedInternalTransactions.forEach(tx => next.delete(tx.id));
+                                                        setSelectedInternalTxIds(next);
+                                                    }
+                                                }}
+                                            />
+                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                                {sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id))
+                                                    ? `${sortedInternalTransactions.length} selecionados`
+                                                    : `Selecionar todos visíveis (${sortedInternalTransactions.length})`}
+                                            </span>
                                         </div>
                                     )}
 
@@ -2926,11 +3031,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div key={tx.id} className="p-4 px-6 border-b border-gray-50 grid grid-cols-[32px_2fr_1fr_110px_110px_120px] gap-4 items-center hover:bg-gray-50/50 transition-colors group">
-                                                <div className="flex justify-center">
-                                                    <input 
+                                            <div key={tx.id} className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-3 hover:shadow-md transition-all group">
+                                                {/* Linha 1: checkbox + ícone + descrição */}
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <input
                                                         type="checkbox"
-                                                        className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                                        className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
                                                         checked={selectedInternalTxIds.has(tx.id)}
                                                         onChange={(e) => {
                                                             const next = new Set(selectedInternalTxIds);
@@ -2939,95 +3045,88 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                             setSelectedInternalTxIds(next);
                                                         }}
                                                     />
-                                                </div>
-                                                <div className="flex items-center gap-4 min-w-0">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                        <Briefcase className="w-5 h-5" />
+                                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                                                        <Briefcase className="w-4 h-4" />
                                                     </div>
-                                                    <div className="flex flex-col gap-0.5 min-w-0">
-                                                        <div className="flex flex-col gap-1">
-                                                            <p className="text-sm font-bold text-gray-900 uppercase break-words">
-                                                                {tx.description}
-                                                            </p>
-                                                            {tx.source_system !== 'MANUAL' && (
-                                                                <span className="w-fit text-[8px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase leading-none">
-                                                                    {tx.source_system}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
+                                                    <p className="text-sm font-bold text-gray-900 uppercase truncate flex-1" title={tx.description}>
+                                                        {tx.description}
+                                                    </p>
+                                                    {tx.source_system !== 'MANUAL' && (
+                                                        <span className="shrink-0 text-[8px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase">
+                                                            {tx.source_system}
+                                                        </span>
+                                                    )}
                                                 </div>
 
-                                                <div className="text-[11px] font-bold text-gray-600 uppercase truncate" title={tx.entity_name}>
-                                                    {tx.entity_name || <span className="text-gray-300">-</span>}
-                                                </div>
+                                                {/* Linha 2: Entidade / Categoria / Data / Valor / Ações */}
+                                                <div className="flex items-center gap-3 pl-10 flex-wrap">
+                                                    <div className="flex flex-col min-w-[80px]">
+                                                        <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Cliente</span>
+                                                        <p className="text-[10px] font-black text-gray-700 uppercase truncate max-w-[120px]">
+                                                            {tx.entity_name || <span className="text-gray-300">—</span>}
+                                                        </p>
+                                                    </div>
 
-                                                <div className="flex justify-center">
-                                                    <select 
+                                                    <select
                                                         value={tx.category || ''}
-                                                        onChange={(e) => handleUpdateInternalCategory(tx.id, e.target.value)}
-                                                        className={`text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center min-w-[100px] ${
-                                                            tx.category 
-                                                                ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200' 
+                                                        onChange={(e) => { e.stopPropagation(); handleUpdateInternalCategory(tx.id, e.target.value); }}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
+                                                            tx.category
+                                                                ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200'
                                                                 : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
                                                         }`}
                                                     >
-                                                        <option value="">Pendente</option>
+                                                        <option value="">Categoria</option>
                                                         {uniqueCategories.map(cat => (
                                                             <option key={cat} value={cat}>{cat}</option>
                                                         ))}
                                                     </select>
-                                                </div>
 
-                                                <div className="flex items-center justify-center gap-2 text-center">
-                                                    <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase">
-                                                        {formatDateBR(tx.transaction_date)}
-                                                    </span>
-                                                </div>
+                                                    <div className="flex items-center gap-1 ml-auto">
+                                                        <Calendar className="w-3 h-3 text-gray-300 shrink-0" />
+                                                        <span className="text-[10px] font-black text-gray-400 uppercase">
+                                                            {formatDateBR(tx.transaction_date)}
+                                                        </span>
+                                                    </div>
 
-                                                <div className="text-right flex flex-col items-end gap-1">
-                                                    <p className="text-sm font-black text-gray-900 leading-none">
-                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tx.amount)}
-                                                    </p>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        {tx.source_system === 'MANUAL' && (
-                                                            <>
-                                                                <button 
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleEditInternalTx(tx);
-                                                                    }}
-                                                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                                                    title="Editar"
-                                                                >
-                                                                    <Settings2 className="w-3.5 h-3.5" />
-                                                                </button>
-                                                                <button 
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleDeleteInternalTx(tx.id);
-                                                                    }}
-                                                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                                    title="Excluir"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                        <button 
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (!selectedBankTxId) {
-                                                                    alert('Por favor, selecione primeiro uma transação no Extrato Bancário (lado esquerdo) para vincular.');
-                                                                    return;
-                                                                }
-                                                                handleConfirmMatch(selectedBankTxId, tx.id);
-                                                            }}
-                                                            className={`text-[9px] font-black uppercase tracking-widest block py-1.5 px-3 rounded-lg transition-all ${selectedBankTxId ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 active:scale-95' : 'text-emerald-600 bg-emerald-50/50 hover:bg-emerald-100'}`}
-                                                        >
-                                                            {selectedBankTxId ? 'Confirmar Vínculo' : 'Vincular'}
-                                                        </button>
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <p className="text-sm font-black text-gray-900 leading-none">
+                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tx.amount)}
+                                                        </p>
+                                                        <div className="flex items-center gap-1.5">
+                                                            {tx.source_system === 'MANUAL' && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleEditInternalTx(tx); }}
+                                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                                        title="Editar"
+                                                                    >
+                                                                        <Settings2 className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleDeleteInternalTx(tx.id); }}
+                                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                                        title="Excluir"
+                                                                    >
+                                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (!selectedBankTxId) {
+                                                                        alert('Por favor, selecione primeiro uma transação no Extrato Bancário (lado esquerdo) para vincular.');
+                                                                        return;
+                                                                    }
+                                                                    handleConfirmMatch(selectedBankTxId, tx.id);
+                                                                }}
+                                                                className={`text-[9px] font-black uppercase tracking-widest py-1.5 px-3 rounded-lg transition-all ${selectedBankTxId ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 active:scale-95' : 'text-emerald-600 bg-emerald-50/50 hover:bg-emerald-100'}`}
+                                                            >
+                                                                {selectedBankTxId ? 'Confirmar Vínculo' : 'Vincular'}
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>

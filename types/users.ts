@@ -72,7 +72,8 @@ export interface Supplier {
     city?: string;
     state?: string;
     zip_code?: string;
-    organization_id?: string;
+    organization_id?: string | null;
+    organization_name?: string;
     created_at?: string;
 }
 

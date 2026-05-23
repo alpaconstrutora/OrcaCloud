@@ -2,10 +2,13 @@ import { supabase } from '../lib/supabase';
 import { Supplier } from '../types';
 
 export const supplierService = {
-    listSuppliers: async (organizationId?: string): Promise<Supplier[]> => {
+    listSuppliers: async (organizationId?: string): Promise<(Supplier & { organization_name?: string })[]> => {
         let query = supabase
             .from('suppliers')
-            .select('*')
+            .select(`
+                *,
+                organizations:organization_id(name)
+            `)
             .order('name', { ascending: true });
 
         if (organizationId) {
@@ -14,7 +17,17 @@ export const supplierService = {
 
         const { data, error } = await query;
         if (error) throw error;
-        return data as Supplier[];
+
+        return (data as any[])?.map(supplier => {
+            let orgName = 'Todas as Organizações';
+            if (supplier.organization_id && supplier.organizations?.name) {
+                orgName = supplier.organizations.name;
+            }
+            return {
+                ...supplier,
+                organization_name: orgName
+            };
+        }) || [];
     },
 
     getByEmail: async (email: string): Promise<Supplier | null> => {
@@ -50,17 +63,24 @@ export const supplierService = {
     },
 
     addSupplier: async (supplier: Omit<Supplier, 'id' | 'created_at'>): Promise<Supplier> => {
+        console.log("[SUPPLIER SERVICE] Adicionando fornecedor:", supplier);
         const { data, error } = await supabase
             .from('suppliers')
             .insert(supplier)
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error("[SUPPLIER SERVICE] Erro ao adicionar fornecedor:", error);
+            throw error;
+        }
+        console.log("[SUPPLIER SERVICE] Fornecedor adicionado com sucesso:", data);
         return data as Supplier;
     },
 
     updateSupplier: async (id: string, updates: Partial<Supplier>): Promise<Supplier> => {
+        console.log("[SUPPLIER SERVICE] Atualizando fornecedor ID:", id);
+        console.log("[SUPPLIER SERVICE] Dados a atualizar:", updates);
         const { data, error } = await supabase
             .from('suppliers')
             .update(updates)
@@ -68,7 +88,11 @@ export const supplierService = {
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error("[SUPPLIER SERVICE] Erro ao atualizar fornecedor:", error);
+            throw error;
+        }
+        console.log("[SUPPLIER SERVICE] Fornecedor atualizado com sucesso:", data);
         return data as Supplier;
     },
 

@@ -38,16 +38,18 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
 
     const handleAdd = async (data: Partial<Supplier>) => {
         try {
+            alert("Salvando fornecedor: " + JSON.stringify({name: data.name, org: data.organization_id}));
+            console.log("handleAdd - dados recebidos do modal:", data);
+
             // Convert empty strings to null for unique/optional fields
             const sanitizedData = Object.fromEntries(
                 Object.entries(data).map(([key, value]) => [key, value === '' ? null : value])
             );
 
-            const payload = {
-                ...sanitizedData,
-                organization_id: organizationId
-            };
-            await supplierService.addSupplier(payload as Omit<Supplier, 'id' | 'created_at'>);
+            console.log("handleAdd - dados sanitizados:", sanitizedData);
+
+            await supplierService.addSupplier(sanitizedData as Omit<Supplier, 'id' | 'created_at'>);
+            console.log("Fornecedor adicionado com sucesso");
             setIsModalOpen(false);
             loadSuppliers();
         } catch (error) {
@@ -59,12 +61,18 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     const handleEdit = async (data: Partial<Supplier>) => {
         try {
             if (!editingSupplier?.id) return;
+            console.log("handleEdit - dados recebidos do modal:", data);
+            console.log("handleEdit - editando fornecedor ID:", editingSupplier.id);
+
             // Convert empty strings to null for unique/optional fields
             const sanitizedData = Object.fromEntries(
                 Object.entries(data).map(([key, value]) => [key, value === '' ? null : value])
             );
 
+            console.log("handleEdit - dados sanitizados:", sanitizedData);
+
             await supplierService.updateSupplier(editingSupplier.id, sanitizedData);
+            console.log("Fornecedor atualizado com sucesso");
             setIsModalOpen(false);
             loadSuppliers();
         } catch (error) {
@@ -187,6 +195,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                 <tr className="bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] border-b border-gray-100">
                                     <th className="px-6 py-5">Fornecedor</th>
                                     <th className="px-6 py-5">Categoria</th>
+                                    <th className="px-6 py-5">Organização</th>
                                     <th className="px-6 py-5">Contato</th>
                                     <th className="px-6 py-5">Documento</th>
                                     <th className="px-6 py-5 text-center">Ações</th>
@@ -216,6 +225,9 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                     <Tag className="w-3.5 h-3.5 text-gray-400" />
                                                     <span className="text-xs font-semibold">{supplier.category}</span>
                                                 </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-xs font-semibold text-gray-700">{supplier.organization_name}</span>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="space-y-1.5">
@@ -260,7 +272,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-20 text-center">
+                                        <td colSpan={6} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-4 max-w-xs mx-auto">
                                                 <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center animate-pulse">
                                                     <Truck className="w-10 h-10 text-blue-200" />
@@ -310,6 +322,10 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                     </p>
 
                                     <div className="space-y-3 pt-4 border-t border-gray-50">
+                                        <div className="flex items-center justify-between text-[11px]">
+                                            <span className="text-gray-400 font-bold uppercase tracking-widest">Organização</span>
+                                            <span className="text-gray-900 font-semibold">{supplier.organization_name}</span>
+                                        </div>
                                         {supplier.email && (
                                             <div className="flex items-center gap-2.5 text-sm text-gray-600 underline-offset-4 hover:underline cursor-pointer">
                                                 <Mail className="w-4 h-4 text-blue-400" />

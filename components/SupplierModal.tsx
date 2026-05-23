@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, Truck, Mail, Phone, FileText, MapPin, Tag } from 'lucide-react';
-import { Supplier } from '../types';
+import { X, Truck, Mail, Phone, FileText, MapPin, Tag, Building2 } from 'lucide-react';
+import { Supplier, Organization } from '../types';
 import { supplierCategoryService } from '../services/supplierCategoryService';
+import { organizationService } from '../services/organizationService';
 import { useStore } from '../store/useStore';
 
 interface SupplierModalProps {
@@ -23,6 +24,7 @@ const DEFAULT_CATEGORIES = [
 export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
     const { activeOrganizationId } = useStore();
     const [dynamicCategories, setDynamicCategories] = React.useState<string[]>(DEFAULT_CATEGORIES);
+    const [organizations, setOrganizations] = React.useState<Organization[]>([]);
     const [formData, setFormData] = React.useState<Omit<Supplier, 'id' | 'created_at'>>({
         name: '',
         email: '',
@@ -32,7 +34,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         category: DEFAULT_CATEGORIES[0],
         address: '',
         city: '',
-        state: ''
+        state: '',
+        organization_id: null
     });
 
     const loadCategories = async () => {
@@ -49,9 +52,20 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         }
     };
 
+    const loadOrganizations = async () => {
+        try {
+            const orgs = await organizationService.listOrganizations();
+            setOrganizations(orgs);
+        } catch (error) {
+            console.error("Error loading organizations in modal:", error);
+            setOrganizations([]);
+        }
+    };
+
     React.useEffect(() => {
         if (isOpen) {
             loadCategories();
+            loadOrganizations();
         }
     }, [isOpen, activeOrganizationId]);
 
@@ -66,7 +80,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 category: initialData.category || 'Materiais de Construção',
                 address: initialData.address || '',
                 city: initialData.city || '',
-                state: initialData.state || ''
+                state: initialData.state || '',
+                organization_id: initialData.organization_id || null
             });
         } else {
             setFormData({
@@ -78,10 +93,11 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 category: 'Materiais de Construção',
                 address: '',
                 city: '',
-                state: ''
+                state: '',
+                organization_id: activeOrganizationId || null
             });
         }
-    }, [initialData, isOpen]);
+    }, [initialData, isOpen, activeOrganizationId]);
 
     if (!isOpen) return null;
 
@@ -106,7 +122,11 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                     </button>
                 </div>
 
-                <form onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }} className="flex-1 overflow-y-auto p-12 space-y-6">
+                <form onSubmit={(e) => {
+                    e.preventDefault();
+                    console.log("[SUPPLIER MODAL] Enviando formData:", formData);
+                    onSubmit(formData);
+                }} className="flex-1 overflow-y-auto p-12 space-y-6">
                     <div className="space-y-1.5">
                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Razão Social / Nome</label>
                         <div className="relative group">
@@ -160,6 +180,23 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                             >
                                 {dynamicCategories.map(cat => (
                                     <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Organização</label>
+                        <div className="relative group">
+                            <Building2 className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            <select
+                                className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-white font-bold text-gray-700 appearance-none cursor-pointer"
+                                value={formData.organization_id || ''}
+                                onChange={e => setFormData({ ...formData, organization_id: e.target.value ? e.target.value : null })}
+                            >
+                                <option value="">🌐 Todas as Organizações</option>
+                                {organizations.map(org => (
+                                    <option key={org.id} value={org.id}>{org.name}</option>
                                 ))}
                             </select>
                         </div>

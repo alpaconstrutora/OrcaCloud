@@ -149,7 +149,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 (tx.counterparty_name || '').toLowerCase().includes(search)
             );
         }
-        if (bankCategoryFilter) {
+        if (bankCategoryFilter === '__none__') {
+            filtered = filtered.filter(tx => !tx.category);
+        } else if (bankCategoryFilter) {
             filtered = filtered.filter(tx => tx.category === bankCategoryFilter);
         }
         if (flowFilter !== 'ALL') {
@@ -192,7 +194,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 (tx.entity_name || '').toLowerCase().includes(search)
             );
         }
-        if (internalCategoryFilter) {
+        if (internalCategoryFilter === '__none__') {
+            filtered = filtered.filter(tx => !tx.category);
+        } else if (internalCategoryFilter) {
             filtered = filtered.filter(tx => tx.category === internalCategoryFilter);
         }
         if (flowFilter !== 'ALL') {
@@ -2776,6 +2780,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                     className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 cursor-pointer text-gray-400"
                                 >
                                     <option value="">Todas Categorias</option>
+                                    <option value="__none__">— Sem categoria</option>
                                     {uniqueCategories.map(cat => (
                                         <option key={cat} value={cat}>{cat}</option>
                                     ))}
@@ -3129,6 +3134,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                         className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/10 cursor-pointer text-gray-400"
                                     >
                                         <option value="">Todas Categorias</option>
+                                        <option value="__none__">— Sem categoria</option>
                                         {uniqueCategories.map(cat => (
                                             <option key={cat} value={cat}>{cat}</option>
                                         ))}

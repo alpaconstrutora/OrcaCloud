@@ -63,24 +63,17 @@ export const supplierService = {
     },
 
     addSupplier: async (supplier: Omit<Supplier, 'id' | 'created_at'>): Promise<Supplier> => {
-        console.log("[SUPPLIER SERVICE] Adicionando fornecedor:", supplier);
         const { data, error } = await supabase
             .from('suppliers')
             .insert(supplier)
             .select()
             .single();
 
-        if (error) {
-            console.error("[SUPPLIER SERVICE] Erro ao adicionar fornecedor:", error);
-            throw error;
-        }
-        console.log("[SUPPLIER SERVICE] Fornecedor adicionado com sucesso:", data);
+        if (error) throw error;
         return data as Supplier;
     },
 
     updateSupplier: async (id: string, updates: Partial<Supplier>): Promise<Supplier> => {
-        console.log("[SUPPLIER SERVICE] Atualizando fornecedor ID:", id);
-        console.log("[SUPPLIER SERVICE] Dados a atualizar:", updates);
         const { data, error } = await supabase
             .from('suppliers')
             .update(updates)
@@ -88,11 +81,7 @@ export const supplierService = {
             .select()
             .single();
 
-        if (error) {
-            console.error("[SUPPLIER SERVICE] Erro ao atualizar fornecedor:", error);
-            throw error;
-        }
-        console.log("[SUPPLIER SERVICE] Fornecedor atualizado com sucesso:", data);
+        if (error) throw error;
         return data as Supplier;
     },
 

@@ -60,6 +60,7 @@ export interface Investor {
 export interface Supplier {
     id: string;
     name: string;
+    contact_name?: string;
     email?: string;
     phone?: string;
     document?: string;

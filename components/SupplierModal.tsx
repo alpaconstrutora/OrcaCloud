@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Truck, Mail, Phone, FileText, MapPin, Tag, Building2 } from 'lucide-react';
+import { X, Truck, Mail, Phone, FileText, MapPin, Tag, Building2, User } from 'lucide-react';
 import { Supplier, Organization } from '../types';
 import { supplierCategoryService } from '../services/supplierCategoryService';
 import { organizationService } from '../services/organizationService';
@@ -21,33 +21,88 @@ const DEFAULT_CATEGORIES = [
     'Outros'
 ];
 
+const ESTADOS_BR = [
+    { sigla: 'AC', nome: 'Acre' },
+    { sigla: 'AL', nome: 'Alagoas' },
+    { sigla: 'AP', nome: 'Amapá' },
+    { sigla: 'AM', nome: 'Amazonas' },
+    { sigla: 'BA', nome: 'Bahia' },
+    { sigla: 'CE', nome: 'Ceará' },
+    { sigla: 'DF', nome: 'Distrito Federal' },
+    { sigla: 'ES', nome: 'Espírito Santo' },
+    { sigla: 'GO', nome: 'Goiás' },
+    { sigla: 'MA', nome: 'Maranhão' },
+    { sigla: 'MT', nome: 'Mato Grosso' },
+    { sigla: 'MS', nome: 'Mato Grosso do Sul' },
+    { sigla: 'MG', nome: 'Minas Gerais' },
+    { sigla: 'PA', nome: 'Pará' },
+    { sigla: 'PB', nome: 'Paraíba' },
+    { sigla: 'PR', nome: 'Paraná' },
+    { sigla: 'PE', nome: 'Pernambuco' },
+    { sigla: 'PI', nome: 'Piauí' },
+    { sigla: 'RJ', nome: 'Rio de Janeiro' },
+    { sigla: 'RN', nome: 'Rio Grande do Norte' },
+    { sigla: 'RS', nome: 'Rio Grande do Sul' },
+    { sigla: 'RO', nome: 'Rondônia' },
+    { sigla: 'RR', nome: 'Roraima' },
+    { sigla: 'SC', nome: 'Santa Catarina' },
+    { sigla: 'SP', nome: 'São Paulo' },
+    { sigla: 'SE', nome: 'Sergipe' },
+    { sigla: 'TO', nome: 'Tocantins' },
+];
+
+function maskCNPJ(value: string): string {
+    const digits = value.replace(/\D/g, '').slice(0, 14);
+    return digits
+        .replace(/^(\d{2})(\d)/, '$1.$2')
+        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1/$2')
+        .replace(/(\d{4})(\d)/, '$1-$2');
+}
+
+function maskCPF(value: string): string {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    return digits
+        .replace(/^(\d{3})(\d)/, '$1.$2')
+        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1-$2');
+}
+
 export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
     const { activeOrganizationId } = useStore();
     const [dynamicCategories, setDynamicCategories] = React.useState<string[]>(DEFAULT_CATEGORIES);
     const [organizations, setOrganizations] = React.useState<Organization[]>([]);
     const [formData, setFormData] = React.useState<Omit<Supplier, 'id' | 'created_at'>>({
         name: '',
+        contact_name: '',
         email: '',
         phone: '',
         document: '',
         type: 'PJ',
         category: DEFAULT_CATEGORIES[0],
+        street: '',
+        number: '',
+        neighborhood: '',
         address: '',
         city: '',
         state: '',
         organization_id: null
     });
 
+    const handleDocumentChange = (value: string) => {
+        const masked = formData.type === 'PJ' ? maskCNPJ(value) : maskCPF(value);
+        setFormData({ ...formData, document: masked });
+    };
+
+    const handleTypeChange = (type: 'PF' | 'PJ') => {
+        setFormData({ ...formData, type, document: '' });
+    };
+
     const loadCategories = async () => {
         try {
             const cats = await supplierCategoryService.listCategories(activeOrganizationId || undefined);
-            if (cats.length > 0) {
-                setDynamicCategories(cats.map(c => c.name));
-            } else {
-                setDynamicCategories(DEFAULT_CATEGORIES);
-            }
-        } catch (error) {
-            console.error("Error loading categories in modal:", error);
+            setDynamicCategories(cats.length > 0 ? cats.map(c => c.name) : DEFAULT_CATEGORIES);
+        } catch {
             setDynamicCategories(DEFAULT_CATEGORIES);
         }
     };
@@ -56,8 +111,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         try {
             const orgs = await organizationService.listOrganizations();
             setOrganizations(orgs);
-        } catch (error) {
-            console.error("Error loading organizations in modal:", error);
+        } catch {
             setOrganizations([]);
         }
     };
@@ -73,11 +127,15 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         if (initialData) {
             setFormData({
                 name: initialData.name,
+                contact_name: initialData.contact_name || '',
                 email: initialData.email || '',
                 phone: initialData.phone || '',
                 document: initialData.document || '',
                 type: initialData.type,
                 category: initialData.category || 'Materiais de Construção',
+                street: initialData.street || initialData.address || '',
+                number: initialData.number || '',
+                neighborhood: initialData.neighborhood || '',
                 address: initialData.address || '',
                 city: initialData.city || '',
                 state: initialData.state || '',
@@ -86,11 +144,15 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         } else {
             setFormData({
                 name: '',
+                contact_name: '',
                 email: '',
                 phone: '',
                 document: '',
                 type: 'PJ',
                 category: 'Materiais de Construção',
+                street: '',
+                number: '',
+                neighborhood: '',
                 address: '',
                 city: '',
                 state: '',
@@ -100,6 +162,18 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     }, [initialData, isOpen, activeOrganizationId]);
 
     if (!isOpen) return null;
+
+    const docPlaceholder = formData.type === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00';
+    const docLabel = formData.type === 'PJ' ? 'CNPJ' : 'CPF';
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const payload = {
+            ...formData,
+            address: [formData.street, formData.number, formData.neighborhood].filter(Boolean).join(', ')
+        };
+        onSubmit(payload);
+    };
 
     return (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-12">
@@ -122,11 +196,9 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                     </button>
                 </div>
 
-                <form onSubmit={(e) => {
-                    e.preventDefault();
-                    console.log("[SUPPLIER MODAL] Enviando formData:", formData);
-                    onSubmit(formData);
-                }} className="flex-1 overflow-y-auto p-12 space-y-6">
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-12 space-y-6">
+
+                    {/* Razão Social / Nome */}
                     <div className="space-y-1.5">
                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Razão Social / Nome</label>
                         <div className="relative group">
@@ -142,33 +214,50 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                         </div>
                     </div>
 
+                    {/* Nome do Contato */}
+                    <div className="space-y-1.5">
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Nome do Contato</label>
+                        <div className="relative group">
+                            <User className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            <input
+                                type="text"
+                                placeholder="Ex: João da Silva"
+                                className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
+                                value={formData.contact_name}
+                                onChange={e => setFormData({ ...formData, contact_name: e.target.value })}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Tipo + Documento */}
                     <div className="grid grid-cols-2 gap-5">
                         <div className="space-y-1.5">
                             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Tipo Identificação</label>
                             <select
                                 className="w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-white font-bold text-gray-700 appearance-none cursor-pointer"
                                 value={formData.type}
-                                onChange={e => setFormData({ ...formData, type: e.target.value as 'PF' | 'PJ' })}
+                                onChange={e => handleTypeChange(e.target.value as 'PF' | 'PJ')}
                             >
                                 <option value="PJ">🏢 Pessoa Jurídica</option>
                                 <option value="PF">👤 Pessoa Física</option>
                             </select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">CNPJ / CPF</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">{docLabel}</label>
                             <div className="relative group">
                                 <FileText className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                 <input
                                     type="text"
-                                    placeholder="00.000.000/0000-00"
+                                    placeholder={docPlaceholder}
                                     className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-mono font-bold text-gray-900"
                                     value={formData.document}
-                                    onChange={e => setFormData({ ...formData, document: e.target.value })}
+                                    onChange={e => handleDocumentChange(e.target.value)}
                                 />
                             </div>
                         </div>
                     </div>
 
+                    {/* Categoria */}
                     <div className="space-y-1.5">
                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Categoria de Atuação</label>
                         <div className="relative group">
@@ -185,6 +274,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                         </div>
                     </div>
 
+                    {/* Organização */}
                     <div className="space-y-1.5">
                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Organização</label>
                         <div className="relative group">
@@ -202,6 +292,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                         </div>
                     </div>
 
+                    {/* E-mail + Telefone */}
                     <div className="grid grid-cols-2 gap-5">
                         <div className="space-y-1.5">
                             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">E-mail Comercial</label>
@@ -231,20 +322,46 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                         </div>
                     </div>
 
+                    {/* Endereço: Rua */}
                     <div className="space-y-1.5">
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Localização (Rua, Nº, Bairro)</label>
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Rua / Logradouro</label>
                         <div className="relative group">
                             <MapPin className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                             <input
                                 type="text"
-                                placeholder="Rua Exemplo, 123 - Centro"
+                                placeholder="Rua Exemplo"
                                 className="pl-12 w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
-                                value={formData.address}
-                                onChange={e => setFormData({ ...formData, address: e.target.value })}
+                                value={formData.street}
+                                onChange={e => setFormData({ ...formData, street: e.target.value })}
                             />
                         </div>
                     </div>
 
+                    {/* Número + Bairro */}
+                    <div className="grid grid-cols-2 gap-5">
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Número</label>
+                            <input
+                                type="text"
+                                placeholder="123 ou S/N"
+                                className="w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
+                                value={formData.number}
+                                onChange={e => setFormData({ ...formData, number: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Bairro</label>
+                            <input
+                                type="text"
+                                placeholder="Centro"
+                                className="w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder-gray-300 font-medium text-gray-900"
+                                value={formData.neighborhood}
+                                onChange={e => setFormData({ ...formData, neighborhood: e.target.value })}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Cidade + UF */}
                     <div className="grid grid-cols-2 gap-5">
                         <div className="space-y-1.5">
                             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Cidade</label>
@@ -257,18 +374,21 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">UF</label>
-                            <input
-                                type="text"
-                                maxLength={2}
-                                placeholder="SP"
-                                className="w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none uppercase font-black text-gray-900 text-center tracking-tighter"
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Estado (UF)</label>
+                            <select
+                                className="w-full rounded-2xl border border-gray-200 p-3.5 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-white font-bold text-gray-700 appearance-none cursor-pointer"
                                 value={formData.state}
-                                onChange={e => setFormData({ ...formData, state: e.target.value.toUpperCase() })}
-                            />
+                                onChange={e => setFormData({ ...formData, state: e.target.value })}
+                            >
+                                <option value="">Selecione</option>
+                                {ESTADOS_BR.map(estado => (
+                                    <option key={estado.sigla} value={estado.sigla}>{estado.sigla} — {estado.nome}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
+                    {/* Botões */}
                     <div className="flex gap-4 pt-6">
                         <button
                             type="button"

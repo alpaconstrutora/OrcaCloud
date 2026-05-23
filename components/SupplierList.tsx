@@ -38,18 +38,10 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
 
     const handleAdd = async (data: Partial<Supplier>) => {
         try {
-            alert("Salvando fornecedor: " + JSON.stringify({name: data.name, org: data.organization_id}));
-            console.log("handleAdd - dados recebidos do modal:", data);
-
-            // Convert empty strings to null for unique/optional fields
             const sanitizedData = Object.fromEntries(
                 Object.entries(data).map(([key, value]) => [key, value === '' ? null : value])
             );
-
-            console.log("handleAdd - dados sanitizados:", sanitizedData);
-
             await supplierService.addSupplier(sanitizedData as Omit<Supplier, 'id' | 'created_at'>);
-            console.log("Fornecedor adicionado com sucesso");
             setIsModalOpen(false);
             loadSuppliers();
         } catch (error) {
@@ -61,18 +53,10 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     const handleEdit = async (data: Partial<Supplier>) => {
         try {
             if (!editingSupplier?.id) return;
-            console.log("handleEdit - dados recebidos do modal:", data);
-            console.log("handleEdit - editando fornecedor ID:", editingSupplier.id);
-
-            // Convert empty strings to null for unique/optional fields
             const sanitizedData = Object.fromEntries(
                 Object.entries(data).map(([key, value]) => [key, value === '' ? null : value])
             );
-
-            console.log("handleEdit - dados sanitizados:", sanitizedData);
-
             await supplierService.updateSupplier(editingSupplier.id, sanitizedData);
-            console.log("Fornecedor atualizado com sucesso");
             setIsModalOpen(false);
             loadSuppliers();
         } catch (error) {

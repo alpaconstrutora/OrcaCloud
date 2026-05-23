@@ -1201,9 +1201,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             }));
 
         } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.error(`Error bulk updating ${type} entity_name:`, error);
-            alert(`Erro ao atualizar fornecedor/cliente em lote: ${error.message}`);
+            const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? JSON.stringify(err);
+            console.error(`Error bulk updating ${type} entity_name:`, err);
+            alert(`Erro ao atualizar fornecedor/cliente em lote: ${msg}`);
         } finally {
             setIsLoading(false);
         }
@@ -2293,19 +2293,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                             </div>
 
                             <div className="flex items-center bg-white/5 p-1 rounded-2xl border border-white/10">
-                                {bankCount > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            const sel = document.getElementById('bulk-entity-select') as HTMLSelectElement;
-                                            if (!sel?.value) { alert('Selecione um fornecedor ou cliente.'); return; }
-                                            handleBulkUpdateEntityName('bank', sel.value);
-                                        }}
-                                        className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                                    >
-                                        Extratos ({bankCount})
-                                    </button>
-                                )}
-                                {bankCount > 0 && internalCount > 0 && <div className="w-px h-4 bg-white/10 mx-1" />}
                                 {internalCount > 0 && (
                                     <button
                                         onClick={() => {
@@ -2317,6 +2304,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                     >
                                         Internos ({internalCount})
                                     </button>
+                                )}
+                                {internalCount === 0 && (
+                                    <span className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white/30">
+                                        Selecione lançamentos internos
+                                    </span>
                                 )}
                             </div>
                         </div>

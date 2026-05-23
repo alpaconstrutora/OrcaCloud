@@ -123,15 +123,15 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     const docPlaceholder = formData.type === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00';
 
     return (
-        <div className="fixed inset-0 z-50 flex">
+        <div className="fixed inset-0 z-50 flex items-center justify-end p-4">
             {/* Overlay */}
             <div
-                className="flex-1 bg-black/30 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/30 backdrop-blur-sm"
                 onClick={onClose}
             />
 
-            {/* Painel lateral direito */}
-            <div className="w-[480px] h-full bg-white rounded-l-[2rem] shadow-2xl flex flex-col overflow-hidden border-l border-gray-100 animate-in slide-in-from-right duration-300">
+            {/* Painel lateral direito com afastamento e bordas arredondas */}
+            <div className="relative w-[480px] h-full bg-white rounded-[1.75rem] shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in slide-in-from-right duration-300">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-7 py-5 border-b border-gray-100 bg-gray-50/60 shrink-0">

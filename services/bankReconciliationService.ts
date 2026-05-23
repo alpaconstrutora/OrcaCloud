@@ -66,9 +66,20 @@ export const bankReconciliationService = {
 
         for (const file of files) {
             try {
-                const text = await file.text();
-                const rawTransactions: RawTransaction[] = [];
                 const fileName = file.name.toLowerCase();
+                let text: string;
+                if (fileName.endsWith('.ofx')) {
+                    // OFX de bancos brasileiros costuma usar Windows-1252/ISO-8859-1
+                    const buffer = await file.arrayBuffer();
+                    try {
+                        text = new TextDecoder('windows-1252').decode(buffer);
+                    } catch {
+                        text = new TextDecoder('utf-8').decode(buffer);
+                    }
+                } else {
+                    text = await file.text();
+                }
+                const rawTransactions: RawTransaction[] = [];
 
                 if (fileName.endsWith('.ofx')) {
                     rawTransactions.push(...this.parseOFX(text));
@@ -101,26 +112,25 @@ export const bankReconciliationService = {
             }
         }
 
-        if (allNormalizedTxs.length === 0) return [];
+        if (allNormalizedTxs.length === 0) return { inserted: 0, duplicates: 0, data: [] };
 
         // Remover duplicatas dentro do próprio lote (mesmo fingerprint)
         const uniqueInBatch = Array.from(new Map(allNormalizedTxs.map(tx => [tx.fingerprint, tx])).values());
 
         // Estabilização: Filtrar transações já existentes pelo fingerprint e bank_account_id
         const fingerprints = uniqueInBatch.map(tx => tx.fingerprint);
-        
-        // Chunk fingerprints if too many (Supabase/PostgREST typically handle up to ~2000-5000)
-        // For bank statements, we rarely exceed 1000 txs in a single batch, but let's be safe.
+
         const { data: existingTxs } = await supabase
             .from('bank_transactions')
             .select('fingerprint')
             .eq('bank_account_id', bankAccountId)
             .in('fingerprint', fingerprints);
-        
+
         const existingFingerprints = new Set(existingTxs?.map(tx => tx.fingerprint) || []);
         const newTxs = uniqueInBatch.filter(tx => !existingFingerprints.has(tx.fingerprint));
+        const duplicateCount = uniqueInBatch.length - newTxs.length;
 
-        if (newTxs.length === 0) return [];
+        if (newTxs.length === 0) return { inserted: 0, duplicates: duplicateCount, data: [] };
 
         const { data, error } = await supabase
             .from('bank_transactions')
@@ -133,7 +143,7 @@ export const bankReconciliationService = {
         await this.normalizeTransactions(bankAccountId);
         await this.applyCustomRules(bankAccountId, organizationId);
 
-        return data;
+        return { inserted: data?.length ?? newTxs.length, duplicates: duplicateCount, data: data ?? [] };
     },
 
     /**

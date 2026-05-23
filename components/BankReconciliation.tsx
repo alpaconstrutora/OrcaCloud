@@ -1179,11 +1179,20 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             if (!orgId) throw new Error('ID da organização não identificado. Selecione uma conta bancária.');
 
             const fileArray = Array.from(files);
-            await bankReconciliationService.ingestMultipleFiles(fileArray, selectedAccountId, orgId);
+            const result = await bankReconciliationService.ingestMultipleFiles(fileArray, selectedAccountId, orgId);
             await bankReconciliationService.runMatchingEngine(selectedAccountId, orgId);
-            
+
             await loadTransactions();
             await loadStats();
+
+            if (result.inserted === 0 && result.duplicates > 0) {
+                alert(`Este extrato já foi importado anteriormente.\n${result.duplicates} transação(ões) duplicada(s) ignorada(s).`);
+            } else if (result.inserted === 0) {
+                alert('Nenhuma transação encontrada no arquivo. Verifique se o formato é OFX válido.');
+            } else {
+                setActionFeedback({ message: `${result.inserted} transação(ões) importada(s) com sucesso!`, type: 'success' });
+                setTimeout(() => setActionFeedback(null), 4000);
+            }
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             alert('Erro na importação: ' + error.message);

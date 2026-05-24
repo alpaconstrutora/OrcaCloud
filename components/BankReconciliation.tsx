@@ -3063,12 +3063,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                         : 'text-gray-400 border-gray-200'
                                                                 }`}
                                                             >
-                                                                <option value="">— selecionar</option>
+                                                                <option value="" className="text-gray-900 bg-white">— selecionar</option>
                                                                 {tx.counterparty_name && ![...uniqueCredores, ...uniqueClients, ...uniqueBankClients].includes(tx.counterparty_name) && (
-                                                                    <option value={tx.counterparty_name}>{tx.counterparty_name}</option>
+                                                                    <option value={tx.counterparty_name} className="text-gray-900 bg-white">{tx.counterparty_name}</option>
                                                                 )}
                                                                 {(tx.direction === 'DEBIT' ? uniqueCredores : [...new Set([...uniqueClients, ...uniqueBankClients])].sort()).map(name => (
-                                                                    <option key={name} value={name}>{name}</option>
+                                                                    <option key={name} value={name} className="text-gray-900 bg-white">{name}</option>
                                                                 ))}
                                                             </select>
                                                         </div>

@@ -129,8 +129,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     // Filtros e Ordenação
     const [bankSearch, setBankSearch] = useState('');
     const [internalSearch, setInternalSearch] = useState('');
-    const [bankCategoryFilter, setBankCategoryFilter] = useState<string[]>([]);
-    const [internalCategoryFilter, setInternalCategoryFilter] = useState<string[]>([]);
+    const [bankCategoryFilter, setBankCategoryFilter] = useState<string[]>(() => {
+        try { return JSON.parse(localStorage.getItem('reconciliation_bank_cat_filter') || '[]'); } catch { return []; }
+    });
+    const [internalCategoryFilter, setInternalCategoryFilter] = useState<string[]>(() => {
+        try { return JSON.parse(localStorage.getItem('reconciliation_internal_cat_filter') || '[]'); } catch { return []; }
+    });
     const [bankCatDropdownOpen, setBankCatDropdownOpen] = useState(false);
     const [internalCatDropdownOpen, setInternalCatDropdownOpen] = useState(false);
     const [bankSortOrder, setBankSortOrder] = useState<'desc' | 'asc'>('desc');
@@ -358,6 +362,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     useEffect(() => {
         localStorage.setItem('reconciliation_active_tab', activeView);
     }, [activeView]);
+
+    useEffect(() => {
+        localStorage.setItem('reconciliation_bank_cat_filter', JSON.stringify(bankCategoryFilter));
+    }, [bankCategoryFilter]);
+
+    useEffect(() => {
+        localStorage.setItem('reconciliation_internal_cat_filter', JSON.stringify(internalCategoryFilter));
+    }, [internalCategoryFilter]);
 
     useEffect(() => {
         localStorage.setItem('reconciliation_rules_view_mode', rulesViewMode);

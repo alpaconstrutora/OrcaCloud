@@ -129,8 +129,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     // Filtros e Ordenação
     const [bankSearch, setBankSearch] = useState('');
     const [internalSearch, setInternalSearch] = useState('');
-    const [bankCategoryFilter, setBankCategoryFilter] = useState('');
-    const [internalCategoryFilter, setInternalCategoryFilter] = useState('');
+    const [bankCategoryFilter, setBankCategoryFilter] = useState<string[]>([]);
+    const [internalCategoryFilter, setInternalCategoryFilter] = useState<string[]>([]);
+    const [bankCatDropdownOpen, setBankCatDropdownOpen] = useState(false);
+    const [internalCatDropdownOpen, setInternalCatDropdownOpen] = useState(false);
     const [bankSortOrder, setBankSortOrder] = useState<'desc' | 'asc'>('desc');
     const [bankSortField, setBankSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'counterparty'>('date');
     const [internalSortOrder, setInternalSortOrder] = useState<'desc' | 'asc'>('desc');
@@ -149,10 +151,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 (tx.counterparty_name || '').toLowerCase().includes(search)
             );
         }
-        if (bankCategoryFilter === '__none__') {
+        if (bankCategoryFilter.includes('__none__') && bankCategoryFilter.length === 1) {
             filtered = filtered.filter(tx => !tx.category);
-        } else if (bankCategoryFilter) {
-            filtered = filtered.filter(tx => tx.category === bankCategoryFilter);
+        } else if (bankCategoryFilter.includes('__none__')) {
+            filtered = filtered.filter(tx => !tx.category || bankCategoryFilter.includes(tx.category));
+        } else if (bankCategoryFilter.length > 0) {
+            filtered = filtered.filter(tx => bankCategoryFilter.includes(tx.category ?? ''));
         }
         if (flowFilter !== 'ALL') {
             filtered = filtered.filter(tx => 
@@ -194,10 +198,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 (tx.entity_name || '').toLowerCase().includes(search)
             );
         }
-        if (internalCategoryFilter === '__none__') {
+        if (internalCategoryFilter.includes('__none__') && internalCategoryFilter.length === 1) {
             filtered = filtered.filter(tx => !tx.category);
-        } else if (internalCategoryFilter) {
-            filtered = filtered.filter(tx => tx.category === internalCategoryFilter);
+        } else if (internalCategoryFilter.includes('__none__')) {
+            filtered = filtered.filter(tx => !tx.category || internalCategoryFilter.includes(tx.category));
+        } else if (internalCategoryFilter.length > 0) {
+            filtered = filtered.filter(tx => internalCategoryFilter.includes(tx.category ?? ''));
         }
         if (flowFilter !== 'ALL') {
             filtered = filtered.filter(tx => 
@@ -392,6 +398,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         };
         fetchData();
     }, [selectedAccountId, activeView, startDate, endDate]);
+
+    useEffect(() => {
+        const close = () => { setBankCatDropdownOpen(false); setInternalCatDropdownOpen(false); };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, []);
 
     // Atalho para limpar seleção com Esc
     useEffect(() => {
@@ -2770,17 +2782,33 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                 Extrato Bancário
                             </h4>
                             <div className="flex items-center gap-2">
-                                <select
-                                    value={bankCategoryFilter}
-                                    onChange={(e) => setBankCategoryFilter(e.target.value)}
-                                    className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 cursor-pointer text-gray-400"
-                                >
-                                    <option value="">Todas Categorias</option>
-                                    <option value="__none__">— Sem categoria</option>
-                                    {uniqueCategories.map(cat => (
-                                        <option key={cat} value={cat}>{cat}</option>
-                                    ))}
-                                </select>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => { setBankCatDropdownOpen(o => !o); setInternalCatDropdownOpen(false); }}
+                                        className={`px-3 py-1.5 border rounded-full text-[10px] font-bold focus:outline-none cursor-pointer flex items-center gap-1.5 ${bankCategoryFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
+                                    >
+                                        {bankCategoryFilter.length > 0 ? `${bankCategoryFilter.length} categoria${bankCategoryFilter.length > 1 ? 's' : ''}` : 'Todas Categorias'}
+                                        <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    </button>
+                                    {bankCatDropdownOpen && (
+                                        <div onMouseDown={(e) => e.stopPropagation()} className="absolute top-full mt-1 left-0 z-50 bg-white border border-gray-100 rounded-2xl shadow-xl min-w-[200px] py-1 max-h-64 overflow-y-auto">
+                                            {bankCategoryFilter.length > 0 && (
+                                                <button onClick={() => setBankCategoryFilter([])} className="w-full text-left px-3 py-1.5 text-[10px] font-black text-red-500 hover:bg-red-50 uppercase tracking-wider">Limpar seleção</button>
+                                            )}
+                                            {[{ value: '__none__', label: '— Sem categoria' }, ...uniqueCategories.map(c => ({ value: c, label: c }))].map(({ value, label }) => (
+                                                <label key={value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={bankCategoryFilter.includes(value)}
+                                                        onChange={() => setBankCategoryFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])}
+                                                        className="w-3.5 h-3.5 rounded text-blue-500 focus:ring-0"
+                                                    />
+                                                    <span className="text-[10px] font-bold text-gray-700 uppercase truncate">{label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-full px-3 py-1.5">
                                     <ArrowUpDown className="w-3 h-3 text-gray-400 shrink-0" />
                                     <select
@@ -3124,17 +3152,33 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                             {sortedInternalTransactions.length > 0 && sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id)) ? 'Todos Selecionados' : 'Selecionar Tudo'}
                                         </button>
                                     )}
-                                    <select
-                                        value={internalCategoryFilter}
-                                        onChange={(e) => setInternalCategoryFilter(e.target.value)}
-                                        className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/10 cursor-pointer text-gray-400"
-                                    >
-                                        <option value="">Todas Categorias</option>
-                                        <option value="__none__">— Sem categoria</option>
-                                        {uniqueCategories.map(cat => (
-                                            <option key={cat} value={cat}>{cat}</option>
-                                        ))}
-                                    </select>
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => { setInternalCatDropdownOpen(o => !o); setBankCatDropdownOpen(false); }}
+                                            className={`px-3 py-1.5 border rounded-full text-[10px] font-bold focus:outline-none cursor-pointer flex items-center gap-1.5 ${internalCategoryFilter.length > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
+                                        >
+                                            {internalCategoryFilter.length > 0 ? `${internalCategoryFilter.length} categoria${internalCategoryFilter.length > 1 ? 's' : ''}` : 'Todas Categorias'}
+                                            <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                        </button>
+                                        {internalCatDropdownOpen && (
+                                            <div onMouseDown={(e) => e.stopPropagation()} className="absolute top-full mt-1 left-0 z-50 bg-white border border-gray-100 rounded-2xl shadow-xl min-w-[200px] py-1 max-h-64 overflow-y-auto">
+                                                {internalCategoryFilter.length > 0 && (
+                                                    <button onClick={() => setInternalCategoryFilter([])} className="w-full text-left px-3 py-1.5 text-[10px] font-black text-red-500 hover:bg-red-50 uppercase tracking-wider">Limpar seleção</button>
+                                                )}
+                                                {[{ value: '__none__', label: '— Sem categoria' }, ...uniqueCategories.map(c => ({ value: c, label: c }))].map(({ value, label }) => (
+                                                    <label key={value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={internalCategoryFilter.includes(value)}
+                                                            onChange={() => setInternalCategoryFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])}
+                                                            className="w-3.5 h-3.5 rounded text-emerald-500 focus:ring-0"
+                                                        />
+                                                        <span className="text-[10px] font-bold text-gray-700 uppercase truncate">{label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                     <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-full px-3 py-1.5">
                                         <ArrowUpDown className="w-3 h-3 text-gray-400 shrink-0" />
                                         <select

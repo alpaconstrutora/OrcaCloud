@@ -2792,9 +2792,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                     </button>
                                     {bankCatDropdownOpen && (
                                         <div onMouseDown={(e) => e.stopPropagation()} className="absolute top-full mt-1 left-0 z-50 bg-white border border-gray-100 rounded-2xl shadow-xl min-w-[200px] py-1 max-h-64 overflow-y-auto">
-                                            {bankCategoryFilter.length > 0 && (
-                                                <button onClick={() => setBankCategoryFilter([])} className="w-full text-left px-3 py-1.5 text-[10px] font-black text-red-500 hover:bg-red-50 uppercase tracking-wider">Limpar seleção</button>
-                                            )}
+                                            <div className="flex border-b border-gray-100 mb-1">
+                                                <button onClick={() => setBankCategoryFilter(['__none__', ...uniqueCategories])} className="flex-1 px-3 py-1.5 text-[10px] font-black text-blue-500 hover:bg-blue-50 uppercase tracking-wider text-left">Selecionar todos</button>
+                                                <button onClick={() => setBankCategoryFilter([])} className="flex-1 px-3 py-1.5 text-[10px] font-black text-red-500 hover:bg-red-50 uppercase tracking-wider text-right">Limpar</button>
+                                            </div>
                                             {[{ value: '__none__', label: '— Sem categoria' }, ...uniqueCategories.map(c => ({ value: c, label: c }))].map(({ value, label }) => (
                                                 <label key={value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
                                                     <input
@@ -3162,9 +3163,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                         </button>
                                         {internalCatDropdownOpen && (
                                             <div onMouseDown={(e) => e.stopPropagation()} className="absolute top-full mt-1 left-0 z-50 bg-white border border-gray-100 rounded-2xl shadow-xl min-w-[200px] py-1 max-h-64 overflow-y-auto">
-                                                {internalCategoryFilter.length > 0 && (
-                                                    <button onClick={() => setInternalCategoryFilter([])} className="w-full text-left px-3 py-1.5 text-[10px] font-black text-red-500 hover:bg-red-50 uppercase tracking-wider">Limpar seleção</button>
-                                                )}
+                                                <div className="flex border-b border-gray-100 mb-1">
+                                                    <button onClick={() => setInternalCategoryFilter(['__none__', ...uniqueCategories])} className="flex-1 px-3 py-1.5 text-[10px] font-black text-emerald-500 hover:bg-emerald-50 uppercase tracking-wider text-left">Selecionar todos</button>
+                                                    <button onClick={() => setInternalCategoryFilter([])} className="flex-1 px-3 py-1.5 text-[10px] font-black text-red-500 hover:bg-red-50 uppercase tracking-wider text-right">Limpar</button>
+                                                </div>
                                                 {[{ value: '__none__', label: '— Sem categoria' }, ...uniqueCategories.map(c => ({ value: c, label: c }))].map(({ value, label }) => (
                                                     <label key={value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
                                                         <input

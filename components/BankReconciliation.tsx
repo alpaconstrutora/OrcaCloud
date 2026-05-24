@@ -1343,6 +1343,34 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         }
     };
 
+    const handleDeleteBankTransactions = async (ids: string[]) => {
+        if (ids.length === 0) return;
+        const msg = ids.length === 1
+            ? 'Deseja realmente excluir este extrato bancário? Esta ação não pode ser desfeita.'
+            : `Deseja realmente excluir ${ids.length} extratos bancários? Esta ação não pode ser desfeita.`;
+        if (!confirm(msg)) return;
+
+        setIsLoading(true);
+        try {
+            const { error } = await supabase
+                .from('bank_transactions')
+                .delete()
+                .in('id', ids);
+            if (error) throw error;
+
+            setBankTransactions(prev => prev.filter(tx => !ids.includes(tx.id)));
+            setSelectedBankTxIds(prev => { const next = new Set(prev); ids.forEach(id => next.delete(id)); return next; });
+            setMatches(prev => prev.filter(m => !ids.includes(m.bank_transaction?.id ?? '')));
+            setActionFeedback({ message: `${ids.length} extrato${ids.length > 1 ? 's' : ''} excluído${ids.length > 1 ? 's' : ''} com sucesso!`, type: 'success' });
+            setTimeout(() => setActionFeedback(null), 3000);
+        } catch (err: unknown) {
+            const msg2 = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
+            alert('Erro ao excluir: ' + msg2);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleUpdateBankCounterparty = async (txId: string, name: string) => {
         try {
             const { error } = await supabase
@@ -2473,6 +2501,20 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                             </div>
                         </div>
 
+                        {bankCount > 0 && (
+                            <>
+                                <div className="w-px h-8 bg-white/20 mx-1" />
+                                <button
+                                    onClick={() => handleDeleteBankTransactions(Array.from(selectedBankTxIds))}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-red-600/80 hover:bg-red-500 transition-all shadow-lg active:scale-95 text-white"
+                                    title="Excluir extratos selecionados"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Excluir extratos ({bankCount})
+                                </button>
+                            </>
+                        )}
+
                         <button
                             onClick={() => { setSelectedBankTxIds(new Set()); setSelectedInternalTxIds(new Set()); }}
                             className="w-10 h-10 rounded-2xl text-white/40 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center group"
@@ -3082,6 +3124,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                             ) : (
                                                                 <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">{tx.status}</span>
                                                             )}
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleDeleteBankTransactions([tx.id]); }}
+                                                                className="mt-1 p-1 text-gray-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                                title="Excluir extrato"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>

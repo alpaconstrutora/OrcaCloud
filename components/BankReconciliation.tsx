@@ -2926,8 +2926,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                         placeholder="Filtro..."
                                         value={bankSearch}
                                         onChange={(e) => setBankSearch(e.target.value)}
-                                        className="pl-8 pr-4 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 w-24 focus:w-32 transition-all"
+                                        className="pl-8 pr-8 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 w-24 focus:w-32 transition-all"
                                     />
+                                    {bankSearch && (
+                                        <button
+                                            onClick={() => setBankSearch('')}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                            title="Limpar filtro"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -3347,8 +3356,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                             placeholder="Filtro..."
                                             value={internalSearch}
                                             onChange={(e) => setInternalSearch(e.target.value)}
-                                            className="pl-8 pr-4 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/10 w-24 focus:w-32 transition-all"
+                                            className="pl-8 pr-8 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/10 w-24 focus:w-32 transition-all"
                                         />
+                                        {internalSearch && (
+                                            <button
+                                                onClick={() => setInternalSearch('')}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                                title="Limpar filtro"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>

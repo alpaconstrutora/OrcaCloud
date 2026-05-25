@@ -246,6 +246,23 @@ export const organizationService = {
 
         // 3. Sync Member Permissions and Roles
         if (org.members) {
+            const { data: currentMembers } = await supabase
+                .from('organization_members')
+                .select('email')
+                .eq('organization_id', id);
+
+            const currentEmails = (currentMembers || []).map(m => m.email.toLowerCase());
+            const newEmails = org.members.map(m => m.email.toLowerCase());
+            const removedEmails = currentEmails.filter(e => !newEmails.includes(e));
+
+            if (removedEmails.length > 0) {
+                await supabase
+                    .from('organization_members')
+                    .delete()
+                    .eq('organization_id', id)
+                    .in('email', removedEmails);
+            }
+
             for (const member of org.members) {
                 await supabase
                     .from('organization_members')

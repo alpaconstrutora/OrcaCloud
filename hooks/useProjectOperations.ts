@@ -281,8 +281,9 @@ export const useProjectOperations = ({
   const handleUpsertOrganization = async (data: Organization, shouldClose: boolean = true) => {
     setIsSaving(true);
     try {
-      if (editingOrganizationId) {
-        await organizationService.updateOrganization(editingOrganizationId, data);
+      const orgId = editingOrganizationId || data.id;
+      if (orgId) {
+        await organizationService.updateOrganization(orgId, data);
         if (shouldClose) alert("Organização atualizada!");
       } else {
         await organizationService.createOrganization(data, session?.user?.email);

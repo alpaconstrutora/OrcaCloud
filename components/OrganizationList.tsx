@@ -23,6 +23,7 @@ interface OrganizationListProps {
     organizations: Organization[];
     onCreate: () => void;
     onEdit: (org: Organization) => void;
+    onSave?: (org: Organization) => void;
     onDelete: (id: string) => void;
     onSelect: (org: Organization) => void;
     
@@ -44,6 +45,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     organizations,
     onCreate,
     onEdit,
+    onSave,
     onDelete,
     onSelect,
     activeTab,
@@ -421,12 +423,12 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                 
                 {activeTab === 'users' && (
                     currentOrg ? (
-                        <OrganizationUsers 
+                        <OrganizationUsers
                             members={currentOrg.members || []}
-                            onUpdateMembers={(members) => onEdit({ ...currentOrg, members })}
+                            onUpdateMembers={(members) => (onSave ?? onEdit)({ ...currentOrg, members })}
                             customRoles={currentOrg.customRoles || []}
-                            onUpdateCustomRoles={(customRoles) => onEdit({ ...currentOrg, customRoles })}
-                            onUpdateAll={(updates) => onEdit({ ...currentOrg, ...updates })}
+                            onUpdateCustomRoles={(customRoles) => (onSave ?? onEdit)({ ...currentOrg, customRoles })}
+                            onUpdateAll={(updates) => (onSave ?? onEdit)({ ...currentOrg, ...updates })}
                         />
                     ) : (
                         <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden">

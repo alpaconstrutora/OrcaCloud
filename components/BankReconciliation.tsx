@@ -109,6 +109,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [masterSuppliers, setMasterSuppliers] = useState<string[]>([]);
     const [masterClients, setMasterClients] = useState<string[]>([]);
     const [masterEmployees, setMasterEmployees] = useState<string[]>([]);
+    const [masterProjects, setMasterProjects] = useState<Array<{ id: string; name: string }>>([]);
     const [managedCategories, setManagedCategories] = useState<string[]>([]);
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [stats, setStats] = useState({
@@ -327,9 +328,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         entity_name: ''
     });
 
-    const [startDate, setStartDate] = useState<string>('');
-    const [endDate, setEndDate] = useState<string>('');
-    const [competencia, setCompetencia] = useState<string>('');
+    const [startDate, setStartDate] = useState<string>(() => localStorage.getItem('reconciliation_start_date') || '');
+    const [endDate, setEndDate] = useState<string>(() => localStorage.getItem('reconciliation_end_date') || '');
+    const [competencia, setCompetencia] = useState<string>(() => localStorage.getItem('reconciliation_competencia') || '');
     const [selectedBankTxId, setSelectedBankTxId] = useState<string | null>(null);
 
     // Determina a organização efetiva (da prop ou da conta selecionada)
@@ -350,6 +351,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             loadSuppliers(effectiveOrgId);
             loadClients(effectiveOrgId);
             loadEmployees(effectiveOrgId);
+            loadProjects(effectiveOrgId);
             // Carrega categorias uma única vez por org (não re-carrega ao trocar de conta)
             if (categoriesLoadedForOrg.current !== effectiveOrgId) {
                 categoriesLoadedForOrg.current = effectiveOrgId;
@@ -370,6 +372,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     useEffect(() => {
         localStorage.setItem('reconciliation_internal_cat_filter', JSON.stringify(internalCategoryFilter));
     }, [internalCategoryFilter]);
+
+    useEffect(() => { localStorage.setItem('reconciliation_start_date', startDate); }, [startDate]);
+    useEffect(() => { localStorage.setItem('reconciliation_end_date', endDate); }, [endDate]);
+    useEffect(() => { localStorage.setItem('reconciliation_competencia', competencia); }, [competencia]);
 
     useEffect(() => {
         localStorage.setItem('reconciliation_rules_view_mode', rulesViewMode);
@@ -567,6 +573,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             if (data) setMasterEmployees(data.map(e => e.name));
         } catch (error) {
             console.error('Error loading employees:', error);
+        }
+    };
+
+    const loadProjects = async (orgId: string) => {
+        try {
+            const { data } = await supabase
+                .from('projects')
+                .select('id, name')
+                .filter('settings->>organizationId', 'eq', orgId)
+                .order('name', { ascending: true });
+            if (data) setMasterProjects(data);
+        } catch (error) {
+            console.error('Error loading projects:', error);
         }
     };
 
@@ -1395,6 +1414,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             ));
         } catch (error) {
             console.error('Error updating counterparty:', error);
+        }
+    };
+
+    const handleUpdateBankProject = async (txId: string, projectId: string) => {
+        try {
+            const { error } = await supabase
+                .from('bank_transactions')
+                .update({ project_id: projectId || null })
+                .eq('id', txId);
+            if (error) throw error;
+            setBankTransactions(prev => prev.map(tx =>
+                tx.id === txId ? { ...tx, project_id: projectId || undefined } : tx
+            ));
+        } catch (error) {
+            console.error('Error updating project:', error);
         }
     };
 
@@ -2970,27 +3004,48 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         {tx.description_normalized || tx.description_raw}
                                                     </h6>
 
-                                                    <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-50">
-                                                        <select 
-                                                            value={tx.category || ''}
-                                                            onChange={(e) => {
-                                                                e.stopPropagation();
-                                                                handleUpdateBankCategory(tx.id, e.target.value);
-                                                            }}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className={`text-[8px] font-black px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center min-w-[80px] ${
-                                                                tx.category 
-                                                                    ? 'text-gray-900 bg-gray-50 border-gray-100 hover:bg-gray-100' 
-                                                                    : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-300 hover:text-blue-500'
-                                                            }`}
-                                                        >
-                                                            <option value="">Pendente</option>
-                                                            {uniqueCategories.map(cat => (
-                                                                <option key={cat} value={cat}>{cat}</option>
-                                                            ))}
-                                                        </select>
-                                                        
-                                                        {tx.status === 'RULE_APPLIED' ? (
+                                                    <div className="flex flex-col gap-3 mt-auto pt-3 border-t border-gray-50">
+                                                        <div className="flex gap-2">
+                                                            <select
+                                                                value={tx.category || ''}
+                                                                onChange={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateBankCategory(tx.id, e.target.value);
+                                                                }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className={`flex-1 text-[8px] font-black px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
+                                                                    tx.category
+                                                                        ? 'text-gray-900 bg-gray-50 border-gray-100 hover:bg-gray-100'
+                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-300 hover:text-blue-500'
+                                                                }`}
+                                                            >
+                                                                <option value="">Categoria</option>
+                                                                {uniqueCategories.map(cat => (
+                                                                    <option key={cat} value={cat}>{cat}</option>
+                                                                ))}
+                                                            </select>
+                                                            <select
+                                                                value={tx.project_id || ''}
+                                                                onChange={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateBankProject(tx.id, e.target.value);
+                                                                }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className={`flex-1 text-[8px] font-black px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
+                                                                    tx.project_id
+                                                                        ? 'text-gray-900 bg-blue-50 border-blue-100 hover:bg-blue-100'
+                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-300 hover:text-blue-500'
+                                                                }`}
+                                                            >
+                                                                <option value="">Obra</option>
+                                                                {masterProjects.map(proj => (
+                                                                    <option key={proj.id} value={proj.id}>{proj.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between">
+                                                            {tx.status === 'RULE_APPLIED' ? (
                                                             <div className="flex gap-1.5 shrink-0">
                                                                 <button 
                                                                     className="text-[8px] font-black text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-2 py-1 rounded-lg uppercase tracking-widest transition-all"
@@ -3015,6 +3070,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         ) : (
                                                             <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{tx.status}</span>
                                                         )}
+                                                        </div>
                                                     </div>
 
                                                     {tx.status === 'RULE_APPLIED' && (
@@ -3102,6 +3158,27 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                 <option value="">Categoria</option>
                                                                 {uniqueCategories.map(cat => (
                                                                     <option key={cat} value={cat}>{cat}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        <div onClick={(e) => e.stopPropagation()}>
+                                                            <select
+                                                                value={tx.project_id || ''}
+                                                                onChange={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateBankProject(tx.id, e.target.value);
+                                                                }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
+                                                                    tx.project_id
+                                                                        ? 'text-gray-900 bg-blue-100 border-blue-200/50 hover:bg-blue-200'
+                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
+                                                                }`}
+                                                            >
+                                                                <option value="">Obra</option>
+                                                                {masterProjects.map(proj => (
+                                                                    <option key={proj.id} value={proj.id}>{proj.name}</option>
                                                                 ))}
                                                             </select>
                                                         </div>

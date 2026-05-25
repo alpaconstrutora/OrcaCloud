@@ -170,6 +170,7 @@ export interface BankTransaction {
     fingerprint?: string;
     category?: string;
     status: BankTransactionStatus;
+    project_id?: string;
     created_at?: string;
 }
 

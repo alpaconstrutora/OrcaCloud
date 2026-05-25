@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { 
     Clock, Plus, Trash2, Pencil, Save, X, FileText, ShieldCheck, 
     ArrowUpRight, ArrowDownRight, Filter, CheckCircle2,
@@ -1534,20 +1535,15 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         <div className="p-2 space-y-8 animate-in fade-in duration-500">
             {/* Header & Tabs */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-                <div className="flex bg-gray-100/80 p-1.5 rounded-[1.5rem] backdrop-blur-sm border border-gray-200/50">
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab.key}
-                            onClick={() => setActiveTab(tab.key)}
-                            className={`px-6 py-2.5 rounded-2xl text-sm font-normal uppercase tracking-widest transition-all duration-300 ${activeTab === tab.key
-                                ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]'
-                                : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
-                                }`}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+                    <TabsList>
+                        {tabs.map((tab) => (
+                            <TabsTrigger key={tab.key} value={tab.key}>
+                                {tab.label}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                </Tabs>
 
                 <div className="flex items-center gap-3">
                     <button

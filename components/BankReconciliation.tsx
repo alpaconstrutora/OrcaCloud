@@ -2283,24 +2283,50 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                     <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
                         <div className="flex flex-col">
                             <label className="text-[8px] font-black text-indigo-400 uppercase ml-1 mb-0.5">Competência</label>
-                            <input
-                                type="month"
-                                value={competencia}
-                                onChange={(e) => {
-                                    const val = e.target.value; // "YYYY-MM"
-                                    setCompetencia(val);
-                                    if (val) {
-                                        const [y, m] = val.split('-').map(Number);
-                                        const lastDay = new Date(y, m, 0).getDate();
-                                        setStartDate(`${val}-01`);
-                                        setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
-                                    } else {
-                                        setStartDate('');
-                                        setEndDate('');
-                                    }
-                                }}
-                                className="bg-transparent border-none text-[10px] font-black text-indigo-700 focus:ring-0 p-0"
-                            />
+                            <div className="flex gap-1">
+                                <select
+                                    value={competencia ? competencia.split('-')[0] : ''}
+                                    onChange={(e) => {
+                                        const year = e.target.value;
+                                        const month = competencia ? competencia.split('-')[1] : '01';
+                                        if (year && month) {
+                                            const val = `${year}-${month}`;
+                                            setCompetencia(val);
+                                            const [y, m] = [parseInt(year), parseInt(month)];
+                                            const lastDay = new Date(y, m, 0).getDate();
+                                            setStartDate(`${val}-01`);
+                                            setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
+                                        }
+                                    }}
+                                    className="bg-transparent border-none text-[10px] font-black text-indigo-700 focus:ring-0 p-0 w-16"
+                                >
+                                    <option value="">Ano</option>
+                                    {Array.from({length: 10}, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                                        <option key={year} value={year}>{year}</option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={competencia ? competencia.split('-')[1] : ''}
+                                    onChange={(e) => {
+                                        const month = e.target.value;
+                                        const year = competencia ? competencia.split('-')[0] : new Date().getFullYear();
+                                        if (year && month) {
+                                            const val = `${year}-${month}`;
+                                            setCompetencia(val);
+                                            const [y, m] = [parseInt(year), parseInt(month)];
+                                            const lastDay = new Date(y, m, 0).getDate();
+                                            setStartDate(`${val}-01`);
+                                            setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
+                                        }
+                                    }}
+                                    className="bg-transparent border-none text-[10px] font-black text-indigo-700 focus:ring-0 p-0 w-14"
+                                >
+                                    <option value="">Mês</option>
+                                    {['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'].map((m, i) => (
+                                        <option key={i} value={String(i + 1).padStart(2, '0')}>{m}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                         {competencia && (
                             <button

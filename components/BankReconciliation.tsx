@@ -582,8 +582,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 .from('projects')
                 .select('id, name')
                 .filter('settings->>organizationId', 'eq', orgId)
+                .neq('name', 'Gestão Comercial')
                 .order('name', { ascending: true });
-            if (data) setMasterProjects(data);
+            if (data) {
+                const uniqueProjects = Array.from(new Map(data.map(p => [p.name, p])).values());
+                setMasterProjects(uniqueProjects);
+            }
         } catch (error) {
             console.error('Error loading projects:', error);
         }

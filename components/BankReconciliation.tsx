@@ -2302,14 +2302,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                 >
                                     <option value="">Ano</option>
                                     {Array.from({length: 10}, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
-                                        <option key={year} value={year}>{year}</option>
+                                        <option key={year} value={String(year)}>{year}</option>
                                     ))}
                                 </select>
                                 <select
                                     value={competencia ? competencia.split('-')[1] : ''}
                                     onChange={(e) => {
                                         const month = e.target.value;
-                                        const year = competencia ? competencia.split('-')[0] : new Date().getFullYear();
+                                        const year = competencia ? competencia.split('-')[0] : String(new Date().getFullYear());
                                         if (year && month) {
                                             const val = `${year}-${month}`;
                                             setCompetencia(val);

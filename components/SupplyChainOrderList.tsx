@@ -1,5 +1,8 @@
 import React from 'react';
 import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { Copy01Icon } from '@hugeicons/core-free-icons';
+import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { orderService } from '../services/orderService';
 import { kpiService } from '../services/kpiService';
 import { PurchaseOrder } from '../types';
@@ -397,35 +400,41 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                             {order.items?.length || 0} itens
                                         </td>
                                         <td className="px-6 py-2.5 text-right">
-                                            <div className="flex items-center justify-end gap-3">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onViewLogistics(order.id); }}
-                                                    className="text-indigo-600 hover:text-indigo-800 text-xs font-black uppercase tracking-widest flex items-center gap-1.5 p-1.5 hover:bg-indigo-50 rounded-lg transition-all"
-                                                >
-                                                    <Truck className="w-3.5 h-3.5" />
-                                                    Logística
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleDuplicate(order.id); }}
-                                                    className="text-gray-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-lg transition-all"
-                                                    title="Duplicar Pedido"
-                                                >
-                                                    <Copy className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleDelete(order.id, order.number || 'sem número'); }}
-                                                    disabled={!canDeleteOrder(order.status)}
-                                                    className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent"
-                                                    title={canDeleteOrder(order.status) ? 'Excluir Pedido' : `Pedido "${order.status}" não pode ser excluído`}
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
+                                            <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); onViewDetails(order.id); }}
                                                     className="text-blue-600 hover:text-blue-800 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all"
                                                 >
                                                     Ver Detalhes
                                                 </button>
+                                                <InlineDisclosureMenu
+                                                    menuItems={[
+                                                        {
+                                                            icon: <Truck className="w-[18px] h-[18px]" />,
+                                                            label: 'Logística',
+                                                            onClick: () => onViewLogistics(order.id),
+                                                        },
+                                                        {
+                                                            icon: <HugeiconsIcon icon={Copy01Icon} size={18} />,
+                                                            label: 'Duplicar Pedido',
+                                                            onClick: () => handleDuplicate(order.id),
+                                                        },
+                                                    ]}
+                                                    showDelete
+                                                    onDelete={async () => {
+                                                        try {
+                                                            setLoading(true);
+                                                            await orderService.deleteOrder(order.id);
+                                                            await loadOrders();
+                                                        } catch (error: any) {
+                                                            notify(`Erro ao excluir pedido: ${error.message || 'Erro desconhecido'}`, 'error');
+                                                        } finally {
+                                                            setLoading(false);
+                                                        }
+                                                    }}
+                                                    deleteDisabled={!canDeleteOrder(order.status)}
+                                                    deleteDisabledTitle={!canDeleteOrder(order.status) ? `Pedido "${order.status}" não pode ser excluído` : undefined}
+                                                />
                                             </div>
                                         </td>
                                     </tr>
@@ -488,35 +497,41 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                             )}
                                         </span>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => onViewLogistics(order.id)}
-                                            className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95"
-                                            title="Ver Logística"
-                                        >
-                                            <Truck className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleDuplicate(order.id); }}
-                                            className="p-2 bg-gray-50 text-gray-500 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95"
-                                            title="Duplicar"
-                                        >
-                                            <Copy className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleDelete(order.id, order.number || 'sem número'); }}
-                                            disabled={!canDeleteOrder(order.status)}
-                                            className="p-2 bg-gray-50 text-gray-500 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gray-50 disabled:hover:text-gray-500"
-                                            title={canDeleteOrder(order.status) ? 'Excluir' : `Pedido "${order.status}" não pode ser excluído`}
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                                         <button
                                             onClick={() => onViewDetails(order.id)}
                                             className="flex items-center gap-2 bg-gray-50 text-gray-900 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
                                         >
                                             Detalhes <ArrowRight className="w-3.5 h-3.5" />
                                         </button>
+                                        <InlineDisclosureMenu
+                                            menuItems={[
+                                                {
+                                                    icon: <Truck className="w-[18px] h-[18px]" />,
+                                                    label: 'Logística',
+                                                    onClick: () => onViewLogistics(order.id),
+                                                },
+                                                {
+                                                    icon: <HugeiconsIcon icon={Copy01Icon} size={18} />,
+                                                    label: 'Duplicar Pedido',
+                                                    onClick: () => handleDuplicate(order.id),
+                                                },
+                                            ]}
+                                            showDelete
+                                            onDelete={async () => {
+                                                try {
+                                                    setLoading(true);
+                                                    await orderService.deleteOrder(order.id);
+                                                    await loadOrders();
+                                                } catch (error: any) {
+                                                    notify(`Erro ao excluir pedido: ${error.message || 'Erro desconhecido'}`, 'error');
+                                                } finally {
+                                                    setLoading(false);
+                                                }
+                                            }}
+                                            deleteDisabled={!canDeleteOrder(order.status)}
+                                            deleteDisabledTitle={!canDeleteOrder(order.status) ? `Pedido "${order.status}" não pode ser excluído` : undefined}
+                                        />
                                     </div>
                                 </div>
                             </div>

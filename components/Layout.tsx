@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
 import { notificationService } from '../services/notificationService';
+import { viewUrl } from '../lib/tabRouter';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -157,22 +158,30 @@ const Layout: React.FC<LayoutProps> = ({
   const NavItem = ({ id, icon: Icon, label, badge, forceFull, onClickOverride }: { id: string, icon: React.ElementType, label: string, badge?: number, forceFull?: boolean, onClickOverride?: () => void }) => {
     const isActive = activeView === id;
     const effectivelyCollapsed = isCollapsed && !forceFull;
+    const href = onClickOverride ? undefined : viewUrl(id);
 
-    return (
-      <button
-        onClick={() => {
-          if (onClickOverride) {
-            onClickOverride();
-          } else {
-            onChangeView(id);
-          }
-          setIsMobileMenuOpen(false);
-        }}
-        className={`flex items-center w-full py-2 text-sm font-medium transition-colors duration-150 rounded-lg mb-0.5 group relative
-          ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}
-          ${effectivelyCollapsed ? 'justify-center px-0' : 'justify-between px-3'}`}
-        title={effectivelyCollapsed ? label : undefined}
-      >
+    const handleClick = (e: React.MouseEvent) => {
+      // Allow middle-click and Ctrl/Cmd+click to open in a new tab via the href.
+      if (!onClickOverride && (e.button !== 0 || e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      if (onClickOverride) {
+        onClickOverride();
+      } else {
+        onChangeView(id);
+      }
+      setIsMobileMenuOpen(false);
+    };
+
+    const commonProps = {
+      onClick: handleClick,
+      className: `flex items-center w-full py-2 text-sm font-medium transition-colors duration-150 rounded-lg mb-0.5 group relative
+        ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}
+        ${effectivelyCollapsed ? 'justify-center px-0' : 'justify-between px-3'}`,
+      title: effectivelyCollapsed ? label : undefined,
+    };
+
+    const content = (
+      <>
         <div className={`flex items-center ${effectivelyCollapsed ? 'justify-center' : ''}`}>
           <Icon className={`w-4 h-4 transition-colors ${isActive ? t.itemIconActive : t.itemIcon} ${!effectivelyCollapsed ? 'mr-3' : ''}`} strokeWidth={2} />
           {!effectivelyCollapsed && <span>{label}</span>}
@@ -185,8 +194,12 @@ const Layout: React.FC<LayoutProps> = ({
         {effectivelyCollapsed && badge !== undefined && (
           <div className={`absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full border-2 ${t.badgeBgRing}`} />
         )}
-      </button>
+      </>
     );
+
+    return href
+      ? <a href={href} {...commonProps}>{content}</a>
+      : <button type="button" {...commonProps}>{content}</button>;
   };
 
   const NavGroup = ({ label, forceFull }: { label: string, forceFull?: boolean }) => {
@@ -227,9 +240,16 @@ const Layout: React.FC<LayoutProps> = ({
 
   const DropdownItem = ({ id, label, icon: Icon, badge }: { id: string, label: string, icon?: React.ElementType, badge?: number }) => {
     const isActive = activeView === id;
+    const handleClick = (e: React.MouseEvent) => {
+      if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
+      e.preventDefault();
+      onChangeView(id);
+      setIsMobileMenuOpen(false);
+    };
     return (
-      <button
-        onClick={() => { onChangeView(id); setIsMobileMenuOpen(false); }}
+      <a
+        href={viewUrl(id)}
+        onClick={handleClick}
         className={`flex items-center w-full px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-lg
           ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}`}
       >
@@ -238,7 +258,7 @@ const Layout: React.FC<LayoutProps> = ({
         {badge !== undefined && badge > 0 && (
           <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ml-1 ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500 text-white'}`}>{badge}</span>
         )}
-      </button>
+      </a>
     );
   };
 

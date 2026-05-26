@@ -19,6 +19,8 @@ import { useAuthSync } from './hooks/useAuthSync';
 import { useProjectOperations } from './hooks/useProjectOperations';
 import AppRouter from './components/AppRouter';
 import { PWAInstallPrompt, OfflineIndicator } from './components/PWAInstallPrompt';
+import { useTabRouter } from './hooks/useTabRouter';
+import { syncViewToUrl } from './lib/tabRouter';
 
 const App: React.FC = () => {
   const {
@@ -90,6 +92,15 @@ const App: React.FC = () => {
   const [viewingImovibStudyId, setViewingImovibStudyId] = React.useState<string | null>(
     localStorage.getItem('app_viewing_imovib_id')
   );
+
+  // Multi-tab routing: sync URL hash → state and handle cross-tab auth events.
+  useTabRouter(activeView, setActiveView, useStore.getState().logout);
+
+  // Ensure the URL hash reflects the current view on first render.
+  React.useEffect(() => {
+    syncViewToUrl(activeView);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleNavigate = React.useCallback((link: string) => {
     setIsNotificationOpen(false);

@@ -17,6 +17,7 @@ import { investorService } from '../services/investorService';
 import { supplierService } from '../services/supplierService';
 import { profileService } from '../services/profileService';
 import { INITIAL_PROJECT_SETTINGS, INITIAL_BUDGET } from '../constants';
+import { getInitialView, syncViewToUrl, broadcastSignOut } from '../lib/tabRouter';
 
 interface SessionData {
     user?: { id: string; email?: string; [key: string]: unknown };
@@ -132,8 +133,8 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
     setIsRehydrating: (isRehydrating) => set({ isRehydrating }),
     setActiveClientId: (activeClientId) => set({ activeClientId }),
 
-    // UI State
-    activeView: typeof window !== 'undefined' ? localStorage.getItem('orca_activeView') || 'eng-obras' : 'eng-obras',
+    // UI State — activeView is sourced from the URL hash so each tab is independent
+    activeView: typeof window !== 'undefined' ? getInitialView() : 'eng-obras',
     managementTab: 'organizations',
     isProjectModalOpen: false,
     projectModalMode: 'create',
@@ -141,7 +142,10 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
     isNotificationOpen: false,
     suppliesOrderMode: 'details',
     setActiveView: (activeView) => {
-        if (typeof window !== 'undefined') localStorage.setItem('orca_activeView', activeView);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('orca_activeView', activeView);
+            syncViewToUrl(activeView);
+        }
         set({ activeView });
     },
     setManagementTab: (managementTab) => set({ managementTab }),
@@ -222,6 +226,7 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
         }
     },
     logout: () => {
+        broadcastSignOut();
         if (typeof window !== 'undefined') {
             localStorage.clear();
             sessionStorage.clear();

@@ -440,6 +440,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onCreateNew={() => setIsCreatingOrder(true)}
           onViewDetails={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('details'); }}
           onViewLogistics={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('logistics'); }}
+          onEdit={(id) => { setEditingOrderId(id); setIsCreatingOrder(true); }}
           version={ordersVersion}
         />
       );

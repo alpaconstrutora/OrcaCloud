@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, Pencil } from 'lucide-react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Copy01Icon } from '@hugeicons/core-free-icons';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
@@ -11,10 +11,11 @@ interface SupplyChainOrderListProps {
     onCreateNew: () => void;
     onViewDetails: (orderId: string) => void;
     onViewLogistics: (orderId: string) => void;
+    onEdit?: (orderId: string) => void;
     version?: number;
 }
 
-const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew, onViewDetails, onViewLogistics, version }) => {
+const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew, onViewDetails, onViewLogistics, onEdit, version }) => {
     const [orders, setOrders] = React.useState<any[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [sortBy, setSortBy] = React.useState<string>('date-desc');
@@ -409,6 +410,11 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                                 </button>
                                                 <InlineDisclosureMenu
                                                     menuItems={[
+                                                        {
+                                                            icon: <Pencil className="w-[18px] h-[18px]" />,
+                                                            label: 'Editar Pedido',
+                                                            onClick: () => onEdit?.(order.id),
+                                                        },
                                                         {
                                                             icon: <Truck className="w-[18px] h-[18px]" />,
                                                             label: 'Logística',

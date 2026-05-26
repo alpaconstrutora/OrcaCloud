@@ -676,19 +676,6 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     </div>
                   </div>
 
-                  <div className="col-span-2 md:col-span-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado (UF)</label>
-                    <select
-                      className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
-                      value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value, state: e.target.value })}
-                    >
-                      <option value="">UF</option>
-                      {Object.keys(BASE_CUB_RATES).sort().map(uf => (
-                        <option key={uf} value={uf}>{uf}</option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
 
                 <div className="border-t border-gray-100 pt-6">
@@ -696,8 +683,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     <MapPin className="w-4 h-4" />
                     Localização da Obra
                   </h3>
-                  <div className="grid grid-cols-4 gap-4">
-                    <div className="col-span-3">
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-9">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Rua / Logradouro</label>
                       <input
                         type="text"
@@ -706,7 +693,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         onChange={(e) => setFormData({ ...formData, street: e.target.value })}
                       />
                     </div>
-                    <div className="col-span-1">
+                    <div className="col-span-3">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Nº</label>
                       <input
                         type="text"
@@ -715,7 +702,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         onChange={(e) => setFormData({ ...formData, number: e.target.value })}
                       />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-6">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
                       <input
                         type="text"
@@ -724,13 +711,36 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
                       />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-6">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
                       <input
                         type="text"
                         className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                         value={formData.city}
                         onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Estado (UF)</label>
+                      <select
+                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                        value={formData.location}
+                        onChange={(e) => setFormData({ ...formData, location: e.target.value, state: e.target.value })}
+                      >
+                        <option value="">UF</option>
+                        {Object.keys(BASE_CUB_RATES).sort().map(uf => (
+                          <option key={uf} value={uf}>{uf}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
+                      <input
+                        type="text"
+                        placeholder="00000-000"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.zipCode}
+                        onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
                       />
                     </div>
                   </div>
@@ -763,16 +773,6 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       <option value="Em andamento">Em andamento</option>
                       <option value="Concluída">Concluída</option>
                     </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
-                    <input
-                      type="text"
-                      placeholder="00000-000"
-                      className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                      value={formData.zipCode}
-                      onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
-                    />
                   </div>
                 </div>
 

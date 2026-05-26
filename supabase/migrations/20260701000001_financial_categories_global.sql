@@ -7,11 +7,21 @@ ALTER TABLE public.financial_categories
 ALTER TABLE public.financial_categories
     DROP CONSTRAINT IF EXISTS financial_categories_organization_id_name_key;
 
-ALTER TABLE public.financial_categories
-    ADD CONSTRAINT financial_categories_name_key UNIQUE (name);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'financial_categories_name_key'
+      AND conrelid = 'public.financial_categories'::regclass
+  ) THEN
+    ALTER TABLE public.financial_categories
+      ADD CONSTRAINT financial_categories_name_key UNIQUE (name);
+  END IF;
+END $$;
 
 -- Atualiza RLS: qualquer autenticado pode ler e gerenciar
 DROP POLICY IF EXISTS "Org members can manage financial_categories" ON public.financial_categories;
+DROP POLICY IF EXISTS "Authenticated users can read financial_categories" ON public.financial_categories;
+DROP POLICY IF EXISTS "Authenticated users can manage financial_categories" ON public.financial_categories;
 
 CREATE POLICY "Authenticated users can read financial_categories"
     ON public.financial_categories FOR SELECT TO authenticated USING (true);

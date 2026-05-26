@@ -11,6 +11,7 @@ interface NonConformance {
   corrective_action: string | null
   created_at: string
   closed_at: string | null
+  checklist_item_description?: string | null
 }
 
 interface Props {
@@ -55,11 +56,23 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
     try {
       const { data, error: fetchErr } = await supabase
         .from('non_conformances')
-        .select('*')
+        .select(`
+          *,
+          oe_checklist_responses!nc_id(
+            oe_checklist_items(description)
+          )
+        `)
         .eq('work_order_id', workOrderId)
         .order('created_at', { ascending: false })
       if (fetchErr) throw fetchErr
-      setNcs(data ?? [])
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mapped = (data ?? []).map((nc: any) => ({
+        ...nc,
+        checklist_item_description:
+          nc.oe_checklist_responses?.[0]?.oe_checklist_items?.description ?? null,
+      }))
+      setNcs(mapped)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro ao carregar NCs')
     } finally {
@@ -233,7 +246,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
                     <StsIcon className={`w-4 h-4 mt-0.5 shrink-0 ${nc.status === 'open' ? 'text-red-500' : nc.status === 'in_treatment' ? 'text-amber-500' : 'text-green-500'}`} />
                     <div>
                       <p className="text-sm font-bold text-slate-800">{nc.description}</p>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${sevCfg.cls}`}>
                           {sevCfg.label}
                         </span>
@@ -243,6 +256,11 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
                         {nc.due_date && (
                           <span className="text-xs text-slate-400">
                             Prazo: {new Date(nc.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                          </span>
+                        )}
+                        {nc.checklist_item_description && (
+                          <span className="text-xs font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
+                            Checklist: {nc.checklist_item_description}
                           </span>
                         )}
                       </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import {
   ClipboardList, LayoutDashboard, BookOpen,
   ChevronRight, Building2, Loader2, LayoutGrid, List,
-  Kanban,
+  Kanban, Library,
 } from 'lucide-react'
 import OperacionalList from './OperacionalList'
 import OperacionalDetail from './OperacionalDetail'
@@ -10,9 +10,10 @@ import OperacionalForm from './OperacionalForm'
 import OperacionalDashboard from './OperacionalDashboard'
 import OperacionalDiary from './OperacionalDiary'
 import OperacionalKanban from './OperacionalKanban'
+import OperacionalTemplateManager from './OperacionalTemplateManager'
 import { supabase } from '../lib/supabase'
 
-type OpsView = 'list' | 'detail' | 'form' | 'dashboard' | 'diary' | 'kanban'
+type OpsView = 'list' | 'detail' | 'form' | 'dashboard' | 'diary' | 'kanban' | 'templates'
 
 interface Props {
   activeOrganizationId?: string
@@ -245,6 +246,12 @@ const OperacionalModule: React.FC<Props> = ({
           label="Diário"
           onClick={() => setView('diary')}
         />
+        <TabBtn
+          active={view === 'templates'}
+          icon={Library}
+          label="Templates"
+          onClick={() => setView('templates')}
+        />
       </div>
     </div>
   )
@@ -303,6 +310,12 @@ const OperacionalModule: React.FC<Props> = ({
       {view === 'diary' && (
         <OperacionalDiary
           projectId={selectedProjectId}
+          orgId={orgId ?? ''}
+        />
+      )}
+
+      {view === 'templates' && (
+        <OperacionalTemplateManager
           orgId={orgId ?? ''}
         />
       )}

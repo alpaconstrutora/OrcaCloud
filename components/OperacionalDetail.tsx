@@ -565,6 +565,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
           {activeTab === 'checklist' && (
             <OperacionalChecklist
               workOrderId={workOrderId}
+              orgId={orgId}
             />
           )}
 

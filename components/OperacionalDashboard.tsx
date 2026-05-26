@@ -1,14 +1,27 @@
 import React, { useState, useEffect } from 'react'
 import {
   BarChart2, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2,
-  Clock, DollarSign, Activity, Loader2
+  Clock, DollarSign, Activity, Loader2, Layers
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { WorkOrderStatus } from '../types/operational-control'
+import { TipoObra, ProjectTypeTemplate } from '../types/project'
+import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService'
+
+const TIPO_OBRA_LABELS: Record<TipoObra, string> = {
+  residencial_multifamiliar: 'Residencial Multifamiliar',
+  casa: 'Casa Residencial',
+  loja: 'Loja Comercial',
+  sala: 'Sala / Escritório',
+  galpao: 'Galpão Industrial / Logístico',
+  reforma: 'Reforma / Manutenção',
+  outro: 'Outro',
+}
 
 interface Props {
   projectId: string
   orgId: string
+  tipoObra?: string
 }
 
 interface WorkOrderSummary {
@@ -74,14 +87,24 @@ const KpiCard: React.FC<{
   </div>
 )
 
-const OperacionalDashboard: React.FC<Props> = ({ projectId }) => {
+const OperacionalDashboard: React.FC<Props> = ({ projectId, orgId, tipoObra }) => {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [template, setTemplate] = useState<ProjectTypeTemplate | null>(null)
 
   useEffect(() => {
     loadData()
   }, [projectId])
+
+  useEffect(() => {
+    if (tipoObra) {
+      projectTypeTemplatesService
+        .getTemplate(tipoObra as TipoObra, orgId || undefined)
+        .then(setTemplate)
+        .catch(console.error)
+    }
+  }, [tipoObra, orgId])
 
   const loadData = async () => {
     setLoading(true)
@@ -197,6 +220,35 @@ const OperacionalDashboard: React.FC<Props> = ({ projectId }) => {
           color="bg-blue-50 text-blue-900"
         />
       </div>
+
+      {/* KPIs do tipo de obra */}
+      {tipoObra && template && template.indicators.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-100 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Layers className="w-4 h-4 text-slate-400" />
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
+              Indicadores — {TIPO_OBRA_LABELS[tipoObra as TipoObra] || tipoObra}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {template.indicators.map(ind => {
+              // Compute value where possible from existing data
+              let value: string = '—'
+              if (ind.key === 'desvio_orcamento' || ind.key === 'desvio_prazo') {
+                value = costDeviation !== 0 ? `${costDeviation > 0 ? '+' : ''}${fmtPct(costDeviation)}` : '0%'
+              }
+              return (
+                <div key={ind.key} className="rounded-xl bg-indigo-50 border border-indigo-100 p-3">
+                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-wider truncate">{ind.label}</p>
+                  <p className="text-lg font-black text-indigo-900 mt-1">{value}</p>
+                  <p className="text-[10px] text-indigo-400 font-medium">{ind.unit}</p>
+                </div>
+              )
+            })}
+          </div>
+          <p className="text-[10px] text-slate-400 font-medium mt-3">Indicadores calculados à medida que dados são lançados nas OEs</p>
+        </div>
+      )}
 
       {/* Cost summary */}
       <div className="bg-white rounded-2xl border border-slate-100 p-5">

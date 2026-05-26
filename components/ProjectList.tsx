@@ -1,6 +1,26 @@
 import React from 'react';
 import { projectService, ProjectData } from '../services/projectService';
-import { FolderOpen, Calendar, Trash2, Search, Loader2, Settings, Plus, Copy, FileSpreadsheet, Edit2, LayoutDashboard, Table2, Lock, Unlock, BookOpen, Link2, Pencil, SquareDashedKanban } from 'lucide-react';
+import { FolderOpen, Calendar, Trash2, Search, Loader2, Settings, Plus, Copy, FileSpreadsheet, Edit2, LayoutDashboard, Table2, Lock, Unlock, BookOpen, Link2, Pencil, SquareDashedKanban, Filter } from 'lucide-react';
+import { TipoObra } from '../types/project';
+
+const TIPO_OBRA_LABELS: Record<TipoObra, string> = {
+    residencial_multifamiliar: 'Residencial',
+    casa: 'Casa',
+    loja: 'Loja',
+    sala: 'Sala/Escritório',
+    galpao: 'Galpão',
+    reforma: 'Reforma',
+    outro: 'Outro',
+};
+const TIPO_OBRA_COLORS: Record<TipoObra, string> = {
+    residencial_multifamiliar: 'bg-blue-100 text-blue-700 border-blue-200',
+    casa: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    loja: 'bg-orange-100 text-orange-700 border-orange-200',
+    sala: 'bg-purple-100 text-purple-700 border-purple-200',
+    galpao: 'bg-amber-100 text-amber-700 border-amber-200',
+    reforma: 'bg-rose-100 text-rose-700 border-rose-200',
+    outro: 'bg-gray-100 text-gray-600 border-gray-200',
+};
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Copy01Icon, FileDownloadIcon } from '@hugeicons/core-free-icons';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
@@ -144,6 +164,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     };
 
     const [sortBy, setSortBy] = React.useState<string>('recent');
+    const [tipoFilter, setTipoFilter] = React.useState<TipoObra | ''>('');
 
     const filteredProjects = React.useMemo(() => {
         return projects
@@ -153,6 +174,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
                 const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (p.settings?.client || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+                const matchesTipo = !tipoFilter || p.settings?.tipoObra === tipoFilter;
 
                 const isOrcamento = p.settings?.classification === 'ORCAMENTO' || !p.settings?.classification; // Orçamento é o padrão
                 const isTemplate = p.settings?.classification === 'OBRA';
@@ -170,7 +193,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             ? (p.settings?.classification === 'DIARIO' || (p.settings?.classification === 'OBRA' && (p.settings?.diaryEntries?.length || 0) > 0))
                             : isOrcamento));
 
-                return matchesSearch && matchesTab;
+                return matchesSearch && matchesTab && matchesTipo;
             })
             .sort((a, b) => {
                 // Obras: sempre ordenar por código numérico crescente
@@ -397,6 +420,21 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         <option value="name-desc">Nome (Z-A)</option>
                     </select>
                 </div>
+                {isObraContext && (
+                    <div className="flex items-center gap-2">
+                        <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+                        <select
+                            value={tipoFilter}
+                            onChange={(e) => setTipoFilter(e.target.value as TipoObra | '')}
+                            className="text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-[1.25rem] px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-sans"
+                        >
+                            <option value="">Todos os tipos</option>
+                            {(Object.keys(TIPO_OBRA_LABELS) as TipoObra[]).map(k => (
+                                <option key={k} value={k}>{TIPO_OBRA_LABELS[k]}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
                 <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
                     <button
                         onClick={() => setViewMode('grid')}
@@ -491,15 +529,20 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         )}
                                         <td className="px-6 py-4">
                                             <div className="flex items-center">
-                                                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 mr-3">
+                                                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 mr-3 shrink-0">
                                                     <FolderOpen className="w-5 h-5" />
                                                 </div>
                                                 <div>
                                                     <div className="text-sm font-bold text-gray-900">
                                                         {project.name}
                                                     </div>
-                                                    <div className="text-xs text-gray-500 flex items-center gap-1">
-                                                        CR: {new Date(project.created_at || 0).toLocaleDateString()}
+                                                    <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                                                        <span>CR: {new Date(project.created_at || 0).toLocaleDateString()}</span>
+                                                        {project.settings?.tipoObra && (
+                                                            <span className={`px-1.5 py-0.5 rounded border text-[9px] font-black uppercase tracking-wider ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                                {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -835,6 +878,13 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             )}
                                         </div>
                                     </div>
+                                    {project.settings?.tipoObra && (
+                                        <div className="mb-3">
+                                            <span className={`px-2 py-0.5 rounded border text-[9px] font-black uppercase tracking-wider ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
+                                            </span>
+                                        </div>
+                                    )}
                                     <div className="flex items-start gap-2">
                                         {(project.code || project.settings?.code) && (
                                             <span className="text-[11px] font-black font-mono text-blue-700 shrink-0 mt-1">

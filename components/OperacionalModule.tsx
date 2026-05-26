@@ -296,6 +296,7 @@ const OperacionalModule: React.FC<Props> = ({
         <OperacionalDashboard
           projectId={selectedProjectId}
           orgId={orgId ?? ''}
+          tipoObra={(projects.find(p => p.id === selectedProjectId) as any)?.settings?.tipoObra}
         />
       )}
 

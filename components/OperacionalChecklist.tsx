@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { CheckSquare, Square, Loader2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { CheckSquare, Square, Loader2, AlertCircle, ChevronDown, ChevronRight, Wand2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { TipoObra, ProjectTypeTemplate } from '../types/project'
+import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService'
 
 interface ChecklistItem {
   id: string
@@ -21,6 +23,17 @@ interface ChecklistResponse {
 
 interface Props {
   workOrderId: string
+  orgId?: string
+}
+
+const TIPO_OBRA_LABELS: Record<TipoObra, string> = {
+  residencial_multifamiliar: 'Residencial Multifamiliar',
+  casa: 'Casa Residencial',
+  loja: 'Loja Comercial',
+  sala: 'Sala / Escritório',
+  galpao: 'Galpão Industrial',
+  reforma: 'Reforma',
+  outro: 'Outro',
 }
 
 const GATE_LABELS: Record<string, string> = {
@@ -35,13 +48,16 @@ const GATE_COLORS: Record<string, string> = {
   free: 'bg-slate-100 text-slate-600',
 }
 
-const OperacionalChecklist: React.FC<Props> = ({ workOrderId }) => {
+const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
   const [items, setItems] = useState<ChecklistItem[]>([])
   const [responses, setResponses] = useState<Record<string, ChecklistResponse>>({})
   const [loading, setLoading] = useState(true)
+  const [seeding, setSeeding] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [tipoObra, setTipoObra] = useState<TipoObra | null>(null)
+  const [template, setTemplate] = useState<ProjectTypeTemplate | null>(null)
 
   useEffect(() => {
     loadData()
@@ -51,10 +67,10 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId }) => {
     setLoading(true)
     setError(null)
     try {
-      // Load work order to get checklist template
+      // Load work order to get checklist template and project_id
       const { data: wo, error: woErr } = await supabase
         .from('work_orders')
-        .select('checklist_template_id')
+        .select('checklist_template_id, project_id')
         .eq('id', workOrderId)
         .single()
       if (woErr) throw woErr
@@ -62,6 +78,20 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId }) => {
       if (!wo.checklist_template_id) {
         setItems([])
         setResponses({})
+        // Try to load tipo_obra from project for seed suggestion
+        if (wo.project_id) {
+          const { data: proj } = await supabase
+            .from('projects')
+            .select('settings')
+            .eq('id', wo.project_id)
+            .maybeSingle()
+          const tipo = (proj?.settings as any)?.tipoObra as TipoObra | undefined
+          if (tipo) {
+            setTipoObra(tipo)
+            const tmpl = await projectTypeTemplatesService.getTemplate(tipo, orgId)
+            setTemplate(tmpl)
+          }
+        }
         setLoading(false)
         return
       }
@@ -138,12 +168,87 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId }) => {
     )
   }
 
+  const handleSeedFromTemplate = async () => {
+    if (!template || !tipoObra || !orgId) return
+    setSeeding(true)
+    setError(null)
+    try {
+      // Create an oe_checklist_template entry
+      const { data: tplRow, error: tplErr } = await supabase
+        .from('oe_checklist_templates')
+        .insert({
+          org_id: orgId,
+          name: `${TIPO_OBRA_LABELS[tipoObra]} — Padrão`,
+          service_type: tipoObra,
+          active: true,
+        })
+        .select('id')
+        .single()
+      if (tplErr) throw tplErr
+
+      // Insert checklist items from template
+      const itemsToInsert: Array<{
+        template_id: string; description: string; required: boolean;
+        requires_photo: boolean; gate: string; sort_order: number
+      }> = []
+      let order = 0
+      for (const phase of template.checklist_template) {
+        const gate = phase.phase === 'pre_start' ? 'pre_start'
+          : phase.phase === 'pre_completion' ? 'pre_completion' : 'free'
+        for (const desc of phase.items) {
+          itemsToInsert.push({
+            template_id: tplRow.id,
+            description: desc,
+            required: gate !== 'free',
+            requires_photo: false,
+            gate,
+            sort_order: order++,
+          })
+        }
+      }
+
+      if (itemsToInsert.length > 0) {
+        const { error: itemsErr } = await supabase
+          .from('oe_checklist_items')
+          .insert(itemsToInsert)
+        if (itemsErr) throw itemsErr
+      }
+
+      // Link template to work order
+      const { error: woErr } = await supabase
+        .from('work_orders')
+        .update({ checklist_template_id: tplRow.id })
+        .eq('id', workOrderId)
+      if (woErr) throw woErr
+
+      await loadData()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erro ao pré-popular checklist')
+    } finally {
+      setSeeding(false)
+    }
+  }
+
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-40 text-slate-300">
+      <div className="flex flex-col items-center justify-center py-10 text-slate-300 gap-4">
         <CheckSquare className="w-10 h-10 mb-2" />
-        <p className="text-sm font-bold">Nenhum checklist vinculado</p>
-        <p className="text-xs mt-1 text-slate-400">Vincule um modelo de checklist ao criar a OE</p>
+        <div className="text-center">
+          <p className="text-sm font-bold text-slate-400">Nenhum checklist vinculado</p>
+          <p className="text-xs mt-1 text-slate-400">Vincule um modelo ao criar a OE ou use o template do tipo de obra</p>
+        </div>
+        {tipoObra && template && template.checklist_template.length > 0 && orgId && (
+          <button
+            onClick={handleSeedFromTemplate}
+            disabled={seeding}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-900/20 disabled:opacity-50"
+          >
+            {seeding
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <Wand2 className="w-4 h-4" />}
+            Pré-popular pelo tipo: {TIPO_OBRA_LABELS[tipoObra]}
+          </button>
+        )}
       </div>
     )
   }

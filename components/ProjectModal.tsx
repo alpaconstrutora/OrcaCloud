@@ -1,5 +1,6 @@
 import React from 'react';
-import { X, Building2, MapPin, Ruler, FileText, Cloud, Search, ChevronDown, TrendingUp, Calendar, Hash } from 'lucide-react';
+import { X, Building2, MapPin, Ruler, FileText, Cloud, Search, ChevronDown, TrendingUp, Calendar, Hash, Layers, Settings2 } from 'lucide-react';
+import { TipoObra, RegimeObra, TechnicalConfig } from '../types/project';
 import { BASE_CUB_RATES, CUB_STANDARDS_DATA } from '../constants';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
@@ -29,7 +30,7 @@ interface NewProjectData {
   bdi: number;
   autoSave?: boolean;
   budgetStatus?: 'Em Andamento' | 'Fechado';
-  obraStatus?: 'Não Iniciado' | 'Em andamento' | 'Concluída';
+  obraStatus?: 'Não Iniciado' | 'Em andamento' | 'Paralisada' | 'Concluída';
   budgetType?: 'ANALYTIC' | 'PARAMETRIC';
   linkedProjectName?: string;
   linkedProjectId?: string;
@@ -42,7 +43,90 @@ interface NewProjectData {
   code?: string;
   organizationId?: string;
   tipo?: 'Reforma' | 'Manutenção' | 'Greenfield' | 'Administração' | 'Condomínio';
+  tipoObra?: TipoObra;
+  regimeObra?: RegimeObra;
+  technicalConfig?: TechnicalConfig;
+  // Gestão financeira
+  valorEstimado?: number;
+  valorContratado?: number;
+  margemAlvo?: number;
+  modalidade?: 'publica' | 'privada';
+  // Equipe
+  mestreObras?: string;
+  encarregado?: string;
+  tecnicoSeguranca?: string;
+  almoxarife?: string;
+  // Registro documental
+  artRrt?: string;
+  alvara?: string;
+  matriculaCNO?: string;
 }
+
+const TIPO_OBRA_LABELS: Record<TipoObra, string> = {
+  residencial_multifamiliar: 'Residencial Multifamiliar (Prédio)',
+  casa: 'Casa Residencial',
+  loja: 'Loja Comercial',
+  sala: 'Sala Comercial / Escritório',
+  galpao: 'Galpão Industrial / Logístico',
+  reforma: 'Reforma / Manutenção',
+  outro: 'Outro',
+};
+
+const REGIME_OBRA_LABELS: Record<RegimeObra, string> = {
+  empreitada_global: 'Empreitada Global',
+  administracao: 'Administração',
+  preco_unitario: 'Preço Unitário',
+  turn_key: 'Turn-Key',
+};
+
+const REQUIRED_DOCS_BY_TYPE: Record<TipoObra, { name: string; required: boolean }[]> = {
+  residencial_multifamiliar: [
+    { name: 'ART/RRT do Projeto', required: true },
+    { name: 'ART/RRT da Execução', required: true },
+    { name: 'Alvará de Construção', required: true },
+    { name: 'Matrícula CNO', required: true },
+    { name: 'Seguro de Obra (RCOC)', required: true },
+    { name: 'AVCB', required: true },
+    { name: 'Habite-se', required: true },
+  ],
+  casa: [
+    { name: 'ART/RRT do Projeto', required: true },
+    { name: 'ART/RRT da Execução', required: true },
+    { name: 'Alvará de Construção', required: true },
+    { name: 'Matrícula CNO', required: true },
+    { name: 'Habite-se', required: true },
+  ],
+  loja: [
+    { name: 'ART/RRT da Execução', required: true },
+    { name: 'Alvará de Reforma/Construção', required: true },
+    { name: 'AVCB', required: true },
+    { name: 'Manual / Padrão da Franqueadora', required: false },
+    { name: 'Autorização do Shopping', required: false },
+  ],
+  sala: [
+    { name: 'ART/RRT da Execução', required: true },
+    { name: 'Alvará de Reforma', required: true },
+    { name: 'Autorização do Condomínio', required: true },
+  ],
+  galpao: [
+    { name: 'ART/RRT Projeto Estrutural', required: true },
+    { name: 'ART/RRT da Execução', required: true },
+    { name: 'Alvará de Construção', required: true },
+    { name: 'Matrícula CNO', required: true },
+    { name: 'Licença Ambiental', required: true },
+    { name: 'Licença Corpo de Bombeiros', required: true },
+    { name: 'PPRA / PCMSO', required: true },
+    { name: 'Habite-se / Auto de Conclusão', required: true },
+  ],
+  reforma: [
+    { name: 'ART/RRT da Execução', required: true },
+    { name: 'Alvará de Reforma', required: false },
+    { name: 'Autorização do Condomínio', required: false },
+  ],
+  outro: [
+    { name: 'ART/RRT da Execução', required: true },
+  ],
+};
 
 interface ProjectModalProps {
   isOpen: boolean;
@@ -99,7 +183,21 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     startDate: '',
     endDate: '',
     responsibleTeam: '',
-    tipo: undefined
+    tipo: undefined,
+    tipoObra: undefined,
+    regimeObra: undefined,
+    technicalConfig: undefined,
+    valorEstimado: undefined,
+    valorContratado: undefined,
+    margemAlvo: undefined,
+    modalidade: undefined,
+    mestreObras: '',
+    encarregado: '',
+    tecnicoSeguranca: '',
+    almoxarife: '',
+    artRrt: '',
+    alvara: '',
+    matriculaCNO: '',
   });
 
 
@@ -210,7 +308,10 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
           startDate: '',
           endDate: '',
           responsibleTeam: '',
-          tipo: undefined
+          tipo: undefined,
+          tipoObra: undefined,
+          regimeObra: undefined,
+          technicalConfig: undefined,
         });
         setLinkedProjectId(null);
       }
@@ -746,20 +847,42 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </div>
                 </div>
 
+                {/* Tipo, Regime e Status */}
                 <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-6">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-blue-500" />
+                      Tipo de Obra
+                    </label>
+                    <select
+                      className="w-full rounded-lg border border-blue-200 bg-blue-50/40 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-sm text-blue-900"
+                      value={formData.tipoObra || ''}
+                      onChange={(e) => {
+                        const novoTipo = (e.target.value as TipoObra) || undefined;
+                        setFormData({
+                          ...formData,
+                          tipoObra: novoTipo,
+                          technicalConfig: novoTipo ? { tipo: novoTipo } as TechnicalConfig : undefined,
+                        });
+                      }}
+                    >
+                      <option value="">Selecione o tipo de obra...</option>
+                      {(Object.keys(TIPO_OBRA_LABELS) as TipoObra[]).map(k => (
+                        <option key={k} value={k}>{TIPO_OBRA_LABELS[k]}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Obra</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Regime de Contratação</label>
                     <select
                       className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm"
-                      value={formData.tipo || ''}
-                      onChange={(e) => setFormData({ ...formData, tipo: e.target.value as any || undefined })}
+                      value={formData.regimeObra || ''}
+                      onChange={(e) => setFormData({ ...formData, regimeObra: (e.target.value as RegimeObra) || undefined })}
                     >
-                      <option value="">Selecione o tipo...</option>
-                      <option value="Reforma">Reforma</option>
-                      <option value="Manutenção">Manutenção</option>
-                      <option value="Greenfield">Greenfield</option>
-                      <option value="Administração">Administração</option>
-                      <option value="Condomínio">Condomínio</option>
+                      <option value="">Selecione o regime...</option>
+                      {(Object.keys(REGIME_OBRA_LABELS) as RegimeObra[]).map(k => (
+                        <option key={k} value={k}>{REGIME_OBRA_LABELS[k]}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -771,9 +894,409 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     >
                       <option value="Não Iniciado">Não Iniciado</option>
                       <option value="Em andamento">Em andamento</option>
+                      <option value="Paralisada">Paralisada</option>
                       <option value="Concluída">Concluída</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Dados Técnicos Dinâmicos por Tipo de Obra */}
+                {formData.tipoObra && formData.tipoObra !== 'outro' && (
+                  <div className="border border-blue-100 rounded-xl bg-blue-50/30 p-5 space-y-4">
+                    <h3 className="text-xs font-bold text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                      <Settings2 className="w-4 h-4" />
+                      Dados Técnicos — {TIPO_OBRA_LABELS[formData.tipoObra]}
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+
+                      {/* Residencial Multifamiliar */}
+                      {formData.tipoObra === 'residencial_multifamiliar' && (<>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Nº Pavimentos</label>
+                          <input type="number" min={1} placeholder="Ex: 12"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={(formData.technicalConfig as any)?.numeroPavimentos || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'residencial_multifamiliar', numeroPavimentos: Number(e.target.value) || undefined } })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Nº Torres</label>
+                          <input type="number" min={1} placeholder="Ex: 2"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={(formData.technicalConfig as any)?.numeroTorres || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'residencial_multifamiliar', numeroTorres: Number(e.target.value) || undefined } })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Nº Unidades</label>
+                          <input type="number" min={1} placeholder="Ex: 48"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={(formData.technicalConfig as any)?.numeroUnidades || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'residencial_multifamiliar', numeroUnidades: Number(e.target.value) || undefined } })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Área Construída Total (m²)</label>
+                          <input type="number" min={0} placeholder="Ex: 4200"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={(formData.technicalConfig as any)?.areaConstruidaTotal || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'residencial_multifamiliar', areaConstruidaTotal: Number(e.target.value) || undefined } })}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Tipo Estrutural</label>
+                          <select
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                            value={(formData.technicalConfig as any)?.tipoEstrutural || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'residencial_multifamiliar', tipoEstrutural: e.target.value || undefined } })}
+                          >
+                            <option value="">Selecione...</option>
+                            <option value="concreto_armado">Concreto Armado</option>
+                            <option value="metalica">Estrutura Metálica</option>
+                            <option value="alvenaria_estrutural">Alvenaria Estrutural</option>
+                          </select>
+                        </div>
+                      </>)}
+
+                      {/* Casa Residencial */}
+                      {formData.tipoObra === 'casa' && (<>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Área do Terreno (m²)</label>
+                          <input type="number" min={0} placeholder="Ex: 360"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={(formData.technicalConfig as any)?.areaTerreno || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'casa', areaTerreno: Number(e.target.value) || undefined } })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Área Construída (m²)</label>
+                          <input type="number" min={0} placeholder="Ex: 180"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={(formData.technicalConfig as any)?.areaConstruida || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'casa', areaConstruida: Number(e.target.value) || undefined } })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Nº Pavimentos</label>
+                          <input type="number" min={1} placeholder="Ex: 2"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={(formData.technicalConfig as any)?.numeroPavimentos || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'casa', numeroPavimentos: Number(e.target.value) || undefined } })}
+                          />
+                        </div>
+                        <div className="flex items-center gap-3 pt-2">
+                          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+                            <input type="checkbox"
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              checked={!!(formData.technicalConfig as any)?.condominioFechado}
+                              onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'casa', condominioFechado: e.target.checked } })}
+                            />
+                            Condomínio fechado
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+                            <input type="checkbox"
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              checked={!!(formData.technicalConfig as any)?.piscina}
+                              onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'casa', piscina: e.target.checked } })}
+                            />
+                            Piscina
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+                            <input type="checkbox"
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              checked={!!(formData.technicalConfig as any)?.energiaSolar}
+                              onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'casa', energiaSolar: e.target.checked } })}
+                            />
+                            Energia Solar
+                          </label>
+                        </div>
+                      </>)}
+
+                      {/* Loja Comercial */}
+                      {formData.tipoObra === 'loja' && (<>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Localidade</label>
+                          <select
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                            value={(formData.technicalConfig as any)?.localidade || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'loja', localidade: e.target.value || undefined } })}
+                          >
+                            <option value="">Selecione...</option>
+                            <option value="shopping">Shopping Center</option>
+                            <option value="rua">Rua / Galeria</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Data de Inauguração</label>
+                          <input type="date"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={(formData.technicalConfig as any)?.dataInauguracao || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'loja', dataInauguracao: e.target.value || undefined } })}
+                          />
+                        </div>
+                        <div className="col-span-2 flex items-center gap-6 pt-1">
+                          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+                            <input type="checkbox"
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              checked={!!(formData.technicalConfig as any)?.trabalhoNoturno}
+                              onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'loja', trabalhoNoturno: e.target.checked } })}
+                            />
+                            Trabalho noturno permitido
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+                            <input type="checkbox"
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              checked={!!(formData.technicalConfig as any)?.marcenariaCorporativa}
+                              onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'loja', marcenariaCorporativa: e.target.checked } })}
+                            />
+                            Marcenaria corporativa
+                          </label>
+                        </div>
+                      </>)}
+
+                      {/* Sala Comercial */}
+                      {formData.tipoObra === 'sala' && (<>
+                        <div className="col-span-2">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Tipo de Ocupação</label>
+                          <select
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                            value={(formData.technicalConfig as any)?.tipoOcupacao || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'sala', tipoOcupacao: e.target.value || undefined } })}
+                          >
+                            <option value="">Selecione...</option>
+                            <option value="escritorio">Escritório Corporativo</option>
+                            <option value="clinica">Clínica / Consultório</option>
+                            <option value="coworking">Coworking</option>
+                            <option value="outro">Outro</option>
+                          </select>
+                        </div>
+                        <div className="col-span-2 flex flex-wrap items-center gap-x-6 gap-y-3 pt-1">
+                          {[
+                            { key: 'pisoElevado', label: 'Piso elevado' },
+                            { key: 'forroModular', label: 'Forro modular' },
+                            { key: 'cabeamentoEstruturado', label: 'Cabeamento estruturado' },
+                            { key: 'cpd', label: 'CPD / Data room' },
+                          ].map(({ key, label }) => (
+                            <label key={key} className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+                              <input type="checkbox"
+                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                checked={!!(formData.technicalConfig as any)?.[key]}
+                                onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'sala', [key]: e.target.checked } })}
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </>)}
+
+                      {/* Galpão */}
+                      {formData.tipoObra === 'galpao' && (<>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Área Total (m²)</label>
+                          <input type="number" min={0} placeholder="Ex: 5000"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={(formData.technicalConfig as any)?.areaTotal || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'galpao', areaTotal: Number(e.target.value) || undefined } })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Pé Direito (m)</label>
+                          <input type="number" min={0} step={0.5} placeholder="Ex: 8"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={(formData.technicalConfig as any)?.peDireito || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'galpao', peDireito: Number(e.target.value) || undefined } })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Tipo de Estrutura</label>
+                          <select
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                            value={(formData.technicalConfig as any)?.tipoEstrutura || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'galpao', tipoEstrutura: e.target.value || undefined } })}
+                          >
+                            <option value="">Selecione...</option>
+                            <option value="pre_moldado">Pré-moldado</option>
+                            <option value="metalica">Estrutura Metálica</option>
+                            <option value="concreto">Concreto In Loco</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Docas</label>
+                          <input type="number" min={0} placeholder="Ex: 4"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={(formData.technicalConfig as any)?.numeroDOcas || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'galpao', numeroDOcas: Number(e.target.value) || undefined } })}
+                          />
+                        </div>
+                        <div className="col-span-2 flex flex-wrap items-center gap-x-6 gap-y-3 pt-1">
+                          {[
+                            { key: 'ponteRolante', label: 'Ponte rolante' },
+                            { key: 'subestacao', label: 'Subestação elétrica' },
+                            { key: 'sprinklers', label: 'Sprinklers' },
+                          ].map(({ key, label }) => (
+                            <label key={key} className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+                              <input type="checkbox"
+                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                checked={!!(formData.technicalConfig as any)?.[key]}
+                                onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'galpao', [key]: e.target.checked } })}
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </>)}
+
+                      {/* Reforma */}
+                      {formData.tipoObra === 'reforma' && (
+                        <div className="col-span-2">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Descrição do Escopo</label>
+                          <textarea rows={2} placeholder="Descreva o escopo principal da reforma..."
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                            value={(formData.technicalConfig as any)?.descricao || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalConfig: { ...(formData.technicalConfig as any), tipo: 'reforma', descricao: e.target.value } })}
+                          />
+                        </div>
+                      )}
+
+                    </div>
+                  </div>
+                )}
+
+                {/* Gestão Financeira */}
+                <div className="border-t border-gray-100 pt-6">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4" />
+                    Gestão Financeira
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Modalidade</label>
+                      <select
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                        value={formData.modalidade || ''}
+                        onChange={(e) => setFormData({ ...formData, modalidade: (e.target.value as any) || undefined })}
+                      >
+                        <option value="">Selecione...</option>
+                        <option value="privada">Privada</option>
+                        <option value="publica">Pública (Licitação)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Margem Alvo (%)</label>
+                      <input
+                        type="number" min={0} max={100} step={0.5} placeholder="Ex: 18"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.margemAlvo ?? ''}
+                        onChange={(e) => setFormData({ ...formData, margemAlvo: e.target.value ? Number(e.target.value) : undefined })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Valor Estimado (R$)</label>
+                      <input
+                        type="number" min={0} step={1000} placeholder="Ex: 2500000"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.valorEstimado ?? ''}
+                        onChange={(e) => setFormData({ ...formData, valorEstimado: e.target.value ? Number(e.target.value) : undefined })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Valor Contratado (R$)</label>
+                      <input
+                        type="number" min={0} step={1000} placeholder="Ex: 2350000"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.valorContratado ?? ''}
+                        onChange={(e) => setFormData({ ...formData, valorContratado: e.target.value ? Number(e.target.value) : undefined })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Equipe de Campo */}
+                <div className="border-t border-gray-100 pt-6">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Building2 className="w-4 h-4" />
+                    Equipe de Campo
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { key: 'mestreObras', label: 'Mestre de Obras' },
+                      { key: 'encarregado', label: 'Encarregado' },
+                      { key: 'tecnicoSeguranca', label: 'Técnico de Segurança' },
+                      { key: 'almoxarife', label: 'Almoxarife' },
+                    ].map(({ key, label }) => (
+                      <div key={key}>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+                        <input
+                          type="text" placeholder={`Nome do ${label.toLowerCase()}`}
+                          className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          value={(formData as any)[key] || ''}
+                          onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Registro Documental */}
+                <div className="border-t border-gray-100 pt-6">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Registro Documental
+                  </h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">ART/RRT nº</label>
+                      <input
+                        type="text" placeholder="Número da ART"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.artRrt || ''}
+                        onChange={(e) => setFormData({ ...formData, artRrt: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Alvará nº</label>
+                      <input
+                        type="text" placeholder="Número do Alvará"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.alvara || ''}
+                        onChange={(e) => setFormData({ ...formData, alvara: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Matrícula CNO</label>
+                      <input
+                        type="text" placeholder="Número CNO"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.matriculaCNO || ''}
+                        onChange={(e) => setFormData({ ...formData, matriculaCNO: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Documentos obrigatórios pelo tipo de obra */}
+                  {formData.tipoObra && (
+                    <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-4">
+                      <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-3">
+                        Documentação exigida — {TIPO_OBRA_LABELS[formData.tipoObra]}
+                      </p>
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {REQUIRED_DOCS_BY_TYPE[formData.tipoObra].map((doc) => (
+                          <div key={doc.name} className="flex items-center gap-2 text-sm">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${doc.required ? 'bg-red-500' : 'bg-gray-400'}`} />
+                            <span className={doc.required ? 'text-gray-800 font-medium' : 'text-gray-500'}>
+                              {doc.name}
+                            </span>
+                            {!doc.required && (
+                              <span className="text-[10px] text-gray-400 font-medium">(se aplicável)</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-amber-600 mt-3">
+                        Ponto vermelho = obrigatório · Cinza = condicional
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div>

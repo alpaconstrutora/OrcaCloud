@@ -4,6 +4,85 @@ import { FinancialInfo } from "./financial";
 import { SchedulePeriod, ItemDistribution, ItemScheduleDetails, Baseline, ScheduleHistoryEntry, ReplanMode } from "./schedule";
 import { ResourceRole, ResourceWorker, ResourceTeam } from "./resources";
 
+export type TipoObra =
+  | 'residencial_multifamiliar'
+  | 'casa'
+  | 'loja'
+  | 'sala'
+  | 'galpao'
+  | 'reforma'
+  | 'outro';
+
+export type RegimeObra =
+  | 'empreitada_global'
+  | 'administracao'
+  | 'preco_unitario'
+  | 'turn_key';
+
+export interface TechnicalConfigResidencialMultifamiliar {
+  tipo: 'residencial_multifamiliar';
+  numeroPavimentos?: number;
+  numeroTorres?: number;
+  numeroUnidades?: number;
+  areaConstruidaTotal?: number;
+  areaPrivativa?: number;
+  numeroVagas?: number;
+  tipoEstrutural?: 'concreto_armado' | 'metalica' | 'alvenaria_estrutural';
+}
+
+export interface TechnicalConfigCasa {
+  tipo: 'casa';
+  areaTerreno?: number;
+  areaConstruida?: number;
+  numeroPavimentos?: number;
+  tipoCobertura?: string;
+  condominioFechado?: boolean;
+  piscina?: boolean;
+  energiaSolar?: boolean;
+}
+
+export interface TechnicalConfigLoja {
+  tipo: 'loja';
+  localidade?: 'shopping' | 'rua';
+  dataInauguracao?: string;
+  trabalhoNoturno?: boolean;
+  marcenariaCorporativa?: boolean;
+  arCondicionadoComercial?: boolean;
+}
+
+export interface TechnicalConfigSala {
+  tipo: 'sala';
+  tipoOcupacao?: 'escritorio' | 'clinica' | 'coworking' | 'outro';
+  pisoElevado?: boolean;
+  forroModular?: boolean;
+  cabeamentoEstruturado?: boolean;
+  cpd?: boolean;
+}
+
+export interface TechnicalConfigGalpao {
+  tipo: 'galpao';
+  areaTotal?: number;
+  peDireito?: number;
+  tipoEstrutura?: 'pre_moldado' | 'metalica' | 'concreto';
+  numeroDOcas?: number;
+  ponteRolante?: boolean;
+  subestacao?: boolean;
+  sprinklers?: boolean;
+}
+
+export interface TechnicalConfigGenerico {
+  tipo: 'reforma' | 'outro';
+  descricao?: string;
+}
+
+export type TechnicalConfig =
+  | TechnicalConfigResidencialMultifamiliar
+  | TechnicalConfigCasa
+  | TechnicalConfigLoja
+  | TechnicalConfigSala
+  | TechnicalConfigGalpao
+  | TechnicalConfigGenerico;
+
 export interface ProjectSettings {
     id?: string;
     name: string;
@@ -49,8 +128,25 @@ export interface ProjectSettings {
     activeVersionId?: string;
     budgetStatus?: 'Em Andamento' | 'Fechado';
     status?: 'Em Andamento' | 'Finalizado' | 'Aprovado' | 'Proposta';
-    obraStatus?: 'Não Iniciado' | 'Em andamento' | 'Concluída';
+    obraStatus?: 'Não Iniciado' | 'Em andamento' | 'Paralisada' | 'Concluída';
     budgetType?: 'ANALYTIC' | 'PARAMETRIC';
+    tipoObra?: TipoObra;
+    regimeObra?: RegimeObra;
+    technicalConfig?: TechnicalConfig;
+    // Gestão financeira da obra
+    valorEstimado?: number;
+    valorContratado?: number;
+    margemAlvo?: number;
+    modalidade?: 'publica' | 'privada';
+    // Equipe de campo
+    mestreObras?: string;
+    encarregado?: string;
+    tecnicoSeguranca?: string;
+    almoxarife?: string;
+    // Registro / documentação
+    artRrt?: string;
+    alvara?: string;
+    matriculaCNO?: string;
     linkedProjectId?: string;
     linkedProjectName?: string;
     investorId?: string;
@@ -134,4 +230,36 @@ export interface BudgetVersion {
     description: string;
     budget: BudgetEntry[];
     settings: Partial<ProjectSettings>;
+}
+
+export interface EapPhase {
+    code: string;
+    name: string;
+}
+
+export interface RequiredDoc {
+    name: string;
+    required: boolean;
+    category?: 'legal' | 'tecnico' | 'ambiental' | 'seguranca';
+}
+
+export interface TemplateIndicator {
+    key: string;
+    label: string;
+    unit: string;
+}
+
+export interface ChecklistTemplateItem {
+    phase: 'pre_start' | 'in_progress' | 'pre_completion';
+    items: string[];
+}
+
+export interface ProjectTypeTemplate {
+    id?: string;
+    tipo_obra: TipoObra;
+    org_id?: string | null;
+    eap_phases: EapPhase[];
+    required_docs: RequiredDoc[];
+    indicators: TemplateIndicator[];
+    checklist_template: ChecklistTemplateItem[];
 }

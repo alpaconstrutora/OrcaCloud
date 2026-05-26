@@ -45,6 +45,9 @@ export const projectService = {
             }
         }
 
+        const tipoObra = rest.settings?.tipoObra ?? null;
+        const regimeObra = rest.settings?.regimeObra ?? null;
+
         // Se tivermos um ID, tentamos atualizar
         if (id) {
             const { data: updated, error } = await supabase
@@ -54,7 +57,9 @@ export const projectService = {
                     settings: rest.settings,
                     budget: rest.budget,
                     updated_at: new Date(),
-                    ...(rest.settings?.code !== undefined ? { code: rest.settings.code || null } : {})
+                    ...(rest.settings?.code !== undefined ? { code: rest.settings.code || null } : {}),
+                    ...(tipoObra !== null ? { tipo_obra: tipoObra } : {}),
+                    ...(regimeObra !== null ? { regime_obra: regimeObra } : {}),
                 })
                 .eq('id', id)
                 .select()
@@ -86,7 +91,9 @@ export const projectService = {
                     name: rest.name,
                     settings: settingsWithCode,
                     budget: rest.budget,
-                    code: codeToUse
+                    code: codeToUse,
+                    ...(tipoObra ? { tipo_obra: tipoObra } : {}),
+                    ...(regimeObra ? { regime_obra: regimeObra } : {}),
                 })
                 .select()
                 .single();

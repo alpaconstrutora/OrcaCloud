@@ -57,13 +57,24 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
-          // Cache app shell and assets — skip the massive JS bundle (>5 MB) from precache
-          globPatterns: ['**/*.{css,html,ico,png,svg,woff2}'],
+          // Cache static assets only — JS bundles excluded from precache to avoid stale-hash white screen
+          // (new deploy changes JS hashes; cached HTML with old hashes → 404 → white screen)
+          globPatterns: ['**/*.{css,ico,png,svg,woff2}'],
           maximumFileSizeToCacheInBytes: 8 * 1024 * 1024, // 8 MB limit
           // Skip Supabase API calls — too dynamic for precache
           navigateFallback: 'index.html',
           navigateFallbackDenylist: [/^\/api/, /^\/rest/, /^\/realtime/],
           runtimeCaching: [
+            {
+              // Navigation: always fetch fresh HTML from network (prevents stale JS hash mismatch after deploy)
+              urlPattern: ({ request }: { request: Request }) => request.mode === 'navigate',
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'navigation-cache',
+                networkTimeoutSeconds: 4,
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
             {
               // Cache Google Fonts
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

@@ -39,6 +39,8 @@ interface NewProjectData {
   classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO';
   startDate?: string;
   endDate?: string;
+  startDateReal?: string;
+  endDateReal?: string;
   responsibleTeam?: string;
   code?: string;
   organizationId?: string;
@@ -182,6 +184,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     classification: 'ORCAMENTO',
     startDate: '',
     endDate: '',
+    startDateReal: '',
+    endDateReal: '',
     responsibleTeam: '',
     tipo: undefined,
     tipoObra: undefined,
@@ -307,6 +311,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
           classification: initialClassification || 'ORCAMENTO',
           startDate: '',
           endDate: '',
+          startDateReal: '',
+          endDateReal: '',
           responsibleTeam: '',
           tipo: undefined,
           tipoObra: undefined,
@@ -405,6 +411,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
         classification: initialClassification || 'ORCAMENTO',
         startDate: '',
         endDate: '',
+        startDateReal: '',
+        endDateReal: '',
         responsibleTeam: '',
         tipo: undefined
       });
@@ -1161,6 +1169,40 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     </div>
                   </div>
                 )}
+
+                {/* Datas Reais */}
+                <div className="border-t border-gray-100 pt-6">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    Datas
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Início Previsto</label>
+                      <input type="date" className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.startDate || ''}
+                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Término Previsto</label>
+                      <input type="date" className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.endDate || ''}
+                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Início Real</label>
+                      <input type="date" className="w-full rounded-lg border border-emerald-300 bg-emerald-50/30 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                        value={formData.startDateReal || ''}
+                        onChange={(e) => setFormData({ ...formData, startDateReal: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Término Real</label>
+                      <input type="date" className="w-full rounded-lg border border-emerald-300 bg-emerald-50/30 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                        value={formData.endDateReal || ''}
+                        onChange={(e) => setFormData({ ...formData, endDateReal: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
 
                 {/* Gestão Financeira */}
                 <div className="border-t border-gray-100 pt-6">

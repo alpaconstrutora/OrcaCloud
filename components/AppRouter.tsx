@@ -54,6 +54,7 @@ import ContasPagarManager from './ContasPagarManager';
 import { FiscalModule } from './fiscal/FiscalModule';
 import OperacionalModule from './OperacionalModule';
 import NotificationsCenter from './NotificationsCenter';
+import ProjectTypeTemplateEditor from './ProjectTypeTemplateEditor';
 
 export interface AppRouterProps {
   activeView: string;
@@ -641,6 +642,11 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onExportProject={handleExportProject}
           onSelect={(org: Organization) => setActiveOrganizationId(org?.id || null)}
         />
+      );
+
+    case 'org-type-templates':
+      return (
+        <ProjectTypeTemplateEditor orgId={activeOrganizationId || ''} />
       );
 
     case 'quality':

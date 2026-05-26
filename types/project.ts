@@ -153,6 +153,8 @@ export interface ProjectSettings {
     investorName?: string;
     startDate?: string;
     endDate?: string;
+    startDateReal?: string;
+    endDateReal?: string;
     responsibleTeam?: string;
     schedule?: ProjectSchedule;
     diaryEntries?: DiaryEntry[];

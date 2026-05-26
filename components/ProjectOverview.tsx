@@ -11,12 +11,36 @@ import {
     MessageSquare,
     Package,
     ArrowUpRight,
-    Clock
+    Clock,
+    Users,
+    FileText,
+    BarChart2,
+    Layers,
+    CheckCircle2,
+    Circle,
 } from 'lucide-react';
 import { ProjectSettings, BudgetEntry, PurchaseOrder } from '../types';
+import { TipoObra, ProjectTypeTemplate } from '../types/project';
 import { calculateProjectProgress, calculateUpcomingPhases, calculateRealizedFinancialProgress } from '../utils/projectUtils';
 import { orderService } from '../services/orderService';
 import { projectService } from '../services/projectService';
+import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService';
+
+const TIPO_OBRA_LABELS: Record<TipoObra, string> = {
+    residencial_multifamiliar: 'Residencial Multifamiliar',
+    casa: 'Casa Residencial',
+    loja: 'Loja Comercial',
+    sala: 'Sala / Escritório',
+    galpao: 'Galpão Industrial / Logístico',
+    reforma: 'Reforma / Manutenção',
+    outro: 'Outro',
+};
+const REGIME_LABELS: Record<string, string> = {
+    empreitada_global: 'Empreitada Global',
+    administracao: 'Administração',
+    preco_unitario: 'Preço Unitário',
+    turn_key: 'Turn-Key',
+};
 
 interface ProjectOverviewProps {
     settings: ProjectSettings;
@@ -29,6 +53,7 @@ interface ProjectOverviewProps {
 const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, projects, onNavigate, onLoadProject }) => {
     const [loading, setLoading] = useState(true);
     const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+    const [template, setTemplate] = useState<ProjectTypeTemplate | null>(null);
     const [linkedProjectsData, setLinkedProjectsData] = useState<{
         budget?: BudgetEntry[];
         planning?: any;
@@ -82,6 +107,11 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                     diary: diaryData
                 });
                 setOrders(ordersData);
+
+                if (settings.tipoObra) {
+                    const tmpl = await projectTypeTemplatesService.getTemplate(settings.tipoObra, settings.organizationId);
+                    setTemplate(tmpl);
+                }
             } catch (error) {
                 console.error("Error loading dashboard data:", error);
             } finally {
@@ -313,6 +343,141 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                         />
                     </div>
                 </div>
+
+                {/* Ficha Técnica da Obra */}
+                {(settings.tipoObra || settings.valorEstimado || settings.mestreObras) && (
+                    <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-6 space-y-5">
+                        <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            <Layers className="w-4 h-4" />
+                            Ficha Técnica
+                        </h2>
+
+                        {/* Tipo e Regime */}
+                        {settings.tipoObra && (
+                            <div className="flex flex-wrap gap-2">
+                                <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-black border border-blue-200">
+                                    {TIPO_OBRA_LABELS[settings.tipoObra as TipoObra] || settings.tipoObra}
+                                </span>
+                                {settings.regimeObra && (
+                                    <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-bold border border-gray-200">
+                                        {REGIME_LABELS[settings.regimeObra] || settings.regimeObra}
+                                    </span>
+                                )}
+                                {settings.modalidade && (
+                                    <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold border border-amber-200">
+                                        {settings.modalidade === 'publica' ? 'Pública' : 'Privada'}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Financeiro */}
+                        {(settings.valorEstimado || settings.valorContratado || settings.margemAlvo) && (
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><DollarSign className="w-3 h-3" />Gestão Financeira</p>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {settings.valorEstimado != null && (
+                                        <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Estimado</p>
+                                            <p className="text-sm font-black text-gray-900 mt-0.5">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(settings.valorEstimado)}</p>
+                                        </div>
+                                    )}
+                                    {settings.valorContratado != null && (
+                                        <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Contratado</p>
+                                            <p className="text-sm font-black text-gray-900 mt-0.5">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(settings.valorContratado)}</p>
+                                        </div>
+                                    )}
+                                    {settings.margemAlvo != null && (
+                                        <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Margem Alvo</p>
+                                            <p className="text-sm font-black text-emerald-700 mt-0.5">{settings.margemAlvo}%</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Equipe */}
+                        {(settings.mestreObras || settings.encarregado || settings.tecnicoSeguranca || settings.almoxarife) && (
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Users className="w-3 h-3" />Equipe de Campo</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[
+                                        { label: 'Mestre', value: settings.mestreObras },
+                                        { label: 'Encarregado', value: settings.encarregado },
+                                        { label: 'Tec. Segurança', value: settings.tecnicoSeguranca },
+                                        { label: 'Almoxarife', value: settings.almoxarife },
+                                    ].filter(i => i.value).map(({ label, value }) => (
+                                        <div key={label} className="flex items-center gap-2">
+                                            <span className="text-[10px] font-black text-gray-400 uppercase w-24 shrink-0">{label}</span>
+                                            <span className="text-xs font-bold text-gray-800">{value}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Indicadores do tipo */}
+                        {template && template.indicators.length > 0 && (
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><BarChart2 className="w-3 h-3" />KPIs para este tipo de obra</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {template.indicators.map(ind => (
+                                        <span key={ind.key} className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-700">
+                                            {ind.label} <span className="text-indigo-400 font-normal">({ind.unit})</span>
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Painel de documentação com status */}
+                        {(template?.required_docs?.length || settings.artRrt || settings.alvara || settings.matriculaCNO) ? (
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><FileText className="w-3 h-3" />Painel de Documentação</p>
+                                <div className="space-y-1.5">
+                                    {(() => {
+                                        // Build unified doc list: template required_docs + fallback fixed fields
+                                        const getDocValue = (name: string): string | null => {
+                                            const n = name.toLowerCase();
+                                            if (n.includes('art') || n.includes('rrt')) return settings.artRrt || null;
+                                            if (n.includes('alvará') || n.includes('alvara')) return settings.alvara || null;
+                                            if (n.includes('cno') || n.includes('matrícula') || n.includes('matricula')) return settings.matriculaCNO || null;
+                                            const clientDoc = settings.clientDocuments?.find(d => d.name.toLowerCase().includes(n.split(' ')[0]));
+                                            return clientDoc?.url || null;
+                                        };
+
+                                        const docs = template?.required_docs?.length
+                                            ? template.required_docs
+                                            : [
+                                                ...(settings.artRrt ? [{ name: 'ART/RRT', required: true }] : []),
+                                                ...(settings.alvara ? [{ name: 'Alvará', required: true }] : []),
+                                                ...(settings.matriculaCNO ? [{ name: 'Matrícula CNO', required: true }] : []),
+                                              ];
+
+                                        return docs.map(doc => {
+                                            const value = getDocValue(doc.name);
+                                            const obtained = !!value;
+                                            return (
+                                                <div key={doc.name} className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs border ${obtained ? 'bg-emerald-50 border-emerald-100' : doc.required ? 'bg-amber-50 border-amber-100' : 'bg-gray-50 border-gray-100'}`}>
+                                                    {obtained
+                                                        ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                                        : doc.required
+                                                            ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                                            : <Circle className="w-3.5 h-3.5 text-gray-300 shrink-0" />}
+                                                    <span className={`flex-1 font-medium ${obtained ? 'text-emerald-800' : doc.required ? 'text-amber-800' : 'text-gray-500'}`}>{doc.name}</span>
+                                                    {value && <span className="font-mono text-[10px] text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded truncate max-w-[120px]">{value}</span>}
+                                                    {!obtained && <span className={`text-[10px] font-bold ${doc.required ? 'text-amber-600' : 'text-gray-400'}`}>{doc.required ? 'Pendente' : 'Opcional'}</span>}
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            </div>
+                        ) : null}
+                    </div>
+                )}
 
                 {/* Messaging & Timeline */}
                 <div className="space-y-6">

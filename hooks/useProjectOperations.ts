@@ -2,7 +2,10 @@ import { useState, useCallback } from 'react';
 import { projectService } from '../services/projectService';
 import { contractService } from '../services/contractService';
 import { organizationService } from '../services/organizationService';
+import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService';
 import { BudgetEntry, ProjectSettings, Organization, Contract } from '../types';
+import { TipoObra } from '../types/project';
+import { WBSGroup, WBSPhase } from '../types/budget';
 import { INITIAL_PROJECT_SETTINGS, INITIAL_BUDGET, BASE_CUB_RATES, CUB_STANDARDS_DATA } from '../constants';
 
 interface UseProjectOperationsProps {
@@ -66,6 +69,32 @@ export const useProjectOperations = ({
         organizationId: data.organizationId || organizations[0]?.id,
         ...(data.code ? { code: data.code } : {})
       } as ProjectSettings;
+      // Auto-populate WBS from tipo_obra template when creating an ORCAMENTO linked to an OBRA
+      if (projectModalMode === 'create' && newSettings.classification === 'ORCAMENTO' && newSettings.linkedProjectId) {
+        try {
+          const linkedProject = await projectService.loadProject(newSettings.linkedProjectId);
+          const tipoObra = (linkedProject?.settings as any)?.tipoObra as TipoObra | undefined;
+          if (tipoObra) {
+            const tmpl = await projectTypeTemplatesService.getTemplate(tipoObra, newSettings.organizationId);
+            if (tmpl && tmpl.eap_phases.length > 0 && (!newSettings.wbs || newSettings.wbs.length === 0)) {
+              const phases: WBSPhase[] = tmpl.eap_phases.map(p => ({
+                id: `eap-${p.code}`,
+                name: `${p.code} ${p.name}`,
+                subPhases: [],
+              }));
+              const wbsGroup: WBSGroup = {
+                id: 'eap-padrao',
+                name: 'EAP Padrão',
+                phases,
+              };
+              newSettings.wbs = [wbsGroup];
+            }
+          }
+        } catch {
+          // Non-critical: proceed without WBS pre-population if template fetch fails
+        }
+      }
+
       if (projectModalMode === 'create') {
         const savedProject = await projectService.saveProject({
           name: newSettings.name,

@@ -23,6 +23,23 @@ interface SupplyChainOrderFormProps {
 const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onSave, editingOrderId }) => {
     const isEditing = !!editingOrderId;
     const [loading, setLoading] = React.useState(true);
+
+    // Sheet slide-in animation for edit mode
+    const [sheetOpen, setSheetOpen] = React.useState(false);
+    React.useEffect(() => {
+        if (isEditing) {
+            const id = requestAnimationFrame(() => setSheetOpen(true));
+            return () => { cancelAnimationFrame(id); setSheetOpen(false); };
+        }
+        setSheetOpen(false);
+    }, [isEditing]);
+
+    React.useEffect(() => {
+        if (!isEditing) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onBack(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [isEditing, onBack]);
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
     const [accounts, setAccounts] = React.useState<PaymentAccount[]>([]);
@@ -502,10 +519,25 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     }
 
     return (
-        <div className="absolute inset-0 z-[110] flex items-center justify-center p-2 md:p-8 lg:p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="relative bg-white rounded-2xl md:rounded-[3rem] shadow-2xl w-full h-full flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden border border-white/20">
+        <div className={
+            isEditing
+                ? 'fixed inset-0 z-[110]'
+                : 'absolute inset-0 z-[110] flex items-center justify-center p-2 md:p-8 lg:p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300'
+        }>
+            {/* Sheet backdrop (edit mode only) */}
+            {isEditing && (
+                <div
+                    className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-200 ${sheetOpen ? 'opacity-100' : 'opacity-0'}`}
+                    onClick={onBack}
+                />
+            )}
+            <div className={
+                isEditing
+                    ? `absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-3xl overflow-hidden border-l border-gray-200 transition-transform duration-300 ease-in-out ${sheetOpen ? 'translate-x-0' : 'translate-x-full'}`
+                    : 'relative bg-white rounded-2xl md:rounded-[3rem] shadow-2xl w-full h-full flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden border border-white/20'
+            }>
 
-                <div className="px-4 py-5 md:px-8 md:py-7 lg:px-12 lg:py-10 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between shrink-0">
+                <div className={`bg-gray-50/50 border-b border-gray-100 flex items-center justify-between shrink-0 ${isEditing ? 'px-6 py-5' : 'px-4 py-5 md:px-8 md:py-7 lg:px-12 lg:py-10'}`}>
                     <div className="flex items-center gap-6">
                         <button
                             onClick={onBack}
@@ -546,7 +578,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     </div>
                 )}
 
-                <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 custom-scrollbar">
+                <div className={`flex-1 overflow-y-auto custom-scrollbar ${isEditing ? 'p-6' : 'p-4 md:p-8 lg:p-12'}`}>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 space-y-6">
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">

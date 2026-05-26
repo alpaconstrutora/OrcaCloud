@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import {
   ClipboardList, LayoutDashboard, BookOpen,
-  ChevronRight, Building2, Loader2, LayoutGrid, List
+  ChevronRight, Building2, Loader2, LayoutGrid, List,
+  Kanban,
 } from 'lucide-react'
 import OperacionalList from './OperacionalList'
 import OperacionalDetail from './OperacionalDetail'
 import OperacionalForm from './OperacionalForm'
 import OperacionalDashboard from './OperacionalDashboard'
 import OperacionalDiary from './OperacionalDiary'
+import OperacionalKanban from './OperacionalKanban'
 import { supabase } from '../lib/supabase'
 
-type OpsView = 'list' | 'detail' | 'form' | 'dashboard' | 'diary'
+type OpsView = 'list' | 'detail' | 'form' | 'dashboard' | 'diary' | 'kanban'
 
 interface Props {
   activeOrganizationId?: string
@@ -226,6 +228,12 @@ const OperacionalModule: React.FC<Props> = ({
           onClick={() => { setView('list'); setSelectedWorkOrderId(null) }}
         />
         <TabBtn
+          active={view === 'kanban'}
+          icon={Kanban}
+          label="Kanban"
+          onClick={() => { setView('kanban'); setSelectedWorkOrderId(null) }}
+        />
+        <TabBtn
           active={view === 'dashboard'}
           icon={LayoutDashboard}
           label="Dashboard"
@@ -255,12 +263,22 @@ const OperacionalModule: React.FC<Props> = ({
         />
       )}
 
+      {view === 'kanban' && (
+        <OperacionalKanban
+          projectId={selectedProjectId}
+          orgId={orgId ?? ''}
+          onViewDetail={(id) => { setSelectedWorkOrderId(id); setView('detail') }}
+          onCreateNew={() => { setEditingWorkOrderId(null); setView('form') }}
+        />
+      )}
+
       {view === 'detail' && selectedWorkOrderId && (
         <OperacionalDetail
           workOrderId={selectedWorkOrderId}
           orgId={orgId ?? ''}
           onBack={() => { setSelectedWorkOrderId(null); setView('list') }}
           onEdit={(id) => { setEditingWorkOrderId(id); setView('form') }}
+          onViewOther={(id) => setSelectedWorkOrderId(id)}
         />
       )}
 

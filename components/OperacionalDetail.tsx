@@ -3,7 +3,7 @@ import {
   ArrowLeft, Edit2, Loader2, AlertCircle, Clock, CheckCircle2, XCircle,
   Lock, PlayCircle, Eye, TrendingUp, DollarSign, Calendar, Users,
   ClipboardList, Camera, AlertTriangle, History, ChevronDown, Plus,
-  CheckSquare, FileText, Zap, Info, RefreshCw
+  CheckSquare, FileText, Zap, Info, RefreshCw, Link2, ArrowRight,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { workOrderService } from '../services/workOrderService'
@@ -21,6 +21,14 @@ interface Props {
   orgId: string
   onBack: () => void
   onEdit: (id: string) => void
+  onViewOther?: (id: string) => void
+}
+
+interface SuccessorRow {
+  id: string
+  code: string | null
+  title: string
+  status: WorkOrderStatus
 }
 
 const STATUS_CONFIG: Record<WorkOrderStatus, { label: string; color: string; bg: string }> = {
@@ -147,7 +155,7 @@ const TransitionModal: React.FC<{
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit }) => {
+const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit, onViewOther }) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [wo, setWo] = useState<Record<string, any> | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -157,6 +165,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
   const [transitionErrors, setTransitionErrors] = useState<string[]>([])
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [showUnblockModal, setShowUnblockModal] = useState(false)
+  const [successors, setSuccessors] = useState<SuccessorRow[]>([])
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -172,6 +181,14 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
   }, [workOrderId])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    supabase
+      .from('work_orders')
+      .select('id, code, title, status')
+      .eq('predecessor_id', workOrderId)
+      .then(({ data }) => setSuccessors((data ?? []) as SuccessorRow[]))
+  }, [workOrderId])
 
   const handleTransitionClick = async (newStatus: WorkOrderStatus) => {
     const result = await workOrderService.validateTransition(workOrderId, newStatus)
@@ -308,6 +325,37 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
         </div>
       </div>
 
+      {/* Predecessor blocking banner */}
+      {(() => {
+        const pred = wo.predecessor as { id: string; code: string | null; title: string; status: WorkOrderStatus } | null
+        if (!pred || pred.status === 'closed') return null
+        return (
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-amber-800">
+                Aguardando encerramento da predecessora
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                <span className="font-bold">{pred.code ?? '—'}</span> — {pred.title}
+              </p>
+              <span className={`inline-block mt-2 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${STATUS_CONFIG[pred.status]?.bg} ${STATUS_CONFIG[pred.status]?.color}`}>
+                {STATUS_CONFIG[pred.status]?.label}
+              </span>
+            </div>
+            {onViewOther && (
+              <button
+                onClick={() => onViewOther(pred.id)}
+                className="flex items-center gap-1.5 text-xs font-bold text-amber-700 hover:text-amber-900 flex-shrink-0"
+              >
+                Ver OE
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )
+      })()}
+
       {/* Workflow buttons */}
       {(allowedNext.length > 0 || status === 'blocked') && (
         <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
@@ -374,6 +422,70 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                   } />
                 </>
               )}
+              {/* Dependências */}
+              {(() => {
+                const pred = wo.predecessor as { id: string; code: string | null; title: string; status: WorkOrderStatus } | null
+                if (!pred && successors.length === 0) return null
+                return (
+                  <div className="col-span-2 md:col-span-3 border-t border-slate-100 pt-4 mt-2">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Link2 className="w-3.5 h-3.5 text-slate-400" />
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dependências</p>
+                    </div>
+                    <div className="space-y-2">
+                      {pred && (
+                        <div className="flex items-center justify-between gap-3 bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex-shrink-0">Predecessora</span>
+                            <span className="text-xs font-bold text-slate-600 truncate">
+                              {pred.code ? `${pred.code} — ` : ''}{pred.title}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${STATUS_CONFIG[pred.status]?.bg} ${STATUS_CONFIG[pred.status]?.color}`}>
+                              {STATUS_CONFIG[pred.status]?.label}
+                            </span>
+                            {onViewOther && (
+                              <button
+                                onClick={() => onViewOther(pred.id)}
+                                className="text-blue-500 hover:text-blue-700"
+                                title="Abrir predecessora"
+                              >
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {successors.map(s => (
+                        <div key={s.id} className="flex items-center justify-between gap-3 bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex-shrink-0">Dependente</span>
+                            <span className="text-xs font-bold text-slate-600 truncate">
+                              {s.code ? `${s.code} — ` : ''}{s.title}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${STATUS_CONFIG[s.status]?.bg} ${STATUS_CONFIG[s.status]?.color}`}>
+                              {STATUS_CONFIG[s.status]?.label}
+                            </span>
+                            {onViewOther && (
+                              <button
+                                onClick={() => onViewOther(s.id)}
+                                className="text-blue-500 hover:text-blue-700"
+                                title="Abrir dependente"
+                              >
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+
               {wo.planning_item_ref && (() => {
                 const p = wo.planning_item_ref as {
                   planningProjectName: string

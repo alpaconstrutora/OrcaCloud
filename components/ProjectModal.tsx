@@ -247,6 +247,16 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     }
   }, [isOpen, projects.length, initialClassification, initialData?.linkedProjectId]);
 
+  // Delay sheet open state by one frame so CSS transition plays on mount
+  const [sheetOpen, setSheetOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (isOpen && mode === 'edit') {
+      const id = requestAnimationFrame(() => setSheetOpen(true));
+      return () => { cancelAnimationFrame(id); setSheetOpen(false); };
+    }
+    setSheetOpen(false);
+  }, [isOpen, mode]);
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -303,13 +313,29 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   };
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className={
+      mode === 'edit'
+        ? 'fixed inset-0 z-50'
+        : 'absolute inset-0 z-50 flex items-center justify-center p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200'
+    }>
 
-      {/* Modal Content */}
-      <div className="relative bg-white rounded-[2.5rem] shadow-2xl w-full h-full flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
+      {/* Sheet backdrop (edit mode only) */}
+      {mode === 'edit' && (
+        <div
+          className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-200 ${sheetOpen ? 'opacity-100' : 'opacity-0'}`}
+          onClick={onClose}
+        />
+      )}
+
+      {/* Modal / Sheet Content */}
+      <div className={
+        mode === 'edit'
+          ? `absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-2xl overflow-hidden border-l border-gray-200 transition-transform duration-300 ease-in-out ${sheetOpen ? 'translate-x-0' : 'translate-x-full'}`
+          : 'relative bg-white rounded-[2.5rem] shadow-2xl w-full h-full flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200'
+      }>
 
         {/* Header */}
-        <div className="px-12 py-8 border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0">
+        <div className={`border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 ${mode === 'edit' ? 'px-6 py-5' : 'px-12 py-8'}`}>
           <div className="flex items-start gap-5 flex-1 min-w-0">
             {/* Bloco de Identidade: Ícone */}
             <div className="flex flex-col items-center gap-2 shrink-0">
@@ -395,7 +421,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-12 space-y-6">
+          <div className={`flex-1 overflow-y-auto space-y-6 ${mode === 'edit' ? 'p-6' : 'p-12'}`}>
 
             {initialClassification === 'OBRA' ? (
               <div className="space-y-6 animate-in fade-in duration-300">
@@ -1359,11 +1385,13 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
           </div>
 
           {/* Footer - Standard Style */}
-          <div className="px-12 py-8 bg-gray-50 border-t border-gray-100 flex justify-between items-center shrink-0">
-            <div className="flex items-center gap-2 text-xs text-gray-400 bg-white px-3 py-1.5 rounded-full border border-gray-200 italic shadow-sm">
-              <Cloud className="w-3.5 h-3.5" />
-              Sincronização ativa: {formData.referenceMonth} ({formData.state || 'Geral'})
-            </div>
+          <div className={`bg-gray-50 border-t border-gray-100 flex items-center shrink-0 ${mode === 'edit' ? 'px-6 py-4 justify-end gap-2' : 'px-12 py-8 justify-between'}`}>
+            {mode !== 'edit' && (
+              <div className="flex items-center gap-2 text-xs text-gray-400 bg-white px-3 py-1.5 rounded-full border border-gray-200 italic shadow-sm">
+                <Cloud className="w-3.5 h-3.5" />
+                Sincronização ativa: {formData.referenceMonth} ({formData.state || 'Geral'})
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <button
                 type="button"

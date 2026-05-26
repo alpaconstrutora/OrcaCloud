@@ -1,6 +1,9 @@
 import React from 'react';
 import { projectService, ProjectData } from '../services/projectService';
-import { FolderOpen, Calendar, Trash2, Search, Loader2, Settings, Plus, Copy, FileSpreadsheet, Edit2, LayoutDashboard, Table2, Lock, Unlock, BookOpen, Link2 } from 'lucide-react';
+import { FolderOpen, Calendar, Trash2, Search, Loader2, Settings, Plus, Copy, FileSpreadsheet, Edit2, LayoutDashboard, Table2, Lock, Unlock, BookOpen, Link2, Pencil, SquareDashedKanban } from 'lucide-react';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { Copy01Icon, FileDownloadIcon } from '@hugeicons/core-free-icons';
+import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 import ExcelImportModal from './ExcelImportModal';
 import { BudgetEntry, ProjectSettings } from '../types';
@@ -760,38 +763,30 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             </td>
                                         )}
                                         <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                                <button
-                                                    onClick={(e) => handleEdit(e, project.id)}
-                                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                    title="Editar Dados"
-                                                >
-                                                    <Settings className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => handleExport(e, project.id)}
-                                                    className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                                                    title="Exportar Excel"
-                                                >
-                                                    <FileSpreadsheet className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => handleDuplicate(e, project.id)}
-                                                    className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                                                    title={isObraContext ? "Duplicar Obra" : (isPlanejamentoContext ? "Duplicar Planejamento" : (isDiaryContext ? "Duplicar Diário" : "Duplicar Orçamento"))}
-                                                >
-                                                    <Copy className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => handleDelete(e, project.id, project.name)}
-                                                    className={`p-2 transition-colors ${getEffectiveOrderCount(project.id) > 0
-                                                        ? 'text-gray-300 cursor-not-allowed'
-                                                        : 'text-gray-400 hover:text-red-600 hover:bg-red-50'}`}
-                                                    title={getEffectiveOrderCount(project.id) > 0 ? "Exclusão Bloqueada (Possui pedidos vinculados)" : "Excluir"}
-                                                    disabled={getEffectiveOrderCount(project.id) > 0}
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                            <div onClick={(e) => e.stopPropagation()}>
+                                                <InlineDisclosureMenu
+                                                    menuItems={[
+                                                        {
+                                                            icon: <Pencil className="w-[18px] h-[18px]" />,
+                                                            label: 'Editar Dados',
+                                                            onClick: () => onEditProject(project.id),
+                                                        },
+                                                        {
+                                                            icon: <HugeiconsIcon icon={FileDownloadIcon} size={18} />,
+                                                            label: 'Exportar Excel',
+                                                            onClick: () => onExportProject(project.id),
+                                                        },
+                                                        {
+                                                            icon: <HugeiconsIcon icon={Copy01Icon} size={18} />,
+                                                            label: isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento',
+                                                            onClick: () => onDuplicateProject(project.id),
+                                                        },
+                                                    ]}
+                                                    showDelete
+                                                    onDelete={() => handleDelete({ stopPropagation: () => {} } as React.MouseEvent, project.id, project.name)}
+                                                    deleteDisabled={getEffectiveOrderCount(project.id) > 0}
+                                                    deleteDisabledTitle={getEffectiveOrderCount(project.id) > 0 ? 'Exclusão Bloqueada (Possui pedidos vinculados)' : undefined}
+                                                />
                                             </div>
                                         </td>
                                     </tr>
@@ -901,23 +896,30 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             </button>
                                         </div>
                                     )}
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={(e) => handleEdit(e, project.id)}
-                                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-white rounded-lg transition-all"
-                                        >
-                                            <Settings className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => handleDelete(e, project.id, project.name)}
-                                            className={`p-2 rounded-lg transition-all ${getEffectiveOrderCount(project.id) > 0
-                                                ? 'text-gray-200 cursor-not-allowed'
-                                                : 'text-gray-500 hover:text-red-600 hover:bg-white'}`}
-                                            disabled={getEffectiveOrderCount(project.id) > 0}
-                                            title={getEffectiveOrderCount(project.id) > 0 ? "Exclusão Bloqueada (Possui pedidos vinculados)" : "Excluir"}
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                    <div onClick={(e) => e.stopPropagation()}>
+                                        <InlineDisclosureMenu
+                                            menuItems={[
+                                                {
+                                                    icon: <Pencil className="w-[18px] h-[18px]" />,
+                                                    label: 'Editar Dados',
+                                                    onClick: () => onEditProject(project.id),
+                                                },
+                                                {
+                                                    icon: <HugeiconsIcon icon={FileDownloadIcon} size={18} />,
+                                                    label: 'Exportar Excel',
+                                                    onClick: () => onExportProject(project.id),
+                                                },
+                                                {
+                                                    icon: <HugeiconsIcon icon={Copy01Icon} size={18} />,
+                                                    label: isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento',
+                                                    onClick: () => onDuplicateProject(project.id),
+                                                },
+                                            ]}
+                                            showDelete
+                                            onDelete={() => handleDelete({ stopPropagation: () => {} } as React.MouseEvent, project.id, project.name)}
+                                            deleteDisabled={getEffectiveOrderCount(project.id) > 0}
+                                            deleteDisabledTitle={getEffectiveOrderCount(project.id) > 0 ? 'Exclusão Bloqueada (Possui pedidos vinculados)' : undefined}
+                                        />
                                     </div>
                                 </div>
                             </div>

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { 
-    Building2, Mail, Plus, Search, 
-    Trash2, Edit2, LayoutDashboard, Table2, 
+import {
+    Building2, Mail, Plus, Search,
+    Trash2, Edit2, LayoutDashboard, Table2,
     Activity, Users, Briefcase, UserPlus,
-    TrendingUp, HandCoins, Filter, Truck
+    TrendingUp, HandCoins, Filter, Truck, Settings
 } from 'lucide-react';
+import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Organization, BudgetEntry } from '../types';
 import { useStore } from '../store/useStore';
 import ProjectList from './ProjectList';
@@ -293,30 +294,24 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                         </span>
                                                     </td>
                                                     <td className="px-8 py-4">
-                                                        <div className="flex items-center justify-center gap-2">
+                                                        <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(org.id); }}
                                                                 className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${isActive ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                                                             >
                                                                 {isActive ? 'ATIVO' : 'SELECIONAR'}
                                                             </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setManagingOrgId(org.id);
-                                                                    onTabChange('settings');
-                                                                }}
-                                                                className="px-4 py-2 bg-gray-50 text-gray-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 border border-gray-200 transition-all"
-                                                            >
-                                                                DETALHES
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); onDelete(org.id); }}
-                                                                className="p-2.5 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 border border-rose-100 transition-all group/del"
-                                                                title="Excluir Organização"
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5 group-hover/del:scale-110 transition-transform" />
-                                                            </button>
+                                                            <InlineDisclosureMenu
+                                                                menuItems={[
+                                                                    {
+                                                                        icon: <Settings className="w-[18px] h-[18px]" />,
+                                                                        label: 'Detalhes',
+                                                                        onClick: () => { setManagingOrgId(org.id); onTabChange('settings'); },
+                                                                    },
+                                                                ]}
+                                                                showDelete
+                                                                onDelete={() => onDelete(org.id)}
+                                                            />
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -362,30 +357,24 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                         </div>
                                         <div className="p-8">
                                             <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2 truncate">{org.name}</h3>
-                                            <div className="flex gap-3">
+                                            <div className="flex gap-3 items-center" onClick={(e) => e.stopPropagation()}>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(org.id); }}
                                                     className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all ${isActive ? 'bg-emerald-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                                                 >
                                                     {isActive ? 'ATIVO' : 'SELECIONAR'}
                                                 </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setManagingOrgId(org.id);
-                                                        onTabChange('settings');
-                                                    }}
-                                                    className="flex-1 py-4 bg-gray-100 text-gray-900 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-gray-200 border border-gray-200 transition-all font-bold"
-                                                >
-                                                    DETALHES
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onDelete(org.id); }}
-                                                    className="p-4 bg-rose-50 text-rose-600 rounded-2xl hover:bg-rose-100 border border-rose-100 transition-all group/del"
-                                                    title="Excluir Organização"
-                                                >
-                                                    <Trash2 className="w-5 h-5 group-hover/del:scale-110 transition-transform" />
-                                                </button>
+                                                <InlineDisclosureMenu
+                                                    menuItems={[
+                                                        {
+                                                            icon: <Settings className="w-[18px] h-[18px]" />,
+                                                            label: 'Detalhes',
+                                                            onClick: () => { setManagingOrgId(org.id); onTabChange('settings'); },
+                                                        },
+                                                    ]}
+                                                    showDelete
+                                                    onDelete={() => onDelete(org.id)}
+                                                />
                                             </div>
                                         </div>
                                     </div>

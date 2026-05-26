@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { OrganizationMember, OrganizationRole, UserPermissions, OrganizationCustomRole } from '../types';
 import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users } from 'lucide-react';
+import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 interface OrganizationUsersProps {
     members: OrganizationMember[];
@@ -329,21 +330,19 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                             <td className="px-6 py-4 text-sm text-gray-500">
                                                 {new Date(member.joinedAt).toLocaleDateString('pt-BR')}
                                             </td>
-                                            <td className="px-6 py-4 text-right flex justify-end gap-2">
-                                                <button
-                                                    onClick={() => setEditingMemberId(editingMemberId === member.id ? null : member.id)}
-                                                    className={`p-2 rounded-lg transition-colors ${editingMemberId === member.id ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}
-                                                    title="Permissões"
-                                                >
-                                                    <Shield className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleRemoveMember(member.id)}
-                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                    title="Remover"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                            <td className="px-6 py-4 text-right">
+                                                <InlineDisclosureMenu
+                                                    menuItems={[
+                                                        {
+                                                            icon: <Shield className="w-[18px] h-[18px]" />,
+                                                            label: editingMemberId === member.id ? 'Fechar Permissões' : 'Permissões',
+                                                            onClick: () => setEditingMemberId(editingMemberId === member.id ? null : member.id),
+                                                        },
+                                                    ]}
+                                                    showDelete
+                                                    onDelete={() => handleRemoveMember(member.id)}
+                                                    deleteDisabledTitle="Remover membro"
+                                                />
                                             </td>
                                         </tr>
                                         {editingMemberId === member.id && (
@@ -425,14 +424,17 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                             <div key={role.id} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all group">
                                 <div className="flex items-center justify-between mb-4">
                                     <h4 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{role.name}</h4>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => handleEditRole(role)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
-                                            <SettingsIcon className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={() => handleDeleteRole(role.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
+                                    <InlineDisclosureMenu
+                                        menuItems={[
+                                            {
+                                                icon: <SettingsIcon className="w-[18px] h-[18px]" />,
+                                                label: 'Editar Cargo',
+                                                onClick: () => handleEditRole(role),
+                                            },
+                                        ]}
+                                        showDelete
+                                        onDelete={() => handleDeleteRole(role.id)}
+                                    />
                                 </div>
                                 <div className="space-y-2">
                                     <div className="flex flex-wrap gap-1">

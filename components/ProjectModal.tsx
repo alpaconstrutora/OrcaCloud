@@ -1,10 +1,11 @@
 import React from 'react';
-import { X, Building2, MapPin, Ruler, FileText, Cloud, Search, ChevronDown, TrendingUp, Calendar, Hash, Layers, Settings2 } from 'lucide-react';
+import { X, Building2, MapPin, Ruler, FileText, Cloud, Search, ChevronDown, TrendingUp, Calendar, Hash, Layers, Settings2, Users } from 'lucide-react';
 import { TipoObra, RegimeObra, TechnicalConfig } from '../types/project';
 import { BASE_CUB_RATES, CUB_STANDARDS_DATA } from '../constants';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
 import { investorService } from '../services/investorService';
+import { laborService, Employee } from '../services/laborService';
 import { Client, Investor } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
@@ -65,6 +66,76 @@ interface NewProjectData {
   alvara?: string;
   matriculaCNO?: string;
 }
+
+// ── Employee combobox ──────────────────────────────────────────────────────────
+const EmployeeCombobox: React.FC<{
+  label: string;
+  value: string;
+  employees: Employee[];
+  onChange: (val: string) => void;
+}> = ({ label, value, employees, onChange }) => {
+  const [query, setQuery] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = React.useMemo(() => {
+    const q = query.toLowerCase();
+    return employees
+      .filter(e => e.status === 'ATIVO')
+      .filter(e => !q || e.name.toLowerCase().includes(q) || (e.role || '').toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [employees, query]);
+
+  const displayValue = value || '';
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <div className="relative">
+        <input
+          type="text"
+          placeholder={`Buscar ou digitar ${label.toLowerCase()}`}
+          className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none pr-8"
+          value={open ? query : displayValue}
+          onFocus={() => { setOpen(true); setQuery(''); }}
+          onChange={e => { setQuery(e.target.value); onChange(e.target.value); }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+        />
+        {employees.length > 0 && (
+          <ChevronDown className="absolute right-2.5 top-3 w-4 h-4 text-gray-400 pointer-events-none" />
+        )}
+      </div>
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          {filtered.map(emp => (
+            <button
+              key={emp.id}
+              type="button"
+              onMouseDown={() => { onChange(emp.name); setQuery(''); setOpen(false); }}
+              className="w-full text-left px-3 py-2.5 hover:bg-blue-50 flex items-center gap-2.5 border-b border-gray-50 last:border-0"
+            >
+              <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-black shrink-0">
+                {emp.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">{emp.name}</p>
+                {emp.role && <p className="text-xs text-gray-400 truncate">{emp.role}</p>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const TIPO_OBRA_LABELS: Record<TipoObra, string> = {
   residencial_multifamiliar: 'Residencial Multifamiliar (Prédio)',
@@ -151,6 +222,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   const [activeTab, setActiveTab] = React.useState<'technical' | 'select' | 'address'>('technical');
   const [clients, setClients] = React.useState<Client[]>([]);
   const [investors, setInvestors] = React.useState<Investor[]>([]);
+  const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [selectedOrgId, setSelectedOrgId] = React.useState<string | undefined>(undefined);
   const [selectedEmpresaId, setSelectedEmpresaId] = React.useState<string | undefined>(
     empresaId ?? activeEmpresaId ?? undefined
@@ -218,6 +290,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
       // Fetch clients directly here to ensure fresh data
       clientService.listClients().then(setClients).catch(console.error);
       investorService.listInvestors().then(setInvestors).catch(console.error);
+      const empOrgId = selectedEmpresaId ? undefined : (organizationId || selectedOrgId);
+      laborService.listEmployees(empOrgId, selectedEmpresaId).then(setEmployees).catch(console.error);
     }
   }, [isOpen]);
 
@@ -1287,25 +1361,23 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                 {/* Equipe de Campo */}
                 <div className="border-t border-gray-100 pt-6">
                   <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <Building2 className="w-4 h-4" />
+                    <Users className="w-4 h-4" />
                     Equipe de Campo
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
-                    {[
+                    {([
                       { key: 'mestreObras', label: 'Mestre de Obras' },
                       { key: 'encarregado', label: 'Encarregado' },
                       { key: 'tecnicoSeguranca', label: 'Técnico de Segurança' },
                       { key: 'almoxarife', label: 'Almoxarife' },
-                    ].map(({ key, label }) => (
-                      <div key={key}>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-                        <input
-                          type="text" placeholder={`Nome do ${label.toLowerCase()}`}
-                          className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                          value={(formData as any)[key] || ''}
-                          onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}
-                        />
-                      </div>
+                    ] as { key: keyof NewProjectData; label: string }[]).map(({ key, label }) => (
+                      <EmployeeCombobox
+                        key={key}
+                        label={label}
+                        value={(formData[key] as string) || ''}
+                        employees={employees}
+                        onChange={(val) => setFormData({ ...formData, [key]: val })}
+                      />
                     ))}
                   </div>
                 </div>

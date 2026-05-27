@@ -88,30 +88,38 @@ export const workOrderService = {
   async create(input: CreateWorkOrderInput) {
     const code = await workOrderService._generateCode(input.projectId)
 
+    // Nota: planning_item_ref é adicionado condicionalmente para evitar erro
+    // caso a migration 20260630000002 ainda não tenha sido aplicada no banco.
+    const payload: Record<string, unknown> = {
+      org_id: input.orgId,
+      project_id: input.projectId,
+      code,
+      title: input.title,
+      description: input.description ?? null,
+      phase: input.phase ?? null,
+      type: input.type ?? 'own',
+      priority: input.priority ?? 'normal',
+      team_id: input.teamId ?? null,
+      responsible_id: input.responsibleId ?? null,
+      planned_start_date: input.plannedStartDate ?? null,
+      planned_end_date: input.plannedEndDate ?? null,
+      measurement_unit: input.measurementUnit ?? null,
+      planned_quantity: input.plannedQuantity ?? null,
+      planned_cost: input.plannedCost ?? null,
+      predecessor_id: input.predecessorId ?? null,
+      checklist_template_id: input.checklistTemplateId ?? null,
+      budget_item_ref: input.budgetItemRef ?? null,
+      status: 'planned',
+    }
+
+    // Incluir apenas se tiver valor (coluna adicionada na migration 20260630000002)
+    if (input.planningItemRef != null) {
+      payload.planning_item_ref = input.planningItemRef
+    }
+
     const { data, error } = await supabase
       .from('work_orders')
-      .insert({
-        org_id: input.orgId,
-        project_id: input.projectId,
-        code,
-        title: input.title,
-        description: input.description ?? null,
-        phase: input.phase ?? null,
-        type: input.type ?? 'own',
-        priority: input.priority ?? 'normal',
-        team_id: input.teamId ?? null,
-        responsible_id: input.responsibleId ?? null,
-        planned_start_date: input.plannedStartDate ?? null,
-        planned_end_date: input.plannedEndDate ?? null,
-        measurement_unit: input.measurementUnit ?? null,
-        planned_quantity: input.plannedQuantity ?? null,
-        planned_cost: input.plannedCost ?? null,
-        predecessor_id: input.predecessorId ?? null,
-        checklist_template_id: input.checklistTemplateId ?? null,
-        budget_item_ref: input.budgetItemRef ?? null,
-        planning_item_ref: input.planningItemRef ?? null,
-        status: 'planned',
-      })
+      .insert(payload)
       .select()
       .single()
 
@@ -132,26 +140,32 @@ export const workOrderService = {
       }
     }
 
+    const updatePayload: Record<string, unknown> = {
+      title: input.title,
+      description: input.description,
+      phase: input.phase,
+      type: input.type,
+      priority: input.priority,
+      team_id: input.teamId,
+      responsible_id: input.responsibleId,
+      planned_start_date: input.plannedStartDate,
+      planned_end_date: input.plannedEndDate,
+      measurement_unit: input.measurementUnit,
+      planned_quantity: input.plannedQuantity,
+      planned_cost: input.plannedCost,
+      predecessor_id: input.predecessorId,
+      checklist_template_id: input.checklistTemplateId,
+      budget_item_ref: input.budgetItemRef,
+    }
+
+    // Incluir apenas se explicitamente enviado (coluna adicionada na migration 20260630000002)
+    if ('planningItemRef' in input) {
+      updatePayload.planning_item_ref = input.planningItemRef ?? null
+    }
+
     const { data, error } = await supabase
       .from('work_orders')
-      .update({
-        title: input.title,
-        description: input.description,
-        phase: input.phase,
-        type: input.type,
-        priority: input.priority,
-        team_id: input.teamId,
-        responsible_id: input.responsibleId,
-        planned_start_date: input.plannedStartDate,
-        planned_end_date: input.plannedEndDate,
-        measurement_unit: input.measurementUnit,
-        planned_quantity: input.plannedQuantity,
-        planned_cost: input.plannedCost,
-        predecessor_id: input.predecessorId,
-        checklist_template_id: input.checklistTemplateId,
-        budget_item_ref: input.budgetItemRef,
-        planning_item_ref: input.planningItemRef,
-      })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single()

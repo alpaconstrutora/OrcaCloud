@@ -151,6 +151,17 @@ const ProjectSelector: React.FC<{
 }
 
 // ── Main module ──────────────────────────────────────────────────────────────
+// Helper: verifica se um projeto é uma Obra operacional
+function isObraProject(proj: { settings?: { classification?: string; isSystemProject?: boolean; standard?: string; location?: string } } | undefined): boolean {
+  const s = proj?.settings
+  return (
+    s?.classification === 'OBRA' &&
+    !s?.isSystemProject &&
+    s?.standard !== 'Vendas' &&
+    s?.location !== 'Sistema'
+  )
+}
+
 const OperacionalModule: React.FC<Props> = ({
   activeOrganizationId,
   projectId: propProjectId,
@@ -159,7 +170,15 @@ const OperacionalModule: React.FC<Props> = ({
   onChangeView,
 }) => {
   const [view, setView] = useState<OpsView>('list')
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(propProjectId ?? null)
+
+  // Só usar propProjectId se o projeto for uma OBRA — evita mostrar lista
+  // vazia quando o usuário chega aqui com um projeto ORÇAMENTO/PLANEJAMENTO ativo.
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
+    if (!propProjectId) return null
+    const proj = projects.find(p => p.id === propProjectId)
+    return isObraProject(proj) ? propProjectId : null
+  })
+
   const [selectedWorkOrderId, setSelectedWorkOrderId] = useState<string | null>(null)
   const [editingWorkOrderId, setEditingWorkOrderId] = useState<string | null>(null)
   const [orgId, setOrgId] = useState<string | null>(activeOrganizationId ?? null)
@@ -171,11 +190,13 @@ const OperacionalModule: React.FC<Props> = ({
     else setView('list')
   }, [activeSection])
 
-  // Resolver orgId a partir do projeto selecionado
+  // Resolver orgId a partir do projeto selecionado (sempre via settings.organizationId)
   useEffect(() => {
-    if (selectedProjectId && !activeOrganizationId) {
+    if (selectedProjectId) {
       const proj = projects.find(p => p.id === selectedProjectId)
-      if (proj?.settings?.organizationId) setOrgId(proj.settings.organizationId)
+      const projOrgId = proj?.settings?.organizationId
+      // Preferir o orgId do projeto; cair para activeOrganizationId como fallback
+      setOrgId(projOrgId ?? activeOrganizationId ?? null)
     } else {
       setOrgId(activeOrganizationId ?? null)
     }

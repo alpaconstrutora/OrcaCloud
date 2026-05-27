@@ -5,12 +5,13 @@ import {
     MoreHorizontal, ArrowUpRight, TrendingUp, BarChart3,
     ArrowRight, Save, Trash2, Edit3, PlusCircle, Clock,
     Camera, ExternalLink, HandCoins, CreditCard, X,
-    Video, Image as ImageIcon, Send, FileDown, Zap
+    Video, Image as ImageIcon, Send, FileDown, Zap,
+    Package, Pencil, Settings, Search
 } from 'lucide-react';
 import {
     Contract, ContractItem, ContractAddendum,
     ContractMeasurement, ContractMeasurementItem, BudgetEntry, ProjectSettings, ContractTemplate,
-    ContractUtilityBill
+    ContractUtilityBill, SinapiItem
 } from '../types';
 import { contractService } from '../services/contractService';
 import { projectService } from '../services/projectService';
@@ -18,11 +19,27 @@ import BudgetPickerModal from './BudgetPickerModal';
 import ContractMeasurementModal from './ContractMeasurementModal';
 import ContractAddendumModal from './ContractAddendumModal';
 import UtilityBillModal from './UtilityBillModal';
+import DatabasePickerModal from './DatabasePickerModal';
 import { organizationService } from '../services/organizationService';
 import { exportService } from '../services/exportService';
 import { webhookService } from '../services/webhookService';
 import { supplierService } from '../services/supplierService';
 import { Organization } from '../types';
+
+// ─── Avulso helpers ────────────────────────────────────────────────────────────
+interface AvulsoItem { code: string; description: string; unit: string; quantity: number; unitPrice: number; }
+const AVULSO_EMPTY: AvulsoItem = { code: '', description: '', unit: '', quantity: 1, unitPrice: 0 };
+const toCurrencyDigits = (v: number) => String(Math.round(v * 100));
+const fromCurrencyDigits = (d: string) => parseInt(d || '0', 10) / 100;
+const displayCurrencyDigits = (d: string) => {
+    const n = parseInt(d || '0', 10);
+    return (n / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+const DEFAULT_UNITS = ['kg', 'm', 'm²', 'm³', 'l', 'pç', 'un', 'bd', 'br', 'h', 'svç', 'vb'];
+const UNITS_KEY = 'orcacloud_units';
+const loadUnits = (): string[] => { try { const s = localStorage.getItem(UNITS_KEY); return s ? JSON.parse(s) : [...DEFAULT_UNITS]; } catch { return [...DEFAULT_UNITS]; } };
+const persistUnits = (u: string[]) => localStorage.setItem(UNITS_KEY, JSON.stringify(u));
+// ───────────────────────────────────────────────────────────────────────────────
 
 interface ContractDetailViewProps {
     contractId: string;
@@ -40,6 +57,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [loading, setLoading] = React.useState(true);
     const [activeTab, setActiveTab] = React.useState<'overview' | 'items' | 'addendums' | 'measurements' | 'utility_bills'>('overview');
     const [isBudgetPickerOpen, setIsBudgetPickerOpen] = React.useState(false);
+    const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingIndex: number | null; initial: AvulsoItem | null }>({ open: false, editingIndex: null, initial: null });
     const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
     const [selectedTemplate, setSelectedTemplate] = React.useState<ContractTemplate | undefined>(undefined);
     const [isMeasurementModalOpen, setIsMeasurementModalOpen] = React.useState(false);
@@ -117,8 +135,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             organizationId: projectData.organization_id || projectData.settings?.organizationId
                         });
 
-                        // Fallback for budget if prop is empty
-                        if ((!activeBudget || activeBudget.length === 0) && projectData.budget) {
+                        // Always load budget from linked project (budget_id takes precedence)
+                        if (projectData.budget && projectData.budget.length > 0) {
                             setActiveBudget(projectData.budget);
                         }
                     }
@@ -331,6 +349,44 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         } catch (error) {
             console.error("Erro ao importar item do orçamento:", error);
             notify("Erro ao importar item. Tente novamente.", "error");
+        }
+    };
+
+    const handleConfirmAvulso = async (item: AvulsoItem, editingIndex: number | null) => {
+        if (!contract) return;
+        try {
+            if (editingIndex !== null) {
+                // Find the avulso item by its position in the items list and update it
+                const avulsoItems = items.filter(i => i.budget_item_id === 'AVULSO');
+                const target = avulsoItems[editingIndex];
+                if (target) {
+                    await contractService.updateContractItem(target.id, {
+                        description: item.description,
+                        unit: item.unit,
+                        quantity: item.quantity,
+                        unit_price: item.unitPrice,
+                        total_price: item.quantity * item.unitPrice,
+                        budget_item_id: item.code || 'AVULSO',
+                    });
+                }
+            } else {
+                await contractService.addContractItem({
+                    contract_id: contractId,
+                    budget_item_id: item.code || 'AVULSO',
+                    description: item.description,
+                    unit: item.unit,
+                    quantity: item.quantity,
+                    unit_price: item.unitPrice,
+                    total_price: item.quantity * item.unitPrice,
+                });
+            }
+            const updatedItems = await contractService.listContractItems(contractId);
+            setItems(updatedItems);
+            setAvulsoModalConfig({ open: false, editingIndex: null, initial: null });
+            notify('Item avulso salvo com sucesso!', 'success');
+        } catch (error) {
+            console.error('Erro ao salvar item avulso:', error);
+            notify('Erro ao salvar item avulso.', 'error');
         }
     };
 
@@ -879,12 +935,20 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 <h3 className="text-lg font-medium text-gray-900 tracking-tight uppercase">Planilha de Itens Contratados</h3>
                                 <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest mt-0.5">Vínculo direto com o orçamento da obra (WBS)</p>
                             </div>
-                            <button
-                                onClick={() => setIsBudgetPickerOpen(true)}
-                                className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-xl hover:bg-blue-600 transition-all font-medium text-[12px] uppercase tracking-widest"
-                            >
-                                <PlusCircle className="w-4 h-4" /> Importar do Orçamento
-                            </button>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
+                                    className="flex items-center gap-2 px-5 py-3 bg-orange-50 border border-orange-200 text-orange-700 rounded-xl hover:bg-orange-100 transition-all font-medium text-[12px] uppercase tracking-widest"
+                                >
+                                    <Package className="w-4 h-4" /> Item Avulso
+                                </button>
+                                <button
+                                    onClick={() => setIsBudgetPickerOpen(true)}
+                                    className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-xl hover:bg-blue-600 transition-all font-medium text-[12px] uppercase tracking-widest"
+                                >
+                                    <PlusCircle className="w-4 h-4" /> Importar do Orçamento
+                                </button>
+                            </div>
                         </div>
 
                         <div className="overflow-x-auto">
@@ -919,9 +983,15 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     ) : items.map((item) => (
                                         <tr key={item.id} className="hover:bg-blue-50/20 transition-colors group">
                                             <td className="px-8 py-4">
-                                                <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[12px] font-medium uppercase tracking-wider border border-gray-200">
-                                                    {item.budget_item_id || 'LOCAL'}
-                                                </span>
+                                                {item.budget_item_id === 'AVULSO' || (!item.budget_item_id) ? (
+                                                    <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-md text-[12px] font-medium uppercase tracking-wider border border-orange-200 flex items-center gap-1 w-fit">
+                                                        <Package className="w-3 h-3" /> AVULSO
+                                                    </span>
+                                                ) : (
+                                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[12px] font-medium uppercase tracking-wider border border-gray-200">
+                                                        {item.budget_item_id}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col">
@@ -992,13 +1062,27 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        disabled
-                                                        title="Edição de item disponível em breve"
-                                                        className="p-2 text-gray-200 rounded-lg cursor-not-allowed opacity-50"
-                                                    >
-                                                        <Edit3 className="w-4 h-4" />
-                                                    </button>
+                                                    {(item.budget_item_id === 'AVULSO' || !item.budget_item_id || item.budget_item_id === item.budget_item_id) && (
+                                                        <button
+                                                            onClick={() => {
+                                                                // Find index among avulso items only
+                                                                const avulsoItems = items.filter(i => i.budget_item_id === 'AVULSO' || (!i.budget_item_id));
+                                                                const idx = avulsoItems.findIndex(a => a.id === item.id);
+                                                                if (idx !== -1) {
+                                                                    setAvulsoModalConfig({
+                                                                        open: true,
+                                                                        editingIndex: idx,
+                                                                        initial: { code: item.budget_item_id === 'AVULSO' ? '' : (item.budget_item_id || ''), description: item.description, unit: item.unit, quantity: item.quantity, unitPrice: item.unit_price }
+                                                                    });
+                                                                }
+                                                            }}
+                                                            className={`p-2 rounded-lg transition-all shadow-sm ${item.budget_item_id === 'AVULSO' || !item.budget_item_id ? 'text-orange-400 hover:text-orange-600 hover:bg-orange-50' : 'text-gray-200 cursor-not-allowed opacity-50'}`}
+                                                            title={item.budget_item_id === 'AVULSO' || !item.budget_item_id ? 'Editar Item Avulso' : 'Edição de item WBS disponível em breve'}
+                                                            disabled={item.budget_item_id !== 'AVULSO' && !!item.budget_item_id}
+                                                        >
+                                                            <Pencil className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => handleDeleteItem(item.id)}
                                                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded-lg transition-all shadow-sm"
@@ -1323,6 +1407,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             )}
 
             {/* Modals */}
+            {avulsoModalConfig.open && (
+                <AvulsoItemModal
+                    initial={avulsoModalConfig.initial}
+                    onConfirm={(item) => handleConfirmAvulso(item, avulsoModalConfig.editingIndex)}
+                    onClose={() => setAvulsoModalConfig({ open: false, editingIndex: null, initial: null })}
+                />
+            )}
+
             <BudgetPickerModal
                 isOpen={isBudgetPickerOpen}
                 onClose={() => setIsBudgetPickerOpen(false)}
@@ -1541,5 +1633,270 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         </div>
     );
 };
+
+// ─── UnitManagerModal ─────────────────────────────────────────────────────────
+interface UnitManagerModalProps { units: string[]; onClose: (updated: string[]) => void; }
+const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClose }) => {
+    const [units, setUnits] = React.useState<string[]>(init);
+    const [newUnit, setNewUnit] = React.useState('');
+    const [editingIdx, setEditingIdx] = React.useState<number | null>(null);
+    const [editVal, setEditVal] = React.useState('');
+    const [error, setError] = React.useState('');
+
+    const handleAdd = () => {
+        const t = newUnit.trim();
+        if (!t) { setError('Digite uma unidade.'); return; }
+        if (units.map(u => u.toLowerCase()).includes(t.toLowerCase())) { setError('Unidade já existe.'); return; }
+        setUnits(prev => [...prev, t]);
+        setNewUnit('');
+        setError('');
+    };
+
+    const handleEditSave = () => {
+        const t = editVal.trim();
+        if (!t || editingIdx === null) return;
+        setUnits(prev => prev.map((u, i) => i === editingIdx ? t : u));
+        setEditingIdx(null);
+    };
+
+    const handleClose = () => { persistUnits(units); onClose(units); };
+
+    return (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={handleClose}>
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="px-6 py-5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-base font-black text-gray-900">Gerenciar Unidades</h2>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Unidades de medida</p>
+                    </div>
+                    <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-xl transition-all text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={newUnit}
+                            onChange={e => { setNewUnit(e.target.value); setError(''); }}
+                            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                            placeholder="Nova unidade..."
+                            className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                        />
+                        <button onClick={handleAdd} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap">
+                            <Plus className="w-3.5 h-3.5" /> Adicionar
+                        </button>
+                    </div>
+                    {error && <p className="text-xs text-red-500 -mt-2">{error}</p>}
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                        {units.map((unit, i) => (
+                            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                                {editingIdx === i ? (
+                                    <input autoFocus type="text" value={editVal} onChange={e => setEditVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleEditSave()} className="flex-1 text-sm font-bold border border-blue-300 rounded-lg px-2 py-0.5 outline-none focus:ring-2 focus:ring-blue-400" />
+                                ) : (
+                                    <span className="flex-1 text-sm font-bold text-gray-800">{unit}</span>
+                                )}
+                                {editingIdx === i ? (
+                                    <button onClick={handleEditSave} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"><CheckCircle2 className="w-3.5 h-3.5" /></button>
+                                ) : (
+                                    <button onClick={() => { setEditingIdx(i); setEditVal(unit); }} className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"><Pencil className="w-3.5 h-3.5" /></button>
+                                )}
+                                <button onClick={() => setUnits(prev => prev.filter((_, j) => j !== i))} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div className="px-6 pb-6 flex justify-end">
+                    <button onClick={handleClose} className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-black transition-all">Concluído</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ─── AvulsoItemModal ──────────────────────────────────────────────────────────
+interface AvulsoItemModalProps {
+    initial: AvulsoItem | null;
+    onConfirm: (item: AvulsoItem) => void;
+    onClose: () => void;
+}
+
+const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, onClose }) => {
+    const isEditing = initial !== null;
+    const [form, setForm] = React.useState<AvulsoItem>(initial ?? AVULSO_EMPTY);
+    const [priceDigits, setPriceDigits] = React.useState(() => initial ? toCurrencyDigits(initial.unitPrice) : '0');
+    const [units, setUnits] = React.useState<string[]>(loadUnits);
+    const [showUnitManager, setShowUnitManager] = React.useState(false);
+    const [pickerOpen, setPickerOpen] = React.useState(false);
+    const [formError, setFormError] = React.useState<string | null>(null);
+
+    const handlePickerSelect = (item: SinapiItem) => {
+        const price = item.price || 0;
+        setForm({ code: item.code, description: item.description, unit: item.unit, quantity: 1, unitPrice: price });
+        setPriceDigits(toCurrencyDigits(price));
+        setPickerOpen(false);
+    };
+
+    const handleConfirm = () => {
+        if (!form.description.trim()) { setFormError('Descrição obrigatória.'); return; }
+        if (!form.unit.trim()) { setFormError('Unidade obrigatória.'); return; }
+        if (form.quantity <= 0) { setFormError('Quantidade deve ser maior que zero.'); return; }
+        setFormError(null);
+        onConfirm({ ...form });
+    };
+
+    const totalItem = form.quantity * form.unitPrice;
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div className="px-8 py-6 bg-orange-50 border-b border-orange-100 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-lg font-black text-gray-900">{isEditing ? 'Editar Item Avulso' : 'Adicionar Item Avulso'}</h2>
+                        <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mt-0.5">Item não vinculado ao orçamento</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-orange-100 rounded-xl transition-all text-gray-400 hover:text-gray-600">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="p-8 space-y-5">
+                    {/* Database picker button */}
+                    <button
+                        type="button"
+                        onClick={() => setPickerOpen(true)}
+                        className="w-full flex items-center justify-center gap-2 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 rounded-xl py-3 text-sm font-black uppercase tracking-wider transition-all"
+                    >
+                        <Search className="w-4 h-4" />
+                        Buscar na base de dados (SINAPI / Própria)
+                    </button>
+                    <p className="text-[10px] text-gray-400 -mt-3">Ou preencha os campos abaixo manualmente.</p>
+
+                    <div className="h-px bg-gray-100" />
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Código <span className="text-gray-300 font-normal normal-case">(opcional)</span></label>
+                            <input
+                                type="text"
+                                value={form.code}
+                                onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
+                                placeholder="Ex: 00001"
+                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none font-mono"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Unidade *</label>
+                            <div className="flex gap-2">
+                                <select
+                                    value={units.includes(form.unit) ? form.unit : form.unit ? '__custom__' : ''}
+                                    onChange={e => { if (e.target.value !== '__custom__') setForm(f => ({ ...f, unit: e.target.value })); }}
+                                    className="flex-1 rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                                >
+                                    <option value="">Selecione...</option>
+                                    {units.map(u => <option key={u} value={u}>{u}</option>)}
+                                    {form.unit && !units.includes(form.unit) && <option value="__custom__">{form.unit}</option>}
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowUnitManager(true)}
+                                    title="Gerenciar unidades"
+                                    className="p-2.5 rounded-xl border border-gray-200 text-gray-400 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all shrink-0"
+                                >
+                                    <Settings className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="col-span-2">
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Descrição *</label>
+                            <input
+                                type="text"
+                                value={form.description}
+                                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                                placeholder="Descrição do material ou serviço"
+                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Quantidade *</label>
+                            <input
+                                type="number"
+                                min={0.001}
+                                step="any"
+                                value={form.quantity}
+                                onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))}
+                                onFocus={e => e.target.select()}
+                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Preço Unitário (R$)</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 pointer-events-none select-none">R$</span>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={displayCurrencyDigits(priceDigits)}
+                                    onChange={e => {
+                                        const digits = (e.target.value.replace(/\D/g, '') || '').replace(/^0+/, '') || '0';
+                                        setPriceDigits(digits);
+                                        setForm(f => ({ ...f, unitPrice: fromCurrencyDigits(digits) }));
+                                    }}
+                                    className="w-full pl-9 rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none text-right font-bold"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {formError && (
+                        <p className="text-xs text-red-600 flex items-center gap-1.5 bg-red-50 px-3 py-2 rounded-lg">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            {formError}
+                        </p>
+                    )}
+
+                    {form.quantity > 0 && form.unitPrice > 0 && (
+                        <div className="flex justify-between items-center bg-orange-50 rounded-xl px-4 py-3">
+                            <span className="text-xs font-bold text-orange-700 uppercase tracking-wider">Total do Item</span>
+                            <span className="text-sm font-black text-orange-700">
+                                R$ {totalItem.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                <div className="px-8 pb-8 flex gap-3 justify-end">
+                    <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all">
+                        Cancelar
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleConfirm}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-black transition-all shadow-lg shadow-orange-500/20"
+                    >
+                        {isEditing ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                        {isEditing ? 'Salvar Alterações' : 'Adicionar Item'}
+                    </button>
+                </div>
+            </div>
+
+            {showUnitManager && (
+                <UnitManagerModal
+                    units={units}
+                    onClose={updated => { setUnits(updated); setShowUnitManager(false); }}
+                />
+            )}
+
+            <DatabasePickerModal
+                isOpen={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onSelect={handlePickerSelect}
+                title="Buscar Material / Serviço"
+                subtitle="Selecione um item da base de dados para adicionar ao contrato."
+                zIndex={210}
+            />
+        </div>
+    );
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default ContractDetailView;

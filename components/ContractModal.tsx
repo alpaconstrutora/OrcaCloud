@@ -128,7 +128,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         }
     };
 
-    const obrasList = projects.filter(p => !p.settings?.classification || p.settings.classification === 'OBRA');
+    const obrasList = projects.filter(p =>
+        p.name !== 'Gestão Comercial' &&
+        (!p.settings?.classification || p.settings.classification === 'OBRA')
+    );
     const orcamentosList = projects.filter(p => p.settings?.classification === 'ORCAMENTO');
 
     const handleSubmit = async (e: React.FormEvent) => {

@@ -108,6 +108,7 @@ export interface ProjectSettings {
     referenceMonth: string;
     socialChargesMode: string;
     organizationId?: string;
+    empresaId?: string;
     code?: string;
     classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO';
     isSystemProject?: boolean;

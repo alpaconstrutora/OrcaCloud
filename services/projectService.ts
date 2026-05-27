@@ -6,6 +6,7 @@ export interface ProjectData {
     name: string;
     settings: ProjectSettings;
     budget: BudgetEntry[];
+    empresa_id?: string;
     updated_at?: string;
 }
 
@@ -47,6 +48,7 @@ export const projectService = {
 
         const tipoObra = rest.settings?.tipoObra ?? null;
         const regimeObra = rest.settings?.regimeObra ?? null;
+        const empresaId = rest.empresa_id ?? rest.settings?.empresaId ?? null;
 
         // Se tivermos um ID, tentamos atualizar
         if (id) {
@@ -60,6 +62,7 @@ export const projectService = {
                     ...(rest.settings?.code !== undefined ? { code: rest.settings.code || null } : {}),
                     ...(tipoObra !== null ? { tipo_obra: tipoObra } : {}),
                     ...(regimeObra !== null ? { regime_obra: regimeObra } : {}),
+                    ...(empresaId ? { empresa_id: empresaId } : {}),
                 })
                 .eq('id', id)
                 .select()
@@ -94,6 +97,7 @@ export const projectService = {
                     code: codeToUse,
                     ...(tipoObra ? { tipo_obra: tipoObra } : {}),
                     ...(regimeObra ? { regime_obra: regimeObra } : {}),
+                    ...(empresaId ? { empresa_id: empresaId } : {}),
                 })
                 .select()
                 .single();
@@ -114,19 +118,26 @@ export const projectService = {
         return data;
     },
 
-    async listProjects(clientId?: string, organizationId?: string, includeOrphans: boolean = false) {
+    async listProjects(
+        clientId?: string,
+        organizationId?: string,
+        includeOrphans: boolean = false,
+        empresaId?: string,
+    ) {
         let query = supabase
             .from('projects')
-            .select('id, name, updated_at, created_at, settings, code')
+            .select('id, name, updated_at, created_at, settings, code, empresa_id')
             .order('updated_at', { ascending: false });
 
         if (clientId) {
             query = query.filter('settings->>clientId', 'eq', clientId);
         }
 
-        if (organizationId) {
+        if (empresaId) {
+            // Filtro por empresa específica do grupo (coluna própria)
+            query = query.eq('empresa_id', empresaId);
+        } else if (organizationId) {
             if (includeOrphans) {
-                // Filtra por organização OU sem organização
                 query = query.or(`settings->>organizationId.eq.${organizationId},settings->>organizationId.is.null`);
             } else {
                 query = query.filter('settings->>organizationId', 'eq', organizationId);

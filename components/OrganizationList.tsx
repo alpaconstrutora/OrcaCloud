@@ -15,6 +15,7 @@ import ClientList from './ClientList';
 import InvestorList from './InvestorList';
 import { SupplierList } from './SupplierList';
 import FinancialRegistryManager from './FinancialRegistryManager';
+import CompaniesModule from './CompaniesModule';
 import CostCenterImportModal from './CostCenterImportModal';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { exportService } from '../services/exportService';
@@ -29,7 +30,7 @@ interface OrganizationListProps {
     onSelect: (org: Organization) => void;
     
     // Management Props
-    activeTab: 'organizations' | 'projects' | 'clients' | 'investors' | 'suppliers' | 'users' | 'accounts' | 'cost_centers' | 'chart_of_accounts' | 'settings';
+    activeTab: 'organizations' | 'empresas_grupo' | 'projects' | 'clients' | 'investors' | 'suppliers' | 'users' | 'accounts' | 'cost_centers' | 'chart_of_accounts' | 'settings';
     onTabChange: (tab: string) => void;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     projects: { id: string; name: string; organizationId?: string; organization_id?: string; settings?: any }[];
@@ -136,7 +137,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
                 <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide max-w-full relative">
                     {[
-                        { id: 'organizations', label: 'Empresas', icon: Building2 },
+                        { id: 'organizations', label: 'Organização', icon: Building2 },
+                        { id: 'empresas_grupo', label: 'Grupo', icon: Building2 },
                         { id: 'projects', label: 'Projetos', icon: Briefcase },
                         { id: 'clients', label: 'Clientes', icon: UserPlus },
                         { id: 'investors', label: 'Investidores', icon: TrendingUp },
@@ -383,6 +385,11 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         </div>
                     )}
                 </div>
+            )}
+
+            {/* Empresas do Grupo Tab */}
+            {activeTab === 'empresas_grupo' && (
+                <CompaniesModule orgId={activeOrganizationId || ''} />
             )}
 
             {/* Other Tabs Rendering with Filtering */}

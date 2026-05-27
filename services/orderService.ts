@@ -27,6 +27,7 @@ export const orderService = {
                 number,
                 project_id: order.projectId,
                 supplier_id: order.supplierId,
+                ...(order.empresaId ? { empresa_id: order.empresaId } : {}),
                 delivery_date: order.deliveryDate,
                 status: order.status || 'Rascunho',
                 status_updated_at: new Date().toISOString(),

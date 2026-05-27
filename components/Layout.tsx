@@ -35,8 +35,19 @@ const Layout: React.FC<LayoutProps> = ({
   isNotificationOpen = false,
   setIsNotificationOpen = () => { }
 }) => {
-  const { logout } = useStore();
+  const { logout, companies, activeEmpresaId, setActiveEmpresaId } = useStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isEmpresaDropdownOpen, setIsEmpresaDropdownOpen] = React.useState(false);
+  const activeEmpresa = companies.find(c => c.id === activeEmpresaId) ?? null;
+
+  // Módulos habilitados para a empresa ativa.
+  // Fallback: tudo true quando não há empresa selecionada (compatibilidade).
+  const mod = React.useMemo(() => {
+    const m = activeEmpresa?.modulos_habilitados;
+    if (!m) return { obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true };
+    return m;
+  }, [activeEmpresa]);
+  const isDev = profile.group === 'DESENVOLVEDOR';
   const [isDarkMode, setIsDarkMode] = React.useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const stored = localStorage.getItem('sidebar_theme');
@@ -312,84 +323,168 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
 
               <NavGroup label="Inteligência de Negócios" />
-              <NavItem id="imovib" icon={TrendingUp} label="Estudos de Viabilidade" />
+              {(mod.incorporacao || isDev) && (
+                <NavItem id="imovib" icon={TrendingUp} label="Estudos de Viabilidade" />
+              )}
 
               <NavGroup label="Corporativo" />
+
+              {/* Seletor de empresa ativa */}
+              {companies.length > 1 && (
+                <div className="relative mb-1">
+                  <button
+                    onClick={() => setIsEmpresaDropdownOpen(o => !o)}
+                    className={`flex items-center w-full py-2 text-sm font-medium transition-colors duration-150 rounded-lg group
+                      ${isCollapsed ? 'justify-center px-0' : 'justify-between px-3'}
+                      ${t.itemText} ${t.itemHover}`}
+                    title={isCollapsed ? (activeEmpresa?.razao_social ?? 'Empresa') : undefined}
+                  >
+                    <div className={`flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
+                      <span
+                        className="w-3 h-3 rounded-full flex-shrink-0 mr-3"
+                        style={{ backgroundColor: activeEmpresa?.cor_sistema ?? '#2563EB' }}
+                      />
+                      {!isCollapsed && (
+                        <span className="truncate">
+                          {activeEmpresa?.nome_fantasia ?? activeEmpresa?.razao_social ?? 'Empresa'}
+                        </span>
+                      )}
+                    </div>
+                    {!isCollapsed && (
+                      <ChevronRight className={`w-3 h-3 transition-transform ${isEmpresaDropdownOpen ? 'rotate-90' : ''} ${t.itemIcon}`} />
+                    )}
+                  </button>
+
+                  {isEmpresaDropdownOpen && !isCollapsed && (
+                    <div className={`absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border shadow-xl overflow-hidden ${t.shell} ${t.dropdownBorder}`}>
+                      {companies.map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => { setActiveEmpresaId(c.id); setIsEmpresaDropdownOpen(false); }}
+                          className={`flex items-center gap-2 w-full px-3 py-2.5 text-xs text-left transition-colors
+                            ${c.id === activeEmpresaId ? t.itemActive : `${t.itemText} ${t.itemHover}`}`}
+                        >
+                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: c.cor_sistema }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="truncate font-semibold">
+                              {c.nome_fantasia ?? c.razao_social}
+                            </div>
+                            <div className={`text-[10px] truncate ${t.userEmail}`}>
+                              {c.cnpj ?? c.tipo}
+                            </div>
+                          </div>
+                          {c.is_headquarters && (
+                            <span className={`text-[9px] font-bold uppercase ${t.groupLabel}`}>sede</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <NavItem id="organization" icon={Building2} label="Minha Organização" />
               <NavItem id="org-type-templates" icon={Layers} label="Templates de Obra" />
 
-              <NavGroup label="Engenharia" />
-              <NavItem id="eng-obras" icon={Building2} label="Obras" />
-              <NavItem id="eng-orcamentos" icon={FolderOpen} label="Orçamentos" />
-              <NavItem id="operacional" icon={ClipboardList} label="Controle Operacional" />
-              <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" />
-              <NavItem id="explorer" icon={BookOpen} label="Composições" />
-              <NavDropdown
-                label="Gestão de Mão de Obra"
-                icon={Users}
-                isOpen={isLaborOpen}
-                onToggle={() => {
-                  if (isCollapsed) { onChangeView('labor-dashboard'); }
-                  else { setIsLaborOpen(o => !o); }
-                }}
-                hasActiveChild={activeView.startsWith('labor-')}
-              >
-                <DropdownGroupLabel label="Visão Geral" />
-                <DropdownItem id="labor-dashboard" label="Dashboard" icon={BarChart3} />
-                <DropdownItem id="labor-cost-dashboard" label="Custo por Obra" icon={TrendingUp} />
+              {(mod.obras || mod.rh || isDev) && <NavGroup label="Engenharia" />}
+              {(mod.obras || isDev) && (
+                <>
+                  <NavItem id="eng-obras" icon={Building2} label="Obras" />
+                  <NavItem id="eng-orcamentos" icon={FolderOpen} label="Orçamentos" />
+                  <NavItem id="operacional" icon={ClipboardList} label="Controle Operacional" />
+                  <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" />
+                  <NavItem id="explorer" icon={BookOpen} label="Composições" />
+                </>
+              )}
+              {(mod.rh || isDev) && (
+                <NavDropdown
+                  label="Gestão de Mão de Obra"
+                  icon={Users}
+                  isOpen={isLaborOpen}
+                  onToggle={() => {
+                    if (isCollapsed) { onChangeView('labor-dashboard'); }
+                    else { setIsLaborOpen(o => !o); }
+                  }}
+                  hasActiveChild={activeView.startsWith('labor-')}
+                >
+                  <DropdownGroupLabel label="Visão Geral" />
+                  <DropdownItem id="labor-dashboard" label="Dashboard" icon={BarChart3} />
+                  <DropdownItem id="labor-cost-dashboard" label="Custo por Obra" icon={TrendingUp} />
 
-                <DropdownGroupLabel label="Pessoas" />
-                <DropdownItem id="labor-employees" label="Colaboradores" icon={Users} />
-                <DropdownItem id="labor-teams" label="Equipes" icon={Shield} />
-                <DropdownItem id="labor-allocations" label="Alocações" icon={Target} />
+                  <DropdownGroupLabel label="Pessoas" />
+                  <DropdownItem id="labor-employees" label="Colaboradores" icon={Users} />
+                  <DropdownItem id="labor-teams" label="Equipes" icon={Shield} />
+                  <DropdownItem id="labor-allocations" label="Alocações" icon={Target} />
 
-                <DropdownGroupLabel label="Operacional" />
-                <DropdownItem id="labor-timetracking" label="Ponto" icon={Clock} />
-                <DropdownItem id="labor-productivity" label="Produtividade" icon={Target} />
-                <DropdownItem id="labor-documents" label="Documentos" icon={FileText} />
+                  <DropdownGroupLabel label="Operacional" />
+                  <DropdownItem id="labor-timetracking" label="Ponto" icon={Clock} />
+                  <DropdownItem id="labor-productivity" label="Produtividade" icon={Target} />
+                  <DropdownItem id="labor-documents" label="Documentos" icon={FileText} />
 
-                <DropdownGroupLabel label="Financeiro" />
-                <DropdownItem id="labor-costs" label="Custos" icon={DollarSign} />
-                <DropdownItem id="labor-payroll" label="Folha" icon={Calculator} />
-                <DropdownItem id="labor-rubrics" label="Rubricas" icon={Shield} />
-                <DropdownItem id="labor-encargos" label="Encargos Sociais" icon={Percent} />
+                  <DropdownGroupLabel label="Financeiro" />
+                  <DropdownItem id="labor-costs" label="Custos" icon={DollarSign} />
+                  <DropdownItem id="labor-payroll" label="Folha" icon={Calculator} />
+                  <DropdownItem id="labor-rubrics" label="Rubricas" icon={Shield} />
+                  <DropdownItem id="labor-encargos" label="Encargos Sociais" icon={Percent} />
 
-                <DropdownGroupLabel label="Configurações" />
-                <DropdownItem id="labor-fiscal" label="Config. Fiscais" icon={Settings} />
-              </NavDropdown>
-              <NavItem id="eng-planejamento" icon={Calendar} label="Planejamento" />
-              <NavItem id="project-diary" icon={BookOpen} label="Diário de Obra" />
-              <NavItem id="reports" icon={FileText} label="Relatórios" />
-              <NavItem id="project-settings" icon={Calculator} label="Dados Técnicos" />
+                  <DropdownGroupLabel label="Configurações" />
+                  <DropdownItem id="labor-fiscal" label="Config. Fiscais" icon={Settings} />
+                </NavDropdown>
+              )}
+              {(mod.obras || isDev) && (
+                <>
+                  <NavItem id="eng-planejamento" icon={Calendar} label="Planejamento" />
+                  <NavItem id="project-diary" icon={BookOpen} label="Diário de Obra" />
+                  <NavItem id="reports" icon={FileText} label="Relatórios" />
+                  <NavItem id="project-settings" icon={Calculator} label="Dados Técnicos" />
+                </>
+              )}
 
-              <NavGroup label="Suprimentos" />
-              <NavItem id="supplies-contracts" icon={FileText} label="Contratos" />
-              <NavItem id="supplies-quotations" icon={FileText} label="Cotações" />
-              <NavItem id="supplies-orders" icon={Package} label="Pedidos" />
-              <NavItem id="supplies-receipts" icon={Truck} label="Recebimento" />
+              {(mod.compras || isDev) && (
+                <>
+                  <NavGroup label="Suprimentos" />
+                  <NavItem id="supplies-contracts" icon={FileText} label="Contratos" />
+                  <NavItem id="supplies-quotations" icon={FileText} label="Cotações" />
+                  <NavItem id="supplies-orders" icon={Package} label="Pedidos" />
+                  <NavItem id="supplies-receipts" icon={Truck} label="Recebimento" />
+                </>
+              )}
 
-              <NavGroup label="Financeiro" />
-              <NavItem
-                id="project-financial"
-                icon={DollarSign}
-                label="Financeiro"
-                onClickOverride={() => {
-                  const { setProjectId } = useStore.getState();
-                  setProjectId(null);
-                  onChangeView('project-financial');
-                }}
-              />
-              <NavItem id="financial-boletos" icon={FileText} label="Boletos" />
-              <NavItem id="contas-a-pagar" icon={TrendingDown} label="Contas a Pagar" />
-              <NavItem id="fiscal-nfe" icon={Receipt} label="Fiscal & NF-e" />
-              <NavItem id="automation" icon={Zap} label="Automação" />
+              {(mod.financeiro || mod.fiscal || isDev) && <NavGroup label="Financeiro" />}
+              {(mod.financeiro || isDev) && (
+                <>
+                  <NavItem
+                    id="project-financial"
+                    icon={DollarSign}
+                    label="Financeiro"
+                    onClickOverride={() => {
+                      const { setProjectId } = useStore.getState();
+                      setProjectId(null);
+                      onChangeView('project-financial');
+                    }}
+                  />
+                  <NavItem id="financial-boletos" icon={FileText} label="Boletos" />
+                  <NavItem id="contas-a-pagar" icon={TrendingDown} label="Contas a Pagar" />
+                </>
+              )}
+              {(mod.fiscal || isDev) && (
+                <>
+                  <NavItem id="fiscal-nfe" icon={Receipt} label="Fiscal & NF-e" />
+                  <NavItem id="automation" icon={Zap} label="Automação" />
+                </>
+              )}
 
-              <NavGroup label="Comercial" />
-              <NavItem id="sales" icon={TrendingUp} label="Vendas" />
-              <NavItem id="rentals" icon={Building2} label="Aluguéis" />
+              {(mod.crm || isDev) && (
+                <>
+                  <NavGroup label="Comercial" />
+                  <NavItem id="sales" icon={TrendingUp} label="Vendas" />
+                  <NavItem id="rentals" icon={Building2} label="Aluguéis" />
+                </>
+              )}
 
               <NavGroup label="Portais" />
-              {profile.group === 'DESENVOLVEDOR' ? (
+              {isDev ? (
                 <NavDropdown
                   label="Portais"
                   icon={Shield}
@@ -402,7 +497,12 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownItem id="broker-area" label="Portal do Corretor" icon={Briefcase} />
                 </NavDropdown>
               ) : (
-                <NavItem id="client-area" icon={User} label="Visão do Cliente" />
+                <>
+                  <NavItem id="client-area" icon={User} label="Visão do Cliente" />
+                  {mod.broker_portal && (
+                    <NavItem id="broker-area" icon={Briefcase} label="Portal do Corretor" />
+                  )}
+                </>
               )}
             </>
           )}

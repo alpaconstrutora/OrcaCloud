@@ -11,5 +11,6 @@ export * from "./contracts";
 export * from "./broker";
 export * from "./imovib";
 export * from "./common";
+export * from "./company";
 export * from "./fiscal";
 export * from "./operational-control";

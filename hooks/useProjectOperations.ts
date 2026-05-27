@@ -56,7 +56,7 @@ export const useProjectOperations = ({
     setIsProjectModalOpen(true, 'edit');
   }, [projectSettings, setProjectModalInitialClassification, setIsProjectModalOpen]);
 
-  const handleUpsertProject = async (data: Partial<ProjectSettings> & { organizationId?: string; code?: string }) => {
+  const handleUpsertProject = async (data: Partial<ProjectSettings> & { organizationId?: string; empresaId?: string; code?: string }) => {
     setIsSaving(true);
     try {
       const baseRate = BASE_CUB_RATES[data.location as keyof typeof BASE_CUB_RATES] || 2000.00;

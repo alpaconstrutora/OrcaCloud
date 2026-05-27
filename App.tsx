@@ -52,6 +52,7 @@ const App: React.FC = () => {
     suppliesOrderMode, setSuppliesOrderMode,
     activeOrganizationId, setActiveOrganizationId,
     fetchProjects, fetchClients, fetchOrganizations,
+    fetchCompanies,
     projectsLoading,
   } = useStore();
 
@@ -123,6 +124,12 @@ const App: React.FC = () => {
       fetchProjects(organizations);
     }
   }, [projectId, fetchProjects, organizations, session?.user?.id, activeOrganizationId]);
+
+  React.useEffect(() => {
+    if (session?.user?.id && activeOrganizationId) {
+      fetchCompanies();
+    }
+  }, [session?.user?.id, activeOrganizationId, fetchCompanies]);
 
   usePersistenceSync({
     projectSettings, budget, projectId, session, isRehydrating, activeView,

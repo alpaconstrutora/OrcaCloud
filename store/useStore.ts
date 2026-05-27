@@ -7,7 +7,8 @@ import {
     BudgetEntry,
     Organization,
     Investor,
-    Supplier
+    Supplier,
+    Company,
 } from '../types';
 import { ProjectData } from '../services/projectService';
 import { projectService } from '../services/projectService';
@@ -16,6 +17,7 @@ import { organizationService } from '../services/organizationService';
 import { investorService } from '../services/investorService';
 import { supplierService } from '../services/supplierService';
 import { profileService } from '../services/profileService';
+import { companyService } from '../services/companyService';
 import { INITIAL_PROJECT_SETTINGS, INITIAL_BUDGET } from '../constants';
 import { getInitialView, syncViewToUrl, broadcastSignOut } from '../lib/tabRouter';
 
@@ -93,6 +95,10 @@ interface ProjectState {
     fetchOrganizations: () => Promise<void>;
     activeOrganizationId: string | null;
     setActiveOrganizationId: (id: string | null) => void;
+    companies: Company[];
+    activeEmpresaId: string | null;
+    setActiveEmpresaId: (id: string | null) => void;
+    fetchCompanies: () => Promise<void>;
     logout: () => void;
 }
 
@@ -168,9 +174,40 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
         ? (() => { const v = localStorage.getItem('orca_activeOrganizationId'); return (!v || v === 'TODAS') ? null : v; })()
         : null,
     setActiveOrganizationId: (id) => {
-        // 'TODAS' sentinel preserves null selection across page refreshes without being confused with "no preference set"
         localStorage.setItem('orca_activeOrganizationId', id || 'TODAS');
-        set({ activeOrganizationId: id });
+        // Reset empresa context when org changes
+        localStorage.removeItem('orca_activeEmpresaId');
+        set({ activeOrganizationId: id, activeEmpresaId: null, companies: [] });
+    },
+
+    companies: [],
+    activeEmpresaId: typeof window !== 'undefined'
+        ? (() => { const v = localStorage.getItem('orca_activeEmpresaId'); return v || null; })()
+        : null,
+    setActiveEmpresaId: (id) => {
+        if (id) localStorage.setItem('orca_activeEmpresaId', id);
+        else localStorage.removeItem('orca_activeEmpresaId');
+        set({ activeEmpresaId: id });
+    },
+    fetchCompanies: async () => {
+        const { activeOrganizationId, activeEmpresaId } = get();
+        if (!activeOrganizationId) return;
+        try {
+            const list = await companyService.list(activeOrganizationId);
+            set({ companies: list });
+            // Auto-select HQ if no active empresa or the saved one no longer exists
+            const saved = activeEmpresaId;
+            const stillExists = saved && list.some(c => c.id === saved);
+            if (!stillExists) {
+                const hq = list.find(c => c.is_headquarters) ?? list[0] ?? null;
+                const newId = hq?.id ?? null;
+                if (newId) localStorage.setItem('orca_activeEmpresaId', newId);
+                else localStorage.removeItem('orca_activeEmpresaId');
+                set({ activeEmpresaId: newId });
+            }
+        } catch (err) {
+            console.error('Error fetching companies:', err);
+        }
     },
 
     setProjectId: (projectId) => {

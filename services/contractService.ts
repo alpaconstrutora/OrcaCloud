@@ -11,7 +11,7 @@ import {
 
 export const contractService = {
     // Contracts
-    listContracts: async (projectId?: string, organizationId?: string): Promise<Contract[]> => {
+    listContracts: async (projectId?: string, organizationId?: string, empresaId?: string): Promise<Contract[]> => {
         let query = supabase
             .from('contracts')
             .select('*')
@@ -19,6 +19,8 @@ export const contractService = {
 
         if (projectId) {
             query = query.eq('project_id', projectId);
+        } else if (empresaId) {
+            query = query.eq('empresa_id', empresaId);
         } else if (organizationId) {
             query = query.eq('organization_id', organizationId);
         }

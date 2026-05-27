@@ -3,12 +3,14 @@ import { PaymentAccount, CostCenter, ChartOfAccount } from '../types';
 
 export const financialRegistryService = {
     // Payment Accounts
-    async listPaymentAccounts(organizationId?: string): Promise<PaymentAccount[]> {
+    async listPaymentAccounts(organizationId?: string, empresaId?: string): Promise<PaymentAccount[]> {
         let query = supabase
             .from('payment_accounts')
             .select('*');
-        
-        if (organizationId) {
+
+        if (empresaId) {
+            query = query.eq('empresa_id', empresaId);
+        } else if (organizationId) {
             query = query.eq('organization_id', organizationId);
         }
 
@@ -51,12 +53,14 @@ export const financialRegistryService = {
     },
 
     // Cost Centers
-    async listCostCenters(organizationId?: string): Promise<CostCenter[]> {
+    async listCostCenters(organizationId?: string, empresaId?: string): Promise<CostCenter[]> {
         let query = supabase
             .from('cost_centers')
             .select('*');
-        
-        if (organizationId) {
+
+        if (empresaId) {
+            query = query.eq('empresa_id', empresaId);
+        } else if (organizationId) {
             query = query.eq('organization_id', organizationId);
         }
 
@@ -124,12 +128,14 @@ export const financialRegistryService = {
     },
 
     // Chart of Accounts
-    async listChartOfAccounts(organizationId?: string): Promise<ChartOfAccount[]> {
+    async listChartOfAccounts(organizationId?: string, empresaId?: string): Promise<ChartOfAccount[]> {
         let query = supabase
             .from('chart_of_accounts')
             .select('*');
-        
-        if (organizationId) {
+
+        if (empresaId) {
+            query = query.eq('empresa_id', empresaId);
+        } else if (organizationId) {
             query = query.eq('organization_id', organizationId);
         }
 

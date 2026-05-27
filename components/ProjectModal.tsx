@@ -7,6 +7,7 @@ import { projectService } from '../services/projectService';
 import { investorService } from '../services/investorService';
 import { Client, Investor } from '../types';
 import { supabase } from '../lib/supabase';
+import { useStore } from '../store/useStore';
 
 interface NewProjectData {
   id?: string;
@@ -44,6 +45,7 @@ interface NewProjectData {
   responsibleTeam?: string;
   code?: string;
   organizationId?: string;
+  empresaId?: string;
   tipo?: 'Reforma' | 'Manutenção' | 'Greenfield' | 'Administração' | 'Condomínio';
   tipoObra?: TipoObra;
   regimeObra?: RegimeObra;
@@ -139,15 +141,20 @@ interface ProjectModalProps {
   initialClassification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO';
   organizationId?: string;
   organizations?: { id: string; name: string }[];
+  empresaId?: string;
   // clients removed from props
 }
 
-const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, initialData, mode = 'create', initialClassification, organizationId, organizations = [] }) => {
-  // console.log('ProjectModal: rendered with clients', clients.length); // Removed debug log
+const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, initialData, mode = 'create', initialClassification, organizationId, organizations = [], empresaId }) => {
+  const { companies, activeEmpresaId } = useStore();
+
   const [activeTab, setActiveTab] = React.useState<'technical' | 'select' | 'address'>('technical');
-  const [clients, setClients] = React.useState<Client[]>([]); // Initialize empty clients state
+  const [clients, setClients] = React.useState<Client[]>([]);
   const [investors, setInvestors] = React.useState<Investor[]>([]);
   const [selectedOrgId, setSelectedOrgId] = React.useState<string | undefined>(undefined);
+  const [selectedEmpresaId, setSelectedEmpresaId] = React.useState<string | undefined>(
+    empresaId ?? activeEmpresaId ?? undefined
+  );
 
   const [projects, setProjects] = React.useState<any[]>([]);
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -274,6 +281,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
         setFormData(sanitized);
         setSelectedOrgId((initialData as any).organizationId || organizationId);
+        setSelectedEmpresaId((initialData as any).empresaId || empresaId || activeEmpresaId || undefined);
 
         // Immediate link check if projects are already here
         if (initialClassification !== 'OBRA' && initialData.linkedProjectId) {
@@ -378,7 +386,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
       linkedProjectId: linkedProjectId || undefined,
       linkedProjectName: linkedProjectId ? projects.find(p => p.id === linkedProjectId)?.name : undefined,
       code: (formData.classification === 'OBRA' && projectCode.trim()) ? projectCode.trim() : undefined,
-      organizationId: selectedOrgId
+      organizationId: selectedOrgId,
+      empresaId: selectedEmpresaId,
     });
     setProjectCode('');
     if (mode === 'create') {
@@ -579,7 +588,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     <div className="col-span-2 md:col-span-1">
                       <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
                         <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                        Empresa / Organização
+                        Organização
                       </label>
                       <select
                         className="w-full rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-indigo-800 text-sm"
@@ -591,7 +600,29 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           <option key={org.id} value={org.id}>{org.name}</option>
                         ))}
                       </select>
-                      <p className="text-[10px] text-gray-400 mt-1">Empresa à qual esta obra pertence.</p>
+                    </div>
+                  )}
+
+                  {/* Empresa do grupo — sempre visível quando há empresas cadastradas */}
+                  {companies.length > 0 && (
+                    <div className="col-span-2 md:col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-blue-500" />
+                        Empresa Executora
+                      </label>
+                      <select
+                        className="w-full rounded-lg border border-blue-200 bg-blue-50 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none font-medium text-blue-800 text-sm"
+                        value={selectedEmpresaId || ''}
+                        onChange={(e) => setSelectedEmpresaId(e.target.value || undefined)}
+                      >
+                        <option value="">Sem vínculo</option>
+                        {companies.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.nome_fantasia ?? c.razao_social}{c.cnpj ? ` — ${c.cnpj}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
                     </div>
                   )}
 
@@ -1539,7 +1570,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         <div className="col-span-2">
                           <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
                             <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                            Empresa / Organização
+                            Organização
                           </label>
                           <select
                             className="w-full rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-indigo-800 text-sm"
@@ -1551,7 +1582,29 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               <option key={org.id} value={org.id}>{org.name}</option>
                             ))}
                           </select>
-                          <p className="text-[10px] text-gray-400 mt-1">Empresa à qual este projeto pertence.</p>
+                        </div>
+                      )}
+
+                      {/* Empresa executora — visível quando há empresas do grupo */}
+                      {companies.length > 0 && (
+                        <div className="col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 text-blue-500" />
+                            Empresa Executora
+                          </label>
+                          <select
+                            className="w-full rounded-lg border border-blue-200 bg-blue-50 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none font-medium text-blue-800 text-sm"
+                            value={selectedEmpresaId || ''}
+                            onChange={(e) => setSelectedEmpresaId(e.target.value || undefined)}
+                          >
+                            <option value="">Sem vínculo</option>
+                            {companies.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.nome_fantasia ?? c.razao_social}{c.cnpj ? ` — ${c.cnpj}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
                         </div>
                       )}
                       <div>

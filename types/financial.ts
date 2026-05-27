@@ -97,6 +97,7 @@ export interface Invoice {
 export interface PaymentAccount {
     id: string;
     organization_id: string;
+    empresa_id?: string;
     name: string;
     description?: string;
     bank?: string;
@@ -108,6 +109,7 @@ export interface PaymentAccount {
 export interface CostCenter {
     id: string;
     organization_id: string;
+    empresa_id?: string;
     name: string;
     code?: string;
     created_at?: string;
@@ -116,6 +118,7 @@ export interface CostCenter {
 export interface ChartOfAccount {
     id: string;
     organization_id: string;
+    empresa_id?: string;
     name: string;
     code: string;
     type?: string;

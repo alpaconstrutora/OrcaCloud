@@ -15,6 +15,7 @@ export type DocumentStatus = 'ATIVO' | 'VENCIDO' | 'PENDENTE';
 export interface Employee {
     id: string;
     org_id: string;
+    empresa_id?: string;
     name: string;
     cpf?: string;
     phone?: string;
@@ -171,7 +172,7 @@ export const laborService = {
 
     // ── EMPLOYEES ──────────────────────────────────────────
 
-    async listEmployees(orgId?: string): Promise<Employee[]> {
+    async listEmployees(orgId?: string, empresaId?: string): Promise<Employee[]> {
         let query = supabase
             .from('employees')
             .select(`
@@ -179,7 +180,9 @@ export const laborService = {
                 allocations:employee_allocations(*)
             `);
 
-        if (orgId && orgId !== 'all') {
+        if (empresaId) {
+            query = query.eq('empresa_id', empresaId);
+        } else if (orgId && orgId !== 'all') {
             query = query.eq('org_id', orgId);
         }
 
@@ -271,8 +274,8 @@ export const laborService = {
 
     // ── TEAMS ──────────────────────────────────────────────
 
-    async listTeams(orgId?: string): Promise<LaborTeam[]> {
-        if (!orgId) return [];
+    async listTeams(orgId?: string, empresaId?: string): Promise<LaborTeam[]> {
+        if (!orgId && !empresaId) return [];
         let query = supabase
             .from('labor_teams')
             .select(`
@@ -280,8 +283,13 @@ export const laborService = {
                 members:team_members(
                     employee:employees(*)
                 )
-            `)
-            .eq('org_id', orgId);
+            `);
+
+        if (empresaId) {
+            query = query.eq('empresa_id', empresaId);
+        } else if (orgId) {
+            query = query.eq('org_id', orgId);
+        }
         const { data, error } = await query.order('name');
         if (error) throw error;
 

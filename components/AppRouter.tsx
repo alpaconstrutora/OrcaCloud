@@ -630,7 +630,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onEdit={(org: Organization) => { setEditingOrganizationId(org.id); setIsCreatingOrganization(true); }}
           onSave={(org: Organization) => handleUpsertOrganization(org, false)}
           onDelete={handleDeleteOrganization}
-          activeTab={managementTab as 'organizations' | 'projects' | 'clients' | 'investors' | 'suppliers' | 'users' | 'accounts' | 'cost_centers' | 'chart_of_accounts' | 'settings'}
+          activeTab={managementTab as 'organizations' | 'empresas_grupo' | 'projects' | 'clients' | 'investors' | 'suppliers' | 'users' | 'accounts' | 'cost_centers' | 'chart_of_accounts' | 'settings'}
           onTabChange={setManagementTab}
           projects={typedProjects}
           onClientsChange={fetchClients}

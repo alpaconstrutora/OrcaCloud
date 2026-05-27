@@ -25,6 +25,7 @@ export interface Contract {
     retention_rate: number;
     responsible_email?: string;
     signed_contract_url?: string;
+    empresa_id?: string;
     cost_center_id?: string;
     category_id?: string;
     payment_method?: string;

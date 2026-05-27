@@ -14,6 +14,7 @@ export interface PurchaseOrder {
     supplierName?: string;
     projectId: string;
     projectName?: string;
+    empresaId?: string;
     projectClassification?: 'OBRA' | 'ORCAMENTO';
     linkedProjectName?: string;
     linkedProjectId?: string;

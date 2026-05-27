@@ -14,3 +14,4 @@ export * from "./common";
 export * from "./company";
 export * from "./fiscal";
 export * from "./operational-control";
+export * from "./supplierBankAccount";

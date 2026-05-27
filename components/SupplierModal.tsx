@@ -4,6 +4,7 @@ import { Supplier, Organization } from '../types';
 import { supplierCategoryService } from '../services/supplierCategoryService';
 import { organizationService } from '../services/organizationService';
 import { useStore } from '../store/useStore';
+import SupplierBankAccountsTab from './SupplierBankAccountsTab';
 
 interface SupplierModalProps {
     isOpen: boolean;
@@ -61,6 +62,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     const { activeOrganizationId } = useStore();
     const [dynamicCategories, setDynamicCategories] = React.useState<string[]>(DEFAULT_CATEGORIES);
     const [organizations, setOrganizations] = React.useState<Organization[]>([]);
+    const [modalTab, setModalTab] = React.useState<'cadastro' | 'bancario'>('cadastro');
 
     const emptyForm = (): Omit<Supplier, 'id' | 'created_at'> => ({
         name: '', contact_name: '', email: '', phone: '', document: '',
@@ -87,6 +89,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     }, [isOpen, activeOrganizationId]);
 
     React.useEffect(() => {
+        // Sempre volta para a aba de cadastro ao abrir/fechar
+        setModalTab('cadastro');
         if (initialData) {
             setFormData({
                 name: initialData.name,
@@ -151,7 +155,38 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                     </button>
                 </div>
 
-                {/* Formulário */}
+                {/* Tabs de navegação — apenas ao editar fornecedor existente */}
+                {initialData && (
+                    <div className="flex border-b border-gray-100 px-7 shrink-0 bg-white">
+                        {(['cadastro', 'bancario'] as const).map(tab => (
+                            <button
+                                key={tab}
+                                type="button"
+                                onClick={() => setModalTab(tab)}
+                                className={`px-4 py-3 text-[11px] font-black uppercase tracking-wider border-b-2 transition-all -mb-px ${
+                                    modalTab === tab
+                                        ? 'border-blue-500 text-blue-600'
+                                        : 'border-transparent text-gray-400 hover:text-gray-600'
+                                }`}
+                            >
+                                {tab === 'cadastro' ? '📋 Cadastro' : '🏦 Dados Bancários'}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* Aba: Dados Bancários */}
+                {initialData && modalTab === 'bancario' && (
+                    <div className="flex-1 overflow-hidden flex flex-col">
+                        <SupplierBankAccountsTab
+                            supplierId={initialData.id}
+                            organizationId={initialData.organization_id}
+                        />
+                    </div>
+                )}
+
+                {/* Aba: Cadastro (formulário principal) */}
+                {modalTab === 'cadastro' && (
                 <form id="supplier-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-7 py-5 space-y-4">
 
                     {/* Razão Social */}
@@ -347,8 +382,10 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                         </div>
                     </div>
                 </form>
+                )}
 
-                {/* Footer fixo com botões */}
+                {/* Footer fixo — só aparece na aba de cadastro */}
+                {modalTab === 'cadastro' && (
                 <div className="shrink-0 flex gap-3 px-7 py-4 border-t border-gray-100 bg-gray-50/60">
                     <button
                         type="button"
@@ -365,6 +402,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                         {initialData ? 'Confirmar Ajustes' : 'Efetuar Cadastro'}
                     </button>
                 </div>
+                )}
             </div>
         </div>
     );

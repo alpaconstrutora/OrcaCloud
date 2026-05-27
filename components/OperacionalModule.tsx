@@ -152,7 +152,8 @@ const ProjectSelector: React.FC<{
 
 // ── Main module ──────────────────────────────────────────────────────────────
 // Helper: verifica se um projeto é uma Obra operacional
-function isObraProject(proj: { settings?: { classification?: string; isSystemProject?: boolean; standard?: string; location?: string } } | undefined): boolean {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isObraProject(proj: any): boolean {
   const s = proj?.settings
   return (
     s?.classification === 'OBRA' &&

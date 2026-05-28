@@ -389,7 +389,22 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
             {/* Empresas do Grupo Tab */}
             {activeTab === 'empresas_grupo' && (
-                <CompaniesModule orgId={activeOrganizationId || ''} />
+                activeOrganizationId
+                    ? <CompaniesModule orgId={activeOrganizationId} />
+                    : (
+                        <div className="flex flex-col items-center justify-center py-20 gap-4 text-gray-400">
+                            <Building2 className="w-10 h-10 opacity-30" />
+                            <p className="text-sm font-black uppercase tracking-wide">Selecione uma organização primeiro</p>
+                            <p className="text-xs text-center max-w-xs">
+                                Vá para a aba <strong className="text-gray-600">Organização</strong>, clique em <strong className="text-gray-600">SELECIONAR</strong> na empresa desejada e volte aqui.
+                            </p>
+                            <button
+                                onClick={() => onTabChange('organizations')}
+                                className="mt-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
+                                Ir para Organização
+                            </button>
+                        </div>
+                    )
             )}
 
             {/* Other Tabs Rendering with Filtering */}

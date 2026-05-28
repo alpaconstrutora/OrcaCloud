@@ -241,6 +241,17 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
 
     const holdingOptions = companies.filter(c => c.tipo === 'holding' || c.is_headquarters);
 
+    // ── Sem org selecionada ───────────────────────────────────
+    if (!orgId) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
+                <Building2 className="w-10 h-10 opacity-30" />
+                <p className="text-sm font-black uppercase tracking-wide">Nenhuma organização selecionada</p>
+                <p className="text-xs">Selecione uma organização na aba "Organização" para gerenciar as empresas do grupo.</p>
+            </div>
+        );
+    }
+
     // ── Modo detalhe ──────────────────────────────────────────
     if (selectedCompany) {
         return (

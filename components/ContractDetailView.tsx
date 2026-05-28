@@ -11,9 +11,10 @@ import {
 import {
     Contract, ContractItem, ContractAddendum,
     ContractMeasurement, ContractMeasurementItem, BudgetEntry, ProjectSettings, ContractTemplate,
-    ContractUtilityBill, SinapiItem
+    ContractUtilityBill, SinapiItem, CustomDatabase, SinapiType
 } from '../types';
 import { contractService } from '../services/contractService';
+import { customDatabaseService } from '../services/customDatabaseService';
 import { projectService } from '../services/projectService';
 import BudgetPickerModal from './BudgetPickerModal';
 import ContractMeasurementModal from './ContractMeasurementModal';
@@ -1727,6 +1728,19 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
     const [showUnitManager, setShowUnitManager] = React.useState(false);
     const [pickerOpen, setPickerOpen] = React.useState(false);
     const [formError, setFormError] = React.useState<string | null>(null);
+    const [saveToBase, setSaveToBase] = React.useState(false);
+    const [databases, setDatabases] = React.useState<CustomDatabase[]>([]);
+    const [selectedDatabaseId, setSelectedDatabaseId] = React.useState<string>('');
+    const [savingToBase, setSavingToBase] = React.useState(false);
+
+    React.useEffect(() => {
+        if (saveToBase && databases.length === 0) {
+            customDatabaseService.listDatabases().then(dbs => {
+                setDatabases(dbs);
+                if (dbs.length === 1) setSelectedDatabaseId(dbs[0].id);
+            });
+        }
+    }, [saveToBase]);
 
     const handlePickerSelect = (item: SinapiItem) => {
         const price = item.price || 0;
@@ -1735,11 +1749,32 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
         setPickerOpen(false);
     };
 
-    const handleConfirm = () => {
+    const handleConfirm = async () => {
         if (!form.description.trim()) { setFormError('Descrição obrigatória.'); return; }
         if (!form.unit.trim()) { setFormError('Unidade obrigatória.'); return; }
         if (form.quantity <= 0) { setFormError('Quantidade deve ser maior que zero.'); return; }
+        if (saveToBase && !selectedDatabaseId) { setFormError('Selecione uma base de dados para salvar.'); return; }
         setFormError(null);
+
+        if (saveToBase && selectedDatabaseId) {
+            setSavingToBase(true);
+            try {
+                await customDatabaseService.saveItem({
+                    code: form.code || `AVULSO-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+                    description: form.description,
+                    unit: form.unit,
+                    price: form.unitPrice,
+                    type: SinapiType.SERVICE,
+                    category: 'Própria',
+                    database_id: selectedDatabaseId,
+                });
+            } catch (e) {
+                console.error('Erro ao salvar na base própria:', e);
+            } finally {
+                setSavingToBase(false);
+            }
+        }
+
         onConfirm({ ...form });
     };
 
@@ -1847,6 +1882,38 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                         </div>
                     </div>
 
+                    {/* Salvar na base própria */}
+                    <div className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50">
+                        <label className="flex items-center gap-3 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={saveToBase}
+                                onChange={e => setSaveToBase(e.target.checked)}
+                                className="w-4 h-4 rounded accent-orange-500 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Salvar na base de dados própria</span>
+                        </label>
+                        {saveToBase && (
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Base de dados *</label>
+                                {databases.length === 0 ? (
+                                    <p className="text-xs text-gray-400 italic">Carregando bases...</p>
+                                ) : (
+                                    <select
+                                        value={selectedDatabaseId}
+                                        onChange={e => setSelectedDatabaseId(e.target.value)}
+                                        className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                                    >
+                                        <option value="">Selecione uma base...</option>
+                                        {databases.map(db => (
+                                            <option key={db.id} value={db.id}>{db.name}</option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                     {formError && (
                         <p className="text-xs text-red-600 flex items-center gap-1.5 bg-red-50 px-3 py-2 rounded-lg">
                             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
@@ -1871,10 +1938,11 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                     <button
                         type="button"
                         onClick={handleConfirm}
-                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-black transition-all shadow-lg shadow-orange-500/20"
+                        disabled={savingToBase}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-black transition-all shadow-lg shadow-orange-500/20"
                     >
                         {isEditing ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                        {isEditing ? 'Salvar Alterações' : 'Adicionar Item'}
+                        {savingToBase ? 'Salvando...' : isEditing ? 'Salvar Alterações' : 'Adicionar Item'}
                     </button>
                 </div>
             </div>

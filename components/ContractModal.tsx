@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
-import { Contract, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature } from '../types';
+import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature } from '../types';
 import { supplierService } from '../services/supplierService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
@@ -51,6 +51,32 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
     const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
 
+    const buildSchedule = (count: number, value: number, startDate: string): ContractInstallment[] => {
+        const base = count > 0 ? Math.floor((value / count) * 100) / 100 : 0;
+        const remainder = Math.round((value - base * count) * 100) / 100;
+        const start = startDate ? new Date(startDate + 'T12:00:00') : new Date();
+        return Array.from({ length: count }, (_, i) => {
+            const d = new Date(start);
+            d.setMonth(d.getMonth() + i);
+            return {
+                date: d.toISOString().split('T')[0],
+                value: i === count - 1 ? Math.round((base + remainder) * 100) / 100 : base,
+            };
+        });
+    };
+
+    const [installmentSchedule, setInstallmentSchedule] = React.useState<ContractInstallment[]>(() => {
+        if (initialData?.payment_schedule?.length) return initialData.payment_schedule;
+        if (initialData?.payment_term_type === 'Parcelado') {
+            return buildSchedule(
+                initialData.payment_installments ?? 1,
+                initialData.original_value ?? 0,
+                initialData.start_date ?? new Date().toISOString().split('T')[0]
+            );
+        }
+        return [];
+    });
+
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
     const [chartOfAccounts, setChartOfAccounts] = React.useState<ChartOfAccount[]>([]);
@@ -63,6 +89,15 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             loadDependencies();
         }
     }, [isOpen, organizationId]);
+
+    // Initialize installment schedule when switching to Parcelado
+    const prevTermType = React.useRef(formData.payment_term_type);
+    React.useEffect(() => {
+        if (formData.payment_term_type === 'Parcelado' && prevTermType.current !== 'Parcelado' && installmentSchedule.length === 0) {
+            setInstallmentSchedule(buildSchedule(formData.payment_installments ?? 1, formData.original_value ?? 0, formData.start_date ?? new Date().toISOString().split('T')[0]));
+        }
+        prevTermType.current = formData.payment_term_type;
+    }, [formData.payment_term_type]);
 
     // Auto-fetch next sequential number for new contracts
     React.useEffect(() => {
@@ -145,6 +180,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             } else {
                 payload.billing_cycle = undefined;
                 payload.due_day = undefined;
+            }
+            if (payload.payment_term_type === 'Parcelado' && !payload.is_recurring) {
+                payload.payment_schedule = installmentSchedule;
+            } else {
+                payload.payment_schedule = undefined;
             }
             await onSubmit(payload);
         } catch (err: unknown) {
@@ -457,18 +497,86 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
 
                                 {formData.payment_term_type === 'Parcelado' && !formData.is_recurring && (
-                                    <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Nº de Parcelas</label>
-                                        <div className="relative group">
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                value={formData.payment_installments}
-                                                onChange={(e) => setFormData({ ...formData, payment_installments: parseInt(e.target.value) || 1 })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
-                                            />
-                                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[12px] font-medium text-gray-400 uppercase">X</span>
+                                    <div className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-300 col-span-2">
+                                        <div className="space-y-2">
+                                            <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Nº de Parcelas</label>
+                                            <div className="relative group">
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    value={formData.payment_installments}
+                                                    onChange={(e) => {
+                                                        const count = parseInt(e.target.value) || 1;
+                                                        setFormData(prev => ({ ...prev, payment_installments: count }));
+                                                        setInstallmentSchedule(buildSchedule(count, formData.original_value ?? 0, formData.start_date ?? new Date().toISOString().split('T')[0]));
+                                                    }}
+                                                    className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
+                                                />
+                                                <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[12px] font-medium text-gray-400 uppercase">X</span>
+                                            </div>
                                         </div>
+
+                                        {installmentSchedule.length > 0 && (
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Cronograma de Parcelas</label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setInstallmentSchedule(buildSchedule(formData.payment_installments ?? 1, formData.original_value ?? 0, formData.start_date ?? new Date().toISOString().split('T')[0]))}
+                                                        className="text-[11px] text-blue-600 hover:text-blue-800 font-medium uppercase tracking-wider"
+                                                    >
+                                                        Redistribuir igualmente
+                                                    </button>
+                                                </div>
+                                                <div className="rounded-2xl border border-gray-100 overflow-hidden">
+                                                    <div className="grid grid-cols-[40px_1fr_1fr] bg-gray-50 border-b border-gray-100 px-4 py-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                                                        <span>#</span>
+                                                        <span>Vencimento</span>
+                                                        <span className="text-right">Valor (R$)</span>
+                                                    </div>
+                                                    <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+                                                        {installmentSchedule.map((inst, i) => (
+                                                            <div key={i} className="grid grid-cols-[40px_1fr_1fr] items-center px-4 py-2 gap-2 hover:bg-gray-50 transition-colors">
+                                                                <span className="text-[12px] font-bold text-gray-400">{i + 1}</span>
+                                                                <input
+                                                                    type="date"
+                                                                    value={inst.date}
+                                                                    onChange={e => {
+                                                                        const updated = [...installmentSchedule];
+                                                                        updated[i] = { ...updated[i], date: e.target.value };
+                                                                        setInstallmentSchedule(updated);
+                                                                    }}
+                                                                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                                                />
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    step="0.01"
+                                                                    value={inst.value}
+                                                                    onChange={e => {
+                                                                        const updated = [...installmentSchedule];
+                                                                        updated[i] = { ...updated[i], value: parseFloat(e.target.value) || 0 };
+                                                                        setInstallmentSchedule(updated);
+                                                                    }}
+                                                                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-sm text-right font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <div className="grid grid-cols-[40px_1fr_1fr] bg-gray-50 border-t border-gray-100 px-4 py-2">
+                                                        <span className="col-span-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total</span>
+                                                        <span className={`text-right text-[12px] font-black ${Math.abs(installmentSchedule.reduce((s, i) => s + i.value, 0) - (formData.original_value ?? 0)) > 0.01 ? 'text-red-600' : 'text-green-600'}`}>
+                                                            R$ {installmentSchedule.reduce((s, i) => s + i.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                {Math.abs(installmentSchedule.reduce((s, i) => s + i.value, 0) - (formData.original_value ?? 0)) > 0.01 && (
+                                                    <p className="text-[11px] text-red-500 ml-1">
+                                                        Soma das parcelas difere do valor do contrato (R$ {(formData.original_value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 

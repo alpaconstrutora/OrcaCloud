@@ -32,7 +32,13 @@ export interface Contract {
     payment_term_type?: 'Vista' | 'Parcelado';
     payment_days?: number;
     payment_installments?: number;
+    payment_schedule?: ContractInstallment[];
     created_at?: string;
+}
+
+export interface ContractInstallment {
+    date: string;
+    value: number;
 }
 
 export interface ContractItem {

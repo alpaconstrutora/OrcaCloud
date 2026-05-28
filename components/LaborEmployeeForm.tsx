@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, CheckCircle2, Info, AlertTriangle } from 'lucide-react';
+import { X, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, CheckCircle2, Info, AlertTriangle, CreditCard, Briefcase } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import { payrollService, PayrollRubric } from '../services/payrollService';
 import { validateCPF } from '../lib/validators';
@@ -50,7 +50,7 @@ const inputCls = "w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded
 const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, organizations = [], onClose, onSaved }) => {
     const isEditing = !!employee;
     const [saving, setSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState<'geral' | 'pessoal' | 'documentos' | 'endereco' | 'checklist' | 'folha'>('geral');
+    const [activeTab, setActiveTab] = useState<'geral' | 'pessoal' | 'documentos' | 'endereco' | 'organizacional' | 'bancario' | 'checklist' | 'folha'>('geral');
     const [allRubrics, setAllRubrics] = useState<PayrollRubric[]>([]);
     const [recurringRubrics, setRecurringRubrics] = useState<string[]>([]);
     const [loadingRubrics, setLoadingRubrics] = useState(false);
@@ -101,6 +101,24 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         address_city: employee?.address_city || '',
         address_uf: employee?.address_uf || '',
         address_zip_code: employee?.address_zip_code || '',
+        // Sprint 1: Organizacional
+        matricula: employee?.matricula || '',
+        departamento: employee?.departamento || '',
+        centro_custo: employee?.centro_custo || '',
+        sindicato: employee?.sindicato || '',
+        jornada_horas_semana: employee?.jornada_horas_semana || 44,
+        contract_type_extra: employee?.contract_type_extra || '',
+        cnh_numero: employee?.cnh_numero || '',
+        cnh_categoria: employee?.cnh_categoria || '',
+        cnh_validade: employee?.cnh_validade || '',
+        num_dependentes: employee?.num_dependentes || 0,
+        // Sprint 1: Bancário
+        banco_codigo: employee?.banco_codigo || '',
+        banco_nome: employee?.banco_nome || '',
+        banco_agencia: employee?.banco_agencia || '',
+        banco_conta: employee?.banco_conta || '',
+        banco_conta_tipo: employee?.banco_conta_tipo || 'corrente',
+        banco_pix: employee?.banco_pix || '',
     });
 
     useEffect(() => {
@@ -178,7 +196,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         }
         setSaving(true);
         const cleanedForm = { ...form };
-        const dateFields: (keyof Employee)[] = ['hire_date', 'birth_date', 'rg_issue_date', 'ctps_issue_date'];
+        const dateFields: (keyof Employee)[] = ['hire_date', 'birth_date', 'rg_issue_date', 'ctps_issue_date', 'cnh_validade'];
         
         dateFields.forEach(field => {
             if (cleanedForm[field] === '') {
@@ -239,6 +257,8 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                         { id: 'pessoal', label: 'Pessoal', icon: Users },
                         { id: 'documentos', label: 'Docs', icon: FileText },
                         { id: 'endereco', label: 'Endereço', icon: MapPin },
+                        { id: 'organizacional', label: 'Org.', icon: Briefcase },
+                        { id: 'bancario', label: 'Banco', icon: CreditCard },
                         { id: 'folha', label: 'Folha', icon: Wallet },
                         { id: 'checklist', label: 'Checklist', icon: CheckSquare }
                     ] as const).map(tab => (
@@ -652,6 +672,131 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                             <input value={form.residential_phone} onChange={e => setField('residential_phone', formatPhone(e.target.value))} className={inputCls} />
                                         </InputGroup>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'organizacional' && (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
+                            <div>
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Briefcase className="w-3.5 h-3.5 text-indigo-500" /> Dados Organizacionais
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <InputGroup label="Matrícula">
+                                        <input value={form.matricula} onChange={e => setField('matricula', e.target.value)} className={inputCls} placeholder="Ex: 001234" />
+                                    </InputGroup>
+                                    <InputGroup label="Departamento">
+                                        <input value={form.departamento} onChange={e => setField('departamento', e.target.value)} className={inputCls} placeholder="Ex: Produção / Obras" />
+                                    </InputGroup>
+                                    <InputGroup label="Centro de Custo">
+                                        <input value={form.centro_custo} onChange={e => setField('centro_custo', e.target.value)} className={inputCls} placeholder="Ex: CC-001 / Obra Vila" />
+                                    </InputGroup>
+                                    <InputGroup label="Sindicato">
+                                        <input value={form.sindicato} onChange={e => setField('sindicato', e.target.value)} className={inputCls} placeholder="Ex: SINDUSCON-MG" />
+                                    </InputGroup>
+                                    <InputGroup label="Jornada Semanal (horas)">
+                                        <input
+                                            type="number" min="0" max="60" step="0.5"
+                                            value={form.jornada_horas_semana ?? 44}
+                                            onChange={e => setField('jornada_horas_semana', parseFloat(e.target.value) || 44)}
+                                            className={inputCls}
+                                        />
+                                    </InputGroup>
+                                    <InputGroup label="Subtipo de Contrato">
+                                        <select value={form.contract_type_extra || ''} onChange={e => setField('contract_type_extra', e.target.value)} className={inputCls}>
+                                            <option value="">Nenhum</option>
+                                            <option value="TEMPORARIO">Temporário (Lei 6.019/74)</option>
+                                            <option value="APRENDIZ">Aprendiz (CLT Art. 428)</option>
+                                        </select>
+                                    </InputGroup>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <FileText className="w-3.5 h-3.5 text-indigo-500" /> CNH (Carteira Nacional de Habilitação)
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <InputGroup label="Número CNH">
+                                        <input value={form.cnh_numero} onChange={e => setField('cnh_numero', e.target.value)} className={inputCls} />
+                                    </InputGroup>
+                                    <InputGroup label="Categoria">
+                                        <select value={form.cnh_categoria || ''} onChange={e => setField('cnh_categoria', e.target.value)} className={inputCls}>
+                                            <option value="">Sem CNH</option>
+                                            {['A','B','C','D','E','AB','AC','AD','AE'].map(c => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </select>
+                                    </InputGroup>
+                                    <InputGroup label="Validade CNH">
+                                        <input type="date" value={form.cnh_validade || ''} onChange={e => setField('cnh_validade', e.target.value)} className={inputCls} />
+                                    </InputGroup>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Users className="w-3.5 h-3.5 text-indigo-500" /> Dependentes
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <InputGroup label="Número de Dependentes">
+                                        <input
+                                            type="number" min="0" max="20"
+                                            value={form.num_dependentes ?? 0}
+                                            onChange={e => setField('num_dependentes', parseInt(e.target.value) || 0)}
+                                            className={inputCls}
+                                        />
+                                    </InputGroup>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'bancario' && (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
+                            <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-start gap-3">
+                                <CreditCard className="text-emerald-600 mt-0.5 shrink-0" size={18} />
+                                <div>
+                                    <p className="text-xs font-black text-emerald-900">Dados Bancários para Pagamento</p>
+                                    <p className="text-[10px] text-emerald-700 mt-0.5">Informações utilizadas para transferência de salário e benefícios.</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Building2 className="w-3.5 h-3.5 text-indigo-500" /> Conta Bancária
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <InputGroup label="Código do Banco">
+                                        <input value={form.banco_codigo || ''} onChange={e => setField('banco_codigo', e.target.value)} className={inputCls} placeholder="Ex: 001 (BB), 341 (Itaú)" />
+                                    </InputGroup>
+                                    <InputGroup label="Nome do Banco">
+                                        <input value={form.banco_nome || ''} onChange={e => setField('banco_nome', e.target.value)} className={inputCls} placeholder="Ex: Banco do Brasil" />
+                                    </InputGroup>
+                                    <InputGroup label="Agência">
+                                        <input value={form.banco_agencia || ''} onChange={e => setField('banco_agencia', e.target.value)} className={inputCls} placeholder="0000-0" />
+                                    </InputGroup>
+                                    <InputGroup label="Número da Conta">
+                                        <input value={form.banco_conta || ''} onChange={e => setField('banco_conta', e.target.value)} className={inputCls} placeholder="00000000-0" />
+                                    </InputGroup>
+                                    <InputGroup label="Tipo de Conta">
+                                        <div className="relative">
+                                            <select value={form.banco_conta_tipo || 'corrente'} onChange={e => setField('banco_conta_tipo', e.target.value as 'corrente' | 'poupanca')} className={inputCls + ' appearance-none pr-8'}>
+                                                <option value="corrente">Conta Corrente</option>
+                                                <option value="poupanca">Conta Poupança</option>
+                                            </select>
+                                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                        </div>
+                                    </InputGroup>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <DollarSign className="w-3.5 h-3.5 text-indigo-500" /> PIX
+                                </h3>
+                                <div className="grid grid-cols-1 gap-4">
+                                    <InputGroup label="Chave PIX (CPF, e-mail, telefone ou chave aleatória)">
+                                        <input value={form.banco_pix || ''} onChange={e => setField('banco_pix', e.target.value)} className={inputCls} placeholder="Ex: 000.000.000-00 ou email@dominio.com" />
+                                    </InputGroup>
                                 </div>
                             </div>
                         </div>

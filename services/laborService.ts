@@ -11,6 +11,165 @@ export type TimeEntryStatus = 'PENDENTE' | 'APROVADO' | 'REJEITADO';
 export type TeamStatus = 'ATIVA' | 'INATIVA';
 export type DocumentCategory = 'ASO' | 'NR' | 'IDENTIDADE' | 'CONTRATO' | 'TREINAMENTO' | 'OUTROS';
 export type DocumentStatus = 'ATIVO' | 'VENCIDO' | 'PENDENTE';
+export type TerminationTipo =
+    | 'DEMISSAO_SEM_JUSTA_CAUSA'
+    | 'DEMISSAO_COM_JUSTA_CAUSA'
+    | 'PEDIDO_DEMISSAO'
+    | 'ACORDO_MUTUO'
+    | 'TERMINO_CONTRATO'
+    | 'APOSENTADORIA'
+    | 'FALECIMENTO'
+    | 'OUTROS';
+
+export type AvisoPrevioTipo = 'TRABALHADO' | 'INDENIZADO' | 'DISPENSADO';
+
+export interface TerminationRecord {
+    id: string;
+    org_id: string;
+    employee_id: string;
+    employee_name?: string;
+    employee_role?: string;
+    termination_date: string;
+    tipo: TerminationTipo;
+    motivo?: string;
+    aviso_previo_tipo?: AvisoPrevioTipo;
+    aviso_previo_inicio?: string;
+    aviso_previo_fim?: string;
+    checklist: string[];
+    entrevista_realizada: boolean;
+    entrevista_motivo_real?: string;
+    entrevista_pontos?: string;
+    entrevista_recontrataria?: boolean;
+    payroll_run_id?: string;
+    epis_devolvidos: boolean;
+    acessos_bloqueados: boolean;
+    processed_by?: string;
+    status: 'RASCUNHO' | 'CONCLUIDO';
+    created_at?: string;
+    updated_at?: string;
+}
+
+export type AbsenceTipo =
+    | 'FERIAS'
+    | 'ATESTADO'
+    | 'FALTA'
+    | 'LICENCA_MATERNIDADE'
+    | 'LICENCA_PATERNIDADE'
+    | 'LICENCA_MEDICA'
+    | 'AFASTAMENTO_INSS'
+    | 'SUSPENSAO'
+    | 'OUTROS';
+
+export type AbsenceStatus = 'SOLICITADO' | 'APROVADO' | 'REJEITADO' | 'CANCELADO';
+export type VacationBalanceStatus = 'ABERTO' | 'PARCIAL' | 'GOZADO' | 'VENCIDO';
+
+export interface Absence {
+    id: string;
+    org_id: string;
+    employee_id: string;
+    employee_name?: string;
+    tipo: AbsenceTipo;
+    data_inicio: string;
+    data_fim: string;
+    dias?: number;
+    status: AbsenceStatus;
+    motivo?: string;
+    atestado_url?: string;
+    approved_by?: string;
+    approved_at?: string;
+    rejection_reason?: string;
+    vacation_period_start?: string;
+    vacation_period_end?: string;
+    payroll_run_id?: string;
+    created_by?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface VacationBalance {
+    id: string;
+    org_id: string;
+    employee_id: string;
+    employee_name?: string;
+    periodo_inicio: string;
+    periodo_fim: string;
+    dias_direito: number;
+    dias_gozados: number;
+    dias_vendidos: number;
+    dias_restantes?: number;
+    status: VacationBalanceStatus;
+    vencimento?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export type TrainingCategoria =
+    | 'NR_OBRIGATORIA' | 'INTEGRACAO' | 'DDS'
+    | 'QUALIDADE' | 'LIDERANCA' | 'TECNICO' | 'OUTROS';
+
+export interface TrainingCourse {
+    id: string;
+    org_id: string;
+    nome: string;
+    descricao?: string;
+    nr_referencia?: string;
+    categoria: TrainingCategoria;
+    carga_horaria: number;
+    validade_meses?: number;
+    instrutor?: string;
+    is_obrigatorio: boolean;
+    roles_obrigatorios: string[];
+    status: 'ATIVO' | 'INATIVO';
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface EmployeeTraining {
+    id: string;
+    org_id: string;
+    employee_id: string;
+    employee_name?: string;
+    course_id: string;
+    course_nome?: string;
+    nr_referencia?: string;
+    data_realizacao: string;
+    data_validade?: string;
+    instrutor?: string;
+    local?: string;
+    carga_horaria?: number;
+    certificado_url?: string;
+    nota?: number;
+    aprovado: boolean;
+    status: 'ATIVO' | 'VENCIDO' | 'PENDENTE';
+    observacoes?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface RhKpis {
+    headcount: { total: number; ativos: number; afastados: number; em_ferias: number };
+    periodo: { admitidos: number; desligados: number; turnover_pct: number };
+    custos: { custo_mes: number; horas_extras: number };
+    qualidade: { absenteismo_pct: number };
+    alertas: {
+        treinamentos_vencendo: number;
+        docs_vencendo: number;
+        epis_estoque_baixo: number;
+        ferias_vencendo: number;
+    };
+}
+
+export type EpiCategoria =
+    | 'PROTECAO_CABECA'
+    | 'PROTECAO_OLHOS_FACE'
+    | 'PROTECAO_AUDITIVA'
+    | 'PROTECAO_RESPIRATORIA'
+    | 'PROTECAO_TRONCO'
+    | 'PROTECAO_MEMBROS_SUPERIORES'
+    | 'PROTECAO_MEMBROS_INFERIORES'
+    | 'PROTECAO_QUEDAS'
+    | 'OUTROS';
+export type EpiStatus = 'ATIVO' | 'INATIVO';
 
 export interface Employee {
     id: string;
@@ -35,7 +194,7 @@ export interface Employee {
     created_at?: string;
     updated_at?: string;
 
-    // Novos campos Ficha de Registro
+    // Ficha de Registro
     father_name?: string;
     mother_name?: string;
     birth_date?: string;
@@ -68,8 +227,69 @@ export interface Employee {
     address_uf?: string;
     address_zip_code?: string;
 
+    // Sprint 1: campos novos
+    matricula?: string;
+    departamento?: string;
+    centro_custo?: string;
+    sindicato?: string;
+    jornada_horas_semana?: number;
+    contract_type_extra?: string;
+    // CNH
+    cnh_numero?: string;
+    cnh_categoria?: string;
+    cnh_validade?: string;
+    // Dependentes
+    num_dependentes?: number;
+    dependentes?: { nome: string; nascimento?: string; parentesco?: string }[];
+    // Dados bancários
+    banco_codigo?: string;
+    banco_nome?: string;
+    banco_agencia?: string;
+    banco_conta?: string;
+    banco_conta_tipo?: 'corrente' | 'poupanca';
+    banco_pix?: string;
+
     // joins
     allocations?: EmployeeAllocation[];
+}
+
+// ── EPI TYPES ──────────────────────────────────────────────
+
+export interface EpiCatalogItem {
+    id: string;
+    org_id: string;
+    nome: string;
+    descricao?: string;
+    ca?: string;
+    ca_validade?: string;
+    unidade: string;
+    estoque_atual: number;
+    estoque_minimo: number;
+    custo_unitario: number;
+    fornecedor?: string;
+    categoria: EpiCategoria;
+    status: EpiStatus;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface EpiDelivery {
+    id: string;
+    org_id: string;
+    epi_id: string;
+    epi_nome?: string; // join
+    employee_id: string;
+    employee_name?: string; // join
+    project_id?: string;
+    project_name?: string;
+    quantidade: number;
+    delivered_at: string;
+    returned_at?: string;
+    motivo?: string;
+    assinatura_url?: string;
+    is_returned: boolean;
+    notes?: string;
+    created_at?: string;
 }
 
 export interface EmployeeAllocation {
@@ -696,6 +916,506 @@ export const laborService = {
         });
         return total;
     },
+
+    // ── TERMINATION ────────────────────────────────────────
+
+    async listTerminations(orgId: string): Promise<TerminationRecord[]> {
+        const { data, error } = await supabase
+            .from('termination_records')
+            .select(`*, employee:employees!employee_id(name, role)`)
+            .eq('org_id', orgId)
+            .order('termination_date', { ascending: false });
+        if (error) throw error;
+        type TRow = TerminationRecord & { employee?: { name: string; role: string } };
+        return (data || [] as TRow[]).map((r: TRow) => ({
+            ...r,
+            employee_name: r.employee?.name,
+            employee_role: r.employee?.role,
+        }));
+    },
+
+    async getTerminationByEmployee(employeeId: string): Promise<TerminationRecord | null> {
+        const { data, error } = await supabase
+            .from('termination_records')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .maybeSingle();
+        if (error) throw error;
+        return data;
+    },
+
+    async createTermination(
+        record: Omit<TerminationRecord, 'id' | 'created_at' | 'updated_at' | 'employee_name' | 'employee_role' | 'epis_devolvidos' | 'acessos_bloqueados'>
+    ): Promise<TerminationRecord> {
+        const { data, error } = await supabase
+            .from('termination_records')
+            .insert({ ...record, epis_devolvidos: false, acessos_bloqueados: false })
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateTermination(id: string, updates: Partial<TerminationRecord>): Promise<TerminationRecord> {
+        const { id: _id, created_at: _ca, updated_at: _ua, employee_name: _en, employee_role: _er, ...clean } = updates;
+        const { data, error } = await supabase
+            .from('termination_records')
+            .update(clean)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async finalizeTermination(id: string, processedBy: string): Promise<TerminationRecord> {
+        const { data, error } = await supabase
+            .from('termination_records')
+            .update({ status: 'CONCLUIDO', processed_by: processedBy })
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteTermination(id: string): Promise<void> {
+        const { error } = await supabase.from('termination_records').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    // ── TRAININGS ──────────────────────────────────────────
+
+    async listTrainingCourses(orgId: string): Promise<TrainingCourse[]> {
+        const { data, error } = await supabase
+            .from('training_courses')
+            .select('*')
+            .eq('org_id', orgId)
+            .order('nome');
+        if (error) throw error;
+        return data || [];
+    },
+
+    async createTrainingCourse(course: Omit<TrainingCourse, 'id' | 'created_at' | 'updated_at'>): Promise<TrainingCourse> {
+        const { data, error } = await supabase
+            .from('training_courses')
+            .insert(course)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateTrainingCourse(id: string, updates: Partial<TrainingCourse>): Promise<TrainingCourse> {
+        const { id: _id, created_at: _ca, updated_at: _ua, ...clean } = updates;
+        const { data, error } = await supabase
+            .from('training_courses')
+            .update(clean)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteTrainingCourse(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('training_courses')
+            .update({ status: 'INATIVO' })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    async listEmployeeTrainings(filters: {
+        orgId: string;
+        employeeId?: string;
+        courseId?: string;
+        status?: EmployeeTraining['status'];
+    }): Promise<EmployeeTraining[]> {
+        let query = supabase
+            .from('employee_trainings')
+            .select(`
+                *,
+                employee:employees!employee_id(name),
+                course:training_courses!course_id(nome, nr_referencia)
+            `)
+            .eq('org_id', filters.orgId)
+            .order('data_realizacao', { ascending: false });
+
+        if (filters.employeeId) query = query.eq('employee_id', filters.employeeId);
+        if (filters.courseId)   query = query.eq('course_id', filters.courseId);
+        if (filters.status)     query = query.eq('status', filters.status);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        type ETRow = EmployeeTraining & {
+            employee?: { name: string };
+            course?: { nome: string; nr_referencia?: string };
+        };
+        return (data || [] as ETRow[]).map((r: ETRow) => ({
+            ...r,
+            employee_name: r.employee?.name,
+            course_nome: r.course?.nome,
+            nr_referencia: r.course?.nr_referencia,
+        }));
+    },
+
+    async createEmployeeTraining(
+        training: Omit<EmployeeTraining, 'id' | 'created_at' | 'updated_at' | 'employee_name' | 'course_nome' | 'nr_referencia'>
+    ): Promise<EmployeeTraining> {
+        const { data, error } = await supabase
+            .from('employee_trainings')
+            .insert(training)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async uploadTrainingCertificado(trainingId: string, orgId: string, file: File): Promise<string> {
+        const validation = validateDocumentFile(file);
+        if (!validation.valid) throw new Error(validation.error);
+
+        const ext = file.name.split('.').pop();
+        const path = `trainings/${orgId}/${trainingId}.${ext}`;
+        const { error } = await supabase.storage
+            .from('organization-assets')
+            .upload(path, file, { upsert: true });
+        if (error) throw error;
+        await supabase.from('employee_trainings').update({ certificado_url: path }).eq('id', trainingId);
+        return path;
+    },
+
+    async updateEmployeeTraining(id: string, updates: Partial<EmployeeTraining>): Promise<EmployeeTraining> {
+        const { id: _id, created_at: _ca, updated_at: _ua, employee_name: _en, course_nome: _cn, nr_referencia: _nr, ...clean } = updates;
+        const { data, error } = await supabase
+            .from('employee_trainings')
+            .update(clean)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteEmployeeTraining(id: string): Promise<void> {
+        const { error } = await supabase.from('employee_trainings').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    async getTrainingAlerts(orgId: string): Promise<EmployeeTraining[]> {
+        const in30 = new Date();
+        in30.setDate(in30.getDate() + 30);
+        const { data, error } = await supabase
+            .from('employee_trainings')
+            .select(`
+                *,
+                employee:employees!employee_id(name),
+                course:training_courses!course_id(nome, nr_referencia)
+            `)
+            .eq('org_id', orgId)
+            .lte('data_validade', in30.toISOString().split('T')[0])
+            .eq('status', 'ATIVO')
+            .order('data_validade');
+        if (error) throw error;
+        type ETRow = EmployeeTraining & { employee?: { name: string }; course?: { nome: string; nr_referencia?: string } };
+        return (data || [] as ETRow[]).map((r: ETRow) => ({
+            ...r, employee_name: r.employee?.name, course_nome: r.course?.nome, nr_referencia: r.course?.nr_referencia,
+        }));
+    },
+
+    // ── RH KPIS (Sprint 5) ─────────────────────────────────
+
+    async getRhKpis(orgId: string, refDate?: string): Promise<RhKpis> {
+        const { data, error } = await supabase.rpc('rh_kpis', {
+            p_org_id: orgId,
+            p_ref_date: refDate || new Date().toISOString().split('T')[0],
+        });
+        if (error) throw error;
+        return data as RhKpis;
+    },
+
+    // ── ABSENCES ───────────────────────────────────────────
+
+    async listAbsences(filters: {
+        orgId: string;
+        employeeId?: string;
+        tipo?: AbsenceTipo;
+        status?: AbsenceStatus;
+        dateStart?: string;
+        dateEnd?: string;
+    }): Promise<Absence[]> {
+        let query = supabase
+            .from('absences')
+            .select(`*, employee:employees!employee_id(name)`)
+            .eq('org_id', filters.orgId)
+            .order('data_inicio', { ascending: false });
+
+        if (filters.employeeId) query = query.eq('employee_id', filters.employeeId);
+        if (filters.tipo)       query = query.eq('tipo', filters.tipo);
+        if (filters.status)     query = query.eq('status', filters.status);
+        if (filters.dateStart)  query = query.gte('data_inicio', filters.dateStart);
+        if (filters.dateEnd)    query = query.lte('data_fim', filters.dateEnd);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        type AbsenceRow = Absence & { employee?: { name: string } };
+        return (data || [] as AbsenceRow[]).map((a: AbsenceRow) => ({
+            ...a,
+            employee_name: a.employee?.name,
+        }));
+    },
+
+    async createAbsence(absence: Omit<Absence, 'id' | 'dias' | 'created_at' | 'updated_at' | 'employee_name'>): Promise<Absence> {
+        const { data, error } = await supabase
+            .from('absences')
+            .insert(absence)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async uploadAbsenceAtestado(absenceId: string, orgId: string, file: File): Promise<string> {
+        const validation = validateDocumentFile(file);
+        if (!validation.valid) throw new Error(validation.error);
+
+        const ext = file.name.split('.').pop();
+        const path = `absences/${orgId}/${absenceId}.${ext}`;
+
+        const { error } = await supabase.storage
+            .from('organization-assets')
+            .upload(path, file, { upsert: true });
+        if (error) throw error;
+
+        await supabase.from('absences').update({ atestado_url: path }).eq('id', absenceId);
+        return path;
+    },
+
+    async approveAbsence(id: string, approvedBy: string): Promise<void> {
+        const { error } = await supabase
+            .from('absences')
+            .update({ status: 'APROVADO', approved_by: approvedBy, approved_at: new Date().toISOString() })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    async rejectAbsence(id: string, approvedBy: string, reason?: string): Promise<void> {
+        const { error } = await supabase
+            .from('absences')
+            .update({ status: 'REJEITADO', approved_by: approvedBy, approved_at: new Date().toISOString(), rejection_reason: reason || null })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    async cancelAbsence(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('absences')
+            .update({ status: 'CANCELADO' })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    async deleteAbsence(id: string): Promise<void> {
+        const { error } = await supabase.from('absences').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    // ── VACATION BALANCE ───────────────────────────────────
+
+    async listVacationBalances(orgId: string, employeeId?: string): Promise<VacationBalance[]> {
+        let query = supabase
+            .from('vacation_balance')
+            .select(`*, employee:employees!employee_id(name)`)
+            .eq('org_id', orgId)
+            .order('vencimento', { ascending: true });
+
+        if (employeeId) query = query.eq('employee_id', employeeId);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        type VBRow = VacationBalance & { employee?: { name: string } };
+        return (data || [] as VBRow[]).map((v: VBRow) => ({
+            ...v,
+            employee_name: v.employee?.name,
+        }));
+    },
+
+    async createVacationPeriod(employeeId: string, orgId: string, periodoInicio: string): Promise<VacationBalance> {
+        const { data, error } = await supabase.rpc('create_vacation_period', {
+            p_employee_id: employeeId,
+            p_org_id: orgId,
+            p_hire_date: periodoInicio,
+        });
+        if (error) throw error;
+
+        // Busca o registro criado
+        const { data: record, error: fetchErr } = await supabase
+            .from('vacation_balance')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .eq('periodo_inicio', periodoInicio)
+            .single();
+        if (fetchErr) throw fetchErr;
+        return record;
+    },
+
+    async updateVacationBalance(id: string, updates: Pick<VacationBalance, 'dias_direito' | 'dias_gozados' | 'dias_vendidos' | 'status'>): Promise<VacationBalance> {
+        const { data, error } = await supabase
+            .from('vacation_balance')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async getVacationAlerts(orgId: string): Promise<VacationBalance[]> {
+        // Férias vencendo nos próximos 60 dias ou já vencidas com saldo
+        const today = new Date().toISOString().split('T')[0];
+        const in60 = new Date();
+        in60.setDate(in60.getDate() + 60);
+        const in60Str = in60.toISOString().split('T')[0];
+
+        const { data, error } = await supabase
+            .from('vacation_balance')
+            .select(`*, employee:employees!employee_id(name)`)
+            .eq('org_id', orgId)
+            .lte('vencimento', in60Str)
+            .gt('dias_restantes', 0)
+            .order('vencimento', { ascending: true });
+        if (error) throw error;
+
+        type VBRow = VacationBalance & { employee?: { name: string } };
+        return (data || [] as VBRow[]).map((v: VBRow) => ({ ...v, employee_name: v.employee?.name }));
+    },
+
+    // ── EPI CATALOG ────────────────────────────────────────
+
+    async listEpiCatalog(orgId: string): Promise<EpiCatalogItem[]> {
+        const { data, error } = await supabase
+            .from('epi_catalog')
+            .select('*')
+            .eq('org_id', orgId)
+            .order('nome');
+        if (error) throw error;
+        return data || [];
+    },
+
+    async createEpiCatalogItem(item: Omit<EpiCatalogItem, 'id' | 'created_at' | 'updated_at'>): Promise<EpiCatalogItem> {
+        const { data, error } = await supabase
+            .from('epi_catalog')
+            .insert(item)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateEpiCatalogItem(id: string, updates: Partial<EpiCatalogItem>): Promise<EpiCatalogItem> {
+        const { id: _id, created_at: _ca, updated_at: _ua, epi_nome: _en, ...clean } = updates as Partial<EpiCatalogItem> & { epi_nome?: string };
+        const { data, error } = await supabase
+            .from('epi_catalog')
+            .update(clean)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteEpiCatalogItem(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('epi_catalog')
+            .update({ status: 'INATIVO' })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    // ── EPI DELIVERIES ─────────────────────────────────────
+
+    async listEpiDeliveries(filters: {
+        orgId: string;
+        employeeId?: string;
+        epiId?: string;
+        includeReturned?: boolean;
+    }): Promise<EpiDelivery[]> {
+        let query = supabase
+            .from('epi_deliveries')
+            .select(`
+                *,
+                epi:epi_catalog!epi_id(nome),
+                employee:employees!employee_id(name)
+            `)
+            .eq('org_id', filters.orgId)
+            .order('delivered_at', { ascending: false });
+
+        if (filters.employeeId) query = query.eq('employee_id', filters.employeeId);
+        if (filters.epiId) query = query.eq('epi_id', filters.epiId);
+        if (!filters.includeReturned) query = query.eq('is_returned', false);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        type DeliveryRow = EpiDelivery & { epi?: { nome: string }; employee?: { name: string } };
+        return (data || [] as DeliveryRow[]).map((d: DeliveryRow) => ({
+            ...d,
+            epi_nome: d.epi?.nome,
+            employee_name: d.employee?.name,
+        }));
+    },
+
+    async createEpiDelivery(delivery: Omit<EpiDelivery, 'id' | 'created_at' | 'epi_nome' | 'employee_name'>): Promise<EpiDelivery> {
+        const { data, error } = await supabase
+            .from('epi_deliveries')
+            .insert(delivery)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async returnEpi(id: string, returnedAt?: string): Promise<void> {
+        const { error } = await supabase
+            .from('epi_deliveries')
+            .update({
+                is_returned: true,
+                returned_at: returnedAt || new Date().toISOString().split('T')[0],
+            })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    async deleteEpiDelivery(id: string): Promise<void> {
+        const { error } = await supabase.from('epi_deliveries').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    async getEpiAlerts(orgId: string): Promise<{ lowStock: EpiCatalogItem[]; expiredCa: EpiCatalogItem[] }> {
+        const { data, error } = await supabase
+            .from('epi_catalog')
+            .select('*')
+            .eq('org_id', orgId)
+            .eq('status', 'ATIVO');
+        if (error) throw error;
+
+        const items = data || [];
+        const today = new Date().toISOString().split('T')[0];
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        const nextMonthStr = nextMonth.toISOString().split('T')[0];
+
+        return {
+            lowStock: items.filter(i => i.estoque_atual <= i.estoque_minimo),
+            expiredCa: items.filter(i => i.ca_validade && i.ca_validade <= nextMonthStr),
+        };
+    },
+
+    // ── MIGRATION ──────────────────────────────────────────
 
     async migrateLegacyWorkers(orgId?: string): Promise<{ imported: number, skipped: number }> {
         let query = supabase.from('organizations').select('id, resources');

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
     Users, Clock, TrendingUp, DollarSign, BarChart3,
     UserPlus, Loader2, AlertCircle, Building2,
-    Shield, Calendar, Target, Check, FileText, Calculator, Settings, ChevronRight, Percent
+    Shield, Calendar, Target, Check, FileText, Calculator, Settings, ChevronRight, Percent, HardHat, Umbrella, BookOpen, LayoutDashboard, UserMinus
 } from 'lucide-react';
 import { laborService, Employee, LaborTeam, TimeEntry, ProductivityLog, LaborCostSummary } from '../services/laborService';
 import LaborEmployeeList from './LaborEmployeeList';
@@ -18,11 +18,16 @@ import LaborCostDashboard from './LaborCostDashboard';
 import LaborRubrics from './LaborRubrics';
 import LaborFiscalSettings from './LaborFiscalSettings';
 import LaborEncargos from './LaborEncargos';
+import LaborEPIs from './LaborEPIs';
+import LaborAbsences from './LaborAbsences';
+import LaborTrainings from './LaborTrainings';
+import LaborRHDashboard from './LaborRHDashboard';
+import LaborTermination from './LaborTermination';
 import { useLaborModuleData } from '../hooks/useLaborQueries';
 import { buildPartialFailureMessage } from '../lib/collectSettled';
 
 // ─── Types ──────────────────────────────────────────────────
-type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos';
+type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination';
 
 const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-dashboard': 'dashboard',
@@ -38,6 +43,11 @@ const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-rubrics': 'rubrics',
     'labor-encargos': 'encargos',
     'labor-fiscal': 'fiscal',
+    'labor-epis': 'epis',
+    'labor-absences':     'absences',
+    'labor-trainings':    'trainings',
+    'labor-rh-dashboard': 'rh_dashboard',
+    'labor-termination':  'termination',
 };
 
 const TAB_TO_SECTION: Record<LaborTab, string> = Object.fromEntries(
@@ -109,6 +119,11 @@ const LaborDashboardTab: React.FC<{
                     { tab: 'costs' as LaborTab, icon: DollarSign, title: 'Custos de MO', desc: 'Custo por colaborador e obra', color: 'rose' },
                     { tab: 'payroll' as LaborTab, icon: Calculator, title: 'Folha de Pagamento', desc: 'Cálculo de INSS, FGTS e IRRF', color: 'blue' },
                     { tab: 'timetracking' as LaborTab, icon: BarChart3, title: 'Horas Trabalhadas', desc: `${(costSummary?.totalHours || 0).toFixed(0)}h aprovadas no total`, color: 'purple' },
+                    { tab: 'epis' as LaborTab, icon: HardHat, title: 'Gestão de EPIs', desc: 'Catálogo, entregas e controle de estoque', color: 'amber' },
+                    { tab: 'absences'    as LaborTab, icon: Umbrella,         title: 'Férias e Ausências', desc: 'Solicitações, saldos e alertas de vencimento', color: 'cyan' },
+                    { tab: 'trainings'   as LaborTab, icon: BookOpen,         title: 'Treinamentos',       desc: 'NRs, certificados e controle de vencimento', color: 'emerald' },
+                    { tab: 'rh_dashboard' as LaborTab, icon: LayoutDashboard, title: 'Dashboard RH',     desc: 'KPIs executivos: turnover, absenteísmo, custos', color: 'violet' },
+                    { tab: 'termination'  as LaborTab, icon: UserMinus,       title: 'Desligamentos',   desc: 'Checklist, entrevista e encerramento de acesso', color: 'rose' },
                 ].map(({ tab, icon: Icon, title, desc, color, badge }) => (
                     <button
                         key={`${tab}-${title}`}
@@ -434,6 +449,42 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         <LaborDocuments
                             employees={employees}
                             orgId={currentOrgId || activeOrganizationId || ''}
+                            onRefresh={refetchAll}
+                        />
+                    )}
+                    {activeTab === 'epis' && (
+                        <LaborEPIs
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            employees={employees}
+                            onRefresh={refetchAll}
+                        />
+                    )}
+                    {activeTab === 'absences' && (
+                        <LaborAbsences
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            employees={employees}
+                            onRefresh={refetchAll}
+                        />
+                    )}
+                    {activeTab === 'trainings' && (
+                        <LaborTrainings
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            employees={employees}
+                            onRefresh={refetchAll}
+                        />
+                    )}
+                    {activeTab === 'rh_dashboard' && (
+                        <LaborRHDashboard
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            employees={employees}
+                            costSummary={costSummary}
+                            onNavigate={onChangeView}
+                        />
+                    )}
+                    {activeTab === 'termination' && (
+                        <LaborTermination
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            employees={employees}
                             onRefresh={refetchAll}
                         />
                     )}

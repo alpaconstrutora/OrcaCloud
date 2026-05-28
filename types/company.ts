@@ -83,6 +83,11 @@ export interface Company {
   responsavel_operacional_nome?: string;
   responsavel_tecnico_crea?: string;
 
+  // Sprint D — Governança
+  dupla_aprovacao_compras: boolean;
+  dupla_aprovacao_pagamentos: boolean;
+  limite_dupla_aprovacao?: number;
+
   // Sprint C — Config de Obras
   obra_empresa_executora_id?: string;
   obra_empresa_incorporadora_id?: string;
@@ -188,6 +193,66 @@ export const REGIME_CONTABIL_LABELS: Record<'caixa' | 'competencia', string> = {
   caixa:       'Regime de Caixa',
   competencia: 'Regime de Competência',
 };
+
+// ─── Documentos da Empresa ───────────────────────────────────
+
+export type TipoDocumento =
+  | 'contrato_social'
+  | 'alteracao_contratual'
+  | 'certidao_federal'
+  | 'certidao_estadual'
+  | 'certidao_municipal'
+  | 'alvara'
+  | 'crea_cau'
+  | 'procuracao'
+  | 'licenca_ambiental'
+  | 'seguro'
+  | 'outros';
+
+export interface CompanyDocument {
+  id: string;
+  company_id: string;
+  tipo: TipoDocumento;
+  numero?: string;
+  emissor?: string;
+  data_emissao?: string;
+  data_validade?: string;
+  arquivo_url?: string;
+  observacoes?: string;
+  alerta_dias_antecedencia: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CompanyDocumentInsert = Omit<CompanyDocument, 'id' | 'created_at' | 'updated_at'>;
+export type CompanyDocumentUpdate = Partial<CompanyDocumentInsert>;
+
+export const TIPO_DOCUMENTO_LABELS: Record<TipoDocumento, string> = {
+  contrato_social:       'Contrato Social',
+  alteracao_contratual:  'Alteração Contratual',
+  certidao_federal:      'Certidão Federal',
+  certidao_estadual:     'Certidão Estadual',
+  certidao_municipal:    'Certidão Municipal',
+  alvara:                'Alvará',
+  crea_cau:              'CREA / CAU',
+  procuracao:            'Procuração',
+  licenca_ambiental:     'Licença Ambiental',
+  seguro:                'Seguro',
+  outros:                'Outros',
+};
+
+// ─── Audit Log ────────────────────────────────────────────────
+
+export interface CompanyAuditLog {
+  id: string;
+  company_id: string;
+  user_email: string;
+  action: 'create' | 'update' | 'delete' | 'status_change' | 'document_upload';
+  field_changed?: string;
+  old_value?: unknown;
+  new_value?: unknown;
+  created_at: string;
+}
 
 // ─── Incorporação / SPE ──────────────────────────────────────
 

@@ -131,6 +131,9 @@ function formToPayload(f: FormData, orgId: string): CompanyInsert {
         retencao_irrf: f.retencao_irrf,
         is_headquarters: false,
         holding_id: f.holding_id || undefined,
+        // Sprint D defaults
+        dupla_aprovacao_compras: false,
+        dupla_aprovacao_pagamentos: false,
         // Sprint B defaults
         retencao_pis: false,
         retencao_cofins: false,

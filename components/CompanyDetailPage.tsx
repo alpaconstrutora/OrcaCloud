@@ -3,6 +3,7 @@ import {
     ArrowLeft, Save, Loader2, AlertCircle, CheckCircle2,
     Building2, Users, Landmark, UserCheck, TrendingUp, Receipt,
     Upload, Download, FileKey, HardHat, GitBranch, Landmark as LandmarkIcon,
+    FolderOpen,
 } from 'lucide-react';
 import {
     Company, CompanyUpdate, CompanyTipo, CompanyStatus, RegimeTributario,
@@ -15,6 +16,7 @@ import CompanyBankAccountsTab from './CompanyBankAccountsTab';
 import CertificateExpiryWarning from './CertificateExpiryWarning';
 import CompanyIncorporacaoTab from './CompanyIncorporacaoTab';
 import CompanyBranchesTab from './CompanyBranchesTab';
+import CompanyDocumentsTab from './CompanyDocumentsTab';
 
 interface Props {
     company: Company;
@@ -23,7 +25,7 @@ interface Props {
     onSaved: (updated: Company) => void;
 }
 
-type Tab = 'identificacao' | 'socios' | 'bancos' | 'financeiro' | 'tributario' | 'obras' | 'incorporacao' | 'filiais' | 'responsaveis';
+type Tab = 'identificacao' | 'socios' | 'bancos' | 'financeiro' | 'tributario' | 'obras' | 'incorporacao' | 'filiais' | 'documentos' | 'responsaveis';
 
 // ─── Form ─────────────────────────────────────────────────────
 
@@ -68,6 +70,10 @@ type FormData = {
     responsavel_financeiro_nome: string;
     responsavel_operacional_nome: string;
     responsavel_tecnico_crea: string;
+    // Sprint D — Governança
+    dupla_aprovacao_compras: boolean;
+    dupla_aprovacao_pagamentos: boolean;
+    limite_dupla_aprovacao: string;
     // Sprint C — Obras
     obra_empresa_executora_id: string;
     obra_empresa_incorporadora_id: string;
@@ -131,6 +137,9 @@ function companyToForm(c: Company): FormData {
         responsavel_financeiro_nome: c.responsavel_financeiro_nome ?? '',
         responsavel_operacional_nome: c.responsavel_operacional_nome ?? '',
         responsavel_tecnico_crea: c.responsavel_tecnico_crea ?? '',
+        dupla_aprovacao_compras: c.dupla_aprovacao_compras ?? false,
+        dupla_aprovacao_pagamentos: c.dupla_aprovacao_pagamentos ?? false,
+        limite_dupla_aprovacao: c.limite_dupla_aprovacao != null ? String(c.limite_dupla_aprovacao) : '',
         obra_empresa_executora_id: c.obra_empresa_executora_id ?? '',
         obra_empresa_incorporadora_id: c.obra_empresa_incorporadora_id ?? '',
         obra_bdi_padrao: c.obra_bdi_padrao != null ? String(c.obra_bdi_padrao) : '',
@@ -191,6 +200,9 @@ function formToPayload(f: FormData): CompanyUpdate {
         responsavel_financeiro_nome: f.responsavel_financeiro_nome.trim() || undefined,
         responsavel_operacional_nome: f.responsavel_operacional_nome.trim() || undefined,
         responsavel_tecnico_crea: f.responsavel_tecnico_crea.trim() || undefined,
+        dupla_aprovacao_compras: f.dupla_aprovacao_compras,
+        dupla_aprovacao_pagamentos: f.dupla_aprovacao_pagamentos,
+        limite_dupla_aprovacao: f.limite_dupla_aprovacao ? parseFloat(f.limite_dupla_aprovacao) : undefined,
         obra_empresa_executora_id: f.obra_empresa_executora_id || undefined,
         obra_empresa_incorporadora_id: f.obra_empresa_incorporadora_id || undefined,
         obra_bdi_padrao: f.obra_bdi_padrao ? parseFloat(f.obra_bdi_padrao) : undefined,
@@ -266,6 +278,7 @@ function buildTabs(company: Company): { id: Tab; label: string; icon: React.Reac
         { id: 'tributario',    label: 'Tributário',       icon: <Receipt className="w-4 h-4" /> },
         { id: 'obras',         label: 'Obras',            icon: <HardHat className="w-4 h-4" /> },
         { id: 'filiais',       label: 'Filiais',          icon: <GitBranch className="w-4 h-4" /> },
+        { id: 'documentos',    label: 'Documentos',       icon: <FolderOpen className="w-4 h-4" /> },
         { id: 'responsaveis',  label: 'Responsáveis',     icon: <UserCheck className="w-4 h-4" /> },
     ];
     if (SPE_TIPOS.includes(company.tipo)) {
@@ -676,9 +689,36 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                         </p>
                     </Section>
 
+                    <Section title="Governança — Dupla Aprovação">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="flex flex-col gap-3 justify-center">
+                                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                    <input type="checkbox"
+                                        checked={form.dupla_aprovacao_compras}
+                                        onChange={e => set('dupla_aprovacao_compras', e.target.checked)} />
+                                    Dupla aprovação em Compras
+                                </label>
+                                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                    <input type="checkbox"
+                                        checked={form.dupla_aprovacao_pagamentos}
+                                        onChange={e => set('dupla_aprovacao_pagamentos', e.target.checked)} />
+                                    Dupla aprovação em Pagamentos
+                                </label>
+                            </div>
+                            {(form.dupla_aprovacao_compras || form.dupla_aprovacao_pagamentos) && (
+                                <Field label="Valor mínimo para dupla aprovação (R$)">
+                                    <input type="number" min="0" step="0.01" className={inputCls}
+                                        placeholder="Acima deste valor exige 2ª aprovação"
+                                        value={form.limite_dupla_aprovacao}
+                                        onChange={e => set('limite_dupla_aprovacao', e.target.value)} />
+                                </Field>
+                            )}
+                        </div>
+                    </Section>
+
                     <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-xs text-blue-600">
                         <p className="font-black uppercase tracking-wide mb-1">Plano de Contas e Centro de Custo Padrão</p>
-                        <p>Configuração disponível após o módulo Financeiro ser ativado para esta empresa. Use a aba <strong>Identificação → Módulos</strong> para habilitar.</p>
+                        <p>Configuração disponível após o módulo Financeiro ser ativado para esta empresa.</p>
                     </div>
 
                     <SaveButton />
@@ -922,6 +962,13 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
             {tab === 'filiais' && (
                 <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
                     <CompanyBranchesTab companyId={company.id} />
+                </div>
+            )}
+
+            {/* ── Tab: Documentos ──────────────────────────────────── */}
+            {tab === 'documentos' && (
+                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                    <CompanyDocumentsTab companyId={company.id} />
                 </div>
             )}
 

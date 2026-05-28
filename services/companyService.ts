@@ -5,6 +5,8 @@ import {
     CompanyBankAccount, CompanyBankAccountInsert, CompanyBankAccountUpdate,
     CompanyIncorporacao, CompanyIncorporacaoUpsert,
     CompanyBranch, CompanyBranchInsert, CompanyBranchUpdate,
+    CompanyDocument, CompanyDocumentInsert, CompanyDocumentUpdate,
+    CompanyAuditLog,
 } from '../types';
 
 export const companyService = {
@@ -222,5 +224,86 @@ export const companyService = {
             .delete()
             .eq('id', id);
         if (error) throw error;
+    },
+
+    // ─── Documentos ───────────────────────────────────────────
+
+    async listDocuments(companyId: string): Promise<CompanyDocument[]> {
+        const { data, error } = await supabase
+            .from('company_documents')
+            .select('*')
+            .eq('company_id', companyId)
+            .order('data_validade', { ascending: true, nullsFirst: false });
+        if (error) throw error;
+        return data as CompanyDocument[];
+    },
+
+    async createDocument(payload: CompanyDocumentInsert): Promise<CompanyDocument> {
+        const { data, error } = await supabase
+            .from('company_documents')
+            .insert(payload)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as CompanyDocument;
+    },
+
+    async updateDocument(id: string, payload: CompanyDocumentUpdate): Promise<CompanyDocument> {
+        const { data, error } = await supabase
+            .from('company_documents')
+            .update(payload)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as CompanyDocument;
+    },
+
+    async removeDocument(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('company_documents')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    async uploadDocumento(companyId: string, tipo: string, file: File): Promise<string> {
+        const ts = Date.now();
+        const ext = file.name.split('.').pop() ?? 'pdf';
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `${companyId}/${tipo}/${ts}_${safeName}.${ext}`;
+        const { error } = await supabase.storage
+            .from('company-documents')
+            .upload(path, file, { upsert: false });
+        if (error) throw error;
+        return path;
+    },
+
+    async getDocumentoSignedUrl(path: string): Promise<string> {
+        const { data, error } = await supabase.storage
+            .from('company-documents')
+            .createSignedUrl(path, 3600);
+        if (error) throw error;
+        return data.signedUrl;
+    },
+
+    // ─── Audit Log ────────────────────────────────────────────
+
+    async listAuditLog(companyId: string, limit = 50): Promise<CompanyAuditLog[]> {
+        const { data, error } = await supabase
+            .from('company_audit_log')
+            .select('*')
+            .eq('company_id', companyId)
+            .order('created_at', { ascending: false })
+            .limit(limit);
+        if (error) throw error;
+        return data as CompanyAuditLog[];
+    },
+
+    async insertAuditLog(entry: Omit<CompanyAuditLog, 'id' | 'created_at'>): Promise<void> {
+        const { error } = await supabase
+            .from('company_audit_log')
+            .insert(entry);
+        if (error) console.warn('Audit log insert failed:', error.message);
     },
 };

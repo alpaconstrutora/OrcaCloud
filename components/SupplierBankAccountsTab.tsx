@@ -84,8 +84,10 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                 ? await supplierBankAccountService.listAllBySupplier(supplierId)
                 : await supplierBankAccountService.listBySupplier(supplierId);
             setAccounts(data);
-        } catch {
-            setError('Erro ao carregar contas bancárias.');
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            setError(`Erro ao carregar contas bancárias: ${msg}`);
+            console.error('[SupplierBankAccountsTab] loadAccounts error:', err);
         } finally {
             setLoading(false);
         }
@@ -177,8 +179,10 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
         try {
             await supplierBankAccountService.remove(id);
             await loadAccounts();
-        } catch {
-            setError('Erro ao remover conta bancária.');
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            setError(`Erro ao desativar conta: ${msg}`);
+            console.error('[SupplierBankAccountsTab] remove error:', err);
         }
     };
 

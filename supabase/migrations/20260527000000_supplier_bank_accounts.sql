@@ -3,7 +3,7 @@
 -- Suporte a múltiplas contas, PIX, favorecido e conta principal
 -- ============================================================
 
-CREATE TABLE public.supplier_bank_accounts (
+CREATE TABLE IF NOT EXISTS public.supplier_bank_accounts (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   supplier_id     uuid NOT NULL REFERENCES public.suppliers(id) ON DELETE CASCADE,
   organization_id uuid REFERENCES public.organizations(id),
@@ -20,7 +20,7 @@ CREATE TABLE public.supplier_bank_accounts (
 
   -- Favorecido (pode ser diferente do fornecedor)
   beneficiary_name     text,
-  beneficiary_document text,   -- CPF ou CNPJ do favorecido
+  beneficiary_document text,
 
   -- PIX
   pix_key         text,
@@ -40,35 +40,21 @@ CREATE TABLE public.supplier_bank_accounts (
 );
 
 -- Índice unicidade: apenas 1 conta principal ativa por fornecedor
-CREATE UNIQUE INDEX uniq_supplier_primary_account
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_supplier_primary_account
   ON public.supplier_bank_accounts(supplier_id)
   WHERE is_primary = true AND status = 'ativo';
 
 -- Índice unicidade: apenas 1 PIX principal por fornecedor
-CREATE UNIQUE INDEX uniq_supplier_pix_primary
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_supplier_pix_primary
   ON public.supplier_bank_accounts(supplier_id)
   WHERE is_pix_primary = true AND status = 'ativo';
 
 -- Índice geral para listagem por fornecedor
-CREATE INDEX idx_supplier_bank_accounts_supplier_id
+CREATE INDEX IF NOT EXISTS idx_sba_supplier_id
   ON public.supplier_bank_accounts(supplier_id);
 
--- RLS
-ALTER TABLE public.supplier_bank_accounts ENABLE ROW LEVEL SECURITY;
-
--- Membros da organização podem ler/escrever
-CREATE POLICY "sba_org_member_access" ON public.supplier_bank_accounts
-  FOR ALL USING (
-    organization_id IS NULL
-    OR EXISTS (
-      SELECT 1 FROM public.organization_members om
-      WHERE om.organization_id = supplier_bank_accounts.organization_id
-        AND om.user_id = auth.uid()
-    )
-  );
-
--- Trigger para atualizar updated_at automaticamente
-CREATE OR REPLACE FUNCTION public.set_updated_at()
+-- ─── Trigger updated_at (sem depender de moddatetime) ──────────────────────
+CREATE OR REPLACE FUNCTION public.sba_set_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
   NEW.updated_at = now();
@@ -76,17 +62,44 @@ BEGIN
 END;
 $$;
 
--- Só cria o trigger se a função moddatetime não estiver disponível
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'moddatetime') THEN
-    CREATE TRIGGER set_updated_at_sba
-      BEFORE UPDATE ON public.supplier_bank_accounts
-      FOR EACH ROW EXECUTE FUNCTION moddatetime(updated_at);
-  ELSE
-    CREATE TRIGGER set_updated_at_sba
-      BEFORE UPDATE ON public.supplier_bank_accounts
-      FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-  END IF;
-END;
-$$;
+DROP TRIGGER IF EXISTS trg_sba_updated_at ON public.supplier_bank_accounts;
+CREATE TRIGGER trg_sba_updated_at
+  BEFORE UPDATE ON public.supplier_bank_accounts
+  FOR EACH ROW EXECUTE FUNCTION public.sba_set_updated_at();
+
+-- ─── RLS ───────────────────────────────────────────────────────────────────
+ALTER TABLE public.supplier_bank_accounts ENABLE ROW LEVEL SECURITY;
+
+-- Limpa políticas anteriores se existirem
+DROP POLICY IF EXISTS "sba_org_member_access"         ON public.supplier_bank_accounts;
+DROP POLICY IF EXISTS "sba_authenticated_view"        ON public.supplier_bank_accounts;
+DROP POLICY IF EXISTS "sba_authenticated_manage"      ON public.supplier_bank_accounts;
+DROP POLICY IF EXISTS "sba_anon_all"                  ON public.supplier_bank_accounts;
+
+-- Usuários autenticados: membros da organização OU admin
+CREATE POLICY "sba_authenticated_view"
+  ON public.supplier_bank_accounts FOR SELECT TO authenticated
+  USING (
+    organization_id IS NULL
+    OR public.is_org_member(organization_id)
+    OR auth.jwt()->>'email' = 'admin@admin.com'
+  );
+
+CREATE POLICY "sba_authenticated_manage"
+  ON public.supplier_bank_accounts FOR ALL TO authenticated
+  USING (
+    organization_id IS NULL
+    OR public.is_org_member(organization_id)
+    OR auth.jwt()->>'email' = 'admin@admin.com'
+  )
+  WITH CHECK (
+    organization_id IS NULL
+    OR public.is_org_member(organization_id)
+    OR auth.jwt()->>'email' = 'admin@admin.com'
+  );
+
+-- Anon: acesso total (padrão do projeto para dev/ambiente atual)
+CREATE POLICY "sba_anon_all"
+  ON public.supplier_bank_accounts FOR ALL TO anon
+  USING (true)
+  WITH CHECK (true);

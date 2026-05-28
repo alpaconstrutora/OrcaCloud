@@ -51,6 +51,7 @@ import DatabaseExplorer from './DatabaseExplorer';
 import QualityModule from './QualityModule';
 import BoletoManager from './BoletoManager';
 import ContasPagarManager from './ContasPagarManager';
+import FinancialCategoriesManager from './FinancialCategoriesManager';
 import { FiscalModule } from './fiscal/FiscalModule';
 import OperacionalModule from './OperacionalModule';
 import NotificationsCenter from './NotificationsCenter';
@@ -494,6 +495,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     case 'supplies-receipts':
       return <SupplyChainReceiptManager onViewOrder={(id) => { setSelectedOrderId(id); setActiveView('supplies-orders'); }} />;
+
+    case 'financial-categories':
+      return <FinancialCategoriesManager />;
 
     case 'financial-boletos':
       return (

@@ -51,6 +51,25 @@ export const laborKeys = {
         ['labor', 'rhKpis', orgId, refDate ?? 'today'] as const,
 
     terminations:     (orgId: string) => ['labor', 'terminations', orgId] as const,
+
+    // Sprint 7
+    qrCodes:          (orgId: string) => ['labor', 'qrCodes',       orgId] as const,
+    timeBankBalances: (orgId: string) => ['labor', 'timeBankBal',   orgId] as const,
+    timeBankEntries:  (orgId: string, employeeId?: string) =>
+        ['labor', 'timeBankEnt', orgId, employeeId ?? 'all'] as const,
+
+    // Sprint 8
+    accidents:        (orgId: string) => ['labor', 'accidents',     orgId] as const,
+    sstChecklists:    (orgId: string) => ['labor', 'sstChecklists', orgId] as const,
+    sstIndicators:    (orgId: string) => ['labor', 'sstIndicators', orgId] as const,
+
+    // Sprint 9
+    contractors:        (orgId: string) => ['labor', 'contractors',    orgId] as const,
+    contractorMeasurements: (orgId: string) => ['labor', 'cMeasurements', orgId] as const,
+    contractorDocs:     (orgId: string) => ['labor', 'cDocs',         orgId] as const,
+
+    // Sprint 10
+    laborDiary:       (orgId: string) => ['labor', 'laborDiary',    orgId] as const,
 } as const;
 
 // ── Shared / cross-module ────────────────────────────────────────────────────

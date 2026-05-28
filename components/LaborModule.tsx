@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
     Users, Clock, TrendingUp, DollarSign, BarChart3,
     UserPlus, Loader2, AlertCircle, Building2,
-    Shield, Calendar, Target, Check, FileText, Calculator, Settings, ChevronRight, Percent, HardHat, Umbrella, BookOpen, LayoutDashboard, UserMinus
+    Shield, Calendar, Target, Check, FileText, Calculator, Settings, ChevronRight, Percent, HardHat, Umbrella, BookOpen, LayoutDashboard, UserMinus, ShieldAlert, Truck, ClipboardList
 } from 'lucide-react';
 import { laborService, Employee, LaborTeam, TimeEntry, ProductivityLog, LaborCostSummary } from '../services/laborService';
 import LaborEmployeeList from './LaborEmployeeList';
@@ -23,11 +23,15 @@ import LaborAbsences from './LaborAbsences';
 import LaborTrainings from './LaborTrainings';
 import LaborRHDashboard from './LaborRHDashboard';
 import LaborTermination from './LaborTermination';
+import LaborTimeBank from './LaborTimeBank';
+import LaborSST from './LaborSST';
+import LaborContractors from './LaborContractors';
+import LaborDiary from './LaborDiary';
 import { useLaborModuleData } from '../hooks/useLaborQueries';
 import { buildPartialFailureMessage } from '../lib/collectSettled';
 
 // ─── Types ──────────────────────────────────────────────────
-type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination';
+type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary';
 
 const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-dashboard': 'dashboard',
@@ -48,6 +52,10 @@ const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-trainings':    'trainings',
     'labor-rh-dashboard': 'rh_dashboard',
     'labor-termination':  'termination',
+    'labor-timebank':     'timebank',
+    'labor-sst':          'sst',
+    'labor-contractors':  'contractors',
+    'labor-diary':        'diary',
 };
 
 const TAB_TO_SECTION: Record<LaborTab, string> = Object.fromEntries(
@@ -124,6 +132,10 @@ const LaborDashboardTab: React.FC<{
                     { tab: 'trainings'   as LaborTab, icon: BookOpen,         title: 'Treinamentos',       desc: 'NRs, certificados e controle de vencimento', color: 'emerald' },
                     { tab: 'rh_dashboard' as LaborTab, icon: LayoutDashboard, title: 'Dashboard RH',     desc: 'KPIs executivos: turnover, absenteísmo, custos', color: 'violet' },
                     { tab: 'termination'  as LaborTab, icon: UserMinus,       title: 'Desligamentos',   desc: 'Checklist, entrevista e encerramento de acesso', color: 'rose' },
+                    { tab: 'timebank'     as LaborTab, icon: Clock,           title: 'Banco de Horas',  desc: 'Saldos, QR Code check-in e geolocalização', color: 'blue' },
+                    { tab: 'sst'          as LaborTab, icon: ShieldAlert,     title: 'SST',             desc: 'Acidentes (CAT), checklists e indicadores TFCA', color: 'orange' },
+                    { tab: 'contractors'  as LaborTab, icon: Truck,           title: 'Empreiteiros',    desc: 'Cadastro, medições com retenções e documentos', color: 'purple' },
+                    { tab: 'diary'        as LaborTab, icon: ClipboardList,   title: 'Diário de Obra',  desc: 'Apontamento HH em lote — fecha e gera ponto', color: 'teal' },
                 ].map(({ tab, icon: Icon, title, desc, color, badge }) => (
                     <button
                         key={`${tab}-${title}`}
@@ -485,6 +497,35 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         <LaborTermination
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees}
+                            onRefresh={refetchAll}
+                        />
+                    )}
+                    {activeTab === 'timebank' && (
+                        <LaborTimeBank
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            employees={employees}
+                            projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
+                        />
+                    )}
+                    {activeTab === 'sst' && (
+                        <LaborSST
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            employees={employees}
+                            projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
+                        />
+                    )}
+                    {activeTab === 'contractors' && (
+                        <LaborContractors
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
+                        />
+                    )}
+                    {activeTab === 'diary' && (
+                        <LaborDiary
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            employees={employees}
+                            teams={teams}
+                            projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
                             onRefresh={refetchAll}
                         />
                     )}

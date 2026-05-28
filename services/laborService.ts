@@ -11,6 +11,243 @@ export type TimeEntryStatus = 'PENDENTE' | 'APROVADO' | 'REJEITADO';
 export type TeamStatus = 'ATIVA' | 'INATIVA';
 export type DocumentCategory = 'ASO' | 'NR' | 'IDENTIDADE' | 'CONTRATO' | 'TREINAMENTO' | 'OUTROS';
 export type DocumentStatus = 'ATIVO' | 'VENCIDO' | 'PENDENTE';
+// ── SPRINT 7 TYPES ─────────────────────────────────────────
+
+export interface QrCodeObra {
+    id: string;
+    org_id: string;
+    project_id?: string;
+    project_name?: string;
+    token: string;
+    label?: string;
+    is_active: boolean;
+    expires_at?: string;
+    scan_count: number;
+    created_at?: string;
+}
+
+export interface TimeBankEntry {
+    id: string;
+    org_id: string;
+    employee_id: string;
+    employee_name?: string;
+    time_entry_id?: string;
+    tipo: 'CREDITO' | 'DEBITO' | 'AJUSTE' | 'COMPENSACAO';
+    horas: number;
+    descricao?: string;
+    referencia_data?: string;
+    created_by?: string;
+    created_at?: string;
+}
+
+export interface TimeBankBalance {
+    id: string;
+    org_id: string;
+    employee_id: string;
+    employee_name?: string;
+    saldo_horas: number;
+    limite_maximo: number;
+    limite_negativo: number;
+    updated_at?: string;
+}
+
+// ── SPRINT 8 TYPES ─────────────────────────────────────────
+
+export type AccidentTipo = 'TIPICO' | 'TRAJETO' | 'DOENCA_OCUPACIONAL' | 'QUASE_ACIDENTE';
+export type AccidentGravidade = 'SEM_AFASTAMENTO' | 'COM_AFASTAMENTO' | 'INCAPACIDADE_PERMANENTE' | 'OBITO';
+
+export interface Accident {
+    id: string;
+    org_id: string;
+    employee_id: string;
+    employee_name?: string;
+    project_id?: string;
+    project_name?: string;
+    data_acidente: string;
+    hora_acidente?: string;
+    tipo: AccidentTipo;
+    gravidade: AccidentGravidade;
+    local_acidente?: string;
+    descricao: string;
+    causa_provavel?: string;
+    parte_corpo?: string;
+    agente_causador?: string;
+    cat_numero?: string;
+    cat_emitida: boolean;
+    cat_data_emissao?: string;
+    cat_url?: string;
+    dias_afastamento: number;
+    data_retorno?: string;
+    investigacao_realizada: boolean;
+    medidas_corretivas?: string;
+    responsavel?: string;
+    horas_trabalhadas_acumuladas?: number;
+    status: 'ABERTO' | 'INVESTIGANDO' | 'FECHADO';
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface SstChecklist {
+    id: string;
+    org_id: string;
+    project_id?: string;
+    project_name?: string;
+    responsavel_id?: string;
+    responsavel_nome?: string;
+    nome_checklist: string;
+    nr_referencia?: string;
+    data_aplicacao: string;
+    itens: { id: string; descricao: string; conforme: boolean | null; observacao?: string; foto_url?: string }[];
+    conformidade_pct?: number;
+    status: 'PENDENTE' | 'CONCLUIDO' | 'REPROVADO';
+    observacoes?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface RiskAssessment {
+    id: string;
+    org_id: string;
+    project_id?: string;
+    project_name?: string;
+    tipo: 'APR' | 'PGR' | 'PPRA' | 'LTCAT' | 'OUTROS';
+    titulo: string;
+    data_avaliacao: string;
+    proxima_revisao?: string;
+    responsavel_tecnico?: string;
+    registro_profissional?: string;
+    riscos: { perigo: string; fonte?: string; fator_risco?: string; probabilidade: number; severidade: number; nivel_risco?: number; medidas_controle?: string[]; status?: string }[];
+    status: 'VIGENTE' | 'REVISAO' | 'ARQUIVADO';
+    documento_url?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface SstIndicators {
+    ano: number;
+    total_acidentes: number;
+    com_afastamento: number;
+    obitos: number;
+    dias_perdidos: number;
+    hh_trabalhadas: number;
+    tfca: number;
+    tgca: number;
+}
+
+// ── SPRINT 9 TYPES ─────────────────────────────────────────
+
+export type ContractorTipo = 'EMPREITEIRO' | 'SUBEMPREITEIRO' | 'FORNECEDOR_SERVICO' | 'COOPERATIVA' | 'MEI' | 'AUTONOMO';
+
+export interface Contractor {
+    id: string;
+    org_id: string;
+    razao_social: string;
+    nome_fantasia?: string;
+    cnpj?: string;
+    cpf?: string;
+    tipo: ContractorTipo;
+    especialidade?: string;
+    contato_nome?: string;
+    contato_telefone?: string;
+    contato_email?: string;
+    endereco?: string;
+    banco_nome?: string;
+    banco_agencia?: string;
+    banco_conta?: string;
+    banco_pix?: string;
+    retencao_inss_pct: number;
+    retencao_iss_pct: number;
+    retencao_irrf_pct: number;
+    contrato_inicio?: string;
+    contrato_fim?: string;
+    valor_contrato?: number;
+    status: 'ATIVO' | 'INATIVO' | 'SUSPENSO';
+    notas?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface ContractorDocument {
+    id: string;
+    org_id: string;
+    contractor_id: string;
+    contractor_name?: string;
+    categoria: 'CND_FEDERAL' | 'CND_ESTADUAL' | 'CND_MUNICIPAL' | 'CRF_FGTS' | 'CND_TRABALHISTA' | 'CONTRATO' | 'ALVARA' | 'ISO' | 'OUTROS';
+    titulo: string;
+    file_url?: string;
+    data_emissao?: string;
+    data_validade?: string;
+    status: 'VIGENTE' | 'VENCIDO' | 'PENDENTE';
+    notas?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface ContractorMeasurement {
+    id: string;
+    org_id: string;
+    contractor_id: string;
+    contractor_name?: string;
+    project_id?: string;
+    project_name?: string;
+    numero_medicao: number;
+    periodo_inicio: string;
+    periodo_fim: string;
+    descricao?: string;
+    valor_bruto: number;
+    retencao_inss: number;
+    retencao_iss: number;
+    retencao_irrf: number;
+    outras_retencoes: number;
+    valor_liquido?: number;
+    status: 'PENDENTE' | 'APROVADO' | 'PAGO' | 'CONTESTADO';
+    data_aprovacao?: string;
+    data_pagamento?: string;
+    nota_fiscal?: string;
+    nf_url?: string;
+    comprovante_url?: string;
+    notas?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+// ── SPRINT 10 TYPES ────────────────────────────────────────
+
+export interface LaborDiaryEntry {
+    id: string;
+    org_id: string;
+    project_id?: string;
+    project_name?: string;
+    team_id?: string;
+    team_name?: string;
+    encarregado_id?: string;
+    encarregado_nome?: string;
+    data: string;
+    turno: 'MANHA' | 'TARDE' | 'NOITE' | 'INTEGRAL';
+    condicao_tempo: 'BOM' | 'NUBLADO' | 'CHUVA' | 'CHUVA_FORTE';
+    efetivo: number;
+    total_hh: number;
+    atividades?: string;
+    ocorrencias?: string;
+    foto_urls: string[];
+    status: 'ABERTO' | 'FECHADO';
+    batch_generated: boolean;
+    workers?: LaborDiaryWorker[];
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface LaborDiaryWorker {
+    id: string;
+    diary_entry_id: string;
+    employee_id: string;
+    employee_name?: string;
+    horas_trabalhadas: number;
+    horas_extras: number;
+    presente: boolean;
+    observacao?: string;
+}
+
 export type TerminationTipo =
     | 'DEMISSAO_SEM_JUSTA_CAUSA'
     | 'DEMISSAO_COM_JUSTA_CAUSA'
@@ -915,6 +1152,311 @@ export const laborService = {
             total += workers.length;
         });
         return total;
+    },
+
+    // ── QR CODES (Sprint 7) ────────────────────────────────
+
+    async listQrCodes(orgId: string): Promise<QrCodeObra[]> {
+        const { data, error } = await supabase
+            .from('qr_codes_obra').select('*').eq('org_id', orgId).order('created_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+    },
+
+    async createQrCode(qr: Omit<QrCodeObra, 'id' | 'token' | 'scan_count' | 'created_at'>): Promise<QrCodeObra> {
+        const { data, error } = await supabase.from('qr_codes_obra').insert(qr).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async toggleQrCode(id: string, isActive: boolean): Promise<void> {
+        const { error } = await supabase.from('qr_codes_obra').update({ is_active: isActive }).eq('id', id);
+        if (error) throw error;
+    },
+
+    async deleteQrCode(id: string): Promise<void> {
+        const { error } = await supabase.from('qr_codes_obra').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    async validateQrCheckin(token: string): Promise<{ valid: boolean; project_id?: string; project_name?: string; org_id?: string; label?: string; error?: string }> {
+        const { data, error } = await supabase.rpc('qr_checkin', { p_token: token });
+        if (error) throw error;
+        return data;
+    },
+
+    // ── TIME BANK (Sprint 7) ───────────────────────────────
+
+    async listTimeBankBalances(orgId: string, employeeId?: string): Promise<TimeBankBalance[]> {
+        let query = supabase
+            .from('time_bank')
+            .select(`*, employee:employees!employee_id(name)`)
+            .eq('org_id', orgId)
+            .order('saldo_horas', { ascending: false });
+        if (employeeId) query = query.eq('employee_id', employeeId);
+        const { data, error } = await query;
+        if (error) throw error;
+        type TBRow = TimeBankBalance & { employee?: { name: string } };
+        return (data || [] as TBRow[]).map((r: TBRow) => ({ ...r, employee_name: r.employee?.name }));
+    },
+
+    async listTimeBankEntries(orgId: string, employeeId?: string): Promise<TimeBankEntry[]> {
+        let query = supabase
+            .from('time_bank_entries')
+            .select(`*, employee:employees!employee_id(name)`)
+            .eq('org_id', orgId)
+            .order('created_at', { ascending: false });
+        if (employeeId) query = query.eq('employee_id', employeeId);
+        const { data, error } = await query;
+        if (error) throw error;
+        type TBERow = TimeBankEntry & { employee?: { name: string } };
+        return (data || [] as TBERow[]).map((r: TBERow) => ({ ...r, employee_name: r.employee?.name }));
+    },
+
+    async addTimeBankEntry(entry: Omit<TimeBankEntry, 'id' | 'created_at' | 'employee_name'>): Promise<TimeBankEntry> {
+        const { data, error } = await supabase.from('time_bank_entries').insert(entry).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    // ── ACCIDENTS / SST (Sprint 8) ─────────────────────────
+
+    async listAccidents(orgId: string, filters?: { projectId?: string; employeeId?: string }): Promise<Accident[]> {
+        let query = supabase
+            .from('accidents')
+            .select(`*, employee:employees!employee_id(name)`)
+            .eq('org_id', orgId)
+            .order('data_acidente', { ascending: false });
+        if (filters?.projectId)  query = query.eq('project_id', filters.projectId);
+        if (filters?.employeeId) query = query.eq('employee_id', filters.employeeId);
+        const { data, error } = await query;
+        if (error) throw error;
+        type ARow = Accident & { employee?: { name: string } };
+        return (data || [] as ARow[]).map((r: ARow) => ({ ...r, employee_name: r.employee?.name }));
+    },
+
+    async createAccident(accident: Omit<Accident, 'id' | 'created_at' | 'updated_at' | 'employee_name'>): Promise<Accident> {
+        const { data, error } = await supabase.from('accidents').insert(accident).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateAccident(id: string, updates: Partial<Accident>): Promise<Accident> {
+        const { id: _id, created_at: _ca, updated_at: _ua, employee_name: _en, ...clean } = updates;
+        const { data, error } = await supabase.from('accidents').update(clean).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteAccident(id: string): Promise<void> {
+        const { error } = await supabase.from('accidents').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    async getSstIndicators(orgId: string, year?: number): Promise<SstIndicators> {
+        const { data, error } = await supabase.rpc('sst_indicators', {
+            p_org_id: orgId,
+            p_year: year || new Date().getFullYear(),
+        });
+        if (error) throw error;
+        return data as SstIndicators;
+    },
+
+    async listSstChecklists(orgId: string, projectId?: string): Promise<SstChecklist[]> {
+        let query = supabase
+            .from('sst_checklists_obra')
+            .select(`*, responsavel:employees!responsavel_id(name)`)
+            .eq('org_id', orgId)
+            .order('data_aplicacao', { ascending: false });
+        if (projectId) query = query.eq('project_id', projectId);
+        const { data, error } = await query;
+        if (error) throw error;
+        type SCRow = SstChecklist & { responsavel?: { name: string } };
+        return (data || [] as SCRow[]).map((r: SCRow) => ({ ...r, responsavel_nome: r.responsavel?.name }));
+    },
+
+    async createSstChecklist(checklist: Omit<SstChecklist, 'id' | 'created_at' | 'updated_at' | 'responsavel_nome'>): Promise<SstChecklist> {
+        const { data, error } = await supabase.from('sst_checklists_obra').insert(checklist).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateSstChecklist(id: string, updates: Partial<SstChecklist>): Promise<SstChecklist> {
+        const { id: _id, created_at: _ca, updated_at: _ua, responsavel_nome: _rn, ...clean } = updates;
+        const { data, error } = await supabase.from('sst_checklists_obra').update(clean).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async listRiskAssessments(orgId: string, projectId?: string): Promise<RiskAssessment[]> {
+        let query = supabase.from('risk_assessments').select('*').eq('org_id', orgId).order('data_avaliacao', { ascending: false });
+        if (projectId) query = query.eq('project_id', projectId);
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
+    },
+
+    async createRiskAssessment(ra: Omit<RiskAssessment, 'id' | 'created_at' | 'updated_at'>): Promise<RiskAssessment> {
+        const { data, error } = await supabase.from('risk_assessments').insert(ra).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateRiskAssessment(id: string, updates: Partial<RiskAssessment>): Promise<RiskAssessment> {
+        const { id: _id, created_at: _ca, updated_at: _ua, ...clean } = updates;
+        const { data, error } = await supabase.from('risk_assessments').update(clean).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    // ── CONTRACTORS (Sprint 9) ─────────────────────────────
+
+    async listContractors(orgId: string): Promise<Contractor[]> {
+        const { data, error } = await supabase.from('contractors').select('*').eq('org_id', orgId).order('razao_social');
+        if (error) throw error;
+        return data || [];
+    },
+
+    async createContractor(c: Omit<Contractor, 'id' | 'created_at' | 'updated_at'>): Promise<Contractor> {
+        const { data, error } = await supabase.from('contractors').insert(c).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateContractor(id: string, updates: Partial<Contractor>): Promise<Contractor> {
+        const { id: _id, created_at: _ca, updated_at: _ua, ...clean } = updates;
+        const { data, error } = await supabase.from('contractors').update(clean).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteContractor(id: string): Promise<void> {
+        const { error } = await supabase.from('contractors').update({ status: 'INATIVO' }).eq('id', id);
+        if (error) throw error;
+    },
+
+    async listContractorDocuments(orgId: string, contractorId?: string): Promise<ContractorDocument[]> {
+        let query = supabase
+            .from('contractor_documents')
+            .select(`*, contractor:contractors!contractor_id(razao_social)`)
+            .eq('org_id', orgId)
+            .order('data_validade', { ascending: true });
+        if (contractorId) query = query.eq('contractor_id', contractorId);
+        const { data, error } = await query;
+        if (error) throw error;
+        type CDRow = ContractorDocument & { contractor?: { razao_social: string } };
+        return (data || [] as CDRow[]).map((r: CDRow) => ({ ...r, contractor_name: r.contractor?.razao_social }));
+    },
+
+    async createContractorDocument(doc: Omit<ContractorDocument, 'id' | 'created_at' | 'updated_at' | 'contractor_name'>): Promise<ContractorDocument> {
+        const { data, error } = await supabase.from('contractor_documents').insert(doc).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async getContractorDocumentAlerts(orgId: string): Promise<ContractorDocument[]> {
+        const in30 = new Date(); in30.setDate(in30.getDate() + 30);
+        const { data, error } = await supabase
+            .from('contractor_documents')
+            .select(`*, contractor:contractors!contractor_id(razao_social)`)
+            .eq('org_id', orgId)
+            .lte('data_validade', in30.toISOString().split('T')[0])
+            .eq('status', 'VIGENTE')
+            .order('data_validade');
+        if (error) throw error;
+        type CDRow = ContractorDocument & { contractor?: { razao_social: string } };
+        return (data || [] as CDRow[]).map((r: CDRow) => ({ ...r, contractor_name: r.contractor?.razao_social }));
+    },
+
+    async listContractorMeasurements(orgId: string, contractorId?: string): Promise<ContractorMeasurement[]> {
+        let query = supabase
+            .from('contractor_measurements')
+            .select(`*, contractor:contractors!contractor_id(razao_social)`)
+            .eq('org_id', orgId)
+            .order('created_at', { ascending: false });
+        if (contractorId) query = query.eq('contractor_id', contractorId);
+        const { data, error } = await query;
+        if (error) throw error;
+        type CMRow = ContractorMeasurement & { contractor?: { razao_social: string } };
+        return (data || [] as CMRow[]).map((r: CMRow) => ({ ...r, contractor_name: r.contractor?.razao_social }));
+    },
+
+    async createContractorMeasurement(m: Omit<ContractorMeasurement, 'id' | 'valor_liquido' | 'created_at' | 'updated_at' | 'contractor_name'>): Promise<ContractorMeasurement> {
+        const { data, error } = await supabase.from('contractor_measurements').insert(m).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateContractorMeasurement(id: string, updates: Partial<ContractorMeasurement>): Promise<ContractorMeasurement> {
+        const { id: _id, valor_liquido: _vl, created_at: _ca, updated_at: _ua, contractor_name: _cn, ...clean } = updates;
+        const { data, error } = await supabase.from('contractor_measurements').update(clean).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    // ── LABOR DIARY (Sprint 10) ────────────────────────────
+
+    async listLaborDiaryEntries(orgId: string, filters?: { projectId?: string; teamId?: string; dateStart?: string; dateEnd?: string }): Promise<LaborDiaryEntry[]> {
+        let query = supabase
+            .from('labor_diary_entries')
+            .select(`
+                *,
+                team:labor_teams!team_id(name),
+                encarregado:employees!encarregado_id(name),
+                workers:labor_diary_workers(*, employee:employees!employee_id(name))
+            `)
+            .eq('org_id', orgId)
+            .order('data', { ascending: false });
+        if (filters?.projectId) query = query.eq('project_id', filters.projectId);
+        if (filters?.teamId)    query = query.eq('team_id', filters.teamId);
+        if (filters?.dateStart) query = query.gte('data', filters.dateStart);
+        if (filters?.dateEnd)   query = query.lte('data', filters.dateEnd);
+        const { data, error } = await query;
+        if (error) throw error;
+
+        type DIRow = LaborDiaryEntry & {
+            team?: { name: string };
+            encarregado?: { name: string };
+            workers?: Array<LaborDiaryWorker & { employee?: { name: string } }>;
+        };
+        return (data || [] as DIRow[]).map((r: DIRow) => ({
+            ...r,
+            team_name: r.team?.name,
+            encarregado_nome: r.encarregado?.name,
+            workers: (r.workers || []).map((w: LaborDiaryWorker & { employee?: { name: string } }) => ({ ...w, employee_name: w.employee?.name })),
+        }));
+    },
+
+    async createLaborDiaryEntry(entry: Omit<LaborDiaryEntry, 'id' | 'total_hh' | 'batch_generated' | 'created_at' | 'updated_at' | 'team_name' | 'encarregado_nome' | 'workers'>): Promise<LaborDiaryEntry> {
+        const { data, error } = await supabase.from('labor_diary_entries').insert(entry).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateLaborDiaryEntry(id: string, updates: Partial<LaborDiaryEntry>): Promise<LaborDiaryEntry> {
+        const { id: _id, total_hh: _th, batch_generated: _bg, created_at: _ca, updated_at: _ua, team_name: _tn, encarregado_nome: _en, workers: _w, ...clean } = updates;
+        const { data, error } = await supabase.from('labor_diary_entries').update(clean).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async setDiaryWorkers(diaryId: string, workers: Omit<LaborDiaryWorker, 'id' | 'diary_entry_id' | 'employee_name'>[]): Promise<void> {
+        await supabase.from('labor_diary_workers').delete().eq('diary_entry_id', diaryId);
+        if (workers.length === 0) return;
+        const { error } = await supabase.from('labor_diary_workers')
+            .insert(workers.map(w => ({ ...w, diary_entry_id: diaryId })));
+        if (error) throw error;
+    },
+
+    async closeLaborDiary(diaryId: string): Promise<{ success: boolean; inserted: number; skipped: number; total_hh: number }> {
+        const { data, error } = await supabase.rpc('close_labor_diary', { p_diary_id: diaryId });
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteLaborDiaryEntry(id: string): Promise<void> {
+        const { error } = await supabase.from('labor_diary_entries').delete().eq('id', id);
+        if (error) throw error;
     },
 
     // ── TERMINATION ────────────────────────────────────────

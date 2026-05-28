@@ -194,6 +194,48 @@ export const REGIME_CONTABIL_LABELS: Record<'caixa' | 'competencia', string> = {
   competencia: 'Regime de Competência',
 };
 
+// ─── Metas Anuais ────────────────────────────────────────────
+
+export interface CompanyTarget {
+  id: string;
+  company_id: string;
+  ano: number;
+  margem_alvo_pct?: number;
+  limite_endividamento_pct?: number;
+  faturamento_meta?: number;
+  ebitda_alvo?: number;
+  ticket_medio_alvo?: number;
+  qtd_obras_meta?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CompanyTargetUpsert = Omit<CompanyTarget, 'id' | 'created_at' | 'updated_at'>;
+
+// ─── View Consolidada ─────────────────────────────────────────
+
+export interface CompanyConsolidated {
+  org_id: string;
+  consolidadora_id: string;
+  company_id: string;
+  razao_social: string;
+  nome_fantasia?: string;
+  tipo: CompanyTipo;
+  status: CompanyStatus;
+  cor_sistema: string;
+  regime_tributario?: RegimeTributario;
+  is_headquarters: boolean;
+  holding_id?: string;
+  qtd_obras: number;
+  qtd_contratos: number;
+  receita_contratada: number;
+  compras_aprovadas: number;  // contagem de pedidos aprovados/entregues
+  qtd_socios: number;
+  qtd_contas: number;
+  docs_vencidos: number;
+  docs_vencendo: number;
+}
+
 // ─── Documentos da Empresa ───────────────────────────────────
 
 export type TipoDocumento =

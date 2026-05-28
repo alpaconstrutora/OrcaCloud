@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Building2, Plus, Trash2, Star, ChevronDown, ChevronUp,
-    Save, X, AlertCircle, Loader2, CheckCircle2, Settings2,
+    Save, X, AlertCircle, Loader2, CheckCircle2, Settings2, BarChart3,
 } from 'lucide-react';
 import {
     Company, CompanyInsert,
@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { companyService } from '../services/companyService';
 import CompanyDetailPage from './CompanyDetailPage';
+import CompanyGroupDashboard from './CompanyGroupDashboard';
 
 interface CompaniesModuleProps {
     orgId: string;
@@ -175,6 +176,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
     const [success, setSuccess] = useState<string | null>(null);
 
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+    const [showDashboard, setShowDashboard] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [form, setForm] = useState<FormData>(EMPTY_FORM);
@@ -255,6 +257,16 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
         );
     }
 
+    // ── Dashboard do grupo ────────────────────────────────────
+    if (showDashboard) {
+        return (
+            <CompanyGroupDashboard
+                orgId={orgId}
+                onBack={() => setShowDashboard(false)}
+            />
+        );
+    }
+
     // ── Modo detalhe ──────────────────────────────────────────
     if (selectedCompany) {
         return (
@@ -283,13 +295,22 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                     </p>
                 </div>
                 {!showForm && (
-                    <button
-                        onClick={openNew}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.15em] hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2 active:scale-95"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Nova Empresa
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowDashboard(true)}
+                            className="px-5 py-3 border border-gray-200 text-gray-600 rounded-2xl font-black text-xs uppercase tracking-[0.12em] hover:bg-gray-50 transition-all flex items-center gap-2 active:scale-95"
+                        >
+                            <BarChart3 className="w-4 h-4" />
+                            Dashboard
+                        </button>
+                        <button
+                            onClick={openNew}
+                            className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.15em] hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2 active:scale-95"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Nova Empresa
+                        </button>
+                    </div>
                 )}
             </div>
 

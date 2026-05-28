@@ -7,6 +7,8 @@ import {
     CompanyBranch, CompanyBranchInsert, CompanyBranchUpdate,
     CompanyDocument, CompanyDocumentInsert, CompanyDocumentUpdate,
     CompanyAuditLog,
+    CompanyTarget, CompanyTargetUpsert,
+    CompanyConsolidated,
 } from '../types';
 
 export const companyService = {
@@ -305,5 +307,48 @@ export const companyService = {
             .from('company_audit_log')
             .insert(entry);
         if (error) console.warn('Audit log insert failed:', error.message);
+    },
+
+    // ─── Metas Anuais ─────────────────────────────────────────
+
+    async listTargets(companyId: string): Promise<CompanyTarget[]> {
+        const { data, error } = await supabase
+            .from('company_targets')
+            .select('*')
+            .eq('company_id', companyId)
+            .order('ano', { ascending: false });
+        if (error) throw error;
+        return data as CompanyTarget[];
+    },
+
+    async upsertTarget(payload: CompanyTargetUpsert): Promise<CompanyTarget> {
+        const { data, error } = await supabase
+            .from('company_targets')
+            .upsert(payload, { onConflict: 'company_id,ano' })
+            .select()
+            .single();
+        if (error) throw error;
+        return data as CompanyTarget;
+    },
+
+    async removeTarget(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('company_targets')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    // ─── Consolidação do Grupo ────────────────────────────────
+
+    async getConsolidatedGroup(orgId: string): Promise<CompanyConsolidated[]> {
+        const { data, error } = await supabase
+            .from('vw_company_consolidated')
+            .select('*')
+            .eq('org_id', orgId)
+            .order('is_headquarters', { ascending: false })
+            .order('razao_social');
+        if (error) throw error;
+        return data as CompanyConsolidated[];
     },
 };

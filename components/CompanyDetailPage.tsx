@@ -3,7 +3,7 @@ import {
     ArrowLeft, Save, Loader2, AlertCircle, CheckCircle2,
     Building2, Users, Landmark, UserCheck, TrendingUp, Receipt,
     Upload, Download, FileKey, HardHat, GitBranch, Landmark as LandmarkIcon,
-    FolderOpen,
+    FolderOpen, Target,
 } from 'lucide-react';
 import {
     Company, CompanyUpdate, CompanyTipo, CompanyStatus, RegimeTributario,
@@ -17,6 +17,7 @@ import CertificateExpiryWarning from './CertificateExpiryWarning';
 import CompanyIncorporacaoTab from './CompanyIncorporacaoTab';
 import CompanyBranchesTab from './CompanyBranchesTab';
 import CompanyDocumentsTab from './CompanyDocumentsTab';
+import CompanyTargetsTab from './CompanyTargetsTab';
 
 interface Props {
     company: Company;
@@ -25,7 +26,7 @@ interface Props {
     onSaved: (updated: Company) => void;
 }
 
-type Tab = 'identificacao' | 'socios' | 'bancos' | 'financeiro' | 'tributario' | 'obras' | 'incorporacao' | 'filiais' | 'documentos' | 'responsaveis';
+type Tab = 'identificacao' | 'socios' | 'bancos' | 'financeiro' | 'tributario' | 'obras' | 'incorporacao' | 'filiais' | 'documentos' | 'metas' | 'responsaveis';
 
 // ─── Form ─────────────────────────────────────────────────────
 
@@ -279,6 +280,7 @@ function buildTabs(company: Company): { id: Tab; label: string; icon: React.Reac
         { id: 'obras',         label: 'Obras',            icon: <HardHat className="w-4 h-4" /> },
         { id: 'filiais',       label: 'Filiais',          icon: <GitBranch className="w-4 h-4" /> },
         { id: 'documentos',    label: 'Documentos',       icon: <FolderOpen className="w-4 h-4" /> },
+        { id: 'metas',         label: 'Metas',            icon: <Target className="w-4 h-4" /> },
         { id: 'responsaveis',  label: 'Responsáveis',     icon: <UserCheck className="w-4 h-4" /> },
     ];
     if (SPE_TIPOS.includes(company.tipo)) {
@@ -969,6 +971,13 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
             {tab === 'documentos' && (
                 <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
                     <CompanyDocumentsTab companyId={company.id} />
+                </div>
+            )}
+
+            {/* ── Tab: Metas ───────────────────────────────────────── */}
+            {tab === 'metas' && (
+                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                    <CompanyTargetsTab companyId={company.id} />
                 </div>
             )}
 

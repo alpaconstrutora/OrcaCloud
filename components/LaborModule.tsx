@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
     Users, Clock, TrendingUp, DollarSign, BarChart3,
     UserPlus, Loader2, AlertCircle, Building2,
-    Shield, Calendar, Target, Check, FileText, Calculator, Settings, ChevronRight, Percent, HardHat, Umbrella, BookOpen, LayoutDashboard, UserMinus, ShieldAlert, Truck, ClipboardList, UserSearch, Smartphone, Award
+    Shield, Calendar, Target, Check, FileText, Calculator, Settings, ChevronRight, Percent, HardHat, Umbrella, BookOpen, LayoutDashboard, UserMinus, ShieldAlert, Truck, ClipboardList, UserSearch, Smartphone, Award, MessageSquare
 } from 'lucide-react';
 import { laborService, Employee, LaborTeam, TimeEntry, ProductivityLog, LaborCostSummary } from '../services/laborService';
 import LaborEmployeeList from './LaborEmployeeList';
@@ -30,11 +30,12 @@ import LaborDiary from './LaborDiary';
 import LaborATS from './LaborATS';
 import LaborPortal from './LaborPortal';
 import LaborEvaluation from './LaborEvaluation';
+import LaborComunicacao from './LaborComunicacao';
 import { useLaborModuleData } from '../hooks/useLaborQueries';
 import { buildPartialFailureMessage } from '../lib/collectSettled';
 
 // ─── Types ──────────────────────────────────────────────────
-type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation';
+type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao';
 
 const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-dashboard': 'dashboard',
@@ -62,6 +63,7 @@ const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-ats':          'ats',
     'labor-portal':       'portal',
     'labor-evaluation':   'evaluation',
+    'labor-comunicacao':  'comunicacao',
 };
 
 const TAB_TO_SECTION: Record<LaborTab, string> = Object.fromEntries(
@@ -145,6 +147,7 @@ const LaborDashboardTab: React.FC<{
                     { tab: 'ats'          as LaborTab, icon: UserSearch,      title: 'Recrutamento',    desc: 'Pipeline Kanban, banco de talentos, contratação', color: 'violet' },
                     { tab: 'portal'       as LaborTab, icon: Smartphone,      title: 'Portal Colaborador', desc: 'Link self-service: ponto, férias, docs no celular', color: 'indigo' },
                     { tab: 'evaluation'   as LaborTab, icon: Award,           title: 'Avaliação 360°',  desc: 'Ciclos, competências, PDI e ranking de equipes', color: 'violet' },
+                    { tab: 'comunicacao'  as LaborTab, icon: MessageSquare,   title: 'Comunicação',     desc: 'Avisos, DDS digitais, treinamentos e WhatsApp', color: 'teal' },
                 ].map(({ tab, icon: Icon, title, desc, color, badge }) => (
                     <button
                         key={`${tab}-${title}`}
@@ -554,6 +557,13 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         <LaborEvaluation
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
+                        />
+                    )}
+                    {activeTab === 'comunicacao' && (
+                        <LaborComunicacao
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
+                            projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
                         />
                     )}
             </div>

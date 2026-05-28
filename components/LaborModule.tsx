@@ -32,11 +32,12 @@ import LaborPortal from './LaborPortal';
 import LaborEvaluation from './LaborEvaluation';
 import LaborComunicacao from './LaborComunicacao';
 import LaborBIAnalytics from './LaborBIAnalytics';
+import LaborEsocial from './LaborEsocial';
 import { useLaborModuleData } from '../hooks/useLaborQueries';
 import { buildPartialFailureMessage } from '../lib/collectSettled';
 
 // ─── Types ──────────────────────────────────────────────────
-type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao' | 'bi_analytics';
+type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao' | 'bi_analytics' | 'esocial';
 
 const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-dashboard': 'dashboard',
@@ -66,6 +67,7 @@ const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-evaluation':   'evaluation',
     'labor-comunicacao':  'comunicacao',
     'labor-bi-analytics': 'bi_analytics',
+    'labor-esocial':      'esocial',
 };
 
 const TAB_TO_SECTION: Record<LaborTab, string> = Object.fromEntries(
@@ -151,6 +153,7 @@ const LaborDashboardTab: React.FC<{
                     { tab: 'evaluation'   as LaborTab, icon: Award,           title: 'Avaliação 360°',  desc: 'Ciclos, competências, PDI e ranking de equipes', color: 'violet' },
                     { tab: 'comunicacao'  as LaborTab, icon: MessageSquare,   title: 'Comunicação',     desc: 'Avisos, DDS digitais, treinamentos e WhatsApp', color: 'teal' },
                     { tab: 'bi_analytics' as LaborTab, icon: BarChart3,       title: 'BI Analytics RH', desc: 'Turnover, retenção, produtividade e movimentações', color: 'sky' },
+                    { tab: 'esocial'      as LaborTab, icon: FileText,        title: 'eSocial',         desc: 'Eventos S-1xxx/S-2xxx, lotes e transmissão', color: 'orange' },
                 ].map(({ tab, icon: Icon, title, desc, color, badge }) => (
                     <button
                         key={`${tab}-${title}`}
@@ -571,6 +574,12 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'bi_analytics' && (
                         <LaborBIAnalytics
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
+                        />
+                    )}
+                    {activeTab === 'esocial' && (
+                        <LaborEsocial
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
                         />

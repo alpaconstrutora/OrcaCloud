@@ -138,4 +138,24 @@ export const companyService = {
             .eq('id', id);
         if (error) throw error;
     },
+
+    // ─── Certificado Digital ──────────────────────────────────
+
+    async uploadCertificado(companyId: string, file: File): Promise<string> {
+        const ext = file.name.split('.').pop() ?? 'pfx';
+        const path = `${companyId}/certificado_digital.${ext}`;
+        const { error } = await supabase.storage
+            .from('company-certificates')
+            .upload(path, file, { upsert: true });
+        if (error) throw error;
+        return path;
+    },
+
+    async getCertificadoSignedUrl(path: string): Promise<string> {
+        const { data, error } = await supabase.storage
+            .from('company-certificates')
+            .createSignedUrl(path, 3600);
+        if (error) throw error;
+        return data.signedUrl;
+    },
 };

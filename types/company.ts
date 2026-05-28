@@ -83,6 +83,30 @@ export interface Company {
   responsavel_operacional_nome?: string;
   responsavel_tecnico_crea?: string;
 
+  // Sprint B — Financeiro
+  regime_contabil?: 'caixa' | 'competencia';
+  limite_aprovacao_compras?: number;
+  limite_aprovacao_pagamentos?: number;
+  empresa_consolidadora_id?: string;
+  plano_contas_padrao_id?: string;
+  centro_custo_padrao_id?: string;
+
+  // Sprint B — Tributário avançado
+  aliquota_iss?: number;
+  codigo_servico_municipal?: string;
+  cnae_fiscal?: string;
+  retencao_pis: boolean;
+  retencao_cofins: boolean;
+  retencao_csll: boolean;
+  possui_substituicao_tributaria: boolean;
+  possui_difal: boolean;
+  possui_inss_obra: boolean;
+  cprb: boolean;
+  certificado_digital_url?: string;
+  certificado_validade?: string;
+  prefeitura_integrada?: string;
+  sefaz_integrada: boolean;
+
   created_at: string;
   updated_at: string;
 }
@@ -151,6 +175,11 @@ export const TIPO_PIX_LABELS: Record<TipoPix, string> = {
   email:     'E-mail',
   telefone:  'Telefone',
   aleatoria: 'Chave Aleatória',
+};
+
+export const REGIME_CONTABIL_LABELS: Record<'caixa' | 'competencia', string> = {
+  caixa:       'Regime de Caixa',
+  competencia: 'Regime de Competência',
 };
 
 export const BANCOS_BRASIL = [

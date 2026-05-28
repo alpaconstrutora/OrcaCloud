@@ -411,22 +411,39 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownGroupLabel label="Visão Geral" />
                   <DropdownItem id="labor-dashboard" label="Dashboard" icon={BarChart3} />
                   <DropdownItem id="labor-cost-dashboard" label="Custo por Obra" icon={TrendingUp} />
+                  <DropdownItem id="labor-rh-dashboard" label="Dashboard RH" icon={Activity} />
 
                   <DropdownGroupLabel label="Pessoas" />
                   <DropdownItem id="labor-employees" label="Colaboradores" icon={Users} />
                   <DropdownItem id="labor-teams" label="Equipes" icon={Shield} />
                   <DropdownItem id="labor-allocations" label="Alocações" icon={Target} />
+                  <DropdownItem id="labor-ats" label="Recrutamento" icon={Briefcase} />
+                  <DropdownItem id="labor-termination" label="Desligamentos" icon={TrendingDown} />
 
                   <DropdownGroupLabel label="Operacional" />
                   <DropdownItem id="labor-timetracking" label="Ponto" icon={Clock} />
+                  <DropdownItem id="labor-timebank" label="Banco de Horas" icon={Clock} />
                   <DropdownItem id="labor-productivity" label="Produtividade" icon={Target} />
+                  <DropdownItem id="labor-absences" label="Férias e Ausências" icon={Calendar} />
+                  <DropdownItem id="labor-trainings" label="Treinamentos" icon={BookOpen} />
+                  <DropdownItem id="labor-epis" label="EPIs" icon={Shield} />
+                  <DropdownItem id="labor-sst" label="SST" icon={Shield} />
                   <DropdownItem id="labor-documents" label="Documentos" icon={FileText} />
+                  <DropdownItem id="labor-diary" label="Diário de Obra" icon={BookOpen} />
+                  <DropdownItem id="labor-contractors" label="Empreiteiros" icon={Truck} />
 
                   <DropdownGroupLabel label="Financeiro" />
                   <DropdownItem id="labor-costs" label="Custos" icon={DollarSign} />
                   <DropdownItem id="labor-payroll" label="Folha" icon={Calculator} />
                   <DropdownItem id="labor-rubrics" label="Rubricas" icon={Shield} />
                   <DropdownItem id="labor-encargos" label="Encargos Sociais" icon={Percent} />
+                  <DropdownItem id="labor-esocial" label="eSocial" icon={FileText} />
+
+                  <DropdownGroupLabel label="Estratégico" />
+                  <DropdownItem id="labor-evaluation" label="Avaliação 360°" icon={Trophy} />
+                  <DropdownItem id="labor-bi-analytics" label="BI Analytics RH" icon={BarChart3} />
+                  <DropdownItem id="labor-comunicacao" label="Comunicação" icon={MessageSquare} />
+                  <DropdownItem id="labor-portal" label="Portal Colaborador" icon={Layers} />
 
                   <DropdownGroupLabel label="Configurações" />
                   <DropdownItem id="labor-fiscal" label="Config. Fiscais" icon={Settings} />

@@ -405,6 +405,24 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'labor-rubrics':
     case 'labor-encargos':
     case 'labor-fiscal':
+    // Fase 1 extras
+    case 'labor-epis':
+    case 'labor-absences':
+    case 'labor-trainings':
+    case 'labor-rh-dashboard':
+    case 'labor-termination':
+    // Fase 2
+    case 'labor-timebank':
+    case 'labor-sst':
+    case 'labor-contractors':
+    case 'labor-diary':
+    // Fase 3
+    case 'labor-ats':
+    case 'labor-portal':
+    case 'labor-evaluation':
+    case 'labor-comunicacao':
+    case 'labor-bi-analytics':
+    case 'labor-esocial':
       return <LaborModule activeOrganizationId={activeOrganizationId || undefined} projects={typedProjects} activeSection={activeView} onChangeView={setActiveView} />;
 
     case 'labor-analytics':

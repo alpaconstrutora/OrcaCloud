@@ -70,6 +70,9 @@ export const laborKeys = {
 
     // Sprint 10
     laborDiary:       (orgId: string) => ['labor', 'laborDiary',    orgId] as const,
+
+    // Sprint 11 (ATS — em atsService.ts, usa chaves ['ats', ...])
+    // Sprint 12 (Portal — em atsService.ts, usa chaves ['portal', ...])
 } as const;
 
 // ── Shared / cross-module ────────────────────────────────────────────────────

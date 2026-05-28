@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Building2, Plus, Edit2, Trash2, Star, ChevronDown, ChevronUp,
-    Save, X, AlertCircle, Loader2, CheckCircle2
+    Building2, Plus, Trash2, Star, ChevronDown, ChevronUp,
+    Save, X, AlertCircle, Loader2, CheckCircle2, Settings2,
 } from 'lucide-react';
 import {
-    Company, CompanyInsert, CompanyUpdate,
+    Company, CompanyInsert,
     CompanyTipo, CompanyStatus, RegimeTributario,
     COMPANY_TIPO_LABELS, REGIME_TRIBUTARIO_LABELS,
     DEFAULT_MODULOS, MODULOS_POR_TIPO,
 } from '../types';
 import { companyService } from '../services/companyService';
+import CompanyDetailPage from './CompanyDetailPage';
 
 interface CompaniesModuleProps {
     orgId: string;
@@ -161,7 +162,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
-    const [editingId, setEditingId] = useState<string | null>(null);
+    const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [form, setForm] = useState<FormData>(EMPTY_FORM);
@@ -182,22 +183,13 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
     useEffect(() => { load(); }, [load]);
 
     const openNew = () => {
-        setEditingId(null);
         setForm(EMPTY_FORM);
-        setShowForm(true);
-        setError(null);
-    };
-
-    const openEdit = (c: Company) => {
-        setEditingId(c.id);
-        setForm(companyToForm(c));
         setShowForm(true);
         setError(null);
     };
 
     const cancel = () => {
         setShowForm(false);
-        setEditingId(null);
         setError(null);
     };
 
@@ -216,18 +208,11 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
         setSaving(true);
         setError(null);
         try {
-            if (editingId) {
-                const payload: CompanyUpdate = formToPayload(form, orgId);
-                await companyService.update(editingId, payload);
-                setSuccess('Empresa atualizada.');
-            } else {
-                await companyService.create(formToPayload(form, orgId));
-                setSuccess('Empresa cadastrada.');
-            }
+            await companyService.create(formToPayload(form, orgId));
+            setSuccess('Empresa cadastrada. Clique em "Gerenciar" para adicionar sócios e contas bancárias.');
             await load();
             setShowForm(false);
-            setEditingId(null);
-            setTimeout(() => setSuccess(null), 3000);
+            setTimeout(() => setSuccess(null), 5000);
         } catch (e: unknown) {
             setError((e as Error).message);
         } finally {
@@ -246,6 +231,21 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
     };
 
     const holdingOptions = companies.filter(c => c.tipo === 'holding' || c.is_headquarters);
+
+    // ── Modo detalhe ──────────────────────────────────────────
+    if (selectedCompany) {
+        return (
+            <CompanyDetailPage
+                company={selectedCompany}
+                companies={companies}
+                onBack={() => setSelectedCompany(null)}
+                onSaved={(updated) => {
+                    setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c));
+                    setSelectedCompany(updated);
+                }}
+            />
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -289,7 +289,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                 <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-6">
                     <div className="flex items-center justify-between">
                         <h3 className="font-black text-gray-900 uppercase tracking-wide text-sm">
-                            {editingId ? 'Editar Empresa' : 'Nova Empresa'}
+                            Nova Empresa
                         </h3>
                         <button type="button" onClick={cancel} className="text-gray-400 hover:text-gray-600">
                             <X className="w-5 h-5" />
@@ -498,7 +498,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                         <button type="submit" disabled={saving}
                             className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                            {editingId ? 'Salvar Alterações' : 'Cadastrar Empresa'}
+                            Cadastrar Empresa
                         </button>
                     </div>
                 </form>
@@ -554,9 +554,10 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                                 </div>
 
                                 <div className="flex items-center gap-1 flex-shrink-0">
-                                    <button onClick={() => openEdit(c)}
-                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                        <Edit2 className="w-4 h-4" />
+                                    <button onClick={() => setSelectedCompany(c)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-xs font-black uppercase tracking-wide">
+                                        <Settings2 className="w-3.5 h-3.5" />
+                                        Gerenciar
                                     </button>
                                     {!c.is_headquarters && (
                                         <button onClick={() => handleDelete(c.id, c.razao_social)}

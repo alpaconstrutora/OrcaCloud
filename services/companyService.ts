@@ -1,5 +1,9 @@
 import { supabase } from '../lib/supabase';
-import { Company, CompanyInsert, CompanyUpdate } from '../types';
+import {
+    Company, CompanyInsert, CompanyUpdate,
+    CompanyPartner, CompanyPartnerInsert, CompanyPartnerUpdate,
+    CompanyBankAccount, CompanyBankAccountInsert, CompanyBankAccountUpdate,
+} from '../types';
 
 export const companyService = {
     async list(orgId: string): Promise<Company[]> {
@@ -47,6 +51,89 @@ export const companyService = {
     async remove(id: string): Promise<void> {
         const { error } = await supabase
             .from('companies')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    // ─── Quadro Societário ────────────────────────────────────
+
+    async listPartners(companyId: string): Promise<CompanyPartner[]> {
+        const { data, error } = await supabase
+            .from('company_partners')
+            .select('*')
+            .eq('company_id', companyId)
+            .order('participacao_pct', { ascending: false });
+        if (error) throw error;
+        return data as CompanyPartner[];
+    },
+
+    async createPartner(payload: CompanyPartnerInsert): Promise<CompanyPartner> {
+        const { data, error } = await supabase
+            .from('company_partners')
+            .insert(payload)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as CompanyPartner;
+    },
+
+    async updatePartner(id: string, payload: CompanyPartnerUpdate): Promise<CompanyPartner> {
+        const { data, error } = await supabase
+            .from('company_partners')
+            .update(payload)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as CompanyPartner;
+    },
+
+    async removePartner(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('company_partners')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    // ─── Contas Bancárias ─────────────────────────────────────
+
+    async listBankAccounts(companyId: string): Promise<CompanyBankAccount[]> {
+        const { data, error } = await supabase
+            .from('company_bank_accounts')
+            .select('*')
+            .eq('company_id', companyId)
+            .order('is_principal', { ascending: false })
+            .order('created_at');
+        if (error) throw error;
+        return data as CompanyBankAccount[];
+    },
+
+    async createBankAccount(payload: CompanyBankAccountInsert): Promise<CompanyBankAccount> {
+        const { data, error } = await supabase
+            .from('company_bank_accounts')
+            .insert(payload)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as CompanyBankAccount;
+    },
+
+    async updateBankAccount(id: string, payload: CompanyBankAccountUpdate): Promise<CompanyBankAccount> {
+        const { data, error } = await supabase
+            .from('company_bank_accounts')
+            .update(payload)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as CompanyBankAccount;
+    },
+
+    async removeBankAccount(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('company_bank_accounts')
             .delete()
             .eq('id', id);
         if (error) throw error;

@@ -78,12 +78,100 @@ export interface Company {
   is_headquarters: boolean;
   holding_id?: string;
 
+  responsavel_legal_nome?: string;
+  responsavel_financeiro_nome?: string;
+  responsavel_operacional_nome?: string;
+  responsavel_tecnico_crea?: string;
+
   created_at: string;
   updated_at: string;
 }
 
 export type CompanyInsert = Omit<Company, 'id' | 'created_at' | 'updated_at'>;
 export type CompanyUpdate = Partial<CompanyInsert>;
+
+// ─── Quadro Societário ────────────────────────────────────────
+
+export interface CompanyPartner {
+  id: string;
+  company_id: string;
+  tipo_pessoa: 'pf' | 'pj';
+  nome: string;
+  documento?: string;
+  participacao_pct: number;
+  is_administrador: boolean;
+  is_assinante_legal: boolean;
+  pj_company_id?: string;
+  data_entrada?: string;
+  data_saida?: string;
+  created_at: string;
+}
+
+export type CompanyPartnerInsert = Omit<CompanyPartner, 'id' | 'created_at'>;
+export type CompanyPartnerUpdate = Partial<CompanyPartnerInsert>;
+
+// ─── Contas Bancárias ─────────────────────────────────────────
+
+export type TipoConta = 'corrente' | 'poupanca' | 'escrow' | 'obra' | 'incorporacao' | 'garantida';
+export type TipoPix   = 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria';
+
+export interface CompanyBankAccount {
+  id: string;
+  company_id: string;
+  banco_codigo: string;
+  banco_nome?: string;
+  agencia?: string;
+  conta?: string;
+  tipo_conta?: TipoConta;
+  pix_chave?: string;
+  pix_tipo?: TipoPix;
+  favorecido?: string;
+  limite_credito?: number;
+  is_principal: boolean;
+  ativa: boolean;
+  obra_id?: string;
+  created_at: string;
+}
+
+export type CompanyBankAccountInsert = Omit<CompanyBankAccount, 'id' | 'created_at'>;
+export type CompanyBankAccountUpdate = Partial<CompanyBankAccountInsert>;
+
+export const TIPO_CONTA_LABELS: Record<TipoConta, string> = {
+  corrente:     'Conta Corrente',
+  poupanca:     'Poupança',
+  escrow:       'Escrow',
+  obra:         'Conta de Obra',
+  incorporacao: 'Conta de Incorporação',
+  garantida:    'Conta Garantida',
+};
+
+export const TIPO_PIX_LABELS: Record<TipoPix, string> = {
+  cpf:       'CPF',
+  cnpj:      'CNPJ',
+  email:     'E-mail',
+  telefone:  'Telefone',
+  aleatoria: 'Chave Aleatória',
+};
+
+export const BANCOS_BRASIL = [
+  { codigo: '001', nome: 'Banco do Brasil' },
+  { codigo: '033', nome: 'Santander' },
+  { codigo: '041', nome: 'Banrisul' },
+  { codigo: '070', nome: 'BRB' },
+  { codigo: '077', nome: 'Banco Inter' },
+  { codigo: '085', nome: 'AILOS' },
+  { codigo: '104', nome: 'Caixa Econômica Federal' },
+  { codigo: '212', nome: 'Banco Original' },
+  { codigo: '237', nome: 'Bradesco' },
+  { codigo: '260', nome: 'Nubank' },
+  { codigo: '290', nome: 'PagBank' },
+  { codigo: '336', nome: 'Banco C6' },
+  { codigo: '341', nome: 'Itaú' },
+  { codigo: '389', nome: 'Banco Mercantil' },
+  { codigo: '422', nome: 'Safra' },
+  { codigo: '748', nome: 'Sicredi' },
+  { codigo: '756', nome: 'Sicoob' },
+];
 
 export const COMPANY_TIPO_LABELS: Record<CompanyTipo, string> = {
   construtora:              'Construtora',

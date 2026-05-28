@@ -83,6 +83,13 @@ export interface Company {
   responsavel_operacional_nome?: string;
   responsavel_tecnico_crea?: string;
 
+  // Sprint C — Config de Obras
+  obra_empresa_executora_id?: string;
+  obra_empresa_incorporadora_id?: string;
+  obra_bdi_padrao?: number;
+  obra_encargos_sociais_pct?: number;
+  obra_tabela_sinapi_uf?: string;
+
   // Sprint B — Financeiro
   regime_contabil?: 'caixa' | 'competencia';
   limite_aprovacao_compras?: number;
@@ -181,6 +188,62 @@ export const REGIME_CONTABIL_LABELS: Record<'caixa' | 'competencia', string> = {
   caixa:       'Regime de Caixa',
   competencia: 'Regime de Competência',
 };
+
+// ─── Incorporação / SPE ──────────────────────────────────────
+
+export type TipoSPE = 'spe' | 'patrimonio_afetacao' | 'scp';
+
+export interface CompanyIncorporacao {
+  company_id: string;
+  tipo_spe?: TipoSPE;
+  registro_incorporacao?: string;
+  cartorio?: string;
+  matriculas?: string[];
+  alvara_construcao?: string;
+  alvara_validade?: string;
+  habite_se?: string;
+  habite_se_data?: string;
+  rep_numero?: string;
+  conta_segregada_id?: string;
+  empreendimento_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CompanyIncorporacaoUpsert = Omit<CompanyIncorporacao, 'created_at' | 'updated_at'>;
+
+export const TIPO_SPE_LABELS: Record<TipoSPE, string> = {
+  spe:                'SPE – Sociedade de Propósito Específico',
+  patrimonio_afetacao: 'Patrimônio de Afetação',
+  scp:                'SCP – Sociedade em Conta de Participação',
+};
+
+// ─── Filiais ──────────────────────────────────────────────────
+
+export interface CompanyBranch {
+  id: string;
+  company_id: string;
+  codigo: string;
+  nome: string;
+  cnpj_proprio?: string;
+  endereco?: {
+    cep?: string; logradouro?: string; numero?: string;
+    complemento?: string; bairro?: string; cidade?: string; uf?: string;
+  };
+  estoque_proprio: boolean;
+  obra_id?: string;
+  ativa: boolean;
+  created_at: string;
+}
+
+export type CompanyBranchInsert = Omit<CompanyBranch, 'id' | 'created_at'>;
+export type CompanyBranchUpdate = Partial<CompanyBranchInsert>;
+
+export const UF_LIST = [
+  'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA',
+  'MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN',
+  'RS','RO','RR','SC','SP','SE','TO',
+];
 
 export const BANCOS_BRASIL = [
   { codigo: '001', nome: 'Banco do Brasil' },

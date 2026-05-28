@@ -2,17 +2,19 @@ import React, { useRef, useState } from 'react';
 import {
     ArrowLeft, Save, Loader2, AlertCircle, CheckCircle2,
     Building2, Users, Landmark, UserCheck, TrendingUp, Receipt,
-    Upload, Download, FileKey,
+    Upload, Download, FileKey, HardHat, GitBranch, Landmark as LandmarkIcon,
 } from 'lucide-react';
 import {
     Company, CompanyUpdate, CompanyTipo, CompanyStatus, RegimeTributario,
     COMPANY_TIPO_LABELS, REGIME_TRIBUTARIO_LABELS, REGIME_CONTABIL_LABELS,
-    DEFAULT_MODULOS, MODULOS_POR_TIPO,
+    DEFAULT_MODULOS, MODULOS_POR_TIPO, UF_LIST,
 } from '../types';
 import { companyService } from '../services/companyService';
 import CompanyPartnersTab from './CompanyPartnersTab';
 import CompanyBankAccountsTab from './CompanyBankAccountsTab';
 import CertificateExpiryWarning from './CertificateExpiryWarning';
+import CompanyIncorporacaoTab from './CompanyIncorporacaoTab';
+import CompanyBranchesTab from './CompanyBranchesTab';
 
 interface Props {
     company: Company;
@@ -21,7 +23,7 @@ interface Props {
     onSaved: (updated: Company) => void;
 }
 
-type Tab = 'identificacao' | 'socios' | 'bancos' | 'responsaveis' | 'financeiro' | 'tributario';
+type Tab = 'identificacao' | 'socios' | 'bancos' | 'financeiro' | 'tributario' | 'obras' | 'incorporacao' | 'filiais' | 'responsaveis';
 
 // ─── Form ─────────────────────────────────────────────────────
 
@@ -66,6 +68,12 @@ type FormData = {
     responsavel_financeiro_nome: string;
     responsavel_operacional_nome: string;
     responsavel_tecnico_crea: string;
+    // Sprint C — Obras
+    obra_empresa_executora_id: string;
+    obra_empresa_incorporadora_id: string;
+    obra_bdi_padrao: string;
+    obra_encargos_sociais_pct: string;
+    obra_tabela_sinapi_uf: string;
     // Sprint B — Financeiro
     regime_contabil: 'caixa' | 'competencia' | '';
     limite_aprovacao_compras: string;
@@ -123,6 +131,11 @@ function companyToForm(c: Company): FormData {
         responsavel_financeiro_nome: c.responsavel_financeiro_nome ?? '',
         responsavel_operacional_nome: c.responsavel_operacional_nome ?? '',
         responsavel_tecnico_crea: c.responsavel_tecnico_crea ?? '',
+        obra_empresa_executora_id: c.obra_empresa_executora_id ?? '',
+        obra_empresa_incorporadora_id: c.obra_empresa_incorporadora_id ?? '',
+        obra_bdi_padrao: c.obra_bdi_padrao != null ? String(c.obra_bdi_padrao) : '',
+        obra_encargos_sociais_pct: c.obra_encargos_sociais_pct != null ? String(c.obra_encargos_sociais_pct) : '',
+        obra_tabela_sinapi_uf: c.obra_tabela_sinapi_uf ?? '',
         regime_contabil: c.regime_contabil ?? '',
         limite_aprovacao_compras: c.limite_aprovacao_compras != null ? String(c.limite_aprovacao_compras) : '',
         limite_aprovacao_pagamentos: c.limite_aprovacao_pagamentos != null ? String(c.limite_aprovacao_pagamentos) : '',
@@ -178,6 +191,11 @@ function formToPayload(f: FormData): CompanyUpdate {
         responsavel_financeiro_nome: f.responsavel_financeiro_nome.trim() || undefined,
         responsavel_operacional_nome: f.responsavel_operacional_nome.trim() || undefined,
         responsavel_tecnico_crea: f.responsavel_tecnico_crea.trim() || undefined,
+        obra_empresa_executora_id: f.obra_empresa_executora_id || undefined,
+        obra_empresa_incorporadora_id: f.obra_empresa_incorporadora_id || undefined,
+        obra_bdi_padrao: f.obra_bdi_padrao ? parseFloat(f.obra_bdi_padrao) : undefined,
+        obra_encargos_sociais_pct: f.obra_encargos_sociais_pct ? parseFloat(f.obra_encargos_sociais_pct) : undefined,
+        obra_tabela_sinapi_uf: f.obra_tabela_sinapi_uf || undefined,
         regime_contabil: (f.regime_contabil as 'caixa' | 'competencia') || undefined,
         limite_aprovacao_compras: f.limite_aprovacao_compras ? parseFloat(f.limite_aprovacao_compras) : undefined,
         limite_aprovacao_pagamentos: f.limite_aprovacao_pagamentos ? parseFloat(f.limite_aprovacao_pagamentos) : undefined,
@@ -237,18 +255,29 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 
 // ─── Tabs config ──────────────────────────────────────────────
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'identificacao', label: 'Identificação',     icon: <Building2 className="w-4 h-4" /> },
-    { id: 'socios',        label: 'Sócios',            icon: <Users className="w-4 h-4" /> },
-    { id: 'bancos',        label: 'Contas Bancárias',  icon: <Landmark className="w-4 h-4" /> },
-    { id: 'financeiro',    label: 'Financeiro',        icon: <TrendingUp className="w-4 h-4" /> },
-    { id: 'tributario',    label: 'Tributário',        icon: <Receipt className="w-4 h-4" /> },
-    { id: 'responsaveis',  label: 'Responsáveis',      icon: <UserCheck className="w-4 h-4" /> },
-];
+const SPE_TIPOS: CompanyTipo[] = ['spe', 'incorporadora'];
+
+function buildTabs(company: Company): { id: Tab; label: string; icon: React.ReactNode }[] {
+    const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+        { id: 'identificacao', label: 'Identificação',    icon: <Building2 className="w-4 h-4" /> },
+        { id: 'socios',        label: 'Sócios',           icon: <Users className="w-4 h-4" /> },
+        { id: 'bancos',        label: 'Contas',           icon: <Landmark className="w-4 h-4" /> },
+        { id: 'financeiro',    label: 'Financeiro',       icon: <TrendingUp className="w-4 h-4" /> },
+        { id: 'tributario',    label: 'Tributário',       icon: <Receipt className="w-4 h-4" /> },
+        { id: 'obras',         label: 'Obras',            icon: <HardHat className="w-4 h-4" /> },
+        { id: 'filiais',       label: 'Filiais',          icon: <GitBranch className="w-4 h-4" /> },
+        { id: 'responsaveis',  label: 'Responsáveis',     icon: <UserCheck className="w-4 h-4" /> },
+    ];
+    if (SPE_TIPOS.includes(company.tipo)) {
+        tabs.splice(6, 0, { id: 'incorporacao', label: 'Incorporação', icon: <LandmarkIcon className="w-4 h-4" /> });
+    }
+    return tabs;
+}
 
 // ─── Componente principal ─────────────────────────────────────
 
 const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSaved }) => {
+    const TABS = buildTabs(company);
     const [tab, setTab] = useState<Tab>('identificacao');
     const [form, setForm] = useState<FormData>(() => companyToForm(company));
     const [saving, setSaving] = useState(false);
@@ -820,6 +849,80 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
 
                     <SaveButton />
                 </form>
+            )}
+
+            {/* ── Tab: Obras ───────────────────────────────────────── */}
+            {tab === 'obras' && (
+                <form onSubmit={handleSave} className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-6">
+                    <Section title="Empresas Padrão por Obra">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Field label="Empresa Executora Padrão">
+                                <select className={selectCls} value={form.obra_empresa_executora_id}
+                                    onChange={e => set('obra_empresa_executora_id', e.target.value)}>
+                                    <option value="">Esta empresa</option>
+                                    {companies.filter(c => c.id !== company.id).map(c => (
+                                        <option key={c.id} value={c.id}>{c.razao_social}</option>
+                                    ))}
+                                </select>
+                            </Field>
+                            <Field label="Empresa Incorporadora Padrão">
+                                <select className={selectCls} value={form.obra_empresa_incorporadora_id}
+                                    onChange={e => set('obra_empresa_incorporadora_id', e.target.value)}>
+                                    <option value="">Esta empresa</option>
+                                    {companies.filter(c => c.id !== company.id).map(c => (
+                                        <option key={c.id} value={c.id}>{c.razao_social}</option>
+                                    ))}
+                                </select>
+                            </Field>
+                        </div>
+                        <p className="mt-2 text-xs text-gray-400">
+                            Define os defaults ao criar novas obras vinculadas a esta empresa.
+                        </p>
+                    </Section>
+
+                    <Section title="Parâmetros de Orçamento">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <Field label="BDI Padrão (%)">
+                                <input type="number" min="0" max="100" step="0.01" className={inputCls}
+                                    placeholder="ex: 25.00"
+                                    value={form.obra_bdi_padrao}
+                                    onChange={e => set('obra_bdi_padrao', e.target.value)} />
+                            </Field>
+                            <Field label="Encargos Sociais (%)">
+                                <input type="number" min="0" max="200" step="0.01" className={inputCls}
+                                    placeholder="ex: 118.00"
+                                    value={form.obra_encargos_sociais_pct}
+                                    onChange={e => set('obra_encargos_sociais_pct', e.target.value)} />
+                            </Field>
+                            <Field label="Tabela SINAPI — UF">
+                                <select className={selectCls} value={form.obra_tabela_sinapi_uf}
+                                    onChange={e => set('obra_tabela_sinapi_uf', e.target.value)}>
+                                    <option value="">Selecione o estado</option>
+                                    {UF_LIST.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                                </select>
+                            </Field>
+                        </div>
+                        <p className="mt-2 text-xs text-gray-400">
+                            Valores pré-preenchidos ao criar orçamentos. Podem ser ajustados por obra.
+                        </p>
+                    </Section>
+
+                    <SaveButton />
+                </form>
+            )}
+
+            {/* ── Tab: Incorporação / SPE ───────────────────────────── */}
+            {tab === 'incorporacao' && (
+                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                    <CompanyIncorporacaoTab companyId={company.id} orgId={company.org_id} />
+                </div>
+            )}
+
+            {/* ── Tab: Filiais ──────────────────────────────────────── */}
+            {tab === 'filiais' && (
+                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                    <CompanyBranchesTab companyId={company.id} />
+                </div>
             )}
 
             {/* ── Tab: Responsáveis ─────────────────────────────────── */}

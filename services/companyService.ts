@@ -3,6 +3,8 @@ import {
     Company, CompanyInsert, CompanyUpdate,
     CompanyPartner, CompanyPartnerInsert, CompanyPartnerUpdate,
     CompanyBankAccount, CompanyBankAccountInsert, CompanyBankAccountUpdate,
+    CompanyIncorporacao, CompanyIncorporacaoUpsert,
+    CompanyBranch, CompanyBranchInsert, CompanyBranchUpdate,
 } from '../types';
 
 export const companyService = {
@@ -157,5 +159,68 @@ export const companyService = {
             .createSignedUrl(path, 3600);
         if (error) throw error;
         return data.signedUrl;
+    },
+
+    // ─── Incorporação / SPE ───────────────────────────────────
+
+    async getIncorporacao(companyId: string): Promise<CompanyIncorporacao | null> {
+        const { data, error } = await supabase
+            .from('company_incorporacao')
+            .select('*')
+            .eq('company_id', companyId)
+            .maybeSingle();
+        if (error) throw error;
+        return data as CompanyIncorporacao | null;
+    },
+
+    async upsertIncorporacao(payload: CompanyIncorporacaoUpsert): Promise<CompanyIncorporacao> {
+        const { data, error } = await supabase
+            .from('company_incorporacao')
+            .upsert(payload, { onConflict: 'company_id' })
+            .select()
+            .single();
+        if (error) throw error;
+        return data as CompanyIncorporacao;
+    },
+
+    // ─── Filiais ──────────────────────────────────────────────
+
+    async listBranches(companyId: string): Promise<CompanyBranch[]> {
+        const { data, error } = await supabase
+            .from('company_branches')
+            .select('*')
+            .eq('company_id', companyId)
+            .order('codigo');
+        if (error) throw error;
+        return data as CompanyBranch[];
+    },
+
+    async createBranch(payload: CompanyBranchInsert): Promise<CompanyBranch> {
+        const { data, error } = await supabase
+            .from('company_branches')
+            .insert(payload)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as CompanyBranch;
+    },
+
+    async updateBranch(id: string, payload: CompanyBranchUpdate): Promise<CompanyBranch> {
+        const { data, error } = await supabase
+            .from('company_branches')
+            .update(payload)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as CompanyBranch;
+    },
+
+    async removeBranch(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('company_branches')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
     },
 };

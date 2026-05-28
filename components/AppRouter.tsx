@@ -52,6 +52,7 @@ import QualityModule from './QualityModule';
 import BoletoManager from './BoletoManager';
 import ContasPagarManager from './ContasPagarManager';
 import FinancialCategoriesManager from './FinancialCategoriesManager';
+import BankReconciliation from './BankReconciliation';
 import { FiscalModule } from './fiscal/FiscalModule';
 import OperacionalModule from './OperacionalModule';
 import NotificationsCenter from './NotificationsCenter';
@@ -498,6 +499,13 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     case 'financial-categories':
       return <FinancialCategoriesManager />;
+
+    case 'bank-reconciliation':
+      return (
+        <BankReconciliation
+          organizationId={activeOrganizationId || organizations[0]?.id || ''}
+        />
+      );
 
     case 'financial-boletos':
       return (

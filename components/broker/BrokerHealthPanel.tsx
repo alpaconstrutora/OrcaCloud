@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
-import { Activity, TrendingUp, Building2, Target, Gauge, Calendar } from 'lucide-react';
+import React from 'react';
+import { Activity, TrendingUp, Building2, Target, Gauge, Calendar, Loader2, AlertTriangle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import type { BrokerHealthKPI } from '../../types';
+import { brokerHealthService } from '../../services/brokerHealthService';
+import { STALE } from '../../lib/queryClient';
 
 interface BrokerHealthPanelProps {
     organizationId: string;
@@ -43,12 +46,32 @@ const generateDemoHealth = (): BrokerHealthKPI => ({
 });
 
 const BrokerHealthPanel: React.FC<BrokerHealthPanelProps> = ({ organizationId }) => {
-    const [health] = useState<BrokerHealthKPI>(generateDemoHealth);
+    const { data: health, isLoading, error } = useQuery<BrokerHealthKPI | null>({
+        queryKey: ['broker-health', organizationId],
+        queryFn: () => brokerHealthService.getHealthData(organizationId),
+        staleTime: STALE.normal,
+        enabled: !!organizationId && organizationId !== 'demo',
+    });
 
     const formatCurrency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
-    const soldPct = (health.sold_units / health.total_units) * 100;
-    const reservedPct = (health.reserved_units / health.total_units) * 100;
-    const availablePct = (health.available_units / health.total_units) * 100;
+
+    if (isLoading) return (
+        <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        </div>
+    );
+
+    if (error || !health) return (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
+            <AlertTriangle className="w-10 h-10" />
+            <p className="text-sm font-bold">Nenhum dado de empreendimento encontrado.</p>
+            <p className="text-xs">Cadastre unidades no módulo Comercial para visualizar a saúde do estoque.</p>
+        </div>
+    );
+
+    const soldPct = health.total_units > 0 ? (health.sold_units / health.total_units) * 100 : 0;
+    const reservedPct = health.total_units > 0 ? (health.reserved_units / health.total_units) * 100 : 0;
+    const availablePct = health.total_units > 0 ? (health.available_units / health.total_units) * 100 : 0;
 
     const ivvColor = health.ivv >= 5 ? 'text-emerald-600' : health.ivv >= 3 ? 'text-amber-600' : 'text-red-600';
     const ivvBg = health.ivv >= 5 ? 'bg-emerald-50' : health.ivv >= 3 ? 'bg-amber-50' : 'bg-red-50';

@@ -3,11 +3,13 @@ import { ArrowLeft, Edit2, MapPin, Phone, Mail, Calendar, ClipboardList, Calcula
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
 import ServicesWonModal from './ServicesWonModal';
+import ServicesEngineeringPicker from './ServicesEngineeringPicker';
 import {
   servicesCommercialService,
   ServiceOpportunity,
   ServiceOpportunityEvent,
   OpportunityStage,
+  EngineeringProjectSummary,
 } from '../../services/servicesCommercialService';
 import { ServicesView } from '../ServicesCommercialModule';
 import ServicesOpportunityModal from './ServicesOpportunityModal';
@@ -49,6 +51,11 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
     projectId: string | null;
     contractId: string | null;
   } | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
+  const [engineeringSummary, setEngineeringSummary] = useState<EngineeringProjectSummary | null>(null);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestEmail, setRequestEmail] = useState('');
+  const [showMigrateConfirm, setShowMigrateConfirm] = useState(false);
   const [lostReason, setLostReason] = useState('');
   const [moving, setMoving] = useState(false);
   const { toasts, show: showToast, dismiss } = useServicesToast();
@@ -64,6 +71,66 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
   }, [opportunityId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (opp?.budget_source === 'engineering' && opp.engineering_project_id) {
+      servicesCommercialService.getEngineeringSummary(opp.engineering_project_id)
+        .then(setEngineeringSummary);
+    } else {
+      setEngineeringSummary(null);
+    }
+  }, [opp?.budget_source, opp?.engineering_project_id]);
+
+  const handleLinkEngineering = async (project: EngineeringProjectSummary) => {
+    if (!opp) return;
+    setShowPicker(false);
+    try {
+      const updated = await servicesCommercialService.linkEngineeringProject(opp.id, project.id);
+      setOpp(updated);
+      showToast(`Orçamento "${project.name}" vinculado.`);
+    } catch {
+      showToast('Erro ao vincular orçamento.', 'error');
+    }
+  };
+
+  const handleUnlinkEngineering = async () => {
+    if (!opp) return;
+    try {
+      const updated = await servicesCommercialService.unlinkEngineering(opp.id);
+      setOpp(updated);
+      showToast('Vínculo removido. Voltando ao orçamento simples.');
+    } catch {
+      showToast('Erro ao desvincular.', 'error');
+    }
+  };
+
+  const handleRequestEngineering = async () => {
+    if (!opp || !requestEmail.trim()) return;
+    try {
+      const { projectId } = await servicesCommercialService.requestEngineering(
+        opp,
+        [requestEmail.trim()]
+      );
+      setShowRequestModal(false);
+      setRequestEmail('');
+      showToast(`Solicitação enviada. Projeto ${projectId.slice(0, 8)}… criado em rascunho.`);
+      load();
+    } catch {
+      showToast('Erro ao solicitar orçamento.', 'error');
+    }
+  };
+
+  const handleMigrate = async () => {
+    if (!opp) return;
+    setShowMigrateConfirm(false);
+    try {
+      await servicesCommercialService.migrateSimpleToEngineering(opp);
+      showToast('Orçamento migrado para Engenharia!');
+      load();
+    } catch {
+      showToast('Erro ao migrar orçamento.', 'error');
+    }
+  };
 
   const moveToNext = async () => {
     if (!opp) return;
@@ -154,11 +221,111 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
         </div>
       )}
 
+      {/* Origem do orçamento (Sprint 2: integração engenharia) */}
+      {!isTerminal && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Origem do orçamento</span>
+            <div className="flex gap-1 text-xs">
+              <button
+                onClick={async () => {
+                  if (opp.budget_source === 'simple') return;
+                  await handleUnlinkEngineering();
+                }}
+                className={`px-3 py-1 rounded-full border transition-colors ${
+                  opp.budget_source === 'simple'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-gray-300 text-gray-600 hover:border-blue-300 dark:border-gray-600 dark:text-gray-300'
+                }`}
+              >
+                Simples
+              </button>
+              <button
+                onClick={() => {
+                  if (opp.budget_source === 'engineering') return;
+                  setShowPicker(true);
+                }}
+                className={`px-3 py-1 rounded-full border transition-colors ${
+                  opp.budget_source === 'engineering'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-gray-300 text-gray-600 hover:border-blue-300 dark:border-gray-600 dark:text-gray-300'
+                }`}
+              >
+                Engenharia
+              </button>
+            </div>
+          </div>
+
+          {opp.budget_source === 'engineering' && opp.engineering_project_id && engineeringSummary && (
+            <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-blue-900 dark:text-blue-200 truncate">
+                  {engineeringSummary.name}
+                </span>
+                {opp.engineering_request_status === 'pending' && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">
+                    Aguardando orçamentista
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="text-gray-500">Subtotal</div>
+                <div className="text-right font-medium text-gray-900 dark:text-white">{fmt(engineeringSummary.subtotal)}</div>
+                <div className="text-gray-500">BDI {engineeringSummary.bdi_pct}%</div>
+                <div className="text-right text-gray-600">{fmt(engineeringSummary.subtotal * engineeringSummary.bdi_pct / 100)}</div>
+                <div className="text-gray-500">Margem {engineeringSummary.margin_pct}%</div>
+                <div className="text-right text-gray-600">
+                  {fmt(engineeringSummary.subtotal * (1 + engineeringSummary.bdi_pct / 100) * (engineeringSummary.margin_pct / 100))}
+                </div>
+                <div className="font-semibold text-blue-900 dark:text-blue-200 pt-1.5 border-t border-blue-100 dark:border-blue-800">Total</div>
+                <div className="text-right font-bold text-green-600 dark:text-green-400 pt-1.5 border-t border-blue-100 dark:border-blue-800">
+                  {fmt(engineeringSummary.total)}
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setShowPicker(true)} className="text-xs text-blue-700 dark:text-blue-300 hover:underline">
+                  Trocar
+                </button>
+                <button onClick={handleUnlinkEngineering} className="text-xs text-red-500 hover:underline">
+                  Desvincular
+                </button>
+              </div>
+            </div>
+          )}
+
+          {opp.budget_source === 'engineering' && !opp.engineering_project_id && (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={() => setShowPicker(true)}
+                className="flex-1 py-2 text-sm border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              >
+                Vincular existente
+              </button>
+              <button
+                onClick={() => setShowRequestModal(true)}
+                className="flex-1 py-2 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-300 transition-colors"
+              >
+                Solicitar à engenharia
+              </button>
+            </div>
+          )}
+
+          {opp.budget_source === 'simple' && (
+            <button
+              onClick={() => setShowMigrateConfirm(true)}
+              className="w-full text-xs text-blue-600 hover:underline pt-1"
+            >
+              Migrar para orçamento de Engenharia →
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Quick nav para sub-telas */}
       <div className="grid grid-cols-3 gap-3">
         {[
           { view: 'visit' as ServicesView, icon: <ClipboardList size={18} />, label: 'Visita técnica', disabled: opp.stage === 'lead' },
-          { view: 'budget' as ServicesView, icon: <Calculator size={18} />, label: 'Orçamento', disabled: ['lead', 'visit'].includes(opp.stage) },
+          { view: 'budget' as ServicesView, icon: <Calculator size={18} />, label: 'Orçamento', disabled: ['lead', 'visit'].includes(opp.stage) || opp.budget_source === 'engineering' },
           { view: 'proposal' as ServicesView, icon: <FileText size={18} />, label: 'Proposta', disabled: ['lead', 'visit'].includes(opp.stage) },
         ].map(({ view, icon, label, disabled }) => (
           <button
@@ -277,6 +444,66 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
             onNavigate('pipeline');
           } : undefined}
         />
+      )}
+
+      {showPicker && (
+        <ServicesEngineeringPicker
+          organizationId={organizationId}
+          onClose={() => setShowPicker(false)}
+          onSelect={handleLinkEngineering}
+        />
+      )}
+
+      {showRequestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-gray-900 dark:text-white">Solicitar orçamento à engenharia</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Um projeto vazio será criado em <strong>Engenharia → Orçamentos</strong> e uma notificação será enviada ao destinatário abaixo.
+            </p>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">E-mail do orçamentista *</label>
+              <input
+                type="email"
+                autoFocus
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                value={requestEmail}
+                onChange={e => setRequestEmail(e.target.value)}
+                placeholder="orcamento@empresa.com.br"
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowRequestModal(false)} className="text-sm text-gray-500 px-4 py-2">Cancelar</button>
+              <button
+                onClick={handleRequestEngineering}
+                disabled={!requestEmail.trim()}
+                className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                Solicitar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMigrateConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-gray-900 dark:text-white">Migrar para Engenharia</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Os itens do orçamento simples serão copiados para um novo projeto da engenharia. O orçamento simples será mantido como histórico.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowMigrateConfirm(false)} className="text-sm text-gray-500 px-4 py-2">Cancelar</button>
+              <button
+                onClick={handleMigrate}
+                className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                Migrar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <ServicesToast toasts={toasts} onDismiss={dismiss} />

@@ -3,6 +3,9 @@ import { supabase } from '../lib/supabase';
 export type OpportunityStage = 'lead' | 'visit' | 'budget' | 'proposal' | 'won' | 'lost';
 export type Priority = 'low' | 'medium' | 'high';
 
+export type BudgetSource = 'simple' | 'engineering';
+export type EngineeringRequestStatus = 'pending' | 'in_progress' | 'ready' | null;
+
 export interface ServiceOpportunity {
   id: string;
   organization_id: string;
@@ -24,9 +27,22 @@ export interface ServiceOpportunity {
   lost_at: string | null;
   converted_project_id: string | null;
   converted_contract_id: string | null;
+  budget_source: BudgetSource;
+  engineering_project_id: string | null;
+  engineering_request_status: EngineeringRequestStatus;
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface EngineeringProjectSummary {
+  id: string;
+  name: string;
+  updated_at: string | null;
+  subtotal: number;
+  bdi_pct: number;
+  margin_pct: number;
+  total: number;
 }
 
 export interface ServiceBudget {
@@ -133,7 +149,7 @@ export const servicesCommercialService = {
   },
 
   async createOpportunity(
-    payload: Omit<ServiceOpportunity, 'id' | 'created_at' | 'updated_at' | 'won_at' | 'lost_at' | 'converted_project_id' | 'converted_contract_id'>
+    payload: Omit<ServiceOpportunity, 'id' | 'created_at' | 'updated_at' | 'won_at' | 'lost_at' | 'converted_project_id' | 'converted_contract_id' | 'budget_source' | 'engineering_project_id' | 'engineering_request_status'> & Partial<Pick<ServiceOpportunity, 'budget_source' | 'engineering_project_id' | 'engineering_request_status'>>
   ): Promise<ServiceOpportunity> {
     const { data, error } = await supabase
       .from('services_opportunities')
@@ -291,6 +307,176 @@ export const servicesCommercialService = {
       .single();
     if (error) throw error;
     return data;
+  },
+
+  // ─── Engineering integration ─────────────────────────────────────────────
+
+  async listEngineeringProjects(organizationId: string): Promise<EngineeringProjectSummary[]> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name, settings, budget, updated_at')
+      .filter('settings->>organizationId', 'eq', organizationId)
+      .filter('settings->>classification', 'eq', 'ORCAMENTO')
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((p) => {
+      const settings = (p.settings ?? {}) as Record<string, unknown>;
+      const budget = Array.isArray(p.budget) ? p.budget : [];
+      const subtotal = budget.reduce((acc: number, item) => {
+        const qty = Number((item as { quantity?: number }).quantity ?? 0);
+        const price = Number(((item as { sinapiItem?: { price?: number } }).sinapiItem)?.price ?? 0);
+        return acc + qty * price;
+      }, 0);
+      const bdi = Number(settings.bdi ?? 0);
+      const margin = Number(settings.margin ?? 0);
+      const total = subtotal * (1 + bdi / 100) * (1 + margin / 100);
+      return {
+        id: p.id,
+        name: p.name,
+        updated_at: p.updated_at,
+        subtotal,
+        bdi_pct: bdi,
+        margin_pct: margin,
+        total,
+      };
+    });
+  },
+
+  async getEngineeringSummary(projectId: string): Promise<EngineeringProjectSummary | null> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name, settings, budget, updated_at')
+      .eq('id', projectId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const settings = (data.settings ?? {}) as Record<string, unknown>;
+    const budget = Array.isArray(data.budget) ? data.budget : [];
+    const subtotal = budget.reduce((acc: number, item) => {
+      const qty = Number((item as { quantity?: number }).quantity ?? 0);
+      const price = Number(((item as { sinapiItem?: { price?: number } }).sinapiItem)?.price ?? 0);
+      return acc + qty * price;
+    }, 0);
+    const bdi = Number(settings.bdi ?? 0);
+    const margin = Number(settings.margin ?? 0);
+    return {
+      id: data.id,
+      name: data.name,
+      updated_at: data.updated_at,
+      subtotal,
+      bdi_pct: bdi,
+      margin_pct: margin,
+      total: subtotal * (1 + bdi / 100) * (1 + margin / 100),
+    };
+  },
+
+  async linkEngineeringProject(opportunityId: string, projectId: string): Promise<ServiceOpportunity> {
+    return servicesCommercialService.updateOpportunity(opportunityId, {
+      budget_source: 'engineering',
+      engineering_project_id: projectId,
+      engineering_request_status: 'ready',
+    });
+  },
+
+  async unlinkEngineering(opportunityId: string): Promise<ServiceOpportunity> {
+    return servicesCommercialService.updateOpportunity(opportunityId, {
+      budget_source: 'simple',
+      engineering_project_id: null,
+      engineering_request_status: null,
+    });
+  },
+
+  async requestEngineering(
+    opp: ServiceOpportunity,
+    recipientEmails: string[]
+  ): Promise<{ projectId: string }> {
+    const projectName = `${opp.contact_name} - ${opp.work_type ?? 'Orçamento'} (CRM)`;
+    const settings = {
+      organizationId: opp.organization_id,
+      classification: 'ORCAMENTO',
+      crmOpportunityId: opp.id,
+      requestedFromCrm: true,
+      area: opp.estimated_area ?? 0,
+      bdi: 0,
+      margin: 0,
+    };
+    const { data: project, error } = await supabase
+      .from('projects')
+      .insert({
+        organization_id: opp.organization_id,
+        name: projectName,
+        settings,
+        budget: [],
+      })
+      .select()
+      .single();
+    if (error) throw error;
+
+    await servicesCommercialService.updateOpportunity(opp.id, {
+      budget_source: 'engineering',
+      engineering_project_id: project.id,
+      engineering_request_status: 'pending',
+    });
+
+    for (const email of recipientEmails) {
+      await supabase.from('notifications').insert({
+        recipient_email: email,
+        title: 'Nova solicitação de orçamento',
+        message: `O CRM solicitou o orçamento de "${projectName}" (cliente ${opp.contact_name}).`,
+        link: `/projects/${project.id}`,
+        type: 'engineering_request',
+      });
+    }
+
+    return { projectId: project.id };
+  },
+
+  async migrateSimpleToEngineering(opp: ServiceOpportunity): Promise<{ projectId: string }> {
+    const budget = await servicesCommercialService.getBudget(opp.id);
+    const items = budget?.items ?? [];
+    const budgetEntries = items.map((it, idx) => ({
+      id: `crm-${opp.id}-${idx}`,
+      sinapiItem: {
+        code: `CRM-${idx + 1}`,
+        description: it.description,
+        unit: it.unit,
+        price: it.unit_price,
+        type: 'SERVICE',
+        category: 'Própria',
+        source: 'Própria',
+      },
+      quantity: it.quantity,
+      phase: 'CRM',
+      group: 'CRM',
+    }));
+
+    const projectName = `${opp.contact_name} - ${opp.work_type ?? 'Orçamento'} (migrado do CRM)`;
+    const { data: project, error } = await supabase
+      .from('projects')
+      .insert({
+        organization_id: opp.organization_id,
+        name: projectName,
+        settings: {
+          organizationId: opp.organization_id,
+          classification: 'ORCAMENTO',
+          crmOpportunityId: opp.id,
+          migratedFromCrm: true,
+          area: opp.estimated_area ?? 0,
+          bdi: 0,
+          margin: budget?.margin_pct ?? 0,
+        },
+        budget: budgetEntries,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+
+    await servicesCommercialService.updateOpportunity(opp.id, {
+      budget_source: 'engineering',
+      engineering_project_id: project.id,
+      engineering_request_status: 'ready',
+    });
+    return { projectId: project.id };
   },
 
   // ─── Conversion result ────────────────────────────────────────────────────

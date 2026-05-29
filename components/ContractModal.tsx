@@ -90,6 +90,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     React.useEffect(() => {
         if (isOpen) {
             loadDependencies();
+            if (!initialData) {
+                // Reset number field for new contract
+                numberInputRef.current = '';
+                setFormData(prev => ({ ...prev, number: '' }));
+                setNumberError(null);
+            }
         }
     }, [isOpen, organizationId]);
 
@@ -104,18 +110,30 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
     // Auto-fetch next sequential number for new contracts
     React.useEffect(() => {
-        if (!isOpen || initialData || !organizationId) return;
+        if (!isOpen || initialData) return;
         (async () => {
             setIsFetchingNumber(true);
             try {
-                const { data } = await supabase.rpc('get_next_contract_number', { p_org_id: organizationId });
-                if (data) {
-                    const n = String(data).padStart(3, '0');
-                    numberInputRef.current = n;
-                    setFormData(prev => ({ ...prev, number: n }));
+                let nextNum = 1;
+                if (organizationId) {
+                    const { data: rows } = await supabase
+                        .from('contracts')
+                        .select('number')
+                        .eq('organization_id', organizationId);
+                    const max = (rows ?? []).reduce((acc, r) => {
+                        const n = parseInt(r.number ?? '', 10);
+                        return isNaN(n) ? acc : Math.max(acc, n);
+                    }, 0);
+                    nextNum = max + 1;
                 }
+                const n = String(nextNum).padStart(3, '0');
+                numberInputRef.current = n;
+                setFormData(prev => ({ ...prev, number: n }));
             } catch (e) {
                 console.error(e);
+                const fallback = '001';
+                numberInputRef.current = fallback;
+                setFormData(prev => ({ ...prev, number: fallback }));
             } finally {
                 setIsFetchingNumber(false);
             }

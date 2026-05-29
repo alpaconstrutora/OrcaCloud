@@ -1,6 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, FileText, Send, Download } from 'lucide-react';
-import { servicesCommercialService, ServiceProposal, ServiceBudget } from '../../services/servicesCommercialService';
+import {
+  servicesCommercialService,
+  ServiceProposal,
+  ServiceBudget,
+  ServiceOpportunity,
+  EngineeringProjectSummary,
+} from '../../services/servicesCommercialService';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
 
@@ -23,6 +29,8 @@ const STATUS_LABELS: Record<string, string> = {
 const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBack }) => {
   const [proposal, setProposal] = useState<ServiceProposal | null>(null);
   const [budget, setBudget] = useState<ServiceBudget | null>(null);
+  const [opportunity, setOpportunity] = useState<ServiceOpportunity | null>(null);
+  const [engineeringSummary, setEngineeringSummary] = useState<EngineeringProjectSummary | null>(null);
   const [form, setForm] = useState({
     scope: '',
     payment_terms: '',
@@ -34,12 +42,20 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
   const { toasts, show: showToast, dismiss } = useServicesToast();
 
   const load = useCallback(async () => {
-    const [p, b] = await Promise.all([
+    const [p, b, o] = await Promise.all([
       servicesCommercialService.getProposal(opportunityId),
       servicesCommercialService.getBudget(opportunityId),
+      servicesCommercialService.getOpportunity(opportunityId),
     ]);
     setProposal(p);
     setBudget(b);
+    setOpportunity(o);
+    if (o?.budget_source === 'engineering' && o.engineering_project_id) {
+      const summary = await servicesCommercialService.getEngineeringSummary(o.engineering_project_id);
+      setEngineeringSummary(summary);
+    } else {
+      setEngineeringSummary(null);
+    }
     if (p) {
       setForm({
         scope: p.scope ?? '',
@@ -47,10 +63,10 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
         delivery_term_days: p.delivery_term_days?.toString() ?? '',
         valid_until: p.valid_until ?? '',
       });
-    } else if (b) {
-      setForm(f => ({ ...f, scope: '' }));
     }
   }, [opportunityId]);
+
+  const totalValue = engineeringSummary?.total ?? budget?.total ?? 0;
 
   useEffect(() => { load(); }, [load]);
 
@@ -64,7 +80,7 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
         opportunity_id: opportunityId,
         organization_id: organizationId,
         budget_id: budget?.id ?? null,
-        total_value: budget?.total ?? 0,
+        total_value: totalValue,
         scope: form.scope || null,
         payment_terms: form.payment_terms || null,
         delivery_term_days: form.delivery_term_days ? Number(form.delivery_term_days) : null,
@@ -90,7 +106,7 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
         opportunity_id: opportunityId,
         organization_id: organizationId,
         budget_id: budget?.id ?? null,
-        total_value: budget?.total ?? 0,
+        total_value: totalValue,
         scope: form.scope || null,
         payment_terms: form.payment_terms || null,
         delivery_term_days: form.delivery_term_days ? Number(form.delivery_term_days) : null,
@@ -115,7 +131,13 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
     const win = window.open('', '_blank');
     if (!win) { setPrinting(false); return; }
 
-    const total = budget?.total ?? 0;
+    const total = totalValue;
+    const isEngineering = !!engineeringSummary;
+    const subtotalForPrint = engineeringSummary?.subtotal ?? budget?.subtotal ?? 0;
+    const bdiPct = engineeringSummary?.bdi_pct ?? 0;
+    const marginPct = engineeringSummary?.margin_pct ?? budget?.margin_pct ?? 0;
+    const bdiValue = subtotalForPrint * bdiPct / 100;
+    const marginValue = subtotalForPrint * (1 + bdiPct / 100) * (marginPct / 100);
     const html = `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -141,7 +163,18 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
 
   ${form.scope ? `<h2>Escopo do Serviço</h2><p style="white-space:pre-line;font-size:13px">${form.scope}</p>` : ''}
 
-  ${budget?.items?.length ? `
+  ${isEngineering ? `
+  <h2>Composição do Valor</h2>
+  <table>
+    <tbody>
+      <tr><td>Subtotal (custo direto)</td><td style="text-align:right">${fmt(subtotalForPrint)}</td></tr>
+      <tr><td>BDI (${bdiPct}%)</td><td style="text-align:right">${fmt(bdiValue)}</td></tr>
+      <tr><td>Margem comercial (${marginPct}%)</td><td style="text-align:right">${fmt(marginValue)}</td></tr>
+      <tr class="total-row" style="background:#f0fdf4"><td>TOTAL</td><td style="text-align:right;color:#16a34a">${fmt(total)}</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:11px;color:#9ca3af;margin-top:8px">Detalhamento por item disponível mediante solicitação.</p>
+  ` : budget?.items?.length ? `
   <h2>Itens do Orçamento</h2>
   <table>
     <thead><tr><th>Descrição</th><th>Unid.</th><th>Qtd.</th><th>Valor Unit.</th><th>Total</th></tr></thead>
@@ -201,14 +234,32 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
             )}
           </div>
         </div>
-        {budget && (
-          <span className="text-lg font-bold text-green-600 dark:text-green-400">{fmt(budget.total)}</span>
+        {totalValue > 0 && (
+          <span className="text-lg font-bold text-green-600 dark:text-green-400">{fmt(totalValue)}</span>
         )}
       </div>
 
-      {!budget && (
+      {!budget && !engineeringSummary && (
         <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4 text-sm text-yellow-700 dark:text-yellow-400">
-          Crie um orçamento antes de gerar a proposta.
+          Crie um orçamento simples ou vincule um orçamento da engenharia antes de gerar a proposta.
+        </div>
+      )}
+
+      {engineeringSummary && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800 space-y-2">
+          <div className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+            Origem: Engenharia — {engineeringSummary.name}
+          </div>
+          <div className="grid grid-cols-2 gap-y-1 text-sm">
+            <span className="text-gray-600 dark:text-gray-400">Subtotal</span>
+            <span className="text-right text-gray-900 dark:text-white">{fmt(engineeringSummary.subtotal)}</span>
+            <span className="text-gray-600 dark:text-gray-400">BDI ({engineeringSummary.bdi_pct}%)</span>
+            <span className="text-right text-gray-900 dark:text-white">{fmt(engineeringSummary.subtotal * engineeringSummary.bdi_pct / 100)}</span>
+            <span className="text-gray-600 dark:text-gray-400">Margem ({engineeringSummary.margin_pct}%)</span>
+            <span className="text-right text-gray-900 dark:text-white">{fmt(engineeringSummary.subtotal * (1 + engineeringSummary.bdi_pct / 100) * (engineeringSummary.margin_pct / 100))}</span>
+            <span className="text-gray-700 dark:text-gray-200 font-semibold pt-1 border-t border-blue-100 dark:border-blue-800">Total</span>
+            <span className="text-right font-bold text-green-600 dark:text-green-400 pt-1 border-t border-blue-100 dark:border-blue-800">{fmt(engineeringSummary.total)}</span>
+          </div>
         </div>
       )}
 
@@ -243,14 +294,14 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
         </button>
         <button
           onClick={printProposal}
-          disabled={!budget || printing}
+          disabled={(!budget && !engineeringSummary) || printing}
           className="flex items-center gap-1.5 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
         >
           <Download size={15} /> PDF
         </button>
         <button
           onClick={markSent}
-          disabled={!budget || saving}
+          disabled={(!budget && !engineeringSummary) || saving}
           className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
         >
           <Send size={15} /> Marcar enviada

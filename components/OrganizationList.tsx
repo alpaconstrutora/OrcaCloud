@@ -560,10 +560,10 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                 )}
 
                 {activeTab === 'settings' && currentOrg && (
-                    <OrganizationPage 
+                    <OrganizationPage
                         organization={currentOrg}
                         onUpdate={(org) => {
-                            onEdit(org);
+                            (onSave ?? onEdit)(org);
                         }}
                     />
                 )}

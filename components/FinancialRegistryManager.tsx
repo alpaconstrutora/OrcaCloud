@@ -76,7 +76,6 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
             handleCancel();
         } catch (error) {
             console.error('Error saving item:', error);
-            alert('Erro ao salvar item.');
         } finally {
             setLoading(false);
         }

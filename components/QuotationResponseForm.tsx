@@ -99,11 +99,9 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
         setLoading(true);
         try {
             await quotationService.submitResponse(formData);
-            alert("Proposta enviada com sucesso!");
             onSave();
         } catch (err) {
             console.error("Error submitting response:", err);
-            alert("Erro ao enviar proposta.");
         } finally {
             setLoading(false);
         }

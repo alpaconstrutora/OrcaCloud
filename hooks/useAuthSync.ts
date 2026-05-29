@@ -41,7 +41,14 @@ export const useAuthSync = ({
 }: UseAuthSyncProps) => {
   const signOutTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auth Listeners
+  // Refs para valores lidos dentro do effect de profile-sync mas que NÃO devem
+  // re-disparar o effect — evita o ciclo: setCurrentProfile → re-run → setCurrentProfile.
+  const profileSynchronizedRef = useRef(profileSynchronized);
+  const currentProfileRef = useRef(currentProfile);
+  useEffect(() => { profileSynchronizedRef.current = profileSynchronized; }, [profileSynchronized]);
+  useEffect(() => { currentProfileRef.current = currentProfile; }, [currentProfile]);
+
+  // ── 1. Auth state listener ────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
       setSession(initialSession);
@@ -50,78 +57,92 @@ export const useAuthSync = ({
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
-
       if (!newSession) {
         setSelectedLoginGroup(null);
         setAuthError(null);
         setProfileSynchronized(false);
       }
-
       setLoadingSession(false);
       if (event === 'PASSWORD_RECOVERY') setIsResettingPassword(true);
     });
 
     return () => subscription.unsubscribe();
-  }, [setSession, setLoadingSession, setAuthError, setProfileSynchronized, setSelectedLoginGroup, setIsResettingPassword]);
+  // Setters são estáveis (useState) — sem risco de re-run desnecessário
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Profile Sync Logic
+  // ── 2. Profile sync — dispara apenas quando usuário ou grupo muda ─────────
   useEffect(() => {
-    if (session?.user?.id && selectedLoginGroup) {
-      if (profileSynchronized && currentProfile.email === session.user.email && currentProfile.group === selectedLoginGroup) {
-        return;
+    if (!session?.user?.id || !selectedLoginGroup) return;
+
+    // Guard via ref: não re-sincroniza se já está sincronizado para este user+grupo
+    const prof = currentProfileRef.current;
+    if (
+      profileSynchronizedRef.current &&
+      prof.email === session.user.email &&
+      prof.group === selectedLoginGroup
+    ) return;
+
+    let cancelled = false;
+
+    const validate = async () => {
+      setIsValidating(true);
+      setAuthError(null);
+
+      const result = await profileService.validateAccess(session.user.email!, selectedLoginGroup);
+
+      if (cancelled) return;
+
+      if (!result.isValid) {
+        setAuthError(result.error || 'Acesso negado.');
+        setProfileSynchronized(false);
+        if (signOutTimeoutRef.current) clearTimeout(signOutTimeoutRef.current);
+        signOutTimeoutRef.current = setTimeout(() => {
+          setSelectedLoginGroup(null);
+          setSession(null);
+          supabase.auth.signOut();
+        }, 3000);
+      } else {
+        // Carregar perfil específico por tipo de grupo
+        if (selectedLoginGroup === ProfileGroup.INVESTOR && session.user.email) {
+          const profile = await investorService.getByEmail(session.user.email);
+          if (!cancelled && profile) setInvestorProfile(profile);
+        }
+        if (selectedLoginGroup === ProfileGroup.CLIENT && session.user.email) {
+          const profile = await clientService.getByEmail(session.user.email);
+          if (!cancelled && profile) setClientProfile(profile);
+        }
+        if (selectedLoginGroup === ProfileGroup.SUPPLIER && session.user.email) {
+          const profile = await supplierService.getByEmail(session.user.email);
+          if (!cancelled && profile) setSupplierProfile(profile);
+        }
+
+        if (cancelled) return;
+
+        let role = UserProfile.USER;
+        if (selectedLoginGroup === ProfileGroup.DEVELOPER) role = UserProfile.DEVELOPER;
+        else if (selectedLoginGroup === ProfileGroup.INVESTOR) role = UserProfile.INVESTOR;
+        else if (selectedLoginGroup === ProfileGroup.CLIENT) role = UserProfile.CLIENT_BUYER;
+        else if (selectedLoginGroup === ProfileGroup.SUPPLIER) role = UserProfile.SUPPLIER;
+
+        setCurrentProfile({ group: selectedLoginGroup, role, email: session.user.email });
+        setProfileSynchronized(true);
       }
 
-      const validate = async () => {
-        setIsValidating(true);
-        setAuthError(null);
-        const result = await profileService.validateAccess(session.user.email!, selectedLoginGroup);
-        if (!result.isValid) {
-          setAuthError(result.error || 'Acesso negado.');
-          setProfileSynchronized(false);
-          if (signOutTimeoutRef.current) clearTimeout(signOutTimeoutRef.current);
-          signOutTimeoutRef.current = setTimeout(() => {
-            setSelectedLoginGroup(null);
-            setSession(null);
-            supabase.auth.signOut();
-          }, 3000);
-        } else {
-          if (selectedLoginGroup === ProfileGroup.INVESTOR && session.user.email) {
-            const profile = await investorService.getByEmail(session.user.email);
-            if (profile) setInvestorProfile(profile);
-          }
-          if (selectedLoginGroup === ProfileGroup.CLIENT && session.user.email) {
-            const profile = await clientService.getByEmail(session.user.email);
-            if (profile) setClientProfile(profile);
-          }
-          if (selectedLoginGroup === ProfileGroup.SUPPLIER && session.user.email) {
-            const profile = await supplierService.getByEmail(session.user.email);
-            if (profile) setSupplierProfile(profile);
-          }
-          let role = UserProfile.USER;
-          if (selectedLoginGroup === ProfileGroup.DEVELOPER) role = UserProfile.DEVELOPER;
-          else if (selectedLoginGroup === ProfileGroup.INVESTOR) role = UserProfile.INVESTOR;
-          else if (selectedLoginGroup === ProfileGroup.CLIENT) role = UserProfile.CLIENT_BUYER;
-          else if (selectedLoginGroup === ProfileGroup.SUPPLIER) role = UserProfile.SUPPLIER;
-          setCurrentProfile({ group: selectedLoginGroup, role, email: session.user.email });
-          setProfileSynchronized(true);
-        }
-        setIsValidating(false);
-      };
-      validate();
-      return () => {
-        if (signOutTimeoutRef.current) clearTimeout(signOutTimeoutRef.current);
-      };
-    }
-  }, [
-    session?.user?.id, session?.user?.email, selectedLoginGroup,
-    fetchProjects, fetchClients, fetchOrganizations,
-    setCurrentProfile, setProfileSynchronized, setIsValidating,
-    setAuthError, setInvestorProfile, setClientProfile, setSupplierProfile,
-    setSelectedLoginGroup, setSession, profileSynchronized,
-    currentProfile.email, currentProfile.group
-  ]);
+      if (!cancelled) setIsValidating(false);
+    };
 
-  // Initial Data Fetch
+    validate();
+
+    return () => {
+      cancelled = true;
+      if (signOutTimeoutRef.current) clearTimeout(signOutTimeoutRef.current);
+    };
+  // Deps mínimas: só re-dispara quando o usuário autenticado ou grupo escolhido mudam
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id, session?.user?.email, selectedLoginGroup]);
+
+  // ── 3. Fetch inicial de dados após sincronização ──────────────────────────
   useEffect(() => {
     if (profileSynchronized) {
       fetchOrganizations();
@@ -129,19 +150,14 @@ export const useAuthSync = ({
     }
   }, [profileSynchronized, fetchOrganizations, fetchClients]);
 
-  // Carregamento automático de obra para Clientes/Investidores ao logar
+  // ── 4. Auto-load de obra para clientes ao logar ───────────────────────────
   useEffect(() => {
     if (profileSynchronized && !projectId) {
       if (currentProfile.group === ProfileGroup.CLIENT && clientProfile?.id) {
         projectService.listProjects(clientProfile.id).then(projects => {
-          if (projects && projects.length > 0) {
-            handleLoadProject(projects[0].id);
-          }
+          if (projects && projects.length > 0) handleLoadProject(projects[0].id);
         });
-      } else if (currentProfile.group === ProfileGroup.INVESTOR && investorProfile?.id) {
-        // Reservado para auto-load de investidor
       }
     }
   }, [profileSynchronized, currentProfile.group, clientProfile?.id, investorProfile?.id, projectId, handleLoadProject]);
-
 };

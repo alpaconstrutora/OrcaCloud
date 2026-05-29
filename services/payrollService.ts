@@ -399,28 +399,14 @@ export const payrollService = {
     async updateEmployeeRecurringRubrics(employeeId: string, rubricCodes: string[], orgId: string): Promise<void> {
         if (!employeeId) throw new Error('ID do colaborador é obrigatório para vincular rubricas.');
 
-        // 1. Deletar vínculos atuais
-        const { error: delError } = await supabase
-            .from('employee_automatic_rubrics')
-            .delete()
-            .eq('employee_id', employeeId);
-        
-        if (delError) throw delError;
+        // RPC atômica: DELETE + INSERT em uma transação — evita colaborador sem rubricas
+        const { error } = await supabase.rpc('update_employee_rubrics', {
+            p_employee_id: employeeId,
+            p_rubric_codes: rubricCodes,
+            p_org_id: orgId,
+        });
 
-        // 2. Inserir novos vínculos
-        if (rubricCodes.length > 0) {
-            const inserts = rubricCodes.map(code => ({
-                employee_id: employeeId,
-                rubric_code: code,
-                org_id: orgId
-            }));
-
-            const { error: insError } = await supabase
-                .from('employee_automatic_rubrics')
-                .insert(inserts);
-            
-            if (insError) throw insError;
-        }
+        if (error) throw error;
     },
 
     async deleteRubric(code: string) {
@@ -627,24 +613,16 @@ export const payrollService = {
         const { valid, total } = validateAllocationTotal(allocations);
         if (!valid) throw new Error(`Alocação total (${total.toFixed(1)}%) ultrapassa 100%. Corrija antes de salvar.`);
 
-        // Primeiro deleta as antigas do período específico
-        await supabase
-            .from('employee_allocations')
-            .delete()
-            .eq('employee_id', employeeId)
-            .eq('reference_period', period);
-            
-        if (allocations.length === 0) return;
-        
-        const { error } = await supabase
-            .from('employee_allocations')
-            .insert(allocations.map(a => ({
-                employee_id: a.employee_id,
+        // RPC atômica: DELETE + INSERT em uma transação — evita estado inconsistente
+        const { error } = await supabase.rpc('upsert_employee_allocations', {
+            p_employee_id: employeeId,
+            p_period: period,
+            p_allocations: JSON.stringify(allocations.map(a => ({
                 project_id: a.project_id,
                 allocation_percent: a.allocation_percent,
-                reference_period: period
-            })));
-            
+            }))),
+        });
+
         if (error) throw error;
     },
 

@@ -159,7 +159,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
         {[
           { view: 'visit' as ServicesView, icon: <ClipboardList size={18} />, label: 'Visita técnica', disabled: opp.stage === 'lead' },
           { view: 'budget' as ServicesView, icon: <Calculator size={18} />, label: 'Orçamento', disabled: ['lead', 'visit'].includes(opp.stage) },
-          { view: 'proposal' as ServicesView, icon: <FileText size={18} />, label: 'Proposta', disabled: ['lead', 'visit', 'budget'].includes(opp.stage) },
+          { view: 'proposal' as ServicesView, icon: <FileText size={18} />, label: 'Proposta', disabled: ['lead', 'visit'].includes(opp.stage) },
         ].map(({ view, icon, label, disabled }) => (
           <button
             key={view}

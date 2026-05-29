@@ -185,12 +185,13 @@ export const payrollEngine = {
             const eDate = new Date(runEndDate.getUTCFullYear(), runEndDate.getUTCMonth(), runEndDate.getUTCDate());
             
             if (hDate > sDate && hDate <= eDate) {
-                // Cálculo de dias trabalhados no mês da admissão (padrão CLT)
-                const monthDays = new Date(eDate.getFullYear(), eDate.getMonth() + 1, 0).getDate();
+                // Cálculo de dias trabalhados no mês da admissão (padrão CLT: mês = 30 dias)
+                // CLT normaliza todos os meses para 30 dias; o dia 31 vale como dia 30.
                 const dayOfAdmission = hDate.getDate();
-                const workedDays = monthDays - dayOfAdmission + 1;
-                
-                referenceDays = Math.min(30, workedDays);
+                const dayOfAdmissionCLT = Math.min(dayOfAdmission, 30);
+                const workedDays = 30 - dayOfAdmissionCLT + 1; // Sempre ≤ 30
+
+                referenceDays = workedDays;
                 baseSalary = (baseSalary / 30) * referenceDays;
             }
         }
@@ -407,16 +408,17 @@ export const payrollEngine = {
         const fullAmount = employee.base_salary || 0;
 
         if (isFirstParcel) {
-            const amount = fullAmount * 0.5;
+            const amount = Math.round(fullAmount * 0.5 * 100) / 100;
             items.push({ code: 'DECIMO', type: 'provento', amount, base_amount: fullAmount, reference: 0.5 });
-            // 1ª parcela geralmente não tem descontos de INSS/FGTS/IRRF (depende da parametrização)
-            // Mas o custo empresa (FGTS) deve incidir.
             return this.finaliseWithRubrics(ctx, items);
         } else {
-            // 2ª Parcela: Valor total com descontos
+            // 2ª Parcela: valor integral com desconto do que foi pago na 1ª parcela.
+            // Busca o valor real pago na 1ª parcela (relevante quando houve reajuste salarial).
+            const year = parseInt(run.start_date.slice(0, 4), 10);
+            const paidInFirst = await payrollService.getFirstDecimoPaidAmount(employee.id, year);
+            const paid = paidInFirst ?? Math.round(fullAmount * 0.5 * 100) / 100;
+
             items.push({ code: 'DECIMO', type: 'provento', amount: fullAmount, base_amount: fullAmount, reference: 1.0 });
-            // Desconto da 1ª parcela paga
-            const paid = fullAmount * 0.5; // Idealmente buscaria no histórico
             items.push({ code: 'DESC_ADIANT_13', type: 'desconto', amount: paid, base_amount: paid, reference: 1.0 });
 
             return this.finaliseWithRubrics(ctx, items);
@@ -427,14 +429,29 @@ export const payrollEngine = {
      * FOLHA DE RESCISÃO
      */
     async processTermination(ctx: PayrollContext) {
-        const { employee } = ctx;
+        const { employee, run } = ctx;
         const items: Omit<PayrollItem, 'payroll_run_id' | 'employee_id'>[] = [];
         const salary = employee.base_salary || 0;
+
+        // 13º proporcional: meses trabalhados no ANO da rescisão (CLT art. 3º Lei 4749/65)
+        // Conta do início do ano (ou admissão se foi neste ano) até o mês da rescisão.
+        // Regra dos 15 dias: se trabalhou ≥ 15 dias no mês, conta o mês inteiro.
+        const termDate = new Date(run.end_date.slice(0, 10) + 'T12:00:00');
+        const termYear = termDate.getFullYear();
+        const yearStart = new Date(`${termYear}-01-01T12:00:00`);
+        let countFrom = yearStart;
+        if (employee.hire_date) {
+            const hireDate = new Date(employee.hire_date.slice(0, 10) + 'T12:00:00');
+            if (hireDate > yearStart) countFrom = hireDate;
+        }
+        const monthsRaw = termDate.getMonth() - countFrom.getMonth();
+        const partialMonth = termDate.getDate() >= 15 ? 1 : 0;
+        const monthsWorked = Math.max(0, Math.min(12, monthsRaw + partialMonth));
 
         // Verbas Rescisórias Base
         items.push({ code: 'SALDO_SALARIO', type: 'provento', amount: salary, base_amount: salary, reference: 30 });
         items.push({ code: 'FERIAS', type: 'provento', amount: salary, base_amount: salary, reference: 30 });
-        items.push({ code: 'DECIMO', type: 'provento', amount: salary / 12 * 6, base_amount: salary, reference: 6 });
+        items.push({ code: 'DECIMO', type: 'provento', amount: salary / 12 * monthsWorked, base_amount: salary, reference: monthsWorked });
 
         return this.finaliseWithRubrics(ctx, items);
     },
@@ -480,7 +497,7 @@ export const payrollEngine = {
         }
 
         const irrfBase = base_irrf - inss;
-        const runYear = new Date(ctx.run.start_date).getFullYear();
+        const runYear = parseInt(ctx.run.start_date.slice(0, 4), 10);
         const rawIrrf = this.calculateIRRF(irrfBase, ctx.irrfBrackets);
         const irrf = runYear >= 2026 ? this.applyIRRFReducer(rawIrrf, irrfBase) : rawIrrf;
         if (irrf > 0) {

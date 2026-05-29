@@ -540,6 +540,20 @@ export const payrollService = {
         return v1 || [];
     },
 
+    async getFirstDecimoPaidAmount(employeeId: string, year: number): Promise<number | null> {
+        const { data } = await supabase
+            .from('payroll_items')
+            .select('amount, payroll_runs!inner(type, subtype, start_date)')
+            .eq('employee_id', employeeId)
+            .eq('code', 'DECIMO')
+            .gte('payroll_runs.start_date', `${year}-01-01`)
+            .lt('payroll_runs.start_date', `${year + 1}-01-01`)
+            .in('payroll_runs.subtype', ['1_parcela', '1'])
+            .limit(1)
+            .maybeSingle();
+        return (data as { amount: number } | null)?.amount ?? null;
+    },
+
     async savePayrollData(
         runId: string,
         employee_id: string,
@@ -580,9 +594,9 @@ export const payrollService = {
             discounts: Math.round((result.discounts || 0) * 100) / 100,
             net: Math.round((result.net || 0) * 100) / 100,
             employer_cost: Math.round((result.employer_cost || 0) * 100) / 100,
-            base_inss: result.base_inss || result.gross,
-            base_fgts: result.base_fgts || result.gross,
-            base_irrf: result.base_irrf || result.gross
+            base_inss: result.base_inss ?? result.gross,
+            base_fgts: result.base_fgts ?? result.gross,
+            base_irrf: result.base_irrf ?? result.gross
         };
 
         const { error: resError } = await supabase

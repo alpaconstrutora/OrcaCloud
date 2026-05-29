@@ -219,6 +219,7 @@ interface ProjectModalProps {
 const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, initialData, mode = 'create', initialClassification, organizationId, organizations = [], empresaId }) => {
   const { companies, activeEmpresaId } = useStore();
 
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<'technical' | 'select' | 'address'>('technical');
   const [clients, setClients] = React.useState<Client[]>([]);
   const [investors, setInvestors] = React.useState<Investor[]>([]);
@@ -448,21 +449,26 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      alert("Por favor, insira um nome para a obra.");
       setActiveTab('technical');
       return;
     }
-    onSubmit({
-      ...formData,
-      linkedProjectId: linkedProjectId || undefined,
-      linkedProjectName: linkedProjectId ? projects.find(p => p.id === linkedProjectId)?.name : undefined,
-      code: (formData.classification === 'OBRA' && projectCode.trim()) ? projectCode.trim() : undefined,
-      organizationId: selectedOrgId,
-      empresaId: selectedEmpresaId,
-    });
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onSubmit({
+        ...formData,
+        linkedProjectId: linkedProjectId || undefined,
+        linkedProjectName: linkedProjectId ? projects.find(p => p.id === linkedProjectId)?.name : undefined,
+        code: (formData.classification === 'OBRA' && projectCode.trim()) ? projectCode.trim() : undefined,
+        organizationId: selectedOrgId,
+        empresaId: selectedEmpresaId,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
     setProjectCode('');
     if (mode === 'create') {
       // Only reset if creating
@@ -2092,9 +2098,10 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
               </button>
               <button
                 type="submit"
-                className="px-8 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100"
+                disabled={isSubmitting}
+                className="px-8 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {mode === 'create'
+                {isSubmitting ? 'Salvando...' : mode === 'create'
                   ? (formData.classification === 'OBRA' ? 'Criar Obra' : formData.classification === 'PLANEJAMENTO' ? 'Criar Planejamento' : 'Criar Orçamento')
                   : 'Salvar Alterações'}
               </button>

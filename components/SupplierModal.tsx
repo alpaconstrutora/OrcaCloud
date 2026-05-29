@@ -60,6 +60,7 @@ const labelCls = 'block text-[10px] font-black text-gray-400 uppercase tracking-
 
 export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
     const { activeOrganizationId } = useStore();
+    const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [dynamicCategories, setDynamicCategories] = React.useState<string[]>(DEFAULT_CATEGORIES);
     const [organizations, setOrganizations] = React.useState<Organization[]>([]);
     const [modalTab, setModalTab] = React.useState<'cadastro' | 'bancario'>('cadastro');
@@ -115,12 +116,18 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSubmit({
-            ...formData,
-            address: [formData.street, formData.number, formData.neighborhood].filter(Boolean).join(', ')
-        });
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            await onSubmit({
+                ...formData,
+                address: [formData.street, formData.number, formData.neighborhood].filter(Boolean).join(', ')
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const docLabel = formData.type === 'PJ' ? 'CNPJ' : 'CPF';
@@ -397,9 +404,10 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                     <button
                         type="submit"
                         form="supplier-form"
-                        className="flex-[2] px-4 py-2.5 bg-gray-900 text-white text-sm rounded-xl hover:bg-blue-600 transition-all shadow-lg font-black uppercase tracking-widest active:scale-95"
+                        disabled={isSubmitting}
+                        className="flex-[2] px-4 py-2.5 bg-gray-900 text-white text-sm rounded-xl hover:bg-blue-600 transition-all shadow-lg font-black uppercase tracking-widest active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                        {initialData ? 'Confirmar Ajustes' : 'Efetuar Cadastro'}
+                        {isSubmitting ? 'Salvando...' : (initialData ? 'Confirmar Ajustes' : 'Efetuar Cadastro')}
                     </button>
                 </div>
                 )}

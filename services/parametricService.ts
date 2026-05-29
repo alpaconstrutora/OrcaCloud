@@ -1,8 +1,20 @@
-
 import { ProjectSettings, BudgetEntry, SinapiType, SinapiItem } from '../types';
 import { CUB_STANDARDS_DATA, BASE_CUB_RATES } from '../constants';
 import { NBR_12721_COEFFICIENTS } from '../constants_nbr';
 import { supabase } from '../lib/supabase';
+
+// Parse de valor CUB do banco — Supabase retorna numeric como JS number,
+// mas protege contra strings com formato BR ("1.234,56") caso a coluna seja text.
+function parseCubRate(value: unknown): number {
+    if (typeof value === 'number') return isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+        // Remove separador de milhar BR (ponto) e troca vírgula decimal por ponto
+        const cleaned = value.replace(/\./g, '').replace(',', '.');
+        const num = parseFloat(cleaned);
+        return isFinite(num) ? num : 0;
+    }
+    return 0;
+}
 
 export const parametricService = {
     async generateParametricBudgetAsync(settings: ProjectSettings): Promise<BudgetEntry[]> {
@@ -31,7 +43,7 @@ export const parametricService = {
         validNatures.forEach(nature => {
             const row = data.find(d => d.nature === nature);
             if (row && row[standardKey] > 0) {
-                const cubRateForNature = parseFloat(row[standardKey]);
+                const cubRateForNature = parseCubRate(row[standardKey]);
                 const allocatedValue = area * cubRateForNature; // Exact value without BDI or multipliers
 
                 const syntheticItem: SinapiItem = {
@@ -117,7 +129,7 @@ export const parametricService = {
         if (!error && data && data.length > 0) {
             const totalRow = data.find(d => d.nature === 'Total');
             if (totalRow && totalRow[standardKey] > 0) {
-                cubRateFromTable = parseFloat(totalRow[standardKey]);
+                cubRateFromTable = parseCubRate(totalRow[standardKey]);
             }
         }
 
@@ -195,7 +207,7 @@ export const parametricService = {
 
         (data as unknown as Record<string, unknown>[]).forEach((row) => {
             const dateStr = String(row.reference_date || '');
-            const rate = parseFloat(String(row[standardKey])) || 0;
+            const rate = parseCubRate(row[standardKey]);
             const created = String(row.created_at || '');
 
             // If we don't have this date yet, OR this one is more recent than what we have
@@ -235,7 +247,7 @@ export const parametricService = {
 
         return (data as unknown as Record<string, unknown>[]).map((row) => ({
             state: String(row.state || ''),
-            rate: parseFloat(String(row[standardKey])) || 0
+            rate: parseCubRate(row[standardKey])
         })).sort((a, b) => b.rate - a.rate);
     },
 

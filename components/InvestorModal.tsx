@@ -11,6 +11,7 @@ interface InvestorModalProps {
 }
 
 const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
+    const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [formData, setFormData] = React.useState<Partial<Investor>>({
         name: '',
         email: '',
@@ -90,19 +91,18 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
         // Let's assume I can update InvestorList.tsx independently. I'll do that in a next step.
         // For now, render the UI.
 
+        if (isSubmitting) return;
+        setIsSubmitting(true);
         try {
-            // Wait for parent to save (and return the saved entity)
             const savedInvestor = await onSubmit(formData);
-
-            // If we have an ID (either from initial or from the save result), update links
-            // The onSubmit in parent returns the saved object now.
             const investorId = (savedInvestor as Investor)?.id || initialData?.id;
-
             if (investorId) {
                 await updateProjectLinks(investorId);
             }
         } catch (error) {
             console.error("Error in modal submit:", error);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -277,9 +277,10 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                     <button
                         type="submit"
                         form="investor-form"
-                        className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium shadow-sm transition-colors"
+                        disabled={isSubmitting}
+                        className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                        Salvar Investidor
+                        {isSubmitting ? 'Salvando...' : 'Salvar Investidor'}
                     </button>
                 </div>
             </div>

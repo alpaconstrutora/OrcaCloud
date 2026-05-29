@@ -315,16 +315,22 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       }
     }
 
-    // Tenta carregar a base em background para atualizar o contador e categorias
+    // Carrega base em background; cancelled evita setState em componente desmontado
+    let cancelled = false;
+
     sinapiService.loadDatabase().then(() => {
-      setDbSize(sinapiService.databaseSize);
+      if (!cancelled) setDbSize(sinapiService.databaseSize);
     });
 
-    sinapiService.getCategories().then(cats => setCategories(cats));
+    sinapiService.getCategories().then(cats => {
+      if (!cancelled) setCategories(cats);
+    });
 
-    // Load custom databases
-    customDatabaseService.listDatabases().then(dbs => setCustomDatabases(dbs));
+    customDatabaseService.listDatabases().then(dbs => {
+      if (!cancelled) setCustomDatabases(dbs);
+    });
 
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

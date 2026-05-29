@@ -278,17 +278,16 @@ export const payrollService = {
     },
 
     async deleteRun(id: string) {
-        // 1. Deletar itens, resultados e eventos vinculados (cascata manual se não houver no banco)
-        await supabase.from('payroll_items').delete().eq('payroll_run_id', id);
-        await supabase.from('payroll_results').delete().eq('payroll_run_id', id);
-        await supabase.from('payroll_events').delete().eq('payroll_run_id', id);
-        
-        // 2. Deletar a folha
-        const { error } = await supabase
-            .from('payroll_runs')
-            .delete()
-            .eq('id', id);
+        // Limpeza em paralelo (ambas as colunas v1/v2 para compatibilidade)
+        await Promise.all([
+            supabase.from('payroll_items').delete().eq('payroll_run_id', id),
+            supabase.from('payroll_items').delete().eq('run_id', id),
+            supabase.from('payroll_results').delete().eq('payroll_run_id', id),
+            supabase.from('payroll_results').delete().eq('run_id', id),
+            supabase.from('payroll_events').delete().eq('payroll_run_id', id),
+        ]);
 
+        const { error } = await supabase.from('payroll_runs').delete().eq('id', id);
         if (error) throw error;
     },
 
@@ -753,7 +752,19 @@ export const payrollService = {
         const { data: empRows } = await supabase.from('employees').select('id, name').in('id', empIds);
         const empNameMap: Record<string, string> = Object.fromEntries((empRows || []).map((e: { id: string; name: string }) => [e.id, e.name]));
 
-        // 3. Obter todas as alocações da organização para o período
+        // 3. Carregar TODAS as alocações do período em uma única query (resolve N+1)
+        const { data: allocRows } = await supabase
+            .from('employee_allocations')
+            .select('*, worksite:project_id(name)')
+            .in('employee_id', empIds)
+            .eq('reference_period', period);
+
+        const allocByEmployee: Record<string, EmployeeAllocation[]> = {};
+        (allocRows || []).forEach((a: EmployeeAllocation & { worksite?: { name: string } }) => {
+            if (!allocByEmployee[a.employee_id]) allocByEmployee[a.employee_id] = [];
+            allocByEmployee[a.employee_id].push({ ...a, worksite_name: a.worksite?.name });
+        });
+
         const summary: Record<string, { id: string, name: string, cost: number, netSalary: number, encargos: number, gross: number, contribuicoes: number, employees: string[] }> = {};
         let unallocatedCost = 0;
         let unallocatedNetSalary = 0;
@@ -762,7 +773,7 @@ export const payrollService = {
         let unallocatedContribuicoes = 0;
 
         for (const res of results) {
-            const allocations = await this.listAllocations(res.employee_id, period);
+            const allocations = allocByEmployee[res.employee_id] ?? [];
             const employerCost = res.employer_cost || 0;
             const netSalary = res.net || 0;
             const grossSalary = res.gross || 0;

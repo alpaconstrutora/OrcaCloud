@@ -9,7 +9,8 @@ export interface SupplyKPIs {
 }
 
 const CLOSED_STATUSES = ['Recebido', 'Divergência'];
-const ACTIVE_STATUSES = ['Enviado', 'Confirmado', 'Separação', 'Em Trânsito', 'Entregue', 'Recebido', 'Divergência'];
+// Ativos = em trânsito no pipeline; fechados ficam só em CLOSED_STATUSES
+const ACTIVE_STATUSES = ['Enviado', 'Confirmado', 'Separação', 'Em Trânsito', 'Entregue'];
 
 export const kpiService = {
     compute(orders: any[]): SupplyKPIs {
@@ -28,10 +29,10 @@ export const kpiService = {
             leadTimeDays = Math.round(totalDays / withLeadTime.length);
         }
 
-        // Taxa Divergência: % of active+completed orders in 'Divergência'
+        // Taxa Divergência: % dos pedidos fechados que chegaram como Divergência
         const divergenceCount = orders.filter(o => o.status === 'Divergência').length;
-        const divergenceRate = active.length > 0
-            ? Math.round((divergenceCount / active.length) * 100)
+        const divergenceRate = completed.length > 0
+            ? Math.round((divergenceCount / completed.length) * 100)
             : null;
 
         // Aprovação Financeira: % of completed orders that are financially approved

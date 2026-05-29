@@ -87,8 +87,7 @@ function isContractTx(t: any, contractTag: string, measurementIds: string[]): bo
 }
 
 // Generate financial transactions from payment_schedule for a Parcelado contract.
-// Priority: project JSONB first (shown in project financial view), vault as fallback (org-level contracts).
-// Also replaces measurement-generated transactions so the schedule is the single source of truth.
+// Writes to both: project JSONB (Despesas tab) and internal_transactions table (Conciliação tab).
 async function syncParceladoScheduleToFinance(contract: Contract) {
     if (!contract.payment_schedule?.length || contract.is_recurring) return;
     try {
@@ -108,25 +107,21 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             notes: `${tag} Parcela ${i + 1} gerada automaticamente do contrato ${contract.number || contract.id}`
         }));
 
-        // Priority 1: project JSONB — this is what the project financial view reads
+        // ── 1. Project JSONB (aba Despesas) ────────────────────────────────────
         if (contract.project_id) {
             const { projectService } = await import('./projectService');
             const project = await projectService.loadProject(contract.project_id);
             if (project) {
                 const info = (project.settings as any)?.financialInfo || { totalValue: 0, paymentMethod: 'Parcelamento Próprio', installments: [], transactions: [] };
-                // Remove both tag-based AND measurement-based transactions for this contract
                 const kept = (info.transactions || []).filter((t: any) => !isContractTx(t, tag, measurementIds));
                 await projectService.saveProject({
                     ...project,
                     settings: { ...project.settings, financialInfo: { ...info, transactions: [...newTxs, ...kept] } }
                 });
-                console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to project ${contract.project_id} (removed ${(info.transactions || []).length - kept.length} old)`);
-                return;
+                console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to project JSONB`);
             }
-        }
-
-        // Fallback: org-level vault (contracts without a project_id)
-        if (contract.organization_id) {
+        } else if (contract.organization_id) {
+            // Fallback: org-level vault
             const vault = await findVault(contract.organization_id);
             if (vault) {
                 const vaultInfo = vault.settings?.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
@@ -134,8 +129,40 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 await supabase.from('projects').update({
                     settings: { ...vault.settings, financialInfo: { ...vaultInfo, transactions: [...newTxs, ...kept] } }
                 }).eq('id', vault.id);
-                console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to vault for org ${contract.organization_id}`);
             }
+        }
+
+        // ── 2. internal_transactions (aba Conciliação) ─────────────────────────
+        if (contract.organization_id) {
+            // Remove old entries (tag-based and measurement-based)
+            await supabase.from('internal_transactions')
+                .delete()
+                .eq('organization_id', contract.organization_id)
+                .eq('source_system', 'CONTRACT_PARCELADO')
+                .eq('reference_id', contract.id);
+            if (measurementIds.length > 0) {
+                await supabase.from('internal_transactions')
+                    .delete()
+                    .eq('organization_id', contract.organization_id)
+                    .eq('source_system', 'CONTRACT_MEASUREMENT')
+                    .in('reference_id', measurementIds);
+            }
+
+            // Insert new rows
+            const internalRows = newTxs.map(tx => ({
+                organization_id: contract.organization_id,
+                source_system: 'CONTRACT_PARCELADO',
+                reference_id: contract.id,
+                transaction_date: tx.date.split('T')[0],
+                amount: tx.value,
+                direction: 'DEBIT',
+                description: tx.description,
+                category: 'Mão de Obra / Serviço',
+                entity_name: supplierName,
+                status: 'PENDING',
+            }));
+            await supabase.from('internal_transactions').insert(internalRows);
+            console.log(`[CONTRACTS] Synced ${internalRows.length} parcelado txs to internal_transactions`);
         }
     } catch (e) {
         console.error('[CONTRACTS] Error syncing parcelado schedule to finance:', e);
@@ -403,6 +430,13 @@ export const contractService = {
                         .eq('id', vault.id);
                     console.log(`[CONTRACTS] Removed ${removedCount} financial transactions for deleted contract ${id}`);
                 }
+
+                // Also clean internal_transactions (Conciliação tab)
+                await supabase.from('internal_transactions')
+                    .delete()
+                    .eq('organization_id', orgId)
+                    .eq('source_system', 'CONTRACT_PARCELADO')
+                    .eq('reference_id', id);
             } catch (e) {
                 console.error('[CONTRACTS] Error cleaning up financial transactions on contract delete:', e);
             }

@@ -110,30 +110,24 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
     // Auto-fetch next sequential number for new contracts
     React.useEffect(() => {
-        if (!isOpen || initialData) return;
+        if (!isOpen || initialData || !organizationId) return;
         (async () => {
             setIsFetchingNumber(true);
             try {
+                const { data: rows } = await supabase
+                    .from('contracts')
+                    .select('number')
+                    .eq('organization_id', organizationId);
+                const usedNums = new Set(
+                    (rows ?? []).map(r => parseInt(r.number ?? '', 10)).filter(n => !isNaN(n))
+                );
                 let nextNum = 1;
-                if (organizationId) {
-                    const { data: rows } = await supabase
-                        .from('contracts')
-                        .select('number')
-                        .eq('organization_id', organizationId);
-                    const max = (rows ?? []).reduce((acc, r) => {
-                        const n = parseInt(r.number ?? '', 10);
-                        return isNaN(n) ? acc : Math.max(acc, n);
-                    }, 0);
-                    nextNum = max + 1;
-                }
+                while (usedNums.has(nextNum)) nextNum++;
                 const n = String(nextNum).padStart(3, '0');
                 numberInputRef.current = n;
                 setFormData(prev => ({ ...prev, number: n }));
             } catch (e) {
-                console.error(e);
-                const fallback = '001';
-                numberInputRef.current = fallback;
-                setFormData(prev => ({ ...prev, number: fallback }));
+                console.error('Erro ao buscar próximo número de contrato:', e);
             } finally {
                 setIsFetchingNumber(false);
             }
@@ -251,7 +245,21 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             setNumberError('Formato inválido. Use 3 dígitos (ex: 001, 042, 123).');
             return;
         }
-        if (numberError) return;
+
+        // Verificação de unicidade obrigatória antes de salvar
+        if (organizationId) {
+            let dupQuery = supabase
+                .from('contracts')
+                .select('id')
+                .eq('organization_id', organizationId)
+                .eq('number', currentNumber);
+            if (initialData?.id) dupQuery = dupQuery.neq('id', initialData.id);
+            const { data: dup } = await dupQuery.maybeSingle();
+            if (dup) {
+                setNumberError(`Número ${currentNumber} já está em uso.`);
+                return;
+            }
+        }
 
         setIsSubmitting(true);
         try {

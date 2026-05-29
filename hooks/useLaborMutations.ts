@@ -19,8 +19,10 @@ export function useSaveEmployee() {
             id
                 ? laborService.updateEmployee(id, emp)
                 : laborService.createEmployee(emp),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['labor', 'employees'] });
+        onSuccess: (_data, variables) => {
+            const { org_id } = variables as { org_id: string };
+            qc.invalidateQueries({ queryKey: laborKeys.employees(org_id) });
+            qc.invalidateQueries({ queryKey: laborKeys.teams(org_id) }); // team member count muda
             qc.invalidateQueries({ queryKey: laborKeys.costSummary() });
             qc.invalidateQueries({ queryKey: laborKeys.docAlerts() });
         },
@@ -30,9 +32,10 @@ export function useSaveEmployee() {
 export function useDeleteEmployee() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (id: string) => laborService.deleteEmployee(id),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['labor', 'employees'] });
+        mutationFn: ({ id }: { id: string; org_id: string }) => laborService.deleteEmployee(id),
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: laborKeys.employees(variables.org_id) });
+            qc.invalidateQueries({ queryKey: laborKeys.teams(variables.org_id) });
             qc.invalidateQueries({ queryKey: laborKeys.costSummary() });
         },
     });
@@ -78,8 +81,10 @@ export function useSaveTeam() {
             id
                 ? laborService.updateTeam(id, team)
                 : laborService.createTeam(team),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['labor', 'teams'] });
+        onSuccess: (_data, variables) => {
+            const { org_id } = variables as { org_id: string };
+            qc.invalidateQueries({ queryKey: laborKeys.teams(org_id) });
+            qc.invalidateQueries({ queryKey: laborKeys.employees(org_id) }); // team_id nos employees muda
         },
     });
 }
@@ -87,9 +92,10 @@ export function useSaveTeam() {
 export function useDeleteTeam() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (id: string) => laborService.deleteTeam(id),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['labor', 'teams'] });
+        mutationFn: ({ id }: { id: string; org_id: string }) => laborService.deleteTeam(id),
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: laborKeys.teams(variables.org_id) });
+            qc.invalidateQueries({ queryKey: laborKeys.employees(variables.org_id) });
         },
     });
 }
@@ -99,12 +105,12 @@ export function useDeleteTeam() {
 export function useSaveTimeEntry() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, ...entry }: Omit<TimeEntry, 'id' | 'total_cost' | 'created_at' | 'employee_name'> & { id?: string }) =>
+        mutationFn: ({ org_id: _orgId, id, ...entry }: Omit<TimeEntry, 'total_cost' | 'created_at' | 'employee_name'> & { org_id: string }) =>
             id
                 ? laborService.updateTimeEntry(id, entry)
                 : laborService.createTimeEntry(entry),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['labor', 'timeEntries'] });
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: laborKeys.timeEntries(variables.org_id) });
         },
     });
 }
@@ -112,10 +118,10 @@ export function useSaveTimeEntry() {
 export function useApproveTimeEntry() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, approvedBy }: { id: string; approvedBy: string }) =>
+        mutationFn: ({ id, approvedBy }: { id: string; approvedBy: string; org_id: string }) =>
             laborService.approveTimeEntry(id, approvedBy),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['labor', 'timeEntries'] });
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: laborKeys.timeEntries(variables.org_id) });
         },
     });
 }
@@ -143,8 +149,8 @@ export function useCreatePayrollRun() {
             isBulk
                 ? payrollEngine.runBulkPayroll(start, end, type as any, subtype)
                 : payrollEngine.runPayroll(orgId, start, end, type as any, subtype).then(r => [r]),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['labor', 'payrollRuns'] });
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: laborKeys.payrollRuns(variables.orgId) });
         },
     });
 }
@@ -152,7 +158,7 @@ export function useCreatePayrollRun() {
 export function useClosePayrollRun() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: async (runId: string) => {
+        mutationFn: async ({ runId }: { runId: string; org_id: string }) => {
             await payrollService.updateRunStatus(runId, 'FECHADO');
             try {
                 await payrollService.syncPayrollToFinance(runId);
@@ -161,8 +167,8 @@ export function useClosePayrollRun() {
             }
             return payrollService.getRun(runId);
         },
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['labor', 'payrollRuns'] });
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: laborKeys.payrollRuns(variables.org_id) });
             qc.invalidateQueries({ queryKey: laborKeys.costSummary() });
         },
     });
@@ -171,9 +177,9 @@ export function useClosePayrollRun() {
 export function useDeletePayrollRun() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (id: string) => payrollService.deleteRun(id),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['labor', 'payrollRuns'] });
+        mutationFn: ({ id }: { id: string; org_id: string }) => payrollService.deleteRun(id),
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: laborKeys.payrollRuns(variables.org_id) });
         },
     });
 }
@@ -194,10 +200,11 @@ export function useSavePayrollEvent() {
 export function useDeletePayrollEvent() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (id: string) => payrollService.deleteEvent(id),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['labor', 'payrollEvents'] });
-            qc.invalidateQueries({ queryKey: ['labor', 'payrollResults'] });
+        mutationFn: ({ id }: { id: string; org_id: string; payroll_run_id: string }) =>
+            payrollService.deleteEvent(id),
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: laborKeys.payrollEvents(variables.org_id, variables.payroll_run_id) });
+            qc.invalidateQueries({ queryKey: laborKeys.payrollResults(variables.payroll_run_id) });
         },
     });
 }

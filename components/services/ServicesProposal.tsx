@@ -78,11 +78,27 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
   };
 
   const markSent = async () => {
-    await save('sent');
-    if (proposal) {
-      await servicesCommercialService.updateProposal(proposal.id, { sent_at: new Date().toISOString() });
+    setSaving(true);
+    try {
+      const payload = {
+        opportunity_id: opportunityId,
+        organization_id: organizationId,
+        budget_id: budget?.id ?? null,
+        total_value: budget?.total ?? 0,
+        scope: form.scope || null,
+        payment_terms: form.payment_terms || null,
+        delivery_term_days: form.delivery_term_days ? Number(form.delivery_term_days) : null,
+        valid_until: form.valid_until || null,
+        status: 'sent' as const,
+        sent_at: new Date().toISOString(),
+      };
+      const saved = proposal
+        ? await servicesCommercialService.updateProposal(proposal.id, payload)
+        : await servicesCommercialService.createProposal(payload);
+      setProposal(saved);
+    } finally {
+      setSaving(false);
     }
-    load();
   };
 
   const printProposal = () => {
@@ -224,7 +240,7 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
           <Download size={15} /> PDF
         </button>
         <button
-          onClick={async () => { await save('sent'); await markSent(); }}
+          onClick={markSent}
           disabled={!budget || saving}
           className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
         >

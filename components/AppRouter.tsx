@@ -694,7 +694,12 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       );
 
     case 'services-commercial':
-      return <ServicesCommercialModule organizationId={activeOrganizationId ?? ''} />;
+      if (!activeOrganizationId) return (
+        <div className="flex items-center justify-center h-full text-sm text-gray-400">
+          Selecione uma organização para acessar o módulo comercial.
+        </div>
+      );
+      return <ServicesCommercialModule organizationId={activeOrganizationId} />;
 
     case 'sales':
       return <SalesModule organizationId={activeOrganizationId || undefined} />;

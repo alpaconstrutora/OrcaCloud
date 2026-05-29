@@ -80,7 +80,7 @@ const ServicesOpportunityModal: React.FC<Props> = ({ organizationId, initial, on
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+        <form id="services-opportunity-form" onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
           {error && <p className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
 
           <div className="grid grid-cols-2 gap-3">
@@ -140,9 +140,10 @@ const ServicesOpportunityModal: React.FC<Props> = ({ organizationId, initial, on
         </form>
 
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900">Cancelar</button>
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900">Cancelar</button>
           <button
-            onClick={handleSubmit as unknown as React.MouseEventHandler}
+            type="submit"
+            form="services-opportunity-form"
             disabled={saving}
             className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
           >

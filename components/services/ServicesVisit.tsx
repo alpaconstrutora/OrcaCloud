@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { supabase } from '../../lib/supabase';
 import { ArrowLeft, Camera, MapPin, Plus, Check, X, Trash2 } from 'lucide-react';
 import { servicesCommercialService, ServiceVisit } from '../../services/servicesCommercialService';
 
@@ -42,16 +43,22 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
     });
   }, [opportunityId]);
 
-  useEffect(() => {
-    if (visit?.photos) {
-      Promise.all(visit.photos.map(async p => {
-        const { data } = await import('../../lib/supabase').then(m =>
-          m.supabase.storage.from('services-visits').createSignedUrl(p.storage_path, 3600)
-        );
+  const loadPhotoUrls = useCallback(async (visitPhotos: NonNullable<typeof visit>['photos']) => {
+    if (!visitPhotos?.length) return;
+    const resolved = await Promise.all(
+      visitPhotos.map(async p => {
+        const { data } = await supabase.storage
+          .from('services-visits')
+          .createSignedUrl(p.storage_path, 3600);
         return { path: p.storage_path, url: data?.signedUrl ?? '', caption: p.caption ?? '' };
-      })).then(setPhotos);
-    }
-  }, [visit]);
+      })
+    );
+    setPhotos(resolved);
+  }, []);
+
+  useEffect(() => {
+    if (visit?.photos?.length) loadPhotoUrls(visit.photos);
+  }, [visit, loadPhotoUrls]);
 
   const getLocation = () => {
     navigator.geolocation.getCurrentPosition(pos =>
@@ -79,11 +86,11 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
     if (!file) return;
     setUploading(true);
     try {
-      const visitId = visit?.id ?? 'new';
+      const visitId = visit?.id ?? 'pending';
       const path = await servicesCommercialService.uploadVisitPhoto(organizationId, visitId, file);
-      const { data } = await import('../../lib/supabase').then(m =>
-        m.supabase.storage.from('services-visits').createSignedUrl(path, 3600)
-      );
+      const { data } = await supabase.storage
+        .from('services-visits')
+        .createSignedUrl(path, 3600);
       setPhotos(prev => [...prev, { path, url: data?.signedUrl ?? '', caption: '' }]);
     } finally {
       setUploading(false);

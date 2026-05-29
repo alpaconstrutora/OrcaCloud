@@ -59,6 +59,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
   const [showMigrateConfirm, setShowMigrateConfirm] = useState(false);
   const [lostReason, setLostReason] = useState('');
   const [moving, setMoving] = useState(false);
+  const [orgMembers, setOrgMembers] = useState<{ email: string; role: string }[]>([]);
   const { toasts, show: showToast, dismiss } = useServicesToast();
 
   const load = useCallback(async () => {
@@ -74,6 +75,10 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
+    servicesCommercialService.listOrgMembers(organizationId).then(setOrgMembers);
+  }, [organizationId]);
+
+  useEffect(() => {
     if (opp?.budget_source === 'engineering' && opp.engineering_project_id) {
       servicesCommercialService.getEngineeringSummary(opp.engineering_project_id)
         .then(setEngineeringSummary);
@@ -81,6 +86,38 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
       setEngineeringSummary(null);
     }
   }, [opp?.budget_source, opp?.engineering_project_id]);
+
+  const handleReopen = async () => {
+    if (!opp) return;
+    setMoving(true);
+    try {
+      const updated = await servicesCommercialService.updateOpportunity(opp.id, {
+        stage: 'lead',
+        lost_reason: null,
+        lost_at: null,
+      });
+      setOpp(updated);
+      showToast('Oportunidade reaberta como Lead.');
+      load();
+    } catch {
+      showToast('Erro ao reabrir oportunidade.', 'error');
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  const handleAssign = async (email: string) => {
+    if (!opp) return;
+    try {
+      const updated = await servicesCommercialService.updateOpportunity(opp.id, {
+        assigned_email: email || null,
+      });
+      setOpp(updated);
+      showToast(email ? `Atribuído a ${email}` : 'Responsável removido.');
+    } catch {
+      showToast('Erro ao atribuir responsável.', 'error');
+    }
+  };
 
   const handleLinkEngineering = async (project: EngineeringProjectSummary) => {
     if (!opp) return;
@@ -372,6 +409,22 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
             <p className="text-sm text-gray-900 dark:text-white whitespace-pre-line">{opp.scope_summary}</p>
           </div>
         )}
+        {/* Responsável */}
+        <div className="flex items-center gap-3 px-4 py-3">
+          <span className="text-gray-400"><CheckCircle size={14} /></span>
+          <span className="text-xs text-gray-500 w-24 shrink-0">Responsável</span>
+          <select
+            value={opp.assigned_email ?? ''}
+            onChange={e => handleAssign(e.target.value)}
+            className="flex-1 text-sm bg-transparent text-gray-900 dark:text-white focus:outline-none cursor-pointer"
+          >
+            <option value="">— Não atribuído —</option>
+            {orgMembers.map(m => (
+              <option key={m.email} value={m.email}>{m.email}</option>
+            ))}
+          </select>
+        </div>
+
         {opp.lost_reason && (
           <div className="px-4 py-3 bg-red-50 dark:bg-red-900/10">
             <p className="text-xs text-red-500 mb-1">Motivo da perda</p>
@@ -379,6 +432,17 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
           </div>
         )}
       </div>
+
+      {/* Reabrir oportunidade perdida */}
+      {opp.stage === 'lost' && (
+        <button
+          onClick={handleReopen}
+          disabled={moving}
+          className="w-full py-2.5 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-sm text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 disabled:opacity-50 transition-colors"
+        >
+          {moving ? 'Reabrindo...' : '↩ Reabrir como Lead'}
+        </button>
+      )}
 
       {/* Timeline */}
       <div>

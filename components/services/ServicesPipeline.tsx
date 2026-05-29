@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Plus, Phone, MapPin, Wifi, WifiOff } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { Plus, Phone, MapPin, Wifi, WifiOff, Search, X } from 'lucide-react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import {
@@ -61,11 +61,18 @@ const OpportunityCard: React.FC<{
         </span>
       )}
     </div>
-    {opp.estimated_value != null && (
-      <div className="mt-2 text-xs font-medium text-green-600 dark:text-green-400">
-        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(opp.estimated_value)}
-      </div>
-    )}
+    <div className="flex items-center justify-between mt-2">
+      {opp.estimated_value != null ? (
+        <span className="text-xs font-medium text-green-600 dark:text-green-400">
+          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(opp.estimated_value)}
+        </span>
+      ) : <span />}
+      {(opp as any).assigned_email && (
+        <span className="text-[10px] text-gray-400 truncate max-w-[90px]" title={(opp as any).assigned_email}>
+          @{((opp as any).assigned_email as string).split('@')[0]}
+        </span>
+      )}
+    </div>
   </div>
 );
 
@@ -77,6 +84,8 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
   const [dragOverStage, setDragOverStage] = useState<OpportunityStage | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const [search, setSearch] = useState('');
+  const [filterPriority, setFilterPriority] = useState<'all' | 'high' | 'medium' | 'low'>('all');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -153,8 +162,23 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
     }
   };
 
+  const filtered = useMemo(() =>
+    opportunities.filter(o => {
+      const q = search.toLowerCase();
+      const matchSearch = !q ||
+        o.contact_name.toLowerCase().includes(q) ||
+        (o.city ?? '').toLowerCase().includes(q) ||
+        (o.work_type ?? '').toLowerCase().includes(q);
+      const matchPriority = filterPriority === 'all' || o.priority === filterPriority;
+      return matchSearch && matchPriority;
+    }),
+    [opportunities, search, filterPriority]
+  );
+
   const byStage = (stage: OpportunityStage) =>
-    opportunities.filter(o => o.stage === stage);
+    filtered.filter(o => o.stage === stage);
+
+  const hasFilter = !!search || filterPriority !== 'all';
 
   return (
     <div className="p-4 h-full flex flex-col">
@@ -178,6 +202,42 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
         >
           <Plus size={15} /> Novo Lead
         </button>
+      </div>
+
+      {/* Filtros */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="relative flex-1 min-w-48">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar cliente, cidade, tipo..."
+            className="w-full pl-8 pr-8 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <div className="flex gap-1 shrink-0">
+          {(['all', 'high', 'medium', 'low'] as const).map(p => (
+            <button
+              key={p}
+              onClick={() => setFilterPriority(p)}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                filterPriority === p
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+              }`}
+            >
+              {p === 'all' ? 'Todos' : p === 'high' ? 'Alta' : p === 'medium' ? 'Média' : 'Baixa'}
+            </button>
+          ))}
+        </div>
+        {hasFilter && (
+          <span className="text-xs text-gray-400">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
+        )}
       </div>
 
       <div className="flex gap-3 overflow-x-auto pb-4 flex-1 min-h-0">

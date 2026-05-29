@@ -30,7 +30,24 @@ export interface ServiceOpportunity {
   budget_source: BudgetSource;
   engineering_project_id: string | null;
   engineering_request_status: EngineeringRequestStatus;
+  assigned_email: string | null;
   notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServiceContract {
+  id: string;
+  organization_id: string;
+  opportunity_id: string | null;
+  project_id: string | null;
+  proposal_id: string | null;
+  contract_number: string;
+  client_name: string;
+  total_value: number;
+  start_date: string | null;
+  end_date: string | null;
+  status: 'draft' | 'active' | 'completed' | 'cancelled';
   created_at: string;
   updated_at: string;
 }
@@ -149,7 +166,7 @@ export const servicesCommercialService = {
   },
 
   async createOpportunity(
-    payload: Omit<ServiceOpportunity, 'id' | 'created_at' | 'updated_at' | 'won_at' | 'lost_at' | 'converted_project_id' | 'converted_contract_id' | 'budget_source' | 'engineering_project_id' | 'engineering_request_status'> & Partial<Pick<ServiceOpportunity, 'budget_source' | 'engineering_project_id' | 'engineering_request_status'>>
+    payload: Omit<ServiceOpportunity, 'id' | 'created_at' | 'updated_at' | 'won_at' | 'lost_at' | 'converted_project_id' | 'converted_contract_id' | 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email'> & Partial<Pick<ServiceOpportunity, 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email'>>
   ): Promise<ServiceOpportunity> {
     const { data, error } = await supabase
       .from('services_opportunities')
@@ -477,6 +494,47 @@ export const servicesCommercialService = {
       engineering_request_status: 'ready',
     });
     return { projectId: project.id };
+  },
+
+  // ─── Org members (for assigned_to picker) ────────────────────────────────
+
+  async listOrgMembers(organizationId: string): Promise<{ email: string; role: string }[]> {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('email, role')
+      .eq('organization_id', organizationId)
+      .order('email');
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  // ─── Contracts listing ────────────────────────────────────────────────────
+
+  async listContracts(organizationId: string): Promise<ServiceContract[]> {
+    const { data, error } = await supabase
+      .from('services_contracts')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  // ─── Pipeline stage counts (for dashboard chart) ─────────────────────────
+
+  async getStageCounts(organizationId: string): Promise<{ stage: string; count: number; value: number }[]> {
+    const { data, error } = await supabase
+      .from('services_opportunities')
+      .select('stage, estimated_value')
+      .eq('organization_id', organizationId);
+    if (error) throw error;
+    const all = data ?? [];
+    const stages = ['lead', 'visit', 'budget', 'proposal', 'won', 'lost'];
+    return stages.map(stage => ({
+      stage,
+      count: all.filter(o => o.stage === stage).length,
+      value: all.filter(o => o.stage === stage).reduce((s, o) => s + (o.estimated_value ?? 0), 0),
+    }));
   },
 
   // ─── Conversion result ────────────────────────────────────────────────────

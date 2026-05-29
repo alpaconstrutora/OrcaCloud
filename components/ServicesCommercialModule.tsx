@@ -5,6 +5,7 @@ import ServicesOpportunityDetail from './services/ServicesOpportunityDetail';
 import ServicesVisit from './services/ServicesVisit';
 import ServicesBudget from './services/ServicesBudget';
 import ServicesProposal from './services/ServicesProposal';
+import ServicesContracts from './services/ServicesContracts';
 
 export type ServicesView =
   | 'dashboard'
@@ -12,7 +13,8 @@ export type ServicesView =
   | 'opportunity'
   | 'visit'
   | 'budget'
-  | 'proposal';
+  | 'proposal'
+  | 'contracts';
 
 interface Props {
   organizationId: string;
@@ -78,6 +80,13 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
             onBack={() => navigate('opportunity', selectedOpportunityId)}
           />
         ) : null;
+      case 'contracts':
+        return (
+          <ServicesContracts
+            organizationId={organizationId}
+            onNavigate={navigate}
+          />
+        );
       default:
         return null;
     }
@@ -87,7 +96,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
     <div className="h-full flex flex-col">
       {/* Tab bar */}
       <div className="flex items-center gap-1 px-4 pt-3 pb-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-        {(['dashboard', 'pipeline'] as ServicesView[]).map(v => (
+        {(['dashboard', 'pipeline', 'contracts'] as ServicesView[]).map(v => (
           <button
             key={v}
             onClick={() => navigate(v)}
@@ -97,7 +106,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
             }`}
           >
-            {v === 'dashboard' ? 'Dashboard' : 'Pipeline'}
+            {v === 'dashboard' ? 'Dashboard' : v === 'pipeline' ? 'Pipeline' : 'Contratos'}
           </button>
         ))}
         {selectedOpportunityId && ['opportunity', 'visit', 'budget', 'proposal'].includes(view) && (

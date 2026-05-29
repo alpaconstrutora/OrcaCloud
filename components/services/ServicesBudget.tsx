@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { servicesCommercialService, ServiceBudget, ServiceBudgetItem } from '../../services/servicesCommercialService';
+import { useServicesToast } from './useServicestoast';
+import ServicesToast from './ServicesToast';
 
 interface Props {
   opportunityId: string;
@@ -19,6 +21,7 @@ const ServicesBudget: React.FC<Props> = ({ opportunityId, organizationId, onBack
   const [marginPct, setMarginPct] = useState(0);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const { toasts, show: showToast, dismiss } = useServicesToast();
 
   const load = useCallback(async () => {
     const b = await servicesCommercialService.getBudget(opportunityId);
@@ -78,7 +81,10 @@ const ServicesBudget: React.FC<Props> = ({ opportunityId, organizationId, onBack
         });
         setItems(prev => prev.map((item, idx) => idx === i ? { ...item, ...saved } : item));
       }
+      showToast('Orçamento salvo!');
       onBack();
+    } catch {
+      showToast('Erro ao salvar o orçamento.', 'error');
     } finally {
       setSaving(false);
     }
@@ -160,6 +166,7 @@ const ServicesBudget: React.FC<Props> = ({ opportunityId, organizationId, onBack
       >
         {saving ? 'Salvando...' : 'Salvar orçamento'}
       </button>
+      <ServicesToast toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 };

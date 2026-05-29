@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Edit2, MapPin, Phone, Mail, Calendar, ClipboardList, Calculator, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { useServicesToast } from './useServicestoast';
+import ServicesToast from './ServicesToast';
 import {
   servicesCommercialService,
   ServiceOpportunity,
@@ -42,6 +44,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
   const [showLostModal, setShowLostModal] = useState(false);
   const [lostReason, setLostReason] = useState('');
   const [moving, setMoving] = useState(false);
+  const { toasts, show: showToast, dismiss } = useServicesToast();
 
   const load = useCallback(async () => {
     const [oppData, eventsData] = await Promise.all([
@@ -60,20 +63,32 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
     const next = NEXT_STAGES[opp.stage];
     if (!next) return;
     setMoving(true);
-    const updated = await servicesCommercialService.moveStage(opp.id, next);
-    setOpp(updated);
-    setMoving(false);
-    load();
+    try {
+      const updated = await servicesCommercialService.moveStage(opp.id, next);
+      setOpp(updated);
+      showToast(`Movido para "${STAGE_LABELS[next]}"`);
+      load();
+    } catch {
+      showToast('Erro ao mover oportunidade.', 'error');
+    } finally {
+      setMoving(false);
+    }
   };
 
   const markLost = async () => {
     if (!opp || !lostReason.trim()) return;
     setMoving(true);
-    const updated = await servicesCommercialService.moveStage(opp.id, 'lost', lostReason.trim());
-    setOpp(updated);
-    setShowLostModal(false);
-    setMoving(false);
-    load();
+    try {
+      const updated = await servicesCommercialService.moveStage(opp.id, 'lost', lostReason.trim());
+      setOpp(updated);
+      setShowLostModal(false);
+      showToast('Oportunidade marcada como perdida.');
+      load();
+    } catch {
+      showToast('Erro ao registrar perda.', 'error');
+    } finally {
+      setMoving(false);
+    }
   };
 
   if (loading) return <div className="p-8 text-center text-gray-400 text-sm">Carregando...</div>;
@@ -235,9 +250,10 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
           organizationId={organizationId}
           initial={opp}
           onClose={() => setIsEditing(false)}
-          onSaved={updated => { setOpp(updated); setIsEditing(false); }}
+          onSaved={updated => { setOpp(updated); setIsEditing(false); showToast('Oportunidade atualizada!'); }}
         />
       )}
+      <ServicesToast toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 };

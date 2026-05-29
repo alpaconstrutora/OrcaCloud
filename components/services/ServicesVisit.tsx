@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { ArrowLeft, Camera, MapPin, Plus, Check, X, Trash2 } from 'lucide-react';
 import { servicesCommercialService, ServiceVisit } from '../../services/servicesCommercialService';
+import { useServicesToast } from './useServicestoast';
+import ServicesToast from './ServicesToast';
 
 interface ChecklistItem { item: string; ok: boolean; note: string }
 
@@ -28,6 +30,7 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
   const [newItem, setNewItem] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const { toasts, show: showToast, dismiss } = useServicesToast();
   const [photos, setPhotos] = useState<Array<{ path: string; url: string; caption: string }>>([]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -123,7 +126,10 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
           taken_at: new Date().toISOString(),
         });
       }
+      showToast('Visita salva com sucesso!');
       onBack();
+    } catch {
+      showToast('Erro ao salvar a visita. Tente novamente.', 'error');
     } finally {
       setSaving(false);
     }
@@ -226,6 +232,7 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
       >
         {saving ? 'Salvando...' : 'Salvar visita'}
       </button>
+      <ServicesToast toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 };

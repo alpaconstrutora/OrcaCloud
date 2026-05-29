@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, FileText, Send, Download } from 'lucide-react';
 import { servicesCommercialService, ServiceProposal, ServiceBudget } from '../../services/servicesCommercialService';
+import { useServicesToast } from './useServicestoast';
+import ServicesToast from './ServicesToast';
 
 interface Props {
   opportunityId: string;
@@ -29,6 +31,7 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
   });
   const [saving, setSaving] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const { toasts, show: showToast, dismiss } = useServicesToast();
 
   const load = useCallback(async () => {
     const [p, b] = await Promise.all([
@@ -72,6 +75,9 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
         ? await servicesCommercialService.updateProposal(proposal.id, payload)
         : await servicesCommercialService.createProposal(payload);
       setProposal(saved);
+      showToast('Rascunho salvo!');
+    } catch {
+      showToast('Erro ao salvar a proposta.', 'error');
     } finally {
       setSaving(false);
     }
@@ -96,6 +102,9 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
         ? await servicesCommercialService.updateProposal(proposal.id, payload)
         : await servicesCommercialService.createProposal(payload);
       setProposal(saved);
+      showToast('Proposta marcada como enviada!');
+    } catch {
+      showToast('Erro ao atualizar a proposta.', 'error');
     } finally {
       setSaving(false);
     }
@@ -247,6 +256,7 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
           <Send size={15} /> Marcar enviada
         </button>
       </div>
+      <ServicesToast toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 };

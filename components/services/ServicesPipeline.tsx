@@ -1,5 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, Phone, MapPin, ChevronRight } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Plus, Phone, MapPin, Wifi, WifiOff } from 'lucide-react';
+import { RealtimeChannel } from '@supabase/supabase-js';
+import { supabase } from '../../lib/supabase';
 import {
   servicesCommercialService,
   ServiceOpportunity,
@@ -73,6 +75,8 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<OpportunityStage | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -82,6 +86,58 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
   }, [organizationId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`services-pipeline-${organizationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'services_opportunities',
+          filter: `organization_id=eq.${organizationId}`,
+        },
+        (payload) => {
+          setOpportunities(prev => {
+            if (prev.some(o => o.id === payload.new.id)) return prev;
+            return [payload.new as ServiceOpportunity, ...prev];
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'services_opportunities',
+          filter: `organization_id=eq.${organizationId}`,
+        },
+        (payload) => {
+          setOpportunities(prev =>
+            prev.map(o => o.id === payload.new.id ? payload.new as ServiceOpportunity : o)
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'services_opportunities',
+        },
+        (payload) => {
+          setOpportunities(prev => prev.filter(o => o.id !== payload.old.id));
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') setRealtimeStatus('connected');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setRealtimeStatus('error');
+      });
+
+    channelRef.current = channel;
+    return () => { supabase.removeChannel(channel); };
+  }, [organizationId]);
 
   const handleDrop = async (stage: OpportunityStage) => {
     if (!draggingId || stage === 'won') return;
@@ -103,7 +159,19 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
   return (
     <div className="p-4 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-white">Pipeline de Serviços</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Pipeline de Serviços</h2>
+          {realtimeStatus === 'connected' && (
+            <span title="Atualizações em tempo real ativas" className="text-green-500">
+              <Wifi size={14} />
+            </span>
+          )}
+          {realtimeStatus === 'error' && (
+            <span title="Tempo real indisponível — dados podem estar desatualizados" className="text-red-400">
+              <WifiOff size={14} />
+            </span>
+          )}
+        </div>
         <button
           onClick={() => setIsModalOpen(true)}
           className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"

@@ -65,14 +65,15 @@ async function removeContractTransactions(contractId: string, orgId: string | un
     }
 }
 
-// Generate financial transactions from payment_schedule for a Parcelado contract
+// Generate financial transactions from payment_schedule for a Parcelado contract.
+// Uses direct vault lookup (same path as removeContractTransactions) to avoid silent fallback mismatches.
 async function syncParceladoScheduleToFinance(contract: Contract) {
     if (!contract.payment_schedule?.length || contract.is_recurring) return;
     try {
         const supplierName = await resolveSupplierName(contract.supplier_id, 'Fornecedor');
-        await removeContractTransactions(contract.id, contract.organization_id, contract.project_id);
-        if (!contract.project_id) return;
-        const batchPayload = contract.payment_schedule.map((inst, i) => ({
+        const tag = `[contract:${contract.id}]`;
+        const newTxs = contract.payment_schedule.map((inst, i) => ({
+            id: crypto.randomUUID(),
             date: inst.date + 'T12:00:00.000Z',
             type: 'EXPENSE' as const,
             category: 'Mão de Obra / Serviço',
@@ -80,10 +81,37 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             value: inst.value,
             status: 'PENDING' as const,
             supplier: supplierName,
-            notes: `[contract:${contract.id}] Parcela ${i + 1} gerada automaticamente do contrato ${contract.number || contract.id}`
+            notes: `${tag} Parcela ${i + 1} gerada automaticamente do contrato ${contract.number || contract.id}`
         }));
-        await financialService.addTransactionBatch(contract.project_id, batchPayload);
-        console.log(`[CONTRACTS] Synced ${batchPayload.length} parcelado transactions for contract ${contract.id}`);
+
+        // Try vault path directly (same as removeContractTransactions)
+        if (contract.organization_id) {
+            const vault = await findVault(contract.organization_id);
+            if (vault) {
+                const vaultInfo = vault.settings?.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
+                // Remove old + add new in a single write
+                const kept = (vaultInfo.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
+                await supabase.from('projects').update({
+                    settings: { ...vault.settings, financialInfo: { ...vaultInfo, transactions: [...newTxs, ...kept] } }
+                }).eq('id', vault.id);
+                console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to vault for contract ${contract.id}`);
+                return;
+            }
+        }
+
+        // Fallback: project JSONB
+        if (contract.project_id) {
+            const { projectService } = await import('./projectService');
+            const project = await projectService.loadProject(contract.project_id);
+            if (!project) return;
+            const info = (project.settings as any)?.financialInfo || { totalValue: 0, paymentMethod: 'Parcelamento Próprio', installments: [], transactions: [] };
+            const kept = (info.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
+            await projectService.saveProject({
+                ...project,
+                settings: { ...project.settings, financialInfo: { ...info, transactions: [...newTxs, ...kept] } }
+            });
+            console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to project for contract ${contract.id}`);
+        }
     } catch (e) {
         console.error('[CONTRACTS] Error syncing parcelado schedule to finance:', e);
     }

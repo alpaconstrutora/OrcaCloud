@@ -16,9 +16,10 @@ export type ServicesView =
 
 interface Props {
   organizationId: string;
+  onGoToProject: (projectId: string) => void;
 }
 
-const ServicesCommercialModule: React.FC<Props> = ({ organizationId }) => {
+const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProject }) => {
   const [view, setView] = useState<ServicesView>('pipeline');
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
 
@@ -50,6 +51,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId }) => {
             organizationId={organizationId}
             onNavigate={navigate}
             onBack={() => navigate('pipeline')}
+            onGoToProject={onGoToProject}
           />
         ) : null;
       case 'visit':

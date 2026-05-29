@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, Edit2, MapPin, Phone, Mail, Calendar, ClipboardList, Calculator, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Edit2, MapPin, Phone, Mail, Calendar, ClipboardList, Calculator, FileText, CheckCircle, XCircle, Clock, ExternalLink } from 'lucide-react';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
 import ServicesWonModal from './ServicesWonModal';
@@ -19,6 +19,7 @@ interface Props {
   organizationId: string;
   onNavigate: (view: ServicesView, opportunityId?: string) => void;
   onBack: () => void;
+  onGoToProject: (projectId: string) => void;
 }
 
 const STAGE_LABELS: Record<OpportunityStage, string> = {
@@ -39,7 +40,7 @@ const NEXT_STAGES: Partial<Record<OpportunityStage, OpportunityStage>> = {
   lead: 'visit', visit: 'budget', budget: 'proposal', proposal: 'won',
 };
 
-const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizationId, onNavigate, onBack }) => {
+const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizationId, onNavigate, onBack, onGoToProject }) => {
   const [opp, setOpp] = useState<ServiceOpportunity | null>(null);
   const [events, setEvents] = useState<ServiceOpportunityEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -282,8 +283,14 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
                   {fmt(engineeringSummary.total)}
                 </div>
               </div>
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setShowPicker(true)} className="text-xs text-blue-700 dark:text-blue-300 hover:underline">
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => onGoToProject(opp.engineering_project_id!)}
+                  className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-300 font-medium hover:underline"
+                >
+                  <ExternalLink size={11} /> Ver na Engenharia
+                </button>
+                <button onClick={() => setShowPicker(true)} className="text-xs text-gray-500 hover:underline">
                   Trocar
                 </button>
                 <button onClick={handleUnlinkEngineering} className="text-xs text-red-500 hover:underline">

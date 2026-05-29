@@ -699,7 +699,12 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           Selecione uma organização para acessar o módulo comercial.
         </div>
       );
-      return <ServicesCommercialModule organizationId={activeOrganizationId} />;
+      return (
+        <ServicesCommercialModule
+          organizationId={activeOrganizationId}
+          onGoToProject={(projectId) => handleLoadProject(projectId, 'analytic')}
+        />
+      );
 
     case 'sales':
       return <SalesModule organizationId={activeOrganizationId || undefined} />;

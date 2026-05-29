@@ -83,6 +83,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const [isFetchingNumber, setIsFetchingNumber] = React.useState(false);
+    const [numberError, setNumberError] = React.useState<string | null>(null);
+    const [isCheckingNumber, setIsCheckingNumber] = React.useState(false);
 
     React.useEffect(() => {
         if (isOpen) {
@@ -152,6 +154,42 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         }
     };
 
+    const handleNumberBlur = async () => {
+        if (!formData.number) return;
+        let value = formData.number.trim();
+
+        // Auto-pad numeric input to 3 digits
+        if (/^\d{1,3}$/.test(value)) {
+            value = value.padStart(3, '0');
+            setFormData(prev => ({ ...prev, number: value }));
+        }
+
+        // Validate format
+        if (!/^\d{3}$/.test(value)) {
+            setNumberError('Formato inválido. Use 3 dígitos (ex: 001, 042, 123).');
+            return;
+        }
+
+        // Check uniqueness
+        if (!organizationId) return;
+        setIsCheckingNumber(true);
+        setNumberError(null);
+        try {
+            let query = supabase
+                .from('contracts')
+                .select('id')
+                .eq('organization_id', organizationId)
+                .eq('number', value);
+            if (initialData?.id) query = query.neq('id', initialData.id);
+            const { data } = await query.maybeSingle();
+            if (data) setNumberError(`Número ${value} já está em uso.`);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsCheckingNumber(false);
+        }
+    };
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !organizationId) return;
@@ -183,6 +221,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+
+        if (!formData.number || !/^\d{3}$/.test(formData.number)) {
+            setNumberError('Formato inválido. Use 3 dígitos (ex: 001, 042, 123).');
+            return;
+        }
+        if (numberError) return;
+
         setIsSubmitting(true);
         try {
             const payload = { ...formData, organization_id: organizationId };
@@ -261,14 +306,31 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Número do Contrato</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        placeholder={isFetchingNumber ? 'Carregando...' : '001'}
-                                        value={formData.number ?? ''}
-                                        onChange={(e) => setFormData({ ...formData, number: e.target.value })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold font-mono focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            required
+                                            maxLength={3}
+                                            placeholder={isFetchingNumber ? 'Carregando...' : '001'}
+                                            value={formData.number ?? ''}
+                                            onChange={(e) => {
+                                                setNumberError(null);
+                                                setFormData({ ...formData, number: e.target.value });
+                                            }}
+                                            onBlur={handleNumberBlur}
+                                            className={`w-full px-6 py-4 bg-gray-50 border rounded-2xl text-sm font-semibold font-mono focus:outline-none focus:ring-4 transition-all ${numberError ? 'border-red-400 focus:ring-red-500/10 focus:border-red-500' : 'border-gray-100 focus:ring-blue-500/10 focus:border-blue-500'}`}
+                                        />
+                                        {isCheckingNumber && (
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    {numberError && (
+                                        <p className="text-xs text-red-500 ml-1 flex items-center gap-1">
+                                            <AlertCircle className="w-3 h-3" /> {numberError}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Título / Objeto</label>

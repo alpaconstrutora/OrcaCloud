@@ -68,19 +68,40 @@ async function removeContractTransactions(contractId: string, orgId: string | un
     }
 }
 
+// Returns all measurement IDs for a contract (used to clean up measurement-based transactions)
+async function getContractMeasurementIds(contractId: string): Promise<string[]> {
+    try {
+        const { data } = await supabase
+            .from('contract_measurements')
+            .select('id')
+            .eq('contract_id', contractId);
+        return (data || []).map((r: any) => r.id);
+    } catch { return []; }
+}
+
+// Removes all transactions belonging to this contract: tag-based OR measurement-based
+function isContractTx(t: any, contractTag: string, measurementIds: string[]): boolean {
+    if ((t.notes || '').includes(contractTag)) return true;
+    if (t.measurementId && measurementIds.includes(t.measurementId)) return true;
+    return false;
+}
+
 // Generate financial transactions from payment_schedule for a Parcelado contract.
 // Priority: project JSONB first (shown in project financial view), vault as fallback (org-level contracts).
+// Also replaces measurement-generated transactions so the schedule is the single source of truth.
 async function syncParceladoScheduleToFinance(contract: Contract) {
     if (!contract.payment_schedule?.length || contract.is_recurring) return;
     try {
         const supplierName = await resolveSupplierName(contract.supplier_id, 'Fornecedor');
         const tag = `[contract:${contract.id}]`;
+        const measurementIds = await getContractMeasurementIds(contract.id);
+
         const newTxs = contract.payment_schedule.map((inst, i) => ({
             id: crypto.randomUUID(),
             date: inst.date + 'T12:00:00.000Z',
             type: 'EXPENSE' as const,
             category: 'Mão de Obra / Serviço',
-            description: `Parcela ${i + 1}/${contract.payment_schedule!.length} - Contrato ${contract.number || contract.id} - ${supplierName}`,
+            description: `Contrato: ${contract.title || contract.number} - Parcela ${i + 1}/${contract.payment_schedule!.length}`,
             value: inst.value,
             status: 'PENDING' as const,
             supplier: supplierName,
@@ -93,12 +114,13 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             const project = await projectService.loadProject(contract.project_id);
             if (project) {
                 const info = (project.settings as any)?.financialInfo || { totalValue: 0, paymentMethod: 'Parcelamento Próprio', installments: [], transactions: [] };
-                const kept = (info.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
+                // Remove both tag-based AND measurement-based transactions for this contract
+                const kept = (info.transactions || []).filter((t: any) => !isContractTx(t, tag, measurementIds));
                 await projectService.saveProject({
                     ...project,
                     settings: { ...project.settings, financialInfo: { ...info, transactions: [...newTxs, ...kept] } }
                 });
-                console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to project ${contract.project_id}`);
+                console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to project ${contract.project_id} (removed ${(info.transactions || []).length - kept.length} old)`);
                 return;
             }
         }
@@ -108,7 +130,7 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             const vault = await findVault(contract.organization_id);
             if (vault) {
                 const vaultInfo = vault.settings?.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
-                const kept = (vaultInfo.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
+                const kept = (vaultInfo.transactions || []).filter((t: any) => !isContractTx(t, tag, measurementIds));
                 await supabase.from('projects').update({
                     settings: { ...vault.settings, financialInfo: { ...vaultInfo, transactions: [...newTxs, ...kept] } }
                 }).eq('id', vault.id);

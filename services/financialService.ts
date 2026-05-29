@@ -326,10 +326,34 @@ export const financialService = {
         const baseDate = measurement.measurement_date || new Date().toISOString();
         const paymentMethod = contract.payment_method || 'Não inf.';
         const termType = contract.payment_term_type || 'Vista';
-        const installmentsCount = termType === 'Parcelado' ? (contract.payment_installments || 1) : 1;
         const intervalDays = contract.payment_days || 0;
 
-        // 7. Generate Transactions
+        // 7. If contract has a custom payment_schedule, use it as source of truth
+        // (schedule already has dates and values; measurement total is proportional)
+        const paymentSchedule: { date: string; value: number }[] | undefined = (contract as any).payment_schedule;
+        if (termType === 'Parcelado' && paymentSchedule?.length) {
+            const scheduleTotal = paymentSchedule.reduce((s: number, p: any) => s + p.value, 0);
+            const ratio = scheduleTotal > 0 ? total / scheduleTotal : 1;
+            for (let i = 0; i < paymentSchedule.length; i++) {
+                const inst = paymentSchedule[i];
+                await this.addTransaction(projectId, {
+                    date: inst.date + 'T12:00:00.000Z',
+                    type: 'EXPENSE',
+                    category: 'Mão de Obra / Serviço',
+                    description: `Contrato: ${contract.title} - Medição #${measurement.number} (${i + 1}/${paymentSchedule.length})`,
+                    value: Math.round(inst.value * ratio * 100) / 100,
+                    status: 'PENDING',
+                    supplier: supplierName,
+                    measurementId: measurementId,
+                    notes: `Gerado da medição. Método: ${paymentMethod}.`
+                });
+            }
+            console.log(`[FINANCIAL] Generated ${paymentSchedule.length} forecast(s) from schedule for Measurement ${measurement.number}`);
+            return;
+        }
+
+        // Fallback: equal division
+        const installmentsCount = termType === 'Parcelado' ? (contract.payment_installments || 1) : 1;
         const installmentValue = total / installmentsCount;
 
         for (let i = 0; i < installmentsCount; i++) {

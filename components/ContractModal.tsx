@@ -118,6 +118,17 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     React.useEffect(() => {
         if (initialData) {
             setFormData(prev => ({ ...prev, ...initialData }));
+            if (initialData.payment_schedule?.length) {
+                setInstallmentSchedule(initialData.payment_schedule);
+            } else if (initialData.payment_term_type === 'Parcelado') {
+                setInstallmentSchedule(buildSchedule(
+                    initialData.payment_installments ?? 1,
+                    initialData.original_value ?? 0,
+                    initialData.start_date ?? new Date().toISOString().split('T')[0]
+                ));
+            } else {
+                setInstallmentSchedule([]);
+            }
         }
     }, [initialData]);
 

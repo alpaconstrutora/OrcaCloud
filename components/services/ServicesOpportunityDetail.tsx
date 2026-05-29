@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Edit2, MapPin, Phone, Mail, Calendar, ClipboardList, Calculator, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
+import ServicesWonModal from './ServicesWonModal';
 import {
   servicesCommercialService,
   ServiceOpportunity,
@@ -42,6 +43,12 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [showLostModal, setShowLostModal] = useState(false);
+  const [wonResult, setWonResult] = useState<{
+    contractNumber: string | null;
+    projectName: string | null;
+    projectId: string | null;
+    contractId: string | null;
+  } | null>(null);
   const [lostReason, setLostReason] = useState('');
   const [moving, setMoving] = useState(false);
   const { toasts, show: showToast, dismiss } = useServicesToast();
@@ -66,7 +73,12 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
     try {
       const updated = await servicesCommercialService.moveStage(opp.id, next);
       setOpp(updated);
-      showToast(`Movido para "${STAGE_LABELS[next]}"`);
+      if (next === 'won') {
+        const result = await servicesCommercialService.getConversionResult(updated);
+        setWonResult(result);
+      } else {
+        showToast(`Movido para "${STAGE_LABELS[next]}"`);
+      }
       load();
     } catch {
       showToast('Erro ao mover oportunidade.', 'error');
@@ -253,6 +265,20 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
           onSaved={updated => { setOpp(updated); setIsEditing(false); showToast('Oportunidade atualizada!'); }}
         />
       )}
+
+      {wonResult && (
+        <ServicesWonModal
+          contactName={opp.contact_name}
+          contractNumber={wonResult.contractNumber}
+          projectName={wonResult.projectName}
+          onClose={() => setWonResult(null)}
+          onGoToProject={wonResult.projectId ? () => {
+            setWonResult(null);
+            onNavigate('pipeline');
+          } : undefined}
+        />
+      )}
+
       <ServicesToast toasts={toasts} onDismiss={dismiss} />
     </div>
   );

@@ -293,6 +293,38 @@ export const servicesCommercialService = {
     return data;
   },
 
+  // ─── Conversion result ────────────────────────────────────────────────────
+
+  async getConversionResult(opp: ServiceOpportunity): Promise<{
+    contractNumber: string | null;
+    projectName: string | null;
+    projectId: string | null;
+    contractId: string | null;
+  }> {
+    const [contractResult, projectResult] = await Promise.all([
+      opp.converted_contract_id
+        ? supabase
+            .from('services_contracts')
+            .select('contract_number')
+            .eq('id', opp.converted_contract_id)
+            .single()
+        : Promise.resolve({ data: null, error: null }),
+      opp.converted_project_id
+        ? supabase
+            .from('projects')
+            .select('name')
+            .eq('id', opp.converted_project_id)
+            .single()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+    return {
+      contractNumber: contractResult.data?.contract_number ?? null,
+      projectName: projectResult.data?.name ?? null,
+      projectId: opp.converted_project_id,
+      contractId: opp.converted_contract_id,
+    };
+  },
+
   // ─── Dashboard KPIs ───────────────────────────────────────────────────────
 
   async getKPIs(organizationId: string) {

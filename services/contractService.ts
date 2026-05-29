@@ -30,9 +30,27 @@ async function findVault(orgId: string) {
     return data?.[0] ?? null;
 }
 
-// Remove all transactions tagged [contract:id] from vault (or project JSONB)
+// Remove all transactions tagged [contract:id] from project JSONB (priority) or vault (fallback)
 async function removeContractTransactions(contractId: string, orgId: string | undefined, projectId: string | undefined) {
     const tag = `[contract:${contractId}]`;
+    // Priority 1: project JSONB
+    if (projectId) {
+        try {
+            const { projectService } = await import('./projectService');
+            const project = await projectService.loadProject(projectId);
+            if (project) {
+                const info = (project.settings as any)?.financialInfo;
+                if (info) {
+                    const cleaned = (info.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
+                    if (cleaned.length !== (info.transactions || []).length) {
+                        await projectService.saveProject({ ...project, settings: { ...project.settings, financialInfo: { ...info, transactions: cleaned } } });
+                    }
+                }
+                return;
+            }
+        } catch (e) { console.error('[CONTRACTS] removeContractTransactions project error:', e); }
+    }
+    // Fallback: vault
     if (orgId) {
         try {
             const vault = await findVault(orgId);
@@ -45,28 +63,13 @@ async function removeContractTransactions(contractId: string, orgId: string | un
                         settings: { ...vault.settings, financialInfo: { ...vaultInfo, transactions: cleaned } }
                     }).eq('id', vault.id);
                 }
-                return;
             }
         } catch (e) { console.error('[CONTRACTS] removeContractTransactions vault error:', e); }
-    }
-    // Fallback: project JSONB
-    if (projectId) {
-        try {
-            const { projectService } = await import('./projectService');
-            const project = await projectService.loadProject(projectId);
-            if (!project) return;
-            const info = (project.settings as any)?.financialInfo;
-            if (!info) return;
-            const cleaned = (info.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
-            if (cleaned.length !== (info.transactions || []).length) {
-                await projectService.saveProject({ ...project, settings: { ...project.settings, financialInfo: { ...info, transactions: cleaned } } });
-            }
-        } catch (e) { console.error('[CONTRACTS] removeContractTransactions project fallback error:', e); }
     }
 }
 
 // Generate financial transactions from payment_schedule for a Parcelado contract.
-// Uses direct vault lookup (same path as removeContractTransactions) to avoid silent fallback mismatches.
+// Priority: project JSONB first (shown in project financial view), vault as fallback (org-level contracts).
 async function syncParceladoScheduleToFinance(contract: Contract) {
     if (!contract.payment_schedule?.length || contract.is_recurring) return;
     try {
@@ -84,33 +87,33 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             notes: `${tag} Parcela ${i + 1} gerada automaticamente do contrato ${contract.number || contract.id}`
         }));
 
-        // Try vault path directly (same as removeContractTransactions)
-        if (contract.organization_id) {
-            const vault = await findVault(contract.organization_id);
-            if (vault) {
-                const vaultInfo = vault.settings?.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
-                // Remove old + add new in a single write
-                const kept = (vaultInfo.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
-                await supabase.from('projects').update({
-                    settings: { ...vault.settings, financialInfo: { ...vaultInfo, transactions: [...newTxs, ...kept] } }
-                }).eq('id', vault.id);
-                console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to vault for contract ${contract.id}`);
+        // Priority 1: project JSONB — this is what the project financial view reads
+        if (contract.project_id) {
+            const { projectService } = await import('./projectService');
+            const project = await projectService.loadProject(contract.project_id);
+            if (project) {
+                const info = (project.settings as any)?.financialInfo || { totalValue: 0, paymentMethod: 'Parcelamento Próprio', installments: [], transactions: [] };
+                const kept = (info.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
+                await projectService.saveProject({
+                    ...project,
+                    settings: { ...project.settings, financialInfo: { ...info, transactions: [...newTxs, ...kept] } }
+                });
+                console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to project ${contract.project_id}`);
                 return;
             }
         }
 
-        // Fallback: project JSONB
-        if (contract.project_id) {
-            const { projectService } = await import('./projectService');
-            const project = await projectService.loadProject(contract.project_id);
-            if (!project) return;
-            const info = (project.settings as any)?.financialInfo || { totalValue: 0, paymentMethod: 'Parcelamento Próprio', installments: [], transactions: [] };
-            const kept = (info.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
-            await projectService.saveProject({
-                ...project,
-                settings: { ...project.settings, financialInfo: { ...info, transactions: [...newTxs, ...kept] } }
-            });
-            console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to project for contract ${contract.id}`);
+        // Fallback: org-level vault (contracts without a project_id)
+        if (contract.organization_id) {
+            const vault = await findVault(contract.organization_id);
+            if (vault) {
+                const vaultInfo = vault.settings?.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
+                const kept = (vaultInfo.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
+                await supabase.from('projects').update({
+                    settings: { ...vault.settings, financialInfo: { ...vaultInfo, transactions: [...newTxs, ...kept] } }
+                }).eq('id', vault.id);
+                console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to vault for org ${contract.organization_id}`);
+            }
         }
     } catch (e) {
         console.error('[CONTRACTS] Error syncing parcelado schedule to finance:', e);

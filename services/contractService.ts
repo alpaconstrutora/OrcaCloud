@@ -133,13 +133,20 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
         }
 
         // ── 2. internal_transactions (aba Conciliação) ─────────────────────────
+        // reference_id uses contract.id:pN pattern to satisfy the (org, reference) unique constraint
         if (contract.organization_id) {
-            // Remove old entries (tag-based and measurement-based)
-            await supabase.from('internal_transactions')
-                .delete()
+            // Remove old entries: use LIKE 'contract.id%' to catch all installment keys
+            const { data: oldRows } = await supabase
+                .from('internal_transactions')
+                .select('id')
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_PARCELADO')
-                .eq('reference_id', contract.id);
+                .like('reference_id', `${contract.id}%`);
+            if (oldRows?.length) {
+                await supabase.from('internal_transactions')
+                    .delete()
+                    .in('id', oldRows.map((r: any) => r.id));
+            }
             if (measurementIds.length > 0) {
                 await supabase.from('internal_transactions')
                     .delete()
@@ -148,11 +155,11 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                     .in('reference_id', measurementIds);
             }
 
-            // Insert new rows
-            const internalRows = newTxs.map(tx => ({
+            // Insert one row per installment with unique reference_id
+            const internalRows = newTxs.map((tx, i) => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_PARCELADO',
-                reference_id: contract.id,
+                reference_id: `${contract.id}:p${i + 1}`,
                 transaction_date: tx.date.split('T')[0],
                 amount: tx.value,
                 direction: 'DEBIT',
@@ -431,12 +438,18 @@ export const contractService = {
                     console.log(`[CONTRACTS] Removed ${removedCount} financial transactions for deleted contract ${id}`);
                 }
 
-                // Also clean internal_transactions (Conciliação tab)
-                await supabase.from('internal_transactions')
-                    .delete()
+                // Also clean internal_transactions (Conciliação tab) — reference_id uses contract.id:pN pattern
+                const { data: parceladoRows } = await supabase
+                    .from('internal_transactions')
+                    .select('id')
                     .eq('organization_id', orgId)
                     .eq('source_system', 'CONTRACT_PARCELADO')
-                    .eq('reference_id', id);
+                    .like('reference_id', `${id}%`);
+                if (parceladoRows?.length) {
+                    await supabase.from('internal_transactions')
+                        .delete()
+                        .in('id', parceladoRows.map((r: any) => r.id));
+                }
             } catch (e) {
                 console.error('[CONTRACTS] Error cleaning up financial transactions on contract delete:', e);
             }

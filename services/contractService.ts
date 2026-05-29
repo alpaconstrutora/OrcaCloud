@@ -113,12 +113,21 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             const project = await projectService.loadProject(contract.project_id);
             if (project) {
                 const info = (project.settings as any)?.financialInfo || { totalValue: 0, paymentMethod: 'Parcelamento Próprio', installments: [], transactions: [] };
+                const toRemove = (info.transactions || []).filter((t: any) => isContractTx(t, tag, measurementIds));
                 const kept = (info.transactions || []).filter((t: any) => !isContractTx(t, tag, measurementIds));
                 await projectService.saveProject({
                     ...project,
                     settings: { ...project.settings, financialInfo: { ...info, transactions: [...newTxs, ...kept] } }
                 });
-                console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to project JSONB`);
+                // Remove internal_transactions mirror entries created by addTransaction (source_system='PROJECT')
+                const removedIds = toRemove.map((t: any) => t.id).filter(Boolean);
+                if (removedIds.length > 0 && contract.organization_id) {
+                    await supabase.from('internal_transactions')
+                        .delete()
+                        .eq('source_system', 'PROJECT')
+                        .in('reference_id', removedIds);
+                }
+                console.log(`[CONTRACTS] Synced ${newTxs.length} parcelado txs to project JSONB, removed ${toRemove.length} old`);
             }
         } else if (contract.organization_id) {
             // Fallback: org-level vault

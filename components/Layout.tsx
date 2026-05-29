@@ -497,6 +497,7 @@ const Layout: React.FC<LayoutProps> = ({
               {(mod.crm || isDev) && (
                 <>
                   <NavGroup label="Comercial" />
+                  <NavItem id="services-commercial" icon={Briefcase} label="CRM Serviços" />
                   <NavItem id="sales" icon={TrendingUp} label="Vendas" />
                   <NavItem id="rentals" icon={Building2} label="Aluguéis" />
                 </>

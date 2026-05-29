@@ -67,9 +67,11 @@ CREATE INDEX IF NOT EXISTS idx_epi_deliveries_date ON public.epi_deliveries(deli
 ALTER TABLE public.epi_catalog   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.epi_deliveries ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "epi_catalog_org_access" ON public.epi_catalog;
 CREATE POLICY "epi_catalog_org_access" ON public.epi_catalog
     FOR ALL USING (public.is_org_member(org_id));
 
+DROP POLICY IF EXISTS "epi_deliveries_org_access" ON public.epi_deliveries;
 CREATE POLICY "epi_deliveries_org_access" ON public.epi_deliveries
     FOR ALL USING (public.is_org_member(org_id));
 
@@ -77,6 +79,7 @@ CREATE POLICY "epi_deliveries_org_access" ON public.epi_deliveries
 -- TRIGGER: updated_at
 -- ============================================================
 
+DROP TRIGGER IF EXISTS trg_epi_catalog_updated_at ON public.epi_catalog;
 CREATE TRIGGER trg_epi_catalog_updated_at
     BEFORE UPDATE ON public.epi_catalog
     FOR EACH ROW EXECUTE FUNCTION public.update_labor_updated_at();
@@ -110,6 +113,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trg_epi_stock_control ON public.epi_deliveries;
 CREATE TRIGGER trg_epi_stock_control
     AFTER INSERT OR UPDATE ON public.epi_deliveries
     FOR EACH ROW EXECUTE FUNCTION public.epi_update_stock();

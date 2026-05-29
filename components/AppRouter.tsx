@@ -55,6 +55,7 @@ import FinancialCategoriesManager from './FinancialCategoriesManager';
 import BankReconciliation from './BankReconciliation';
 import { FiscalModule } from './fiscal/FiscalModule';
 import OperacionalModule from './OperacionalModule';
+import ServicesCommercialModule from './ServicesCommercialModule';
 import NotificationsCenter from './NotificationsCenter';
 import ProjectTypeTemplateEditor from './ProjectTypeTemplateEditor';
 
@@ -691,6 +692,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             .map(p => ({ id: p.id, name: p.name }))}
         />
       );
+
+    case 'services-commercial':
+      return <ServicesCommercialModule organizationId={activeOrganizationId ?? ''} />;
 
     case 'sales':
       return <SalesModule organizationId={activeOrganizationId || undefined} />;

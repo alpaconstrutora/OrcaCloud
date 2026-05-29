@@ -590,12 +590,29 @@ export const bankReconciliationService = {
         const lines = text.split('\n').filter(l => l.trim());
         const transactions: RawTransaction[] = [];
 
+        // Parser simples de CSV com suporte a campos entre aspas ("descrição, com vírgula")
+        const parseCSVLine = (line: string): string[] => {
+            const cols: string[] = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '"') { inQuotes = !inQuotes; }
+                else if (ch === ',' && !inQuotes) { cols.push(current.trim()); current = ''; }
+                else { current += ch; }
+            }
+            cols.push(current.trim());
+            return cols;
+        };
+
         lines.slice(1).forEach(line => {
-            const cols = line.split(',');
-            if (cols.length >= 3) {
+            const cols = parseCSVLine(line);
+            const rawAmount = cols[1]?.trim().replace(',', '.');
+            const amount = parseFloat(rawAmount);
+            if (cols.length >= 3 && !isNaN(amount)) {
                 transactions.push({
                     date: cols[0].trim(),
-                    amount: parseFloat(cols[1].trim().replace(',', '.')),
+                    amount,
                     description: cols[2].trim(),
                     id: `csv-${Math.random().toString(36).substring(7)}`
                 });
@@ -606,6 +623,13 @@ export const bankReconciliationService = {
     },
 
     generateFingerprint(tx: RawTransaction): string {
-        return btoa(`${tx.date}-${tx.amount}-${tx.memo || tx.description}`).substring(0, 32);
+        const raw = `${tx.date}-${tx.amount}-${tx.memo || tx.description}`;
+        // btoa() lança RangeError em chars > 0xFF (ã, ç, etc. do PT-BR).
+        // encodeURIComponent → unescape converte para representação Latin-1 segura.
+        try {
+            return btoa(unescape(encodeURIComponent(raw))).substring(0, 32);
+        } catch {
+            return btoa(raw.replace(/[^\x00-\xff]/g, '?')).substring(0, 32);
+        }
     }
 };

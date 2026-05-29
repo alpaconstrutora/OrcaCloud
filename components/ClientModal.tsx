@@ -6,11 +6,12 @@ import { BASE_CUB_RATES } from '../constants';
 interface ClientModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSubmit: (data: Partial<Client>) => void;
+    onSubmit: (data: Partial<Client>) => Promise<void> | void;
     initialData?: Client;
 }
 
 const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
+    const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [formData, setFormData] = React.useState<Partial<Client>>({
         name: '',
         email: '',
@@ -45,13 +46,16 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.name) {
-            alert("O nome do cliente é obrigatório.");
-            return;
+        if (!formData.name?.trim()) return;
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            await onSubmit(formData);
+        } finally {
+            setIsSubmitting(false);
         }
-        onSubmit(formData);
     };
 
     return (
@@ -214,9 +218,10 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                         </button>
                         <button
                             type="submit"
-                            className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm transition-colors"
+                            disabled={isSubmitting}
+                            className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                            Salvar Cliente
+                            {isSubmitting ? 'Salvando...' : 'Salvar Cliente'}
                         </button>
                     </div>
                 </form>

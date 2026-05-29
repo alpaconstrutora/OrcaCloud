@@ -1,5 +1,13 @@
 import { supabase } from '../lib/supabase';
 
+// Garante que `date` é uma string ISO YYYY-MM-DD antes de interpolar em queries PostgREST.
+// Evita injeção via .or() que usa string literal na sintaxe do filtro.
+function safeIsoDate(date: string): string {
+    return /^\d{4}-\d{2}-\d{2}/.test(date)
+        ? date.substring(0, 10)
+        : new Date().toISOString().substring(0, 10);
+}
+
 export interface INSSBracket {
     id?: string;
     valid_from: string;
@@ -37,7 +45,7 @@ export const fiscalService = {
             .from('inss_brackets')
             .select('*')
             .lte('valid_from', date)
-            .or(`valid_to.is.null,valid_to.gte."${date}"`)
+            .or(`valid_to.is.null,valid_to.gte."${safeIsoDate(date)}"`)
             .order('min_value', { ascending: true });
 
         if (error) {
@@ -57,7 +65,7 @@ export const fiscalService = {
             .from('irrf_brackets')
             .select('*')
             .lte('valid_from', date)
-            .or(`valid_to.is.null,valid_to.gte."${date}"`)
+            .or(`valid_to.is.null,valid_to.gte."${safeIsoDate(date)}"`)
             .order('min_value', { ascending: true });
 
         if (error) {
@@ -77,7 +85,7 @@ export const fiscalService = {
             .from('fgts_config')
             .select('*')
             .lte('valid_from', date)
-            .or(`valid_to.is.null,valid_to.gte."${date}"`)
+            .or(`valid_to.is.null,valid_to.gte."${safeIsoDate(date)}"`)
             .order('valid_from', { ascending: false })
             .limit(1)
             .single();

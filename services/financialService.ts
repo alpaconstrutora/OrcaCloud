@@ -231,14 +231,17 @@ export const financialService = {
         const intervalDays = order.payment_days || 30; // Use negotiated days or default to 30
 
         // 7. Generate Transactions
-        const installmentValue = total / installmentsCount;
+        const baseInstallment = Math.round((total / installmentsCount) * 100) / 100;
 
         for (let i = 0; i < installmentsCount; i++) {
+            // Última parcela absorve o resíduo de centavos para soma exata ao total
+            const installmentValue = i === installmentsCount - 1
+                ? Math.round((total - baseInstallment * (installmentsCount - 1)) * 100) / 100
+                : baseInstallment;
+
             const dueDate = new Date(baseDate);
-            // Calculate due date for each installment (e.g., 1st in X days, 2nd in X+30 days, etc.)
-            // Logic: first installment is baseDate + intervalDays, subsequent are +30 days each
-            const daysToAdd = intervalDays + (i * 30);
-            dueDate.setDate(dueDate.getDate() + daysToAdd);
+            // intervalDays * (i+1): 30/60/90 ou 28/56/84 — espaçamento uniforme
+            dueDate.setDate(dueDate.getDate() + intervalDays * (i + 1));
 
             const installmentDesc = installmentsCount > 1
                 ? `Pedido ${order.number} (${i + 1}/${installmentsCount})`
@@ -322,7 +325,7 @@ export const financialService = {
         }
 
         // 6. Calculate Values and Terms
-        const total = measurement.net_value || measurement.total_value;
+        const total = measurement.net_value ?? measurement.total_value;
         const baseDate = measurement.measurement_date || new Date().toISOString();
         const paymentMethod = contract.payment_method || 'Não inf.';
         const termType = contract.payment_term_type || 'Vista';
@@ -354,12 +357,15 @@ export const financialService = {
 
         // Fallback: equal division
         const installmentsCount = termType === 'Parcelado' ? (contract.payment_installments || 1) : 1;
-        const installmentValue = total / installmentsCount;
+        const baseInstallmentM = Math.round((total / installmentsCount) * 100) / 100;
 
         for (let i = 0; i < installmentsCount; i++) {
+            const installmentValue = i === installmentsCount - 1
+                ? Math.round((total - baseInstallmentM * (installmentsCount - 1)) * 100) / 100
+                : baseInstallmentM;
+
             const dueDate = new Date(baseDate);
-            const daysToAdd = intervalDays + (i * 30);
-            dueDate.setDate(dueDate.getDate() + daysToAdd);
+            dueDate.setDate(dueDate.getDate() + intervalDays * (i + 1));
 
             const installmentDesc = installmentsCount > 1
                 ? `Medição #${measurement.number} (${i + 1}/${installmentsCount})`

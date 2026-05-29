@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { projectService } from '../services/projectService';
 import { BudgetEntry, ProjectSettings } from '../types';
 import { INITIAL_BUDGET, INITIAL_PROJECT_SETTINGS } from '../constants';
@@ -39,6 +39,10 @@ export const usePersistenceSync = ({
   setIsCreatingImovibStudy, setEditingImovibStudyId, setViewingImovibStudyId,
   setIsRehydrating, setProjectId, setProjectSettings, setBudget
 }: UsePersistenceSyncProps) => {
+  // Ref com o projectId mais recente — guarda o auto-save de salvar no projeto errado
+  // quando projectId muda antes do debounce de 2s disparar.
+  const currentProjectIdRef = useRef<string | null>(projectId);
+  useEffect(() => { currentProjectIdRef.current = projectId; }, [projectId]);
 
   // Persistence to LocalStorage
   useEffect(() => {
@@ -161,7 +165,11 @@ export const usePersistenceSync = ({
   // Auto-save: persiste budget + sincroniza snapshot da versão ativa
   useEffect(() => {
     if (!projectId || !session?.user?.id || isRehydrating || !projectSettings) return;
+    const savedProjectId = projectId; // captura do closure para comparação
     const timeoutId = setTimeout(async () => {
+      // Cancela silenciosamente se o projeto foi trocado durante o debounce
+      if (currentProjectIdRef.current !== savedProjectId) return;
+
       // Se há versão ativa, atualiza o snapshot dela com o budget atual
       let settingsToSave = projectSettings;
       if (projectSettings.activeVersionId && (projectSettings.versions?.length ?? 0) > 0) {
@@ -174,7 +182,7 @@ export const usePersistenceSync = ({
       }
       try {
         await projectService.saveProject({
-          id: projectId,
+          id: savedProjectId,
           name: settingsToSave.name,
           settings: settingsToSave,
           budget: budget

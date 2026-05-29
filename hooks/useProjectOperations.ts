@@ -138,12 +138,12 @@ export const useProjectOperations = ({
       if (savedProject) {
         // Só atualiza projectId se estava nulo (novo projeto) — evita disparar rehydrate
         if (!projectId) setProjectId(savedProject.id);
-        if (!explicitBudget) alert(`Obra "${s?.name}" salva com sucesso na nuvem!`);
+        if (!explicitBudget) showToast(`Obra "${s?.name}" salva com sucesso na nuvem!`);
       }
     } catch (error: unknown) {
       console.error("Erro ao salvar obra:", error);
       const message = error instanceof Error ? error.message : "Erro desconhecido";
-      if (!explicitBudget) alert("Erro ao salvar obra: " + message);
+      if (!explicitBudget) showToast("Erro ao salvar obra: " + message, 'error');
       throw error;
     } finally {
       setIsSaving(false);
@@ -189,12 +189,12 @@ export const useProjectOperations = ({
         budget: originalProject.budget || []
       });
       if (savedProject) {
-        alert("Projeto duplicado com sucesso!");
+        showToast("Projeto duplicado com sucesso!");
         fetchProjects(organizations);
       }
     } catch (error) {
       console.error("Erro ao duplicar projeto:", error);
-      alert("Erro ao duplicar projeto.");
+      showToast("Erro ao duplicar projeto.", 'error');
     } finally {
       setIsSaving(false);
     }
@@ -209,12 +209,12 @@ export const useProjectOperations = ({
         budget: data.budget
       });
       if (savedProject) {
-        alert(`Projeto "${savedProject.name}" importado com sucesso!`);
+        showToast(`Projeto "${savedProject.name}" importado com sucesso!`);
         fetchProjects(organizations);
       }
     } catch (error) {
       console.error("Erro ao importar projeto:", error);
-      alert("Erro ao importar projeto.");
+      showToast("Erro ao importar projeto.", 'error');
     } finally {
       setIsSaving(false);
     }
@@ -223,7 +223,7 @@ export const useProjectOperations = ({
   const handleExportProject = async (id: string) => {
     try {
       const projectData = await projectService.loadProject(id);
-      if (!projectData) return alert("Erro: Projeto não encontrado.");
+      if (!projectData) { showToast("Erro: Projeto não encontrado.", 'error'); return; }
       const ExcelJS = await import('exceljs');
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Dados da Obra');
@@ -237,7 +237,7 @@ export const useProjectOperations = ({
       saveAs(blob, `Export_${projectData.name.replace(/\s+/g, '_')}.xlsx`);
     } catch (error) {
       console.error("Erro ao exportar projeto:", error);
-      alert("Erro ao exportar projeto.");
+      showToast("Erro ao exportar projeto.", 'error');
     }
   };
 

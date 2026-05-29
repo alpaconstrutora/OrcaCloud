@@ -706,7 +706,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         
         // NOVO: Notificar o motor comercial sobre a mudança de status da parcela para acionar Liquidação Automática
         if (shouldReconcile && inst.dealId) {
-             commercialFinanceService.reconcileDealStatusWithFinance(inst.dealId).catch(console.error);
+             commercialFinanceService.reconcileDealStatusWithFinance(inst.dealId, organizationId || settings.organizationId).catch(console.error);
         }
     };
 
@@ -735,7 +735,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         
         // NOVO: Notificar o motor comercial sobre a mudança de status da parcela
         if (shouldReconcile && item && item.dealId) {
-             commercialFinanceService.reconcileDealStatusWithFinance(item.dealId).catch(console.error);
+             commercialFinanceService.reconcileDealStatusWithFinance(item.dealId, organizationId || settings.organizationId).catch(console.error);
         }
     };
 

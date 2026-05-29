@@ -467,13 +467,13 @@ export const commercialFinanceService = {
      * Bloqueia a remoção se houver parcelas já pagas (PAID).
      */
     async deleteDealInstallments(dealId: string, organizationId?: string) {
-        console.log(`[COMMERCIAL-FINANCE] Attempting GLOBAL cleanup for Deal ${dealId} (Org: ${organizationId})`);
+        console.log(`[COMMERCIAL-FINANCE] Cleanup for Deal ${dealId} (Org: ${organizationId})`);
 
-        // 1. Carregar TODOS os projetos (Mestre + Satélites) de TODA a base de dados
-        // (A Trava Financeira deve ser Onisciente. Como a tabela projects não tem organization_id direto,
-        //  buscamos os projetos e filtramos no settings se necessário, ou varremos todos os acessíveis)
-        const query = supabase.from('projects').select('id, name, settings');
-        
+        // Filtra por organizationId quando disponível — evita varredura cross-tenant.
+        let query = supabase.from('projects').select('id, name, settings');
+        if (organizationId) {
+            query = query.filter('settings->>organizationId', 'eq', organizationId);
+        }
         const { data: allProjects, error } = await query;
         if (error || !allProjects) {
             console.error(`[COMMERCIAL-FINANCE] Failed to load ALL projects for global cleanup:`, error);
@@ -637,13 +637,16 @@ export const commercialFinanceService = {
      * Se todas as parcelas estiverem PAID, o status do Deal será COMPLETED.
      * Se houver qualquer parcela PENDING/OVERDUE, o status volta para PENDING.
      */
-    async reconcileDealStatusWithFinance(dealId: string) {
+    async reconcileDealStatusWithFinance(dealId: string, organizationId?: string) {
         if (!dealId) return;
 
-        console.log(`[COMMERCIAL-RECONCILE] Checking GLOBAL financial health for Deal ${dealId}...`);
+        console.log(`[COMMERCIAL-RECONCILE] Checking financial health for Deal ${dealId} (Org: ${organizationId ?? 'all'})...`);
 
-        // 1. Carregar TODOS os projetos de TODA a base de dados (Onisciência)
-        const query = supabase.from('projects').select('id, name, settings');
+        // Filtra por org quando disponível — evita varredura cross-tenant.
+        let query = supabase.from('projects').select('id, name, settings');
+        if (organizationId) {
+            query = query.filter('settings->>organizationId', 'eq', organizationId);
+        }
         const { data: allProjects, error: fetchProjError } = await query;
         if (fetchProjError || !allProjects) {
             console.error('[COMMERCIAL-RECONCILE] Error fetching ALL projects:', fetchProjError);

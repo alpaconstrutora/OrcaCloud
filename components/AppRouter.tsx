@@ -55,6 +55,7 @@ import FinancialCategoriesManager from './FinancialCategoriesManager';
 import BankReconciliation from './BankReconciliation';
 import { FiscalModule } from './fiscal/FiscalModule';
 import OperacionalModule from './OperacionalModule';
+import TasksModule from './TasksModule';
 import ServicesCommercialModule from './ServicesCommercialModule';
 import NotificationsCenter from './NotificationsCenter';
 import ProjectTypeTemplateEditor from './ProjectTypeTemplateEditor';
@@ -719,6 +720,15 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
           onUpdateBudget={handleUpdateBudget}
+        />
+      );
+
+    // ── Tarefas (agenda pessoal) ────────────────────────────────────────────────
+    case 'tarefas':
+      return (
+        <TasksModule
+          activeOrganizationId={activeOrganizationId ?? undefined}
+          onChangeView={setActiveView}
         />
       );
 

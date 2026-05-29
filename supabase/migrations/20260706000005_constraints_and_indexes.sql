@@ -67,8 +67,9 @@ END;
 $$;
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- 3. payroll_runs: UNIQUE por (org, month, year, type, subtype)
+-- 3. payroll_runs: UNIQUE por (org, start_date, end_date, type, subtype)
 --    Previne geração duplicada de folha do mesmo período.
+--    Nota: o schema usa start_date/end_date (não period_month/period_year).
 -- ══════════════════════════════════════════════════════════════════════════════
 
 DO $$
@@ -76,9 +77,9 @@ DECLARE v_count INTEGER;
 BEGIN
   SELECT COUNT(*) INTO v_count
   FROM (
-    SELECT org_id, period_month, period_year, type, COALESCE(subtype, '')
+    SELECT org_id, start_date, end_date, type, COALESCE(subtype, '')
     FROM public.payroll_runs
-    GROUP BY org_id, period_month, period_year, type, COALESCE(subtype, '')
+    GROUP BY org_id, start_date, end_date, type, COALESCE(subtype, '')
     HAVING COUNT(*) > 1
   ) AS dups;
 
@@ -90,18 +91,18 @@ BEGIN
       WHERE schemaname = 'public' AND tablename = 'payroll_runs' AND indexname = 'idx_payroll_runs_period_unique'
     ) THEN
       CREATE UNIQUE INDEX idx_payroll_runs_period_unique
-        ON public.payroll_runs(org_id, period_month, period_year, type, COALESCE(subtype, ''));
+        ON public.payroll_runs(org_id, start_date, end_date, type, COALESCE(subtype, ''));
     END IF;
   END IF;
 END;
 $$;
 
--- CHECK de sanidade em period_year (aceitar apenas 2000–2100)
+-- CHECK de sanidade em end_date (não pode ser anterior a start_date)
 ALTER TABLE public.payroll_runs
-  DROP CONSTRAINT IF EXISTS payroll_runs_period_year_check;
+  DROP CONSTRAINT IF EXISTS payroll_runs_period_range_check;
 ALTER TABLE public.payroll_runs
-  ADD CONSTRAINT payroll_runs_period_year_check
-  CHECK (period_year BETWEEN 2000 AND 2100);
+  ADD CONSTRAINT payroll_runs_period_range_check
+  CHECK (end_date >= start_date);
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- 4. Índices em chaves estrangeiras sem índice (performance + planner)

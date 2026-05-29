@@ -9,6 +9,86 @@ import {
     ContractUtilityBill
 } from '../types';
 
+// Resolve supplier name from DB (returns fallback string on error)
+async function resolveSupplierName(supplierId: string | undefined, fallback: string): Promise<string> {
+    if (!supplierId) return fallback;
+    try {
+        const { data } = await supabase.from('suppliers').select('name').eq('id', supplierId).maybeSingle();
+        return data?.name || fallback;
+    } catch { return fallback; }
+}
+
+// Find the "Gestão Comercial" vault for an org
+async function findVault(orgId: string) {
+    const { data } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('name', 'Gestão Comercial')
+        .filter('settings->>organizationId', 'eq', orgId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+    return data?.[0] ?? null;
+}
+
+// Remove all transactions tagged [contract:id] from vault (or project JSONB)
+async function removeContractTransactions(contractId: string, orgId: string | undefined, projectId: string | undefined) {
+    const tag = `[contract:${contractId}]`;
+    if (orgId) {
+        try {
+            const vault = await findVault(orgId);
+            if (vault) {
+                const vaultInfo = vault.settings?.financialInfo;
+                if (!vaultInfo) return;
+                const cleaned = (vaultInfo.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
+                if (cleaned.length !== (vaultInfo.transactions || []).length) {
+                    await supabase.from('projects').update({
+                        settings: { ...vault.settings, financialInfo: { ...vaultInfo, transactions: cleaned } }
+                    }).eq('id', vault.id);
+                }
+                return;
+            }
+        } catch (e) { console.error('[CONTRACTS] removeContractTransactions vault error:', e); }
+    }
+    // Fallback: project JSONB
+    if (projectId) {
+        try {
+            const { projectService } = await import('./projectService');
+            const project = await projectService.loadProject(projectId);
+            if (!project) return;
+            const info = (project.settings as any)?.financialInfo;
+            if (!info) return;
+            const cleaned = (info.transactions || []).filter((t: any) => !(t.notes || '').includes(tag));
+            if (cleaned.length !== (info.transactions || []).length) {
+                await projectService.saveProject({ ...project, settings: { ...project.settings, financialInfo: { ...info, transactions: cleaned } } });
+            }
+        } catch (e) { console.error('[CONTRACTS] removeContractTransactions project fallback error:', e); }
+    }
+}
+
+// Generate financial transactions from payment_schedule for a Parcelado contract
+async function syncParceladoScheduleToFinance(contract: Contract) {
+    if (!contract.payment_schedule?.length || contract.is_recurring) return;
+    try {
+        const supplierName = await resolveSupplierName(contract.supplier_id, 'Fornecedor');
+        await removeContractTransactions(contract.id, contract.organization_id, contract.project_id);
+        if (!contract.project_id) return;
+        const batchPayload = contract.payment_schedule.map((inst, i) => ({
+            date: inst.date + 'T12:00:00.000Z',
+            type: 'EXPENSE' as const,
+            category: 'Mão de Obra / Serviço',
+            description: `Parcela ${i + 1}/${contract.payment_schedule!.length} - Contrato ${contract.number || contract.id} - ${supplierName}`,
+            value: inst.value,
+            status: 'PENDING' as const,
+            supplier: supplierName,
+            notes: `[contract:${contract.id}] Parcela ${i + 1} gerada automaticamente do contrato ${contract.number || contract.id}`
+        }));
+        await financialService.addTransactionBatch(contract.project_id, batchPayload);
+        console.log(`[CONTRACTS] Synced ${batchPayload.length} parcelado transactions for contract ${contract.id}`);
+    } catch (e) {
+        console.error('[CONTRACTS] Error syncing parcelado schedule to finance:', e);
+    }
+}
+
 export const contractService = {
     // Contracts
     listContracts: async (projectId?: string, organizationId?: string, empresaId?: string): Promise<Contract[]> => {
@@ -54,6 +134,11 @@ export const contractService = {
         if (error) throw error;
         
         const newContract = data as Contract;
+
+        // Sync parcelado schedule to financial module
+        if (!newContract.is_recurring && newContract.payment_term_type === 'Parcelado') {
+            await syncParceladoScheduleToFinance(newContract);
+        }
 
         // Auto-generate installments for recurring contracts with an end date
         if (newContract.is_recurring && newContract.start_date && newContract.end_date) {
@@ -163,14 +248,21 @@ export const contractService = {
             .single();
 
         if (error) throw error;
-        return data as Contract;
+        const updated = data as Contract;
+
+        // Re-sync parcelado schedule when schedule is explicitly updated
+        if ('payment_schedule' in updates && !updated.is_recurring && updated.payment_term_type === 'Parcelado') {
+            await syncParceladoScheduleToFinance(updated);
+        }
+
+        return updated;
     },
 
     deleteContract: async (id: string): Promise<void> => {
         // 1. Antes de excluir, busca o contrato para saber se era recorrente e qual organização
         const { data: contract } = await supabase
             .from('contracts')
-            .select('id, is_recurring, organization_id, number, project_id')
+            .select('id, is_recurring, organization_id, number, project_id, payment_term_type')
             .eq('id', id)
             .single();
 
@@ -214,8 +306,8 @@ export const contractService = {
 
         if (error) throw error;
 
-        // 4. Se era recorrente, remove as transações geradas do vault "Gestão Comercial"
-        if (contract?.is_recurring) {
+        // 4. Remove transações financeiras geradas (recorrente ou parcelado)
+        if (contract?.is_recurring || contract?.payment_term_type === 'Parcelado') {
             try {
                 const orgId = contract.organization_id;
                 if (!orgId) return;

@@ -18,6 +18,7 @@ import { usePersistenceSync } from './hooks/usePersistenceSync';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useProjectOperations } from './hooks/useProjectOperations';
 import AppRouter from './components/AppRouter';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { PWAInstallPrompt, OfflineIndicator } from './components/PWAInstallPrompt';
 import { useTabRouter } from './hooks/useTabRouter';
 import { syncViewToUrl } from './lib/tabRouter';
@@ -241,6 +242,7 @@ const App: React.FC = () => {
       </div>
 
       {/* Roteamento de conteúdo */}
+      <ErrorBoundary>
       <AppRouter
         activeView={activeView}
         setActiveView={setActiveView}
@@ -315,6 +317,7 @@ const App: React.FC = () => {
         fetchClients={fetchClients}
         setProjectId={setProjectId}
       />
+      </ErrorBoundary>
 
       {/* Modais globais */}
       <AIChat isOpen={isAIChatOpen} onClose={() => setIsAIChatOpen(false)} budget={budget} settings={settingsWithId} />

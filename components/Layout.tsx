@@ -111,6 +111,7 @@ const Layout: React.FC<LayoutProps> = ({
   React.useEffect(() => { if (activeView.startsWith('labor-')) setIsLaborOpen(true); }, [activeView]);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [toast, setToast] = React.useState<{ title: string; message: string } | null>(null);
+  const toastTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchUnreadCount = React.useCallback(async () => {
     if (!profile.email && profile.group !== 'DESENVOLVEDOR') return;
@@ -153,8 +154,9 @@ const Layout: React.FC<LayoutProps> = ({
       if (payload?.eventType === 'INSERT') {
         const newNotif = payload.new;
         if (newNotif) {
+          if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
           setToast({ title: newNotif.title, message: newNotif.message });
-          setTimeout(() => setToast(null), 8000);
+          toastTimeoutRef.current = setTimeout(() => setToast(null), 8000);
         }
       }
     }, emailToFilter);
@@ -163,6 +165,7 @@ const Layout: React.FC<LayoutProps> = ({
       window.removeEventListener('notifications_updated', handleLocalUpdate);
       clearInterval(pollInterval);
       unsubscribe();
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     };
   }, [profile.email, profile.group, fetchUnreadCount]);
 

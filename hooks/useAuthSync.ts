@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { profileService } from '../services/profileService';
 import { investorService } from '../services/investorService';
@@ -39,6 +39,7 @@ export const useAuthSync = ({
   setSupplierProfile, fetchProjects, fetchClients, fetchOrganizations,
   projectId, clientProfile, investorProfile, handleLoadProject
 }: UseAuthSyncProps) => {
+  const signOutTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auth Listeners
   useEffect(() => {
@@ -77,7 +78,8 @@ export const useAuthSync = ({
         if (!result.isValid) {
           setAuthError(result.error || 'Acesso negado.');
           setProfileSynchronized(false);
-          setTimeout(() => {
+          if (signOutTimeoutRef.current) clearTimeout(signOutTimeoutRef.current);
+          signOutTimeoutRef.current = setTimeout(() => {
             setSelectedLoginGroup(null);
             setSession(null);
             supabase.auth.signOut();
@@ -106,6 +108,9 @@ export const useAuthSync = ({
         setIsValidating(false);
       };
       validate();
+      return () => {
+        if (signOutTimeoutRef.current) clearTimeout(signOutTimeoutRef.current);
+      };
     }
   }, [
     session?.user?.id, session?.user?.email, selectedLoginGroup,

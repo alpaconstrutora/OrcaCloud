@@ -85,6 +85,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [isFetchingNumber, setIsFetchingNumber] = React.useState(false);
     const [numberError, setNumberError] = React.useState<string | null>(null);
     const [isCheckingNumber, setIsCheckingNumber] = React.useState(false);
+    const numberInputRef = React.useRef<string>(formData.number ?? '');
 
     React.useEffect(() => {
         if (isOpen) {
@@ -108,7 +109,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             setIsFetchingNumber(true);
             try {
                 const { data } = await supabase.rpc('get_next_contract_number', { p_org_id: organizationId });
-                if (data) setFormData(prev => ({ ...prev, number: String(data).padStart(3, '0') }));
+                if (data) {
+                    const n = String(data).padStart(3, '0');
+                    numberInputRef.current = n;
+                    setFormData(prev => ({ ...prev, number: n }));
+                }
             } catch (e) {
                 console.error(e);
             } finally {
@@ -155,12 +160,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     };
 
     const handleNumberBlur = async () => {
-        if (!formData.number) return;
-        let value = formData.number.trim();
+        if (!numberInputRef.current) return;
+        let value = numberInputRef.current.trim();
 
         // Auto-pad numeric input to 3 digits
         if (/^\d{1,3}$/.test(value)) {
             value = value.padStart(3, '0');
+            numberInputRef.current = value;
             setFormData(prev => ({ ...prev, number: value }));
         }
 
@@ -222,7 +228,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         e.preventDefault();
         setError(null);
 
-        if (!formData.number || !/^\d{3}$/.test(formData.number)) {
+        const currentNumber = numberInputRef.current ?? formData.number ?? '';
+        if (!currentNumber || !/^\d{3}$/.test(currentNumber)) {
             setNumberError('Formato inválido. Use 3 dígitos (ex: 001, 042, 123).');
             return;
         }
@@ -314,6 +321,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             placeholder={isFetchingNumber ? 'Carregando...' : '001'}
                                             value={formData.number ?? ''}
                                             onChange={(e) => {
+                                                numberInputRef.current = e.target.value;
                                                 setNumberError(null);
                                                 setFormData({ ...formData, number: e.target.value });
                                             }}

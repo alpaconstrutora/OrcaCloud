@@ -728,6 +728,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <TasksModule
           activeOrganizationId={activeOrganizationId ?? undefined}
+          organizations={organizations}
+          projects={typedProjects}
           onChangeView={setActiveView}
         />
       );

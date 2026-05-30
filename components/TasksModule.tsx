@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks } from 'lucide-react'
+import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import TasksList from './TasksList'
-import TaskForm, { type TaskRecord } from './TaskForm'
+import TaskForm, { type TaskRecord, type EmployeeOption, type ProjectOption, type OrgOption } from './TaskForm'
 
 type FilterView = 'today' | 'all' | 'overdue'
 
 interface Props {
   activeOrganizationId?: string
+  organizations?: OrgOption[]
+  projects?: Array<{ id: string; name: string; settings?: { organizationId?: string; classification?: string; isSystemProject?: boolean } }>
   onChangeView?: (view: string) => void
 }
 
@@ -35,39 +37,71 @@ const TabBtn: React.FC<{
   </button>
 )
 
-const TasksModule: React.FC<Props> = ({ activeOrganizationId, onChangeView }) => {
-  const [view, setView] = useState<FilterView>('today')
-  const [tasks, setTasks] = useState<TaskRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<TaskRecord | null>(null)
-  const [showForm, setShowForm] = useState(false)
+const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = [], projects = [], onChangeView }) => {
+  const [view, setView]           = useState<FilterView>('today')
+  const [tasks, setTasks]         = useState<TaskRecord[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [editing, setEditing]     = useState<TaskRecord | null>(null)
+  const [showForm, setShowForm]   = useState(false)
+  const [filterOrg, setFilterOrg] = useState<string>(activeOrganizationId ?? '')
+  const [employees, setEmployees] = useState<EmployeeOption[]>([])
 
+  // Carrega tarefas
   const load = useCallback(async () => {
     setLoading(true)
-    const { data, error } = await supabase
+    const q = supabase
       .from('tasks')
       .select('*')
-      .order('status', { ascending: true })
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .order('priority', { ascending: true })
-    if (error) {
-      console.error('[tasks] load', error)
-      setTasks([])
-    } else {
-      setTasks((data ?? []) as TaskRecord[])
-    }
+      .order('status',    { ascending: true })
+      .order('due_date',  { ascending: true, nullsFirst: false })
+      .order('priority',  { ascending: true })
+
+    const { data, error } = await q
+    if (error) { console.error('[tasks] load', error); setTasks([]) }
+    else        { setTasks((data ?? []) as TaskRecord[]) }
     setLoading(false)
   }, [])
 
+  // Carrega colaboradores da org selecionada para o form
+  const loadEmployees = useCallback(async (orgId: string) => {
+    if (!orgId) { setEmployees([]); return }
+    const { data } = await supabase
+      .from('employees')
+      .select('id, name, role')
+      .eq('org_id', orgId)
+      .eq('status', 'ATIVO')
+      .order('name')
+    setEmployees((data ?? []) as EmployeeOption[])
+  }, [])
+
   useEffect(() => { load() }, [load])
+  useEffect(() => { loadEmployees(filterOrg || activeOrganizationId || '') }, [filterOrg, activeOrganizationId, loadEmployees])
 
-  const { today, overdue, all } = useMemo(() => {
-    const now = new Date()
+  // Obras disponíveis filtradas pela org selecionada
+  const obras: ProjectOption[] = useMemo(() => {
+    const orgId = filterOrg || activeOrganizationId
+    return projects
+      .filter(p => {
+        const s = p.settings
+        if (!s) return true
+        if (s.isSystemProject) return false
+        if (orgId && s.organizationId && s.organizationId !== orgId) return false
+        return true
+      })
+      .map(p => ({ id: p.id, name: p.name }))
+  }, [projects, filterOrg, activeOrganizationId])
+
+  // Filtros computados
+  const { today, overdue, visible } = useMemo(() => {
+    const now          = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const endOfToday = new Date(startOfToday.getTime() + 86_400_000)
+    const endOfToday   = new Date(startOfToday.getTime() + 86_400_000)
 
-    const open = tasks.filter(t => t.status !== 'done')
-    const today = open.filter(t => {
+    let filtered = tasks
+    if (filterOrg) filtered = filtered.filter(t => t.org_id === filterOrg)
+
+    const open    = filtered.filter(t => t.status !== 'done')
+    const today   = open.filter(t => {
       if (!t.due_date) return false
       const d = new Date(t.due_date)
       return d >= startOfToday && d < endOfToday
@@ -76,10 +110,12 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, onChangeView }) =>
       if (!t.due_date) return false
       return new Date(t.due_date) < startOfToday
     })
-    return { today, overdue, all: tasks }
-  }, [tasks])
+    const visible = view === 'today' ? today : view === 'overdue' ? overdue : filtered
 
-  const visible = view === 'today' ? today : view === 'overdue' ? overdue : all
+    return { today, overdue, visible }
+  }, [tasks, filterOrg, view])
+
+  const orgForNew = filterOrg || activeOrganizationId || ''
 
   const toggleDone = async (t: TaskRecord) => {
     const next = t.status === 'done' ? 'open' : 'done'
@@ -90,17 +126,23 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, onChangeView }) =>
 
   const handleNavigate = (route: string) => {
     if (onChangeView && route.startsWith('/')) {
-      const view = route.replace(/^\//, '').split('/')[0]
-      onChangeView(view)
+      onChangeView(route.replace(/^\//, '').split('/')[0])
     }
   }
 
+  const orgsOptions: OrgOption[] = organizations.length
+    ? organizations
+    : activeOrganizationId
+      ? [{ id: activeOrganizationId, name: 'Minha Organização' }]
+      : []
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Tarefas</h1>
-          <p className="text-slate-400 text-sm mt-1 font-medium">Sua agenda pessoal de pendências no ORÇACLOUD</p>
+          <p className="text-slate-400 text-sm mt-1 font-medium">Sua agenda pessoal de pendências</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <TabBtn active={view === 'today'}   icon={Calendar}      label="Hoje"      count={today.length}   onClick={() => setView('today')} />
@@ -108,7 +150,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, onChangeView }) =>
           <TabBtn active={view === 'all'}     icon={ListChecks}    label="Todas"                            onClick={() => setView('all')} />
           <button
             onClick={() => { setEditing(null); setShowForm(true) }}
-            disabled={!activeOrganizationId}
+            disabled={!orgForNew}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
@@ -117,20 +159,34 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, onChangeView }) =>
         </div>
       </div>
 
-      {!activeOrganizationId && (
+      {/* Filtro de organização */}
+      {orgsOptions.length > 1 && (
+        <div className="flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <select
+            value={filterOrg}
+            onChange={(e) => setFilterOrg(e.target.value)}
+            className="text-xs font-bold text-slate-700 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-blue-400"
+          >
+            <option value="">Todas as organizações</option>
+            {orgsOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      {/* Aviso sem org */}
+      {!orgForNew && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs font-bold text-amber-800">
           Selecione uma organização para criar tarefas.
         </div>
       )}
 
+      {/* Banner atrasadas */}
       {view === 'today' && overdue.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-3 text-xs font-bold text-red-700">
           <AlertTriangle className="w-4 h-4" />
           Você tem <span className="font-black">{overdue.length}</span> tarefa(s) atrasada(s).
-          <button
-            onClick={() => setView('overdue')}
-            className="ml-auto text-red-700 hover:underline font-black uppercase tracking-wider"
-          >
+          <button onClick={() => setView('overdue')} className="ml-auto font-black uppercase tracking-wider hover:underline">
             Ver atrasadas
           </button>
         </div>
@@ -139,16 +195,22 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, onChangeView }) =>
       <TasksList
         tasks={visible}
         loading={loading}
+        employees={employees}
+        projects={obras}
         onToggleDone={toggleDone}
-        onEdit={(t) => { setEditing(t); setShowForm(true) }}
+        onEdit={(t) => { setEditing(t); showForm || loadEmployees(t.org_id); setEditing(t); setShowForm(true) }}
         onNavigate={handleNavigate}
       />
 
       {showForm && (
         <TaskForm
-          orgId={activeOrganizationId ?? ''}
+          orgId={orgForNew}
+          orgs={orgsOptions}
+          employees={employees}
+          projects={obras}
           task={editing}
           onClose={() => setShowForm(false)}
+          onOrgChange={(id) => loadEmployees(id)}
           onSaved={() => { setShowForm(false); load() }}
         />
       )}

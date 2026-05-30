@@ -555,7 +555,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'portal' && (
                         <LaborPortal
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={activeOrganizationId || currentOrgId || ''}
                             employees={employees}
                         />
                     )}

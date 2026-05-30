@@ -385,6 +385,10 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
     });
 
     const handleGenerate = async (emp: Employee) => {
+        if (!orgId) {
+            alert('Selecione uma organização antes de gerar o acesso.');
+            return;
+        }
         setGeneratingId(emp.id);
         try {
             const token = await atsService.generatePortalToken(emp.id, orgId);

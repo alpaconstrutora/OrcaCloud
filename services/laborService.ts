@@ -670,9 +670,10 @@ export const laborService = {
     },
 
     async createEmployee(employee: Omit<Employee, 'id' | 'created_at' | 'updated_at'>): Promise<Employee> {
+        const payload = { ...employee, cnh_categoria: employee.cnh_categoria || null };
         const { data, error } = await supabase
             .from('employees')
-            .insert(employee)
+            .insert(payload)
             .select()
             .single();
         if (error) throw error;
@@ -683,6 +684,9 @@ export const laborService = {
         // Strip computed/join fields before sending to DB
         const { id: _id, created_at: _ca, updated_at: _ua, ...cleanUpdates } =
             updates as Partial<Employee> & { allocations?: unknown };
+        if ('cnh_categoria' in cleanUpdates) {
+            cleanUpdates.cnh_categoria = cleanUpdates.cnh_categoria || null;
+        }
         const { data, error } = await supabase
             .from('employees')
             .update(cleanUpdates)

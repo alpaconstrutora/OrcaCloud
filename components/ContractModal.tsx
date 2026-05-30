@@ -90,12 +90,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     React.useEffect(() => {
         if (isOpen) {
             loadDependencies();
-            if (!initialData) {
-                // Reset number field for new contract
-                numberInputRef.current = '';
-                setFormData(prev => ({ ...prev, number: '' }));
-                setNumberError(null);
-            }
+            if (!initialData) setNumberError(null);
         }
     }, [isOpen, organizationId]);
 
@@ -111,13 +106,17 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     // Auto-fetch next sequential number for new contracts
     React.useEffect(() => {
         if (!isOpen || initialData || !organizationId) return;
+        let cancelled = false;
         (async () => {
             setIsFetchingNumber(true);
+            numberInputRef.current = '';
+            setFormData(prev => ({ ...prev, number: '' }));
             try {
                 const { data: rows } = await supabase
                     .from('contracts')
                     .select('number')
                     .eq('organization_id', organizationId);
+                if (cancelled) return;
                 const usedNums = new Set(
                     (rows ?? []).map(r => parseInt(r.number ?? '', 10)).filter(n => !isNaN(n))
                 );
@@ -129,9 +128,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             } catch (e) {
                 console.error('Erro ao buscar próximo número de contrato:', e);
             } finally {
-                setIsFetchingNumber(false);
+                if (!cancelled) setIsFetchingNumber(false);
             }
         })();
+        return () => { cancelled = true; };
     }, [isOpen, initialData, organizationId]);
 
     React.useEffect(() => {
@@ -879,8 +879,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                         <button
                             type="submit"
-                            disabled={isSubmitting}
-                            className={`w-full py-5 rounded-[24px] text-white transition-all shadow-xl font-medium text-[12px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${isSubmitting
+                            disabled={isSubmitting || isFetchingNumber}
+                            className={`w-full py-5 rounded-[24px] text-white transition-all shadow-xl font-medium text-[12px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber)
                                 ? 'bg-gray-400 cursor-not-allowed shadow-none'
                                 : 'bg-gray-900 hover:bg-emerald-600 shadow-gray-200 hover:shadow-emerald-200 active:scale-95'
                                 }`}

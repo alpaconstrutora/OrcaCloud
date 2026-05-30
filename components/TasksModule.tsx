@@ -77,13 +77,14 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   useEffect(() => { load() }, [load])
   useEffect(() => { loadEmployees(filterOrg || activeOrganizationId || '') }, [filterOrg, activeOrganizationId, loadEmployees])
 
-  // Obras disponíveis filtradas pela org selecionada
+  // Obras disponíveis filtradas pela org selecionada (apenas classification === 'OBRA')
   const obras: ProjectOption[] = useMemo(() => {
     const orgId = filterOrg || activeOrganizationId
     return projects
       .filter(p => {
         const s = p.settings
-        if (!s) return true
+        if (!s) return false
+        if (s.classification !== 'OBRA') return false
         if (s.isSystemProject) return false
         if (orgId && s.organizationId && s.organizationId !== orgId) return false
         return true

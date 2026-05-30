@@ -327,6 +327,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" />
 
               <NavGroup label="Inteligência de Negócios" />
+              <NavItem id="bi-executivo" icon={BarChart3} label="BI Executivo" />
               {(mod.incorporacao || isDev) && (
                 <NavItem id="imovib" icon={TrendingUp} label="Estudos de Viabilidade" />
               )}

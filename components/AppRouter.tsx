@@ -63,6 +63,7 @@ import ProjectTypeTemplateEditor from './ProjectTypeTemplateEditor';
 import WarrantyModule from './WarrantyModule';
 import DREReport from './DREReport';
 import CashFlowDashboard from './CashFlowDashboard';
+import BIDashboard from './BIDashboard';
 
 export interface AppRouterProps {
   activeView: string;
@@ -771,6 +772,14 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           projects={typedProjects
             .filter(p => p.settings?.classification === 'OBRA')
             .map(p => ({ id: p.id, name: p.name }))}
+        />
+      );
+
+    // ── BI Executivo ───────────────────────────────────────────────────────────
+    case 'bi-executivo':
+      return (
+        <BIDashboard
+          organizationId={activeOrganizationId || organizations[0]?.id || ''}
         />
       );
 

@@ -6,6 +6,54 @@ import Auth from './components/Auth';
 import ResetPassword from './components/ResetPassword';
 import LoginGateway from './components/LoginGateway';
 import { supabase } from './lib/supabase';
+import { atsService } from './services/atsService';
+import { PortalView } from './components/LaborPortal';
+
+// Acesso público via token — sem login
+const PortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
+  const [state, setState] = React.useState<'loading' | 'ok' | 'error'>('loading');
+  const [empId, setEmpId] = React.useState('');
+  const [orgId, setOrgId] = React.useState('');
+
+  React.useEffect(() => {
+    atsService.validatePortalToken(token)
+      .then(res => {
+        if (res.valid && res.employee_id && res.org_id) {
+          setEmpId(res.employee_id);
+          setOrgId(res.org_id);
+          setState('ok');
+        } else {
+          setState('error');
+        }
+      })
+      .catch(() => setState('error'));
+  }, [token]);
+
+  if (state === 'loading') return (
+    <div className="h-screen flex items-center justify-center bg-indigo-50">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-black text-indigo-700 uppercase tracking-widest">Carregando portal...</p>
+      </div>
+    </div>
+  );
+
+  if (state === 'error') return (
+    <div className="h-screen flex items-center justify-center bg-slate-50">
+      <div className="text-center space-y-3 p-8">
+        <p className="text-4xl">🔒</p>
+        <p className="text-lg font-black text-slate-800">Link inválido ou expirado</p>
+        <p className="text-sm text-slate-500">Solicite um novo link ao seu gestor.</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="h-screen bg-white overflow-hidden">
+      <PortalView employeeId={empId} orgId={orgId} onLogout={() => { window.location.href = '/'; }} />
+    </div>
+  );
+};
 import { ContractModal } from './components/ContractModal';
 import SupplyChainQuotationForm from './components/SupplyChainQuotationForm';
 import SupplyChainOrderForm from './components/SupplyChainOrderForm';
@@ -187,6 +235,15 @@ const App: React.FC = () => {
 
   const handleUpdateSettings = (newSettings: ProjectSettings) => setProjectSettings(newSettings);
   const handleUpdateBudget = (newBudget: BudgetEntry[]) => setBudget(newBudget);
+
+  // ── Guard público: portal do colaborador via token ───────────────────────────
+  const portalToken = React.useMemo(() => {
+    if (window.location.pathname === '/portal') {
+      return new URLSearchParams(window.location.search).get('token');
+    }
+    return null;
+  }, []);
+  if (portalToken) return <PortalTokenGate token={portalToken} />;
 
   // ── Guards de autenticação ───────────────────────────────────────────────────
   if (isResettingPassword) return <ResetPassword onComplete={() => setIsResettingPassword(false)} />;

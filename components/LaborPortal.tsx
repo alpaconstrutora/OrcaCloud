@@ -3,11 +3,14 @@ import {
     User, Clock, Umbrella, BookOpen, FileText, DollarSign,
     LogOut, Loader2, AlertTriangle, CheckCircle2, ChevronRight,
     Calendar, Shield, QrCode, Copy, X, Plus, RefreshCw,
-    Smartphone, Key, Trash2, Search
+    Smartphone, Key, Trash2, Search, ChevronDown
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { atsService, PortalToken, PortalEmployeeSummary } from '../services/atsService';
 import { laborService, Employee, Absence, TimeEntry, EmployeeTraining } from '../services/laborService';
+import { PayrollRun } from '../services/payrollService';
+import { supabase } from '../lib/supabase';
+import PaystubModal from './PaystubModal';
 import { STALE } from '../lib/queryClient';
 
 // ── View: Portal do Colaborador (tela que o funcionário vê no celular) ────────
@@ -18,8 +21,9 @@ interface PortalViewProps {
     onLogout: () => void;
 }
 
-const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLogout }) => {
-    const [activeSection, setActiveSection] = useState<'home' | 'ponto' | 'ferias' | 'docs' | 'treino'>('home');
+export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLogout }) => {
+    const [activeSection, setActiveSection] = useState<'home' | 'ponto' | 'ferias' | 'docs' | 'treino' | 'folha'>('home');
+    const [paystubOpen, setPaystubOpen] = useState<{ runId: string } | null>(null);
 
     const summaryKey = ['portal', 'summary', employeeId];
     const { data: summary, isLoading } = useQuery<PortalEmployeeSummary>({
@@ -54,6 +58,25 @@ const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLogout }) 
         queryFn: () => laborService.listDocuments({ employeeId }),
         staleTime: STALE.normal,
         enabled: activeSection === 'docs',
+    });
+
+    const { data: folhaRuns = [] } = useQuery<Array<PayrollRun & { net: number }>>({
+        queryKey: ['portal', 'folha', employeeId],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('payroll_results')
+                .select('payroll_run_id, net, payroll_runs(id, start_date, end_date, type, status)')
+                .eq('employee_id', employeeId)
+                .eq('payroll_runs.status', 'FECHADO')
+                .order('payroll_run_id', { ascending: false });
+            if (error) throw error;
+            return (data || [])
+                .filter((r: any) => r.payroll_runs)
+                .map((r: any) => ({ ...r.payroll_runs, net: r.net }))
+                .sort((a: any, b: any) => b.start_date.localeCompare(a.start_date));
+        },
+        staleTime: STALE.normal,
+        enabled: activeSection === 'folha',
     });
 
     if (isLoading) {
@@ -111,6 +134,7 @@ const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLogout }) 
                     ['home',   'Início',    User],
                     ['ponto',  'Ponto',     Clock],
                     ['ferias', 'Férias',    Umbrella],
+                    ['folha',  'Folha',     DollarSign],
                     ['docs',   'Docs',      FileText],
                     ['treino', 'Trein.',    BookOpen],
                 ] as const).map(([id, label, Icon]) => (
@@ -121,6 +145,16 @@ const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLogout }) 
                     </button>
                 ))}
             </div>
+
+            {/* Holerite Modal */}
+            {paystubOpen && (
+                <PaystubModal
+                    orgId={orgId}
+                    runId={paystubOpen.runId}
+                    employeeId={employeeId}
+                    onClose={() => setPaystubOpen(null)}
+                />
+            )}
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-5">
@@ -231,6 +265,53 @@ const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLogout }) 
                                         </div>
                                         {expired && <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />}
                                     </div>
+                                );
+                            })
+                        )}
+                    </div>
+                )}
+
+                {/* Folha de Pagamento */}
+                {activeSection === 'folha' && (
+                    <div className="space-y-3">
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Holerites Disponíveis</p>
+                        {folhaRuns.length === 0 ? (
+                            <div className="text-center py-10">
+                                <DollarSign className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                                <p className="text-sm text-slate-400">Nenhum holerite disponível</p>
+                            </div>
+                        ) : (
+                            folhaRuns.map(run => {
+                                const typeLabel =
+                                    run.type === 'mensal' ? 'Folha Mensal' :
+                                    run.type === 'ferias' ? 'Férias' :
+                                    run.type === 'decimo_terceiro' ? '13º Salário' :
+                                    run.type === 'rescisao' ? 'Rescisão' : run.type;
+                                const [y, m] = run.start_date.split('-');
+                                const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+                                const periodLabel = `${months[parseInt(m) - 1]}/${y}`;
+                                return (
+                                    <button
+                                        key={run.id}
+                                        onClick={() => setPaystubOpen({ runId: run.id })}
+                                        className="w-full flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all text-left"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0">
+                                                <DollarSign className="w-4 h-4 text-indigo-500" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-800">{typeLabel}</p>
+                                                <p className="text-xs text-slate-400">{periodLabel}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-sm font-black text-emerald-700">
+                                                {(run.net ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400">líquido</p>
+                                        </div>
+                                    </button>
                                 );
                             })
                         )}

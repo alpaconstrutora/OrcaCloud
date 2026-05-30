@@ -526,14 +526,17 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">{formData.is_recurring ? 'Valor Estimado Mensal' : 'Valor Original (Base)'}</label>
+                                    <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">
+                                        {formData.is_recurring ? 'Valor por Ciclo (Opcional)' : 'Valor Original (Base)'}
+                                    </label>
                                     <div className="relative group">
                                         <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
                                         <input
                                             type="number"
-                                            required
+                                            required={!formData.is_recurring}
                                             min="0"
                                             step="0.01"
+                                            placeholder={formData.is_recurring ? 'Variável — preencha se souber' : '0,00'}
                                             value={formData.original_value || ''}
                                             onChange={(e) => {
                                                 const val = e.target.value === '' ? 0 : parseFloat(e.target.value);

@@ -575,12 +575,14 @@ export const contractService = {
     },
 
     createAddendum: async (addendum: Omit<ContractAddendum, 'id' | 'created_at' | 'status' | 'approved_at'>): Promise<ContractAddendum> => {
+        // Exclude notes if empty to avoid 400 when the column hasn't been migrated yet
+        const { notes, ...rest } = addendum as typeof addendum & { notes?: string };
+        const payload: Record<string, unknown> = { ...rest, status: 'Pendente' };
+        if (notes) payload.notes = notes;
+
         const { data, error } = await supabase
             .from('contract_addendums')
-            .insert({
-                ...addendum,
-                status: 'Pendente'
-            })
+            .insert(payload)
             .select()
             .single();
 

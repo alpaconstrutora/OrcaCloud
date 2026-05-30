@@ -275,11 +275,21 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             } else {
                 payload.payment_schedule = undefined;
             }
+            // Sanitize UUID fields: empty string would fail Postgres UUID cast
+            if (!payload.cost_center_id) payload.cost_center_id = undefined;
+            if (!payload.category_id) payload.category_id = undefined;
+            if (!payload.supplier_id) payload.supplier_id = undefined;
+            if (!payload.budget_id) payload.budget_id = undefined;
+            if (!payload.project_id) payload.project_id = undefined;
             await onSubmit(payload);
         } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.error("Erro ao processar contrato:", error);
-            setError(error.message || "Erro desconhecido ao salvar contrato.");
+            const msg = err instanceof Error
+                ? err.message
+                : (err && typeof err === 'object' && 'message' in err)
+                    ? String((err as { message: unknown }).message)
+                    : String(err);
+            console.error("Erro ao processar contrato:", err);
+            setError(msg || "Erro desconhecido ao salvar contrato.");
         } finally {
             setIsSubmitting(false);
         }

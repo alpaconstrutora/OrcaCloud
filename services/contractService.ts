@@ -185,6 +185,95 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
     }
 }
 
+// Generate monthly financial entries for a recurring contract with end_date.
+// Starts from the CURRENT month (not from the historical start_date) to avoid
+// flooding the financial module with hundreds of past "Pending" entries.
+async function syncRecurringToFinance(contract: Contract) {
+    if (!contract.is_recurring || !contract.end_date || !contract.original_value) return;
+    try {
+        const supplierName = await resolveSupplierName(contract.supplier_id, 'Contrato Recorrente');
+
+        const today = new Date();
+        // First day of current month — never generate entries before today
+        const firstOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1, 12, 0, 0);
+        const contractStart = new Date(contract.start_date + 'T12:00:00');
+        const endDate = new Date(contract.end_date + 'T12:00:00');
+
+        // Start from the later of "first of current month" and "contract start"
+        let cur = new Date(Math.max(firstOfCurrentMonth.getTime(), contractStart.getTime()));
+
+        // Align to due_day within that month
+        if (contract.due_day) {
+            const maxDay = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
+            cur.setDate(Math.min(contract.due_day, maxDay));
+        }
+
+        if (cur > endDate) return; // contract already ended
+
+        const transactions: Array<{
+            id: string; date: string; type: 'EXPENSE'; category: string;
+            description: string; value: number; status: 'PENDING'; supplier: string; notes: string;
+        }> = [];
+        let n = 1;
+
+        while (cur <= endDate) {
+            transactions.push({
+                id: crypto.randomUUID(),
+                date: cur.toISOString().split('T')[0] + 'T12:00:00.000Z',
+                type: 'EXPENSE',
+                category: 'Mão de Obra / Serviço',
+                description: `Fatura Contrato ${contract.number || ''} (${n}) - ${cur.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`,
+                value: contract.original_value,
+                status: 'PENDING',
+                supplier: supplierName,
+                notes: `[contract:${contract.id}] Gerado automaticamente do contrato ${contract.number || contract.id}`
+            });
+
+            if (contract.billing_cycle === 'Anual') cur.setFullYear(cur.getFullYear() + 1);
+            else if (contract.billing_cycle === 'Semestral') cur.setMonth(cur.getMonth() + 6);
+            else if (contract.billing_cycle === 'Bimestral') cur.setMonth(cur.getMonth() + 2);
+            else cur.setMonth(cur.getMonth() + 1);
+
+            if (contract.due_day) {
+                const maxDay = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
+                cur.setDate(Math.min(contract.due_day, maxDay));
+            }
+            n++;
+        }
+
+        if (transactions.length === 0) return;
+
+        if (contract.project_id) {
+            await financialService.addTransactionBatch(contract.project_id, transactions.map(tx => ({
+                date: tx.date,
+                type: tx.type,
+                category: tx.category,
+                description: tx.description,
+                value: tx.value,
+                status: tx.status,
+                supplier: tx.supplier,
+                notes: tx.notes,
+            })));
+        } else if (contract.organization_id) {
+            await supabase.from('internal_transactions').insert(transactions.map(tx => ({
+                organization_id: contract.organization_id,
+                source_system: 'CONTRACT_RECURRING',
+                reference_id: contract.id,
+                transaction_date: tx.date.split('T')[0],
+                amount: tx.value,
+                direction: 'DEBIT',
+                description: tx.description,
+                category: 'Mão de Obra / Serviço',
+                entity_name: supplierName,
+                status: 'PENDING',
+            })));
+        }
+        console.log(`[CONTRACTS] Generated ${transactions.length} recurring entries for contract ${contract.id} (from current month)`);
+    } catch (e) {
+        console.error('[CONTRACTS] Error syncing recurring contract to finance:', e);
+    }
+}
+
 // Generate a single financial entry for a À Vista (non-parcelado, non-recurring) contract.
 async function syncAVistaToFinance(contract: Contract) {
     if (contract.is_recurring || contract.payment_term_type === 'Parcelado') return;
@@ -314,84 +403,9 @@ export const contractService = {
         }
 
         // Auto-generate installments for recurring contracts with an end date
-        if (newContract.is_recurring && newContract.start_date && newContract.end_date) {
+        if (newContract.is_recurring && newContract.start_date && newContract.end_date && newContract.original_value > 0) {
             try {
-                // Resolve supplier name for financial entries
-                let supplierName = 'Contrato Recorrente';
-                if (newContract.supplier_id) {
-                    const { data: supplierData } = await supabase
-                        .from('suppliers')
-                        .select('name')
-                        .eq('id', newContract.supplier_id)
-                        .maybeSingle();
-                    if (supplierData?.name) supplierName = supplierData.name;
-                }
-
-                const startDate = new Date(newContract.start_date + 'T12:00:00');
-                const endDate = new Date(newContract.end_date + 'T12:00:00');
-                
-                let currentTxDate = new Date(startDate);
-                
-                // Set the specific due day if provided, otherwise use the start date's day
-                if (newContract.due_day) {
-                    currentTxDate.setDate(Math.min(newContract.due_day, new Date(currentTxDate.getFullYear(), currentTxDate.getMonth() + 1, 0).getDate()));
-                }
-
-                const transactions = [];
-                let installmentNumber = 1;
-
-                while (currentTxDate <= endDate) {
-                    transactions.push({
-                        organization_id: newContract.organization_id || null,
-                        source_system: 'CONTRACT_RECURRING',
-                        reference_id: newContract.id,
-                        transaction_date: currentTxDate.toISOString().split('T')[0],
-                        amount: newContract.original_value,
-                        direction: 'DEBIT',
-                        description: `Fatura Contrato ${newContract.number || ''} (${installmentNumber}) - ${currentTxDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`,
-                        category: newContract.category_id || 'Contrato Recorrente',
-                        status: 'PENDING'
-                    });
-
-                    // Advance one cycle
-                    if (newContract.billing_cycle === 'Anual') {
-                        currentTxDate.setFullYear(currentTxDate.getFullYear() + 1);
-                    } else if (newContract.billing_cycle === 'Semestral') {
-                        currentTxDate.setMonth(currentTxDate.getMonth() + 6);
-                    } else if (newContract.billing_cycle === 'Bimestral') {
-                        currentTxDate.setMonth(currentTxDate.getMonth() + 2);
-                    } else { // Mensal
-                        currentTxDate.setMonth(currentTxDate.getMonth() + 1);
-                    }
-                    
-                    // Re-adjust day if necessary
-                    if (newContract.due_day) {
-                        currentTxDate.setDate(Math.min(newContract.due_day, new Date(currentTxDate.getFullYear(), currentTxDate.getMonth() + 1, 0).getDate()));
-                    }
-                    
-                    installmentNumber++;
-                }
-
-                if (transactions.length > 0) {
-                    if (newContract.project_id) {
-                        // Insere todas as parcelas de uma vez (evita race conditions)
-                        const batchPayload = transactions.map(tx => ({
-                            date: tx.transaction_date + 'T12:00:00.000Z',
-                            type: 'EXPENSE' as const,
-                            category: 'Mão de Obra / Serviço',
-                            description: tx.description,
-                            value: tx.amount,
-                            status: 'PENDING' as const,
-                            supplier: supplierName,
-                            notes: `[contract:${newContract.id}] Gerado automaticamente do contrato ${newContract.number || newContract.id}`
-                        }));
-                        await financialService.addTransactionBatch(newContract.project_id, batchPayload);
-                    } else {
-                        // Sem project_id: salva em internal_transactions (reconciliação bancária)
-                        await supabase.from('internal_transactions').insert(transactions);
-                    }
-                    console.log(`[CONTRACTS] Generated ${transactions.length} installments for recurring contract ${newContract.id}`);
-                }
+                await syncRecurringToFinance(newContract);
             } catch (e) {
                 console.error('[CONTRACTS] Error generating installments for recurring contract:', e);
             }
@@ -435,65 +449,15 @@ export const contractService = {
         return updated;
     },
 
-    // Re-lança o contrato no financeiro (uso retroativo ou manual)
+    // Re-lança o contrato no financeiro (uso retroativo ou manual).
+    // Para recorrentes: gera apenas a partir do mês atual (não retroage a 2014).
     syncContractToFinance: async (contract: Contract): Promise<void> => {
         if (!contract.is_recurring && contract.payment_term_type === 'Parcelado') {
             await syncParceladoScheduleToFinance(contract);
         } else if (!contract.is_recurring) {
             await syncAVistaToFinance(contract);
         } else if (contract.is_recurring && contract.start_date && contract.end_date) {
-            // Recurring with end date: rebuild entries (reuses createContract logic inline)
-            const existing = await contractService.getContractById(contract.id);
-            if (existing) {
-                // Remove old recurring entries
-                await removeContractTransactions(contract.id, contract.organization_id, contract.project_id);
-                if (contract.organization_id) {
-                    await supabase.from('internal_transactions')
-                        .delete()
-                        .eq('organization_id', contract.organization_id)
-                        .eq('source_system', 'CONTRACT_RECURRING')
-                        .eq('reference_id', contract.id);
-                }
-                // Re-create via createContract stub (trigger the generation block)
-                const supplierName = await resolveSupplierName(contract.supplier_id, 'Contrato Recorrente');
-                const start = new Date(contract.start_date + 'T12:00:00');
-                const end = new Date(contract.end_date + 'T12:00:00');
-                let cur = new Date(start);
-                if (contract.due_day) cur.setDate(Math.min(contract.due_day, new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate()));
-                const transactions = [];
-                let n = 1;
-                while (cur <= end) {
-                    transactions.push({
-                        id: crypto.randomUUID(),
-                        date: cur.toISOString().split('T')[0] + 'T12:00:00.000Z',
-                        type: 'EXPENSE' as const,
-                        category: 'Mão de Obra / Serviço',
-                        description: `Fatura Contrato ${contract.number || ''} (${n}) - ${cur.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`,
-                        value: contract.original_value,
-                        status: 'PENDING' as const,
-                        supplier: supplierName,
-                        notes: `[contract:${contract.id}] Gerado automaticamente do contrato ${contract.number || contract.id}`
-                    });
-                    if (contract.billing_cycle === 'Anual') cur.setFullYear(cur.getFullYear() + 1);
-                    else if (contract.billing_cycle === 'Semestral') cur.setMonth(cur.getMonth() + 6);
-                    else if (contract.billing_cycle === 'Bimestral') cur.setMonth(cur.getMonth() + 2);
-                    else cur.setMonth(cur.getMonth() + 1);
-                    if (contract.due_day) cur.setDate(Math.min(contract.due_day, new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate()));
-                    n++;
-                }
-                if (transactions.length > 0 && contract.project_id) {
-                    await financialService.addTransactionBatch(contract.project_id, transactions.map(tx => ({
-                        date: tx.date,
-                        type: tx.type,
-                        category: tx.category,
-                        description: tx.description,
-                        value: tx.value,
-                        status: tx.status,
-                        supplier: tx.supplier,
-                        notes: tx.notes,
-                    })));
-                }
-            }
+            await syncRecurringToFinance(contract);
         }
     },
 

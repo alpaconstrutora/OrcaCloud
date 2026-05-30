@@ -7,11 +7,18 @@ import {
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { atsService, PortalToken, PortalEmployeeSummary } from '../services/atsService';
-import { laborService, Employee, Absence, TimeEntry, EmployeeTraining } from '../services/laborService';
+import { laborService, Employee } from '../services/laborService';
 import { PayrollRun } from '../services/payrollService';
 import { supabase } from '../lib/supabase';
 import PaystubModal from './PaystubModal';
 import { STALE } from '../lib/queryClient';
+
+// Helper: chama RPC SECURITY DEFINER e retorna array (funciona sem sessão Supabase)
+async function portalRpc<T>(fn: string, employeeId: string): Promise<T[]> {
+    const { data, error } = await supabase.rpc(fn, { p_employee_id: employeeId });
+    if (error) throw error;
+    return (data as T[]) ?? [];
+}
 
 // ── View: Portal do Colaborador (tela que o funcionário vê no celular) ────────
 
@@ -32,49 +39,37 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
         staleTime: STALE.fast,
     });
 
-    const { data: recentEntries = [] } = useQuery<TimeEntry[]>({
+    const { data: recentEntries = [] } = useQuery({
         queryKey: ['portal', 'timeEntries', employeeId],
-        queryFn: () => laborService.listTimeEntries({ employeeId, orgId }),
+        queryFn: () => portalRpc<any>('portal_get_time_entries', employeeId),
         staleTime: STALE.fast,
         enabled: activeSection === 'ponto',
     });
 
-    const { data: absences = [] } = useQuery<Absence[]>({
+    const { data: absences = [] } = useQuery({
         queryKey: ['portal', 'absences', employeeId],
-        queryFn: () => laborService.listAbsences({ orgId, employeeId }),
+        queryFn: () => portalRpc<any>('portal_get_absences', employeeId),
         staleTime: STALE.normal,
         enabled: activeSection === 'ferias',
     });
 
-    const { data: trainings = [] } = useQuery<EmployeeTraining[]>({
+    const { data: trainings = [] } = useQuery({
         queryKey: ['portal', 'trainings', employeeId],
-        queryFn: () => laborService.listEmployeeTrainings({ orgId, employeeId }),
+        queryFn: () => portalRpc<any>('portal_get_trainings', employeeId),
         staleTime: STALE.normal,
         enabled: activeSection === 'treino',
     });
 
     const { data: documents = [] } = useQuery({
         queryKey: ['portal', 'docs', employeeId],
-        queryFn: () => laborService.listDocuments({ employeeId }),
+        queryFn: () => portalRpc<any>('portal_get_documents', employeeId),
         staleTime: STALE.normal,
         enabled: activeSection === 'docs',
     });
 
     const { data: folhaRuns = [] } = useQuery<Array<PayrollRun & { net: number }>>({
         queryKey: ['portal', 'folha', employeeId],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from('payroll_results')
-                .select('payroll_run_id, net, payroll_runs(id, start_date, end_date, type, status)')
-                .eq('employee_id', employeeId)
-                .eq('payroll_runs.status', 'FECHADO')
-                .order('payroll_run_id', { ascending: false });
-            if (error) throw error;
-            return (data || [])
-                .filter((r: any) => r.payroll_runs)
-                .map((r: any) => ({ ...r.payroll_runs, net: r.net }))
-                .sort((a: any, b: any) => b.start_date.localeCompare(a.start_date));
-        },
+        queryFn: () => portalRpc<PayrollRun & { net: number }>('portal_get_payroll_runs', employeeId),
         staleTime: STALE.normal,
         enabled: activeSection === 'folha',
     });

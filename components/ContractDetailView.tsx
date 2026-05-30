@@ -634,17 +634,15 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         Emitir PDF
                     </button>
 
-                    {!contract.is_recurring && (
-                        <button
-                            onClick={handleSyncFinance}
-                            disabled={syncingFinance}
-                            className="flex items-center gap-2 px-6 py-4 bg-white border border-emerald-200 text-emerald-700 rounded-2xl hover:bg-emerald-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm disabled:opacity-50"
-                            title="Lançar / Re-lançar este contrato no módulo financeiro"
-                        >
-                            <DollarSign className="w-4 h-4" />
-                            {syncingFinance ? 'Lançando...' : 'Lançar Financeiro'}
-                        </button>
-                    )}
+                    <button
+                        onClick={handleSyncFinance}
+                        disabled={syncingFinance}
+                        className="flex items-center gap-2 px-6 py-4 bg-white border border-emerald-200 text-emerald-700 rounded-2xl hover:bg-emerald-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm disabled:opacity-50"
+                        title="Lançar / Re-lançar este contrato no módulo financeiro"
+                    >
+                        <DollarSign className="w-4 h-4" />
+                        {syncingFinance ? 'Lançando...' : 'Lançar Financeiro'}
+                    </button>
 
                     <button
                         onClick={() => handleSendWebhook()}

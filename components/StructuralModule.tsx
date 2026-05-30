@@ -350,57 +350,25 @@ const ComingSoon: React.FC<{ icon: React.ElementType; title: string; desc: strin
 // ── Aba Obra & Armaduras ──────────────────────────────────────────────────────
 const ObraTab: React.FC<{
   orgId: string
-  projects: Array<{ id: string; name: string; settings?: { organizationId?: string } }>
-}> = ({ orgId, projects }) => {
-  const [projectId, setProjectId] = useState<string | null>(null)
+  projectId: string | null
+}> = ({ orgId, projectId }) => {
   const [assembly, setAssembly] = useState<StructuralAssembly | null>(null)
   const [element, setElement] = useState<StructuralElement | null>(null)
 
-  // Filtrar obras da org ativa
-  const obras = projects.filter(p => {
-    const s = (p as { settings?: { organizationId?: string; classification?: string; isSystemProject?: boolean } }).settings
-    return s?.organizationId === orgId && s?.classification === 'OBRA' && !s?.isSystemProject
-  })
-
   if (!projectId) {
     return (
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-xl font-black text-slate-900">Selecione uma Obra</h2>
-          <p className="text-sm text-slate-400 mt-0.5">As estruturas e armaduras ficam vinculadas à obra.</p>
-        </div>
-        {obras.length === 0 ? (
-          <div className="flex flex-col items-center py-12 text-slate-300">
-            <Building2 className="w-10 h-10 mb-2 opacity-40" />
-            <p className="text-sm font-bold text-slate-400">Nenhuma obra encontrada nesta organização</p>
-            <p className="text-xs text-slate-300 mt-1">Crie uma obra em Engenharia → Obras</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {obras.map(p => (
-              <button key={p.id} onClick={() => setProjectId(p.id)}
-                className="text-left p-4 rounded-2xl border-2 border-slate-100 bg-white hover:border-blue-300 hover:shadow-md transition-all flex items-center gap-3">
-                <Building2 className="w-5 h-5 text-slate-300 flex-shrink-0" />
-                <span className="font-black text-slate-900 truncate">{p.name}</span>
-                <ChevronRight className="w-4 h-4 text-slate-300 ml-auto flex-shrink-0" />
-              </button>
-            ))}
-          </div>
-        )}
+      <div className="flex flex-col items-center py-16 text-slate-300">
+        <Building2 className="w-10 h-10 mb-2 opacity-40" />
+        <p className="text-sm font-bold text-slate-400">Selecione uma obra acima para começar</p>
       </div>
     )
   }
 
-  const obraName = obras.find(p => p.id === projectId)?.name ?? projectId
-
   return (
     <div className="space-y-4">
-      {/* Breadcrumb */}
+      {/* Breadcrumb de estrutura/elemento */}
       <div className="flex items-center gap-2 text-sm">
-        <button onClick={() => { setProjectId(null); setAssembly(null); setElement(null) }}
-          className="font-bold text-blue-600 hover:underline">Obras</button>
-        <ChevronRight className="w-4 h-4 text-slate-300" />
-        <span className="font-bold text-slate-700">{obraName}</span>
+        <span className="font-bold text-slate-500">Estruturas</span>
         {assembly && (
           <>
             <ChevronRight className="w-4 h-4 text-slate-300" />
@@ -464,6 +432,7 @@ const ObraTab: React.FC<{
 // ── Container do módulo ───────────────────────────────────────────────────────
 const StructuralModule: React.FC<Props> = ({ activeOrganizationId, projects = [] }) => {
   const [tab, setTab] = useState<ModuleTab>('catalogo')
+  const [projectId, setProjectId] = useState<string | null>(null)
 
   if (!activeOrganizationId) {
     return (
@@ -475,8 +444,15 @@ const StructuralModule: React.FC<Props> = ({ activeOrganizationId, projects = []
     )
   }
 
+  const obras = projects.filter(p => {
+    const s = (p as { settings?: { organizationId?: string; classification?: string; isSystemProject?: boolean } }).settings
+    return s?.organizationId === activeOrganizationId && s?.classification === 'OBRA' && !s?.isSystemProject
+  })
+  const projectName = obras.find(p => p.id === projectId)?.name ?? ''
+
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
+    <div className="p-6 space-y-5 max-w-6xl mx-auto">
+      {/* Cabeçalho */}
       <div className="flex items-center gap-3">
         <div className="bg-blue-600 text-white rounded-xl p-2.5">
           <Layers className="w-5 h-5" />
@@ -487,6 +463,26 @@ const StructuralModule: React.FC<Props> = ({ activeOrganizationId, projects = []
         </div>
       </div>
 
+      {/* Seletor de obra — compartilhado por todas as abas exceto Catálogo */}
+      {tab !== 'catalogo' && (
+        <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+          <Building2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          {obras.length === 0 ? (
+            <span className="text-sm text-slate-400">Nenhuma obra nesta organização — crie uma em Engenharia → Obras</span>
+          ) : (
+            <select
+              value={projectId ?? ''}
+              onChange={e => setProjectId(e.target.value || null)}
+              className="flex-1 text-sm font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer"
+            >
+              <option value="">— Selecione uma obra —</option>
+              {obras.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+
+      {/* Abas */}
       <div className="flex items-center gap-2 flex-wrap">
         <TabBtn active={tab === 'catalogo'} icon={Layers} label="Catálogo de Aço" onClick={() => setTab('catalogo')} />
         <TabBtn active={tab === 'obra'} icon={ClipboardList} label="Obra & Armaduras" onClick={() => setTab('obra')} />
@@ -496,13 +492,13 @@ const StructuralModule: React.FC<Props> = ({ activeOrganizationId, projects = []
 
       {tab === 'catalogo' && <SteelCatalog orgId={activeOrganizationId} />}
       {tab === 'obra' && (
-        <ObraTab orgId={activeOrganizationId} projects={projects} />
+        <ObraTab orgId={activeOrganizationId} projectId={projectId} />
       )}
       {tab === 'corte' && (
-        <StructuralCutTable orgId={activeOrganizationId} projects={projects} />
+        <StructuralCutTable orgId={activeOrganizationId} projectId={projectId} projectName={projectName} />
       )}
       {tab === 'quantitativo' && (
-        <StructuralQuantitative orgId={activeOrganizationId} projects={projects} />
+        <StructuralQuantitative orgId={activeOrganizationId} projectId={projectId} projectName={projectName} />
       )}
     </div>
   )

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Loader2, Building2, ChevronRight, FileSpreadsheet, FileText, AlertCircle, Table2, Scissors } from 'lucide-react'
+import { Loader2, FileSpreadsheet, FileText, AlertCircle, Table2, Scissors } from 'lucide-react'
 import { useProjectStructure, useSteelCatalog } from '../../hooks/useStructuralQueries'
 import { buildCutTable, summarizeCutTable } from '../../utils/cutTable'
 import { buildProjectBarPlan } from '../../utils/cuttingStock'
@@ -8,7 +8,8 @@ import StructuralBarPlan from './StructuralBarPlan'
 
 interface Props {
   orgId: string
-  projects: Array<{ id: string; name: string; settings?: { organizationId?: string; classification?: string; isSystemProject?: boolean } }>
+  projectId: string | null
+  projectName: string
 }
 
 // ── Export helpers ────────────────────────────────────────────────────────────
@@ -117,16 +118,9 @@ async function exportPdf(rows: CutTableRow[], summary: ReturnType<typeof summari
 
 type CorteSubTab = 'tabela' | 'plano'
 
-const StructuralCutTable: React.FC<Props> = ({ orgId, projects }) => {
-  const [projectId, setProjectId] = useState<string | null>(null)
+const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) => {
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null)
   const [subTab, setSubTab] = useState<CorteSubTab>('tabela')
-
-  const obras = projects.filter(p =>
-    p.settings?.organizationId === orgId &&
-    p.settings?.classification === 'OBRA' &&
-    !p.settings?.isSystemProject
-  )
 
   const { data: structure = [], isLoading: loadingStructure } = useProjectStructure(projectId ?? undefined)
   const { data: catalog = [], isLoading: loadingCatalog } = useSteelCatalog(orgId)
@@ -135,7 +129,6 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projects }) => {
   const summary = useMemo(() => summarizeCutTable(rows), [rows])
   const barPlan = useMemo(() => buildProjectBarPlan(rows, catalog), [rows, catalog])
 
-  const projectName = projects.find(p => p.id === projectId)?.name ?? ''
   const isLoading = loadingStructure || loadingCatalog
 
   const handleExportExcel = async () => {
@@ -152,44 +145,18 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projects }) => {
 
   if (!projectId) {
     return (
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-xl font-black text-slate-900">Tabela de Corte e Dobra</h2>
-          <p className="text-sm text-slate-400 mt-0.5">Selecione a obra para gerar a tabela.</p>
-        </div>
-        {obras.length === 0 ? (
-          <div className="flex flex-col items-center py-12 text-slate-300">
-            <Building2 className="w-10 h-10 mb-2 opacity-40" />
-            <p className="text-sm font-bold text-slate-400">Nenhuma obra nesta organização</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {obras.map(p => (
-              <button key={p.id} onClick={() => setProjectId(p.id)}
-                className="text-left p-4 rounded-2xl border-2 border-slate-100 bg-white hover:border-blue-300 hover:shadow-md transition-all flex items-center gap-3">
-                <Building2 className="w-5 h-5 text-slate-300 flex-shrink-0" />
-                <span className="font-black text-slate-900 truncate">{p.name}</span>
-                <ChevronRight className="w-4 h-4 text-slate-300 ml-auto flex-shrink-0" />
-              </button>
-            ))}
-          </div>
-        )}
+      <div className="flex flex-col items-center py-16 text-slate-300">
+        <Scissors className="w-10 h-10 mb-2 opacity-40" />
+        <p className="text-sm font-bold text-slate-400">Selecione uma obra acima para gerar a tabela</p>
       </div>
     )
   }
 
   return (
     <div className="space-y-4">
-      {/* Header + breadcrumb */}
+      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2 text-sm mb-1">
-            <button onClick={() => setProjectId(null)} className="font-bold text-blue-600 hover:underline">Obras</button>
-            <ChevronRight className="w-4 h-4 text-slate-300" />
-            <span className="font-bold text-slate-700">{projectName}</span>
-          </div>
-          <h2 className="text-xl font-black text-slate-900">Corte & Dobra</h2>
-        </div>
+        <h2 className="text-xl font-black text-slate-900">Corte & Dobra</h2>
 
         {rows.length > 0 && subTab === 'tabela' && (
           <div className="flex items-center gap-2">

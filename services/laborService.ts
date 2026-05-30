@@ -621,6 +621,30 @@ export interface EmployeeDocument {
     updated_at?: string;
 }
 
+// ── SST DOCS REGULATÓRIOS ──────────────────────────────────
+
+export type SSTDocTipo = 'PCMSO' | 'PGR' | 'NR18_PCMAT' | 'PPRA';
+export type SSTDocStatus = 'VIGENTE' | 'REVISAO' | 'VENCIDO' | 'CANCELADO';
+
+export interface SSTRegulatoryDoc {
+    id: string;
+    org_id: string;
+    project_id?: string;
+    project_name?: string;
+    tipo: SSTDocTipo;
+    titulo: string;
+    responsavel?: string;
+    responsavel_doc?: string;
+    vigencia_inicio?: string;
+    vigencia_fim?: string;
+    data_revisao?: string;
+    status: SSTDocStatus;
+    observacoes?: string;
+    documento_url?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
 // ============================================================
 // SERVICE
 // ============================================================
@@ -1959,6 +1983,63 @@ export const laborService = {
             lowStock: items.filter(i => i.estoque_atual <= i.estoque_minimo),
             expiredCa: items.filter(i => i.ca_validade && i.ca_validade <= nextMonthStr),
         };
+    },
+
+    // ── SST REGULATORY DOCS ───────────────────────────────
+
+    async listSSTRegulatoryDocs(orgId: string, projectId?: string): Promise<SSTRegulatoryDoc[]> {
+        let query = supabase
+            .from('sst_regulatory_docs')
+            .select(`*, project:projects!project_id(name)`)
+            .eq('org_id', orgId)
+            .order('tipo')
+            .order('vigencia_fim', { ascending: true });
+        if (projectId) query = query.eq('project_id', projectId);
+        const { data, error } = await query;
+        if (error) throw error;
+        type Row = SSTRegulatoryDoc & { project?: { name: string } };
+        return (data || [] as Row[]).map((r: Row) => ({ ...r, project_name: r.project?.name }));
+    },
+
+    async createSSTRegulatoryDoc(doc: Omit<SSTRegulatoryDoc, 'id' | 'created_at' | 'updated_at' | 'project_name'>): Promise<SSTRegulatoryDoc> {
+        const { id: _id, project_name: _pn, ...clean } = doc as SSTRegulatoryDoc;
+        const { data, error } = await supabase
+            .from('sst_regulatory_docs')
+            .insert(clean)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateSSTRegulatoryDoc(id: string, updates: Partial<Omit<SSTRegulatoryDoc, 'id' | 'created_at' | 'updated_at' | 'project_name'>>): Promise<SSTRegulatoryDoc> {
+        const { data, error } = await supabase
+            .from('sst_regulatory_docs')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteSSTRegulatoryDoc(id: string): Promise<void> {
+        const { error } = await supabase.from('sst_regulatory_docs').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    async getSSTRegulatoryAlerts(orgId: string): Promise<SSTRegulatoryDoc[]> {
+        const in60 = new Date();
+        in60.setDate(in60.getDate() + 60);
+        const { data, error } = await supabase
+            .from('sst_regulatory_docs')
+            .select('*')
+            .eq('org_id', orgId)
+            .lte('vigencia_fim', in60.toISOString().split('T')[0])
+            .neq('status', 'CANCELADO')
+            .order('vigencia_fim', { ascending: true });
+        if (error) throw error;
+        return data || [];
     },
 
     // ── MIGRATION ──────────────────────────────────────────

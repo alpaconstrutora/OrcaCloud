@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import {
     ShieldAlert, Plus, X, ChevronDown, Loader2, Search,
     AlertTriangle, CheckCircle2, FileText, Trash2, Eye,
-    Activity, Users, Clock, Stethoscope, ClipboardList, BookOpen
+    Activity, Users, Clock, Stethoscope, ClipboardList, BookOpen,
+    Pencil, Calendar, Building2
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Employee,
     Accident, AccidentTipo, AccidentGravidade,
-    SstChecklist, SstIndicators
+    SstChecklist, SstIndicators,
+    SSTRegulatoryDoc, SSTDocTipo, SSTDocStatus
 } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
@@ -21,18 +23,20 @@ const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ la
     </div>
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Accidents
+// ─────────────────────────────────────────────────────────────────────────────
+
 const TIPO_LABELS: Record<AccidentTipo, string> = {
     TIPICO: 'Típico', TRAJETO: 'Trajeto',
     DOENCA_OCUPACIONAL: 'Doença Ocupacional', QUASE_ACIDENTE: 'Quase Acidente',
 };
 const GRAV_CONFIG: Record<AccidentGravidade, { label: string; bg: string; text: string }> = {
-    SEM_AFASTAMENTO:       { label: 'Sem Afastamento',       bg: 'bg-amber-100',  text: 'text-amber-700' },
-    COM_AFASTAMENTO:       { label: 'Com Afastamento',       bg: 'bg-orange-100', text: 'text-orange-700' },
-    INCAPACIDADE_PERMANENTE:{ label: 'Incap. Permanente',    bg: 'bg-red-100',    text: 'text-red-700' },
-    OBITO:                 { label: 'Óbito',                 bg: 'bg-slate-800',  text: 'text-white' },
+    SEM_AFASTAMENTO:        { label: 'Sem Afastamento',    bg: 'bg-amber-100',  text: 'text-amber-700' },
+    COM_AFASTAMENTO:        { label: 'Com Afastamento',    bg: 'bg-orange-100', text: 'text-orange-700' },
+    INCAPACIDADE_PERMANENTE:{ label: 'Incap. Permanente',  bg: 'bg-red-100',    text: 'text-red-700' },
+    OBITO:                  { label: 'Óbito',              bg: 'bg-slate-800',  text: 'text-white' },
 };
-
-// ── Modal de Acidente ─────────────────────────────────────────────────────────
 
 interface AccidentFormProps {
     orgId: string;
@@ -191,7 +195,158 @@ const AccidentForm: React.FC<AccidentFormProps> = ({ orgId, employees, projects,
     );
 };
 
-// ── Componente principal ─────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Docs Regulatórios — PCMSO / PGR / NR-18 PCMAT
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DOC_TIPO_CONFIG: Record<SSTDocTipo, { label: string; desc: string; bg: string; text: string; responsavelLabel: string; docLabel: string }> = {
+    PCMSO:     { label: 'PCMSO',       desc: 'Programa de Controle Médico de Saúde Ocupacional', bg: 'bg-teal-50',   text: 'text-teal-700',   responsavelLabel: 'Médico Coordenador', docLabel: 'CRM' },
+    PGR:       { label: 'PGR',         desc: 'Programa de Gerenciamento de Riscos (NR-01)',       bg: 'bg-indigo-50', text: 'text-indigo-700', responsavelLabel: 'Responsável Técnico', docLabel: 'CREA/CRQ/CPF' },
+    NR18_PCMAT:{ label: 'NR-18/PCMAT', desc: 'Programa de Condições e Meio Ambiente — Construção',bg: 'bg-orange-50', text: 'text-orange-700', responsavelLabel: 'Resp. Técnico',      docLabel: 'CREA' },
+    PPRA:      { label: 'PPRA',        desc: 'Programa de Prevenção de Riscos Ambientais (legado)', bg: 'bg-slate-50', text: 'text-slate-600', responsavelLabel: 'Responsável',        docLabel: 'CREA/CRQ' },
+};
+
+const DOC_STATUS_CONFIG: Record<SSTDocStatus, { label: string; bg: string; text: string }> = {
+    VIGENTE:   { label: 'Vigente',   bg: 'bg-emerald-100', text: 'text-emerald-700' },
+    REVISAO:   { label: 'Em Revisão', bg: 'bg-amber-100',  text: 'text-amber-700' },
+    VENCIDO:   { label: 'Vencido',   bg: 'bg-rose-100',    text: 'text-rose-700' },
+    CANCELADO: { label: 'Cancelado', bg: 'bg-slate-100',   text: 'text-slate-500' },
+};
+
+interface RegDocFormProps {
+    orgId: string;
+    projects: { id: string; name: string }[];
+    doc?: SSTRegulatoryDoc | null;
+    onClose: () => void;
+    onSaved: () => void;
+}
+
+const RegDocForm: React.FC<RegDocFormProps> = ({ orgId, projects, doc, onClose, onSaved }) => {
+    const isEditing = !!doc;
+    const [saving, setSaving] = useState(false);
+    const [form, setForm] = useState<Partial<SSTRegulatoryDoc>>({
+        org_id: orgId,
+        tipo: doc?.tipo || 'PCMSO',
+        titulo: doc?.titulo || '',
+        responsavel: doc?.responsavel || '',
+        responsavel_doc: doc?.responsavel_doc || '',
+        project_id: doc?.project_id || '',
+        vigencia_inicio: doc?.vigencia_inicio || '',
+        vigencia_fim: doc?.vigencia_fim || '',
+        data_revisao: doc?.data_revisao || '',
+        status: doc?.status || 'VIGENTE',
+        observacoes: doc?.observacoes || '',
+    });
+
+    const set = <K extends keyof SSTRegulatoryDoc>(k: K, v: SSTRegulatoryDoc[K]) => setForm(p => ({ ...p, [k]: v }));
+    const tipoConf = DOC_TIPO_CONFIG[form.tipo as SSTDocTipo] || DOC_TIPO_CONFIG.PCMSO;
+
+    const handleSave = async () => {
+        if (!form.titulo?.trim()) { alert('Título é obrigatório.'); return; }
+        setSaving(true);
+        try {
+            const payload: any = {
+                ...form,
+                org_id: orgId,
+                vigencia_inicio: form.vigencia_inicio || null,
+                vigencia_fim: form.vigencia_fim || null,
+                data_revisao: form.data_revisao || null,
+                project_id: form.project_id || null,
+            };
+            if (isEditing && doc?.id) {
+                await laborService.updateSSTRegulatoryDoc(doc.id, payload);
+            } else {
+                await laborService.createSSTRegulatoryDoc(payload);
+            }
+            onSaved();
+        } catch (err: any) {
+            alert('Erro: ' + (err.message || 'Tente novamente.'));
+        } finally { setSaving(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+                <div className="px-6 py-5 border-b flex items-center justify-between bg-gradient-to-r from-teal-600 to-indigo-700">
+                    <div>
+                        <h2 className="text-lg font-black text-white">{isEditing ? 'Editar' : 'Cadastrar'} Documento Regulatório</h2>
+                        <p className="text-indigo-200 text-xs mt-0.5">PCMSO · PGR · NR-18/PCMAT · PPRA</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white"><X className="w-5 h-5" /></button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <InputGroup label="Tipo *">
+                            <div className="relative">
+                                <select value={form.tipo} onChange={e => set('tipo', e.target.value as SSTDocTipo)} className={inputCls + ' appearance-none pr-8'}>
+                                    {(Object.entries(DOC_TIPO_CONFIG) as [SSTDocTipo, typeof DOC_TIPO_CONFIG[SSTDocTipo]][]).map(([k, v]) => (
+                                        <option key={k} value={k}>{v.label} — {v.desc}</option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                            </div>
+                        </InputGroup>
+                        <InputGroup label="Obra (opcional)">
+                            <div className="relative">
+                                <select value={form.project_id || ''} onChange={e => set('project_id', e.target.value)} className={inputCls + ' appearance-none pr-8'}>
+                                    <option value="">Sem obra — nível empresa</option>
+                                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                            </div>
+                        </InputGroup>
+                    </div>
+                    <InputGroup label="Título / Identificação *">
+                        <input value={form.titulo || ''} onChange={e => set('titulo', e.target.value)} className={inputCls} placeholder={`Ex: ${tipoConf.label} 2025 — Empresa XPTO`} />
+                    </InputGroup>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <InputGroup label={`${tipoConf.responsavelLabel}`}>
+                            <input value={form.responsavel || ''} onChange={e => set('responsavel', e.target.value)} className={inputCls} placeholder="Nome completo" />
+                        </InputGroup>
+                        <InputGroup label={`${tipoConf.docLabel} do Responsável`}>
+                            <input value={form.responsavel_doc || ''} onChange={e => set('responsavel_doc', e.target.value)} className={inputCls} placeholder={tipoConf.docLabel} />
+                        </InputGroup>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <InputGroup label="Vigência Início">
+                            <input type="date" value={form.vigencia_inicio || ''} onChange={e => set('vigencia_inicio', e.target.value)} className={inputCls} />
+                        </InputGroup>
+                        <InputGroup label="Vigência Fim">
+                            <input type="date" value={form.vigencia_fim || ''} onChange={e => set('vigencia_fim', e.target.value)} className={inputCls} />
+                        </InputGroup>
+                        <InputGroup label="Próxima Revisão">
+                            <input type="date" value={form.data_revisao || ''} onChange={e => set('data_revisao', e.target.value)} className={inputCls} />
+                        </InputGroup>
+                    </div>
+                    <InputGroup label="Status">
+                        <div className="flex gap-2 flex-wrap">
+                            {(Object.entries(DOC_STATUS_CONFIG) as [SSTDocStatus, typeof DOC_STATUS_CONFIG[SSTDocStatus]][]).map(([k, v]) => (
+                                <button key={k} type="button" onClick={() => set('status', k)}
+                                    className={`px-3 py-1.5 rounded-xl border text-xs font-black transition-all ${form.status === k ? `${v.bg} ${v.text} border-transparent` : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300'}`}>
+                                    {v.label}
+                                </button>
+                            ))}
+                        </div>
+                    </InputGroup>
+                    <InputGroup label="Observações">
+                        <textarea value={form.observacoes || ''} onChange={e => set('observacoes', e.target.value)} className={inputCls + ' resize-none h-16'} placeholder="Notas adicionais, nº do documento, localização do arquivo..." />
+                    </InputGroup>
+                </div>
+                <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50/50">
+                    <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 shadow-lg disabled:opacity-50">
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                        {saving ? 'Salvando...' : (isEditing ? 'Salvar' : 'Cadastrar')}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LaborSST — Componente principal
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface LaborSSTProps {
     orgId: string;
@@ -199,7 +354,7 @@ interface LaborSSTProps {
     projects?: { id: string; name: string }[];
 }
 
-type SSTView = 'accidents' | 'checklists' | 'indicators';
+type SSTView = 'accidents' | 'checklists' | 'indicators' | 'regulatory';
 
 const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) => {
     const qc = useQueryClient();
@@ -207,10 +362,14 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
     const [search, setSearch] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [editingAccident, setEditingAccident] = useState<Accident | null>(null);
+    const [showRegForm, setShowRegForm] = useState(false);
+    const [editingRegDoc, setEditingRegDoc] = useState<SSTRegulatoryDoc | null>(null);
+    const [regFilter, setRegFilter] = useState<SSTDocTipo | ''>('');
 
     const accidentsKey   = [...laborKeys.all, 'accidents', orgId];
     const checklistsKey  = [...laborKeys.all, 'sstChecklists', orgId];
     const indicatorsKey  = [...laborKeys.all, 'sstIndicators', orgId];
+    const regDocsKey     = [...laborKeys.all, 'sstRegDocs', orgId];
 
     const { data: accidents = [], isLoading: loadingAcc } = useQuery({
         queryKey: accidentsKey,
@@ -230,21 +389,63 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
         staleTime: STALE.slow, enabled: !!orgId,
     });
 
+    const { data: regDocs = [], isLoading: loadingReg } = useQuery({
+        queryKey: regDocsKey,
+        queryFn: () => laborService.listSSTRegulatoryDocs(orgId),
+        staleTime: STALE.normal, enabled: !!orgId && view === 'regulatory',
+    });
+
     const invalidate = () => {
         qc.invalidateQueries({ queryKey: accidentsKey });
         qc.invalidateQueries({ queryKey: indicatorsKey });
     };
 
+    const invalidateReg = () => qc.invalidateQueries({ queryKey: regDocsKey });
+
     const deleteAcc = useMutation({ mutationFn: (id: string) => laborService.deleteAccident(id), onSuccess: invalidate });
+    const deleteReg = useMutation({ mutationFn: (id: string) => laborService.deleteSSTRegulatoryDoc(id), onSuccess: invalidateReg });
 
     const withLeave = accidents.filter(a => ['COM_AFASTAMENTO','INCAPACIDADE_PERMANENTE','OBITO'].includes(a.gravidade)).length;
     const open = accidents.filter(a => a.status === 'ABERTO').length;
     const catPending = accidents.filter(a => !a.cat_emitida && a.tipo !== 'QUASE_ACIDENTE').length;
 
-    const filteredAcc = accidents.filter(a => !search || (a.employee_name || '').toLowerCase().includes(search.toLowerCase()) || a.descricao.toLowerCase().includes(search.toLowerCase()));
+    const filteredAcc = accidents.filter(a => !search ||
+        (a.employee_name || '').toLowerCase().includes(search.toLowerCase()) ||
+        a.descricao.toLowerCase().includes(search.toLowerCase()));
+
+    const filteredReg = regDocs.filter(d => {
+        if (regFilter && d.tipo !== regFilter) return false;
+        if (search && !(d.titulo.toLowerCase().includes(search.toLowerCase()) || (d.responsavel || '').toLowerCase().includes(search.toLowerCase()))) return false;
+        return true;
+    });
+
+    // Classifica docs vencendo em 60 dias
+    const today = new Date().toISOString().split('T')[0];
+    const in60 = new Date(); in60.setDate(in60.getDate() + 60);
+    const in60Str = in60.toISOString().split('T')[0];
+    const regAlerts = regDocs.filter(d => d.vigencia_fim && d.vigencia_fim <= in60Str && d.status !== 'CANCELADO');
 
     return (
         <div className="space-y-6">
+            {/* Alerta docs regulatórios vencendo */}
+            {regAlerts.length > 0 && (
+                <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-xs font-black text-orange-900 uppercase tracking-tight">
+                            {regAlerts.length} documento{regAlerts.length > 1 ? 's' : ''} regulatório{regAlerts.length > 1 ? 's' : ''} vencendo em 60 dias
+                        </p>
+                        <p className="text-[11px] text-orange-700 mt-1">
+                            {regAlerts.slice(0, 3).map(d => `${DOC_TIPO_CONFIG[d.tipo]?.label} — vence ${d.vigencia_fim}`).join(' · ')}
+                            {regAlerts.length > 3 && ` e mais ${regAlerts.length - 3}…`}
+                        </p>
+                    </div>
+                    <button onClick={() => setView('regulatory')} className="ml-auto shrink-0 px-3 py-1 bg-orange-600 text-white text-[10px] font-black rounded-lg hover:bg-orange-700 transition-colors whitespace-nowrap">
+                        Ver docs
+                    </button>
+                </div>
+            )}
+
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
@@ -262,15 +463,23 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
 
             {/* Controls */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
-                <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
-                    {([['accidents', 'Acidentes', ShieldAlert], ['checklists', 'Checklists SST', ClipboardList], ['indicators', 'Indicadores', Activity]] as const).map(([id, label, Icon]) => (
+                <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1 flex-wrap">
+                    {([
+                        ['accidents',  'Acidentes/CAT',    ShieldAlert],
+                        ['checklists', 'Checklists SST',   ClipboardList],
+                        ['indicators', 'Indicadores',      Activity],
+                        ['regulatory', 'Docs Regulatórios',FileText],
+                    ] as const).map(([id, label, Icon]) => (
                         <button key={id} onClick={() => setView(id)}
                             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
                             <Icon className="w-3.5 h-3.5" />{label}
+                            {id === 'regulatory' && regAlerts.length > 0 && (
+                                <span className="px-1.5 py-0.5 bg-orange-500 text-white text-[9px] font-black rounded-full">{regAlerts.length}</span>
+                            )}
                         </button>
                     ))}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
@@ -281,10 +490,27 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                             <Plus className="w-3.5 h-3.5" /> Registrar Acidente
                         </button>
                     )}
+                    {view === 'regulatory' && (
+                        <>
+                            <div className="relative">
+                                <select value={regFilter} onChange={e => setRegFilter(e.target.value as SSTDocTipo | '')} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none appearance-none">
+                                    <option value="">Todos os tipos</option>
+                                    {(Object.keys(DOC_TIPO_CONFIG) as SSTDocTipo[]).map(k => (
+                                        <option key={k} value={k}>{DOC_TIPO_CONFIG[k].label}</option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                            </div>
+                            <button onClick={() => { setEditingRegDoc(null); setShowRegForm(true); }}
+                                className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 font-bold text-xs shadow-md">
+                                <Plus className="w-3.5 h-3.5" /> Cadastrar Documento
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
-            {/* Acidentes */}
+            {/* ── Acidentes ── */}
             {view === 'accidents' && (
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                     {loadingAcc ? <div className="flex items-center justify-center py-16"><Loader2 className="w-7 h-7 text-indigo-500 animate-spin" /></div>
@@ -332,7 +558,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                 </div>
             )}
 
-            {/* Checklists */}
+            {/* ── Checklists ── */}
             {view === 'checklists' && (
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                     {loadingCkl ? <div className="flex items-center justify-center py-16"><Loader2 className="w-7 h-7 text-indigo-500 animate-spin" /></div>
@@ -377,7 +603,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                 </div>
             )}
 
-            {/* Indicadores */}
+            {/* ── Indicadores ── */}
             {view === 'indicators' && indicators && (
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -411,10 +637,114 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                 </div>
             )}
 
+            {/* ── Docs Regulatórios ── */}
+            {view === 'regulatory' && (
+                <div className="space-y-4">
+                    {/* Cards por tipo */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {(Object.entries(DOC_TIPO_CONFIG) as [SSTDocTipo, typeof DOC_TIPO_CONFIG[SSTDocTipo]][]).map(([tipo, conf]) => {
+                            const count = regDocs.filter(d => d.tipo === tipo).length;
+                            const vencidos = regDocs.filter(d => d.tipo === tipo && d.vigencia_fim && d.vigencia_fim < today).length;
+                            return (
+                                <button key={tipo} onClick={() => setRegFilter(regFilter === tipo ? '' : tipo)}
+                                    className={`bg-white p-4 rounded-2xl border shadow-sm text-left hover:shadow-md transition-all ${regFilter === tipo ? `border-teal-300 ring-2 ring-teal-100` : 'border-slate-100'}`}>
+                                    <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${conf.text}`}>{conf.label}</p>
+                                    <p className="text-2xl font-black text-slate-900">{count}</p>
+                                    {vencidos > 0 && <p className="text-[10px] font-black text-rose-600 mt-1">⚠ {vencidos} vencido{vencidos > 1 ? 's' : ''}</p>}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        {loadingReg ? (
+                            <div className="flex items-center justify-center py-16"><Loader2 className="w-7 h-7 text-teal-500 animate-spin" /></div>
+                        ) : filteredReg.length === 0 ? (
+                            <div className="text-center py-16">
+                                <FileText className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                                <p className="text-sm font-black text-slate-400">Nenhum documento regulatório cadastrado</p>
+                                <p className="text-xs text-slate-400 mt-1">Cadastre PCMSO, PGR, NR-18/PCMAT para rastrear vigências e revisões.</p>
+                                <button onClick={() => { setEditingRegDoc(null); setShowRegForm(true); }}
+                                    className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 shadow-md">
+                                    <Plus className="w-4 h-4" /> Cadastrar Primeiro Documento
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-slate-50">
+                                {filteredReg.map(doc => {
+                                    const conf = DOC_TIPO_CONFIG[doc.tipo];
+                                    const statusConf = DOC_STATUS_CONFIG[doc.status];
+                                    const isExpiringSoon = doc.vigencia_fim && doc.vigencia_fim <= in60Str && doc.vigencia_fim >= today;
+                                    const isExpired = doc.vigencia_fim && doc.vigencia_fim < today;
+                                    const reviewSoon = doc.data_revisao && doc.data_revisao <= in60Str && doc.data_revisao >= today;
+                                    return (
+                                        <div key={doc.id} className="p-4 hover:bg-slate-50/50 transition-colors">
+                                            <div className="flex items-start gap-4">
+                                                <div className={`p-2.5 rounded-xl ${conf.bg} shrink-0`}>
+                                                    <FileText className={`w-4 h-4 ${conf.text}`} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${conf.bg} ${conf.text}`}>{conf.label}</span>
+                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${statusConf.bg} ${statusConf.text}`}>{statusConf.label}</span>
+                                                        {isExpired && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700">⚠ VENCIDO</span>}
+                                                        {isExpiringSoon && !isExpired && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-100 text-orange-700">⏰ Vence em breve</span>}
+                                                        {reviewSoon && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700">📋 Revisão em breve</span>}
+                                                    </div>
+                                                    <p className="text-sm font-black text-slate-900 mt-1">{doc.titulo}</p>
+                                                    <div className="flex items-center gap-4 mt-1 flex-wrap">
+                                                        {doc.responsavel && (
+                                                            <span className="text-xs text-slate-500 flex items-center gap-1">
+                                                                <Users className="w-3 h-3" /> {doc.responsavel}
+                                                                {doc.responsavel_doc && ` (${doc.responsavel_doc})`}
+                                                            </span>
+                                                        )}
+                                                        {doc.vigencia_inicio && doc.vigencia_fim && (
+                                                            <span className="text-xs text-slate-500 flex items-center gap-1">
+                                                                <Calendar className="w-3 h-3" /> {doc.vigencia_inicio} → {doc.vigencia_fim}
+                                                            </span>
+                                                        )}
+                                                        {doc.project_name && (
+                                                            <span className="text-xs text-slate-500 flex items-center gap-1">
+                                                                <Building2 className="w-3 h-3" /> {doc.project_name}
+                                                            </span>
+                                                        )}
+                                                        {doc.data_revisao && (
+                                                            <span className="text-xs text-slate-400">Revisão: {doc.data_revisao}</span>
+                                                        )}
+                                                    </div>
+                                                    {doc.observacoes && (
+                                                        <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-[400px]">{doc.observacoes}</p>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <button onClick={() => { setEditingRegDoc(doc); setShowRegForm(true); }} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button onClick={() => { if (confirm('Excluir documento regulatório?')) deleteReg.mutate(doc.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Modais */}
             {showForm && (
                 <AccidentForm orgId={orgId} employees={employees} projects={projects} accident={editingAccident}
                     onClose={() => { setShowForm(false); setEditingAccident(null); }}
                     onSaved={() => { setShowForm(false); setEditingAccident(null); invalidate(); }} />
+            )}
+            {showRegForm && (
+                <RegDocForm orgId={orgId} projects={projects} doc={editingRegDoc}
+                    onClose={() => { setShowRegForm(false); setEditingRegDoc(null); }}
+                    onSaved={() => { setShowRegForm(false); setEditingRegDoc(null); invalidateReg(); }} />
             )}
         </div>
     );

@@ -52,15 +52,77 @@ function calcDias(inicio: string, fim: string): number {
 
 // ── Modal de Ausência ────────────────────────────────────────────────────────
 
+// ── CLT Vacation validation ──────────────────────────────────────────────────
+// CLT art. 130, 134, 135, 143
+
+interface CltIssue {
+    severity: 'error' | 'warning';
+    msg: string;
+}
+
+function computeCltIssues(
+    dias: number,
+    form: Partial<Absence>,
+    selectedBalance: VacationBalance | undefined,
+    existingFeriasPeriod: Absence[],   // FERIAS aprovadas/solicitadas mesmo período aquisitivo
+): CltIssue[] {
+    if (form.tipo !== 'FERIAS' || !form.data_inicio || !form.data_fim || dias <= 0) return [];
+    const issues: CltIssue[] = [];
+
+    if (!selectedBalance) return issues;
+
+    // Dias restantes
+    const restantes = selectedBalance.dias_restantes ?? 0;
+    if (dias > restantes) {
+        issues.push({ severity: 'error', msg: `Período excede o saldo: você tem ${restantes} dia(s) disponível(is) para este período aquisitivo.` });
+    }
+
+    // Máximo 3 fracionamentos (art. 134)
+    const existingCount = existingFeriasPeriod.filter(a =>
+        a.status !== 'CANCELADO' && a.status !== 'REJEITADO'
+    ).length;
+    if (existingCount >= 3) {
+        issues.push({ severity: 'error', msg: `CLT art. 134: férias já foram fracionadas em ${existingCount} período(s). Máximo permitido: 3 períodos.` });
+    }
+
+    // Mínimo 14 dias para o primeiro período; 5 dias para os demais (art. 134 §1 e §2)
+    const jaGozados = selectedBalance.dias_gozados;
+    const isFirstPeriod = jaGozados === 0 && existingCount === 0;
+    if (isFirstPeriod && dias < 14) {
+        issues.push({ severity: 'error', msg: `CLT art. 134 §1: o primeiro período de férias não pode ser inferior a 14 dias corridos (solicitado: ${dias} dias).` });
+    } else if (!isFirstPeriod && dias < 5) {
+        issues.push({ severity: 'error', msg: `CLT art. 134 §2: períodos subsequentes de férias não podem ser inferiores a 5 dias corridos (solicitado: ${dias} dias).` });
+    }
+
+    // Período concessivo — deve iniciar antes do vencimento (art. 135)
+    if (selectedBalance.vencimento && form.data_inicio > selectedBalance.vencimento) {
+        issues.push({ severity: 'error', msg: `CLT art. 135: as férias devem ser iniciadas antes do vencimento do período concessivo (${selectedBalance.vencimento}). Risco de pagamento em dobro.` });
+    } else if (selectedBalance.vencimento) {
+        const daysUntilExpiry = Math.ceil((new Date(selectedBalance.vencimento).getTime() - Date.now()) / 86400000);
+        if (daysUntilExpiry <= 30 && daysUntilExpiry > 0) {
+            issues.push({ severity: 'warning', msg: `Período concessivo vence em ${daysUntilExpiry} dia(s) (${selectedBalance.vencimento}). Conceda as férias antes dessa data para evitar pagamento em dobro.` });
+        }
+    }
+
+    // Abono pecuniário — aviso informativo (art. 143): máx. 10 dias / 1/3 do direito
+    const maxAbono = Math.min(10, Math.floor(selectedBalance.dias_direito / 3));
+    if (selectedBalance.dias_vendidos > maxAbono) {
+        issues.push({ severity: 'error', msg: `CLT art. 143: abono pecuniário excede o limite. Máximo: ${maxAbono} dia(s) (1/3 de ${selectedBalance.dias_direito} dias de direito).` });
+    }
+
+    return issues;
+}
+
 interface AbsenceFormProps {
     orgId: string;
     employees: Employee[];
     vacationBalances: VacationBalance[];
+    existingAbsences?: Absence[];
     onClose: () => void;
     onSaved: () => void;
 }
 
-const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBalances, onClose, onSaved }) => {
+const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBalances, existingAbsences = [], onClose, onSaved }) => {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<Partial<Absence>>({
         org_id: orgId,
@@ -84,6 +146,18 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
         b.employee_id === form.employee_id && b.dias_restantes! > 0
     );
 
+    const selectedBalance = employeeBalances.find(b => b.periodo_inicio === form.vacation_period_start);
+
+    const existingFeriasSamePeriod = existingAbsences.filter(a =>
+        a.employee_id === form.employee_id &&
+        a.tipo === 'FERIAS' &&
+        a.vacation_period_start === form.vacation_period_start
+    );
+
+    const cltIssues = computeCltIssues(dias, form, selectedBalance, existingFeriasSamePeriod);
+    const cltErrors = cltIssues.filter(i => i.severity === 'error');
+    const cltWarnings = cltIssues.filter(i => i.severity === 'warning');
+
     const handleSave = async () => {
         if (!form.employee_id) { alert('Selecione um colaborador.'); return; }
         if (!form.data_inicio || !form.data_fim) { alert('Preencha as datas.'); return; }
@@ -93,6 +167,11 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
         }
         if (form.tipo === 'FERIAS' && !form.vacation_period_start) {
             alert('Selecione o período aquisitivo para as férias.');
+            return;
+        }
+        // Bloqueia erros CLT críticos
+        if (form.tipo === 'FERIAS' && cltErrors.length > 0) {
+            alert('Não é possível registrar:\n\n' + cltErrors.map(e => '• ' + e.msg).join('\n'));
             return;
         }
         setSaving(true);
@@ -190,6 +269,33 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
                         <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 flex items-center gap-2">
                             <CalendarDays className="w-4 h-4 text-indigo-600 shrink-0" />
                             <span className="text-xs font-black text-indigo-800">{dias} dia{dias !== 1 ? 's' : ''} de afastamento</span>
+                            {form.tipo === 'FERIAS' && selectedBalance && (
+                                <span className="text-xs text-slate-500 ml-auto">Saldo disponível: <strong>{selectedBalance.dias_restantes}d</strong></span>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Validações CLT — erros */}
+                    {cltErrors.length > 0 && (
+                        <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1">
+                            <p className="text-[10px] font-black text-rose-700 uppercase tracking-widest flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" /> Violação CLT — não pode prosseguir
+                            </p>
+                            {cltErrors.map((e, i) => (
+                                <p key={i} className="text-xs text-rose-700 font-medium">• {e.msg}</p>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Validações CLT — avisos */}
+                    {cltWarnings.length > 0 && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                            <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" /> Atenção CLT
+                            </p>
+                            {cltWarnings.map((w, i) => (
+                                <p key={i} className="text-xs text-amber-700 font-medium">• {w.msg}</p>
+                            ))}
                         </div>
                     )}
 
@@ -665,6 +771,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                     orgId={orgId}
                     employees={employees}
                     vacationBalances={balances}
+                    existingAbsences={absences}
                     onClose={() => setShowForm(false)}
                     onSaved={() => { setShowForm(false); invalidate(); }}
                 />

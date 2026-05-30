@@ -70,6 +70,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [organization, setOrganization] = React.useState<Organization | null>(null);
     const [projectSettings, setProjectSettings] = React.useState<ProjectSettings | null>(null);
     const [exporting, setExporting] = React.useState(false);
+    const [syncingFinance, setSyncingFinance] = React.useState(false);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
 
@@ -414,6 +415,23 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         }
     };
 
+    const handleSyncFinance = async () => {
+        if (!contract) return;
+        if (!contract.original_value || contract.original_value <= 0) {
+            notify("Contrato sem valor definido — defina o valor antes de lançar no financeiro.", "error");
+            return;
+        }
+        setSyncingFinance(true);
+        try {
+            await contractService.syncContractToFinance(contract);
+            notify("Contrato lançado no financeiro com sucesso!", "success");
+        } catch (e) {
+            notify("Erro ao lançar no financeiro. Tente novamente.", "error");
+        } finally {
+            setSyncingFinance(false);
+        }
+    };
+
     const handleSendWebhook = (template?: ContractTemplate) => {
         if (!contract) {
             notify("Dados insuficientes para enviar o contrato.", "error");
@@ -615,6 +633,18 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <FileDown className="w-4 h-4 text-blue-600" />
                         Emitir PDF
                     </button>
+
+                    {!contract.is_recurring && (
+                        <button
+                            onClick={handleSyncFinance}
+                            disabled={syncingFinance}
+                            className="flex items-center gap-2 px-6 py-4 bg-white border border-emerald-200 text-emerald-700 rounded-2xl hover:bg-emerald-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm disabled:opacity-50"
+                            title="Lançar / Re-lançar este contrato no módulo financeiro"
+                        >
+                            <DollarSign className="w-4 h-4" />
+                            {syncingFinance ? 'Lançando...' : 'Lançar Financeiro'}
+                        </button>
+                    )}
 
                     <button
                         onClick={() => handleSendWebhook()}

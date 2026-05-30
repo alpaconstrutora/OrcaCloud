@@ -75,6 +75,19 @@ export const laborKeys = {
     // Sprint 12 (Portal — em atsService.ts, usa chaves ['portal', ...])
 } as const;
 
+// ── Structural / Ferragem Armada module ──────────────────────────────────────
+
+export const structuralKeys = {
+    /** Raiz: invalida todos os dados do módulo estrutural */
+    all: ['structural'] as const,
+
+    catalog:    (orgId: string)      => ['structural', 'catalog',    orgId]      as const,
+    assemblies: (projectId: string)  => ['structural', 'assemblies', projectId]  as const,
+    elements:   (assemblyId: string) => ['structural', 'elements',   assemblyId] as const,
+    rebars:     (elementId: string)  => ['structural', 'rebars',     elementId]  as const,
+    structure:  (projectId: string)  => ['structural', 'structure',  projectId]  as const,
+} as const
+
 // ── Shared / cross-module ────────────────────────────────────────────────────
 
 export const orgKeys = {

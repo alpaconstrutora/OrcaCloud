@@ -185,48 +185,45 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
     }
 }
 
-// Generate monthly financial entries for a recurring contract.
-// - With end_date: generates from next due date until end_date.
-// - Without end_date: generates a rolling 12-month window from next due date.
-// "Next due date" = first occurrence of due_day that is strictly after today,
-// but never before the contract's own start_date.
+function advanceCycle(date: Date, cycle: string | undefined) {
+    if (cycle === 'Anual') date.setFullYear(date.getFullYear() + 1);
+    else if (cycle === 'Semestral') date.setMonth(date.getMonth() + 6);
+    else if (cycle === 'Bimestral') date.setMonth(date.getMonth() + 2);
+    else date.setMonth(date.getMonth() + 1); // default: Mensal
+}
+
+// Generate financial entries for a recurring contract.
+// First payment = start_date + payment_days.
+// Subsequent payments advance by billing_cycle from that reference.
+// Only generates payments strictly after today (past entries are history).
+// Without end_date: generates the next 12 cycles from the next due date.
 async function syncRecurringToFinance(contract: Contract) {
     if (!contract.is_recurring || !contract.original_value) return;
     try {
         const supplierName = await resolveSupplierName(contract.supplier_id, 'Contrato Recorrente');
 
         const today = new Date();
-        today.setHours(12, 0, 0, 0);
-        const contractStart = new Date(contract.start_date + 'T12:00:00');
+        today.setHours(23, 59, 59, 0); // compare against end of today
 
-        // Find the next due date: start from the contract start month, advance until > today
-        let cur = new Date(contractStart);
-        const dueDay = contract.due_day ?? cur.getDate();
-        // Set to due_day in the contract's start month
-        cur.setDate(Math.min(dueDay, new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate()));
-
-        // Advance cycle-by-cycle until we reach a date strictly after today
-        while (cur <= today) {
-            if (contract.billing_cycle === 'Anual') cur.setFullYear(cur.getFullYear() + 1);
-            else if (contract.billing_cycle === 'Semestral') cur.setMonth(cur.getMonth() + 6);
-            else if (contract.billing_cycle === 'Bimestral') cur.setMonth(cur.getMonth() + 2);
-            else cur.setMonth(cur.getMonth() + 1);
-            // Re-align due_day after month change
-            cur.setDate(Math.min(dueDay, new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate()));
+        // First payment date = start_date + payment_days
+        const firstPayment = new Date(contract.start_date + 'T12:00:00');
+        if (contract.payment_days && contract.payment_days > 0) {
+            firstPayment.setDate(firstPayment.getDate() + contract.payment_days);
         }
 
-        // End: use contract end_date if set, otherwise roll 12 cycles from the first due date
+        // Walk the payment schedule from firstPayment until we find the next date > today
+        let cur = new Date(firstPayment);
+        while (cur <= today) {
+            advanceCycle(cur, contract.billing_cycle);
+        }
+
+        // End boundary
         const endDate = contract.end_date
             ? new Date(contract.end_date + 'T12:00:00')
             : (() => {
+                // 12 cycles from the first future payment
                 const e = new Date(cur);
-                for (let i = 0; i < 11; i++) {
-                    if (contract.billing_cycle === 'Anual') e.setFullYear(e.getFullYear() + 1);
-                    else if (contract.billing_cycle === 'Semestral') e.setMonth(e.getMonth() + 6);
-                    else if (contract.billing_cycle === 'Bimestral') e.setMonth(e.getMonth() + 2);
-                    else e.setMonth(e.getMonth() + 1);
-                    e.setDate(Math.min(dueDay, new Date(e.getFullYear(), e.getMonth() + 1, 0).getDate()));
-                }
+                for (let i = 0; i < 11; i++) advanceCycle(e, contract.billing_cycle);
                 return e;
             })();
 
@@ -251,15 +248,7 @@ async function syncRecurringToFinance(contract: Contract) {
                 notes: `[contract:${contract.id}] Gerado automaticamente do contrato ${contract.number || contract.id}`
             });
 
-            if (contract.billing_cycle === 'Anual') cur.setFullYear(cur.getFullYear() + 1);
-            else if (contract.billing_cycle === 'Semestral') cur.setMonth(cur.getMonth() + 6);
-            else if (contract.billing_cycle === 'Bimestral') cur.setMonth(cur.getMonth() + 2);
-            else cur.setMonth(cur.getMonth() + 1);
-
-            if (contract.due_day) {
-                const maxDay = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
-                cur.setDate(Math.min(contract.due_day, maxDay));
-            }
+            advanceCycle(cur, contract.billing_cycle);
             n++;
         }
 

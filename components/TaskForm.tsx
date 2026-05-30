@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 export type TaskRecord = {
   id: string
   org_id: string
+  user_id: string
   title: string
   description: string | null
   start_date: string | null
@@ -15,6 +16,7 @@ export type TaskRecord = {
   source_ref: { type?: string; id?: string; route?: string } | null
   assignee_employee_id: string | null
   project_id: string | null
+  parent_task_id: string | null
   completed_at: string | null
   created_at: string
 }
@@ -29,6 +31,8 @@ interface Props {
   employees: EmployeeOption[]
   projects: ProjectOption[]
   task?: TaskRecord | null
+  parentTaskId?: string | null
+  parentTaskTitle?: string | null
   onClose: () => void
   onSaved: () => void
   onOrgChange?: (orgId: string) => void
@@ -44,12 +48,14 @@ const PRIORITIES: Array<{ value: number; label: string; cls: string }> = [
 function toLocalInput(iso: string | null): string {
   if (!iso) return ''
   const d = new Date(iso)
-  const off = d.getTimezoneOffset()
-  const local = new Date(d.getTime() - off * 60_000)
-  return local.toISOString().slice(0, 16)
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
 }
 
-const TaskForm: React.FC<Props> = ({ orgId, orgs, employees, projects, task, onClose, onSaved, onOrgChange }) => {
+const TaskForm: React.FC<Props> = ({
+  orgId, orgs, employees, projects, task,
+  parentTaskId = null, parentTaskTitle = null,
+  onClose, onSaved, onOrgChange,
+}) => {
   const [selectedOrgId, setSelectedOrgId] = useState(task?.org_id ?? orgId)
   const [title, setTitle]             = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
@@ -71,7 +77,6 @@ const TaskForm: React.FC<Props> = ({ orgId, orgs, employees, projects, task, onC
     if (!title.trim()) { setError('Título é obrigatório'); return }
     if (!selectedOrgId) { setError('Selecione uma organização'); return }
     setSaving(true); setError(null)
-
     const payload = {
       title:                title.trim(),
       description:          description.trim() || null,
@@ -81,7 +86,6 @@ const TaskForm: React.FC<Props> = ({ orgId, orgs, employees, projects, task, onC
       assignee_employee_id: assigneeId || null,
       project_id:           projectId  || null,
     }
-
     try {
       if (task?.id) {
         const { error: e } = await supabase.from('tasks').update(payload).eq('id', task.id)
@@ -91,9 +95,14 @@ const TaskForm: React.FC<Props> = ({ orgId, orgs, employees, projects, task, onC
         if (!user) throw new Error('Usuário não autenticado')
         const { data: inserted, error: e } = await supabase
           .from('tasks')
-          .insert({ ...payload, org_id: selectedOrgId, user_id: user.id, source_module: 'manual' })
-          .select()
-          .single()
+          .insert({
+            ...payload,
+            org_id: selectedOrgId,
+            user_id: user.id,
+            source_module: 'manual',
+            parent_task_id: parentTaskId ?? null,
+          })
+          .select().single()
         if (e) throw e
         if (!inserted) throw new Error('Tarefa não foi salva — tente novamente')
       }
@@ -108,7 +117,7 @@ const TaskForm: React.FC<Props> = ({ orgId, orgs, employees, projects, task, onC
 
   const remove = async () => {
     if (!task?.id) return
-    if (!window.confirm('Excluir esta tarefa?')) return
+    if (!window.confirm('Excluir esta tarefa? As subtarefas também serão excluídas.')) return
     setSaving(true)
     const { error: e } = await supabase.from('tasks').delete().eq('id', task.id)
     setSaving(false)
@@ -126,65 +135,46 @@ const TaskForm: React.FC<Props> = ({ orgId, orgs, employees, projects, task, onC
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
-          <h2 className="text-lg font-black text-slate-900">
-            {task?.id ? 'Editar tarefa' : 'Nova tarefa'}
-          </h2>
+          <div>
+            <h2 className="text-lg font-black text-slate-900">
+              {task?.id ? 'Editar tarefa' : parentTaskId ? 'Nova subtarefa' : 'Nova tarefa'}
+            </h2>
+            {parentTaskTitle && (
+              <p className="text-xs text-slate-400 mt-0.5 font-medium">↳ {parentTaskTitle}</p>
+            )}
+          </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
-
-          {/* Organização */}
-          {orgs.length > 1 && (
+          {orgs.length > 1 && !parentTaskId && (
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Organização</label>
-              <select
-                value={selectedOrgId}
-                onChange={(e) => { setSelectedOrgId(e.target.value); onOrgChange?.(e.target.value) }}
-                className={inp}
-                disabled={!!task?.id}
-              >
+              <select value={selectedOrgId} onChange={(e) => { setSelectedOrgId(e.target.value); onOrgChange?.(e.target.value) }} className={inp} disabled={!!task?.id}>
                 <option value="">Selecione...</option>
                 {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
               </select>
             </div>
           )}
 
-          {/* Título */}
           <div>
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Título *</label>
-            <input
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className={inp}
-              placeholder="O que precisa ser feito?"
-            />
+            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} className={inp} placeholder="O que precisa ser feito?" />
           </div>
 
-          {/* Descrição */}
           <div>
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Descrição</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className={'mt-1 ' + sel + ' resize-none'}
-              placeholder="Opcional"
-            />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={'mt-1 ' + sel + ' resize-none'} placeholder="Opcional" />
           </div>
 
-          {/* Responsável + Obra */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Responsável</label>
               <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={inp}>
                 <option value="">Nenhum</option>
-                {employees.map(emp => (
-                  <option key={emp.id} value={emp.id}>{emp.name}{emp.role ? ` — ${emp.role}` : ''}</option>
-                ))}
+                {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}{emp.role ? ` — ${emp.role}` : ''}</option>)}
               </select>
             </div>
             <div>
@@ -196,73 +186,45 @@ const TaskForm: React.FC<Props> = ({ orgId, orgs, employees, projects, task, onC
             </div>
           </div>
 
-          {/* Datas */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Data início</label>
-              <input
-                type="datetime-local"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className={inp}
-              />
+              <input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inp} />
             </div>
             <div>
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Prazo (término)</label>
-              <input
-                type="datetime-local"
-                value={due}
-                onChange={(e) => setDue(e.target.value)}
-                className={inp}
-              />
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Término</label>
+              <input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} className={inp} />
             </div>
           </div>
 
-          {/* Prioridade */}
           <div>
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Prioridade</label>
             <div className="mt-1 flex gap-1.5">
               {PRIORITIES.map(p => (
-                <button
-                  key={p.value}
-                  onClick={() => setPriority(p.value)}
+                <button key={p.value} onClick={() => setPriority(p.value)}
                   className={`flex-1 px-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all
-                    ${priority === p.value ? p.cls + ' ring-2 ring-offset-1 ring-slate-300' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'}`}
-                >
+                    ${priority === p.value ? p.cls + ' ring-2 ring-offset-1 ring-slate-300' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'}`}>
                   {p.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {error && (
-            <div className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {error}
-            </div>
-          )}
+          {error && <div className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
         </div>
 
         <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-100 flex-shrink-0">
           <div>
             {task?.id && (
-              <button
-                onClick={remove}
-                disabled={saving}
-                className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-red-600 hover:text-red-700"
-              >
+              <button onClick={remove} disabled={saving} className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-red-600 hover:text-red-700">
                 <Trash2 className="w-3.5 h-3.5" /> Excluir
               </button>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-slate-500 hover:bg-slate-100">
-              Cancelar
-            </button>
-            <button
-              onClick={save}
-              disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-            >
+            <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-slate-500 hover:bg-slate-100">Cancelar</button>
+            <button onClick={save} disabled={saving}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Salvar
             </button>

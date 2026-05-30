@@ -38,13 +38,14 @@ const TabBtn: React.FC<{
 )
 
 const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = [], projects = [], onChangeView }) => {
-  const [view, setView]           = useState<FilterView>('today')
-  const [tasks, setTasks]         = useState<TaskRecord[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [editing, setEditing]     = useState<TaskRecord | null>(null)
-  const [showForm, setShowForm]   = useState(false)
-  const [filterOrg, setFilterOrg] = useState<string>(activeOrganizationId ?? '')
-  const [employees, setEmployees] = useState<EmployeeOption[]>([])
+  const [view, setView]               = useState<FilterView>('today')
+  const [tasks, setTasks]             = useState<TaskRecord[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [editing, setEditing]         = useState<TaskRecord | null>(null)
+  const [showForm, setShowForm]       = useState(false)
+  const [filterOrg, setFilterOrg]     = useState<string>(activeOrganizationId ?? '')
+  const [employees, setEmployees]     = useState<EmployeeOption[]>([])
+  const [parentTask, setParentTask]   = useState<TaskRecord | null>(null)
 
   // Carrega tarefas
   const load = useCallback(async () => {
@@ -92,16 +93,17 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       .map(p => ({ id: p.id, name: p.name }))
   }, [projects, filterOrg, activeOrganizationId])
 
-  // Filtros computados
+  // Filtros de tabs (Hoje/Atrasadas/Todas) — operam sobre pais, mantém subtarefas agrupadas
   const { today, overdue, visible } = useMemo(() => {
     const now          = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const endOfToday   = new Date(startOfToday.getTime() + 86_400_000)
 
-    let filtered = tasks
-    if (filterOrg) filtered = filtered.filter(t => t.org_id === filterOrg)
+    let byOrg = tasks
+    if (filterOrg) byOrg = byOrg.filter(t => t.org_id === filterOrg)
 
-    const open    = filtered.filter(t => t.status !== 'done')
+    const parents = byOrg.filter(t => !t.parent_task_id)
+    const open    = parents.filter(t => t.status !== 'done')
     const today   = open.filter(t => {
       if (!t.due_date) return false
       const d = new Date(t.due_date)
@@ -111,7 +113,11 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       if (!t.due_date) return false
       return new Date(t.due_date) < startOfToday
     })
-    const visible = view === 'today' ? today : view === 'overdue' ? overdue : filtered
+
+    const visibleParents = view === 'today' ? today : view === 'overdue' ? overdue : parents
+    const parentIds = new Set(visibleParents.map(t => t.id))
+    const subtasks  = byOrg.filter(t => t.parent_task_id && parentIds.has(t.parent_task_id))
+    const visible   = [...visibleParents, ...subtasks]
 
     return { today, overdue, visible }
   }, [tasks, filterOrg, view])
@@ -199,20 +205,23 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         employees={employees}
         projects={obras}
         onToggleDone={toggleDone}
-        onEdit={(t) => { setEditing(t); showForm || loadEmployees(t.org_id); setEditing(t); setShowForm(true) }}
+        onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
+        onAddSubtask={(parent) => { loadEmployees(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
         onNavigate={handleNavigate}
       />
 
       {showForm && (
         <TaskForm
-          orgId={orgForNew}
+          orgId={parentTask?.org_id ?? orgForNew}
           orgs={orgsOptions}
           employees={employees}
           projects={obras}
           task={editing}
-          onClose={() => setShowForm(false)}
+          parentTaskId={parentTask?.id ?? null}
+          parentTaskTitle={parentTask?.title ?? null}
+          onClose={() => { setShowForm(false); setParentTask(null) }}
           onOrgChange={(id) => loadEmployees(id)}
-          onSaved={() => { setShowForm(false); load() }}
+          onSaved={() => { setShowForm(false); setParentTask(null); load() }}
         />
       )}
     </div>

@@ -1,12 +1,12 @@
 import React from 'react';
 import {
     X, BarChart3, Calendar, Save,
-    AlertCircle, CheckCircle2, Info,
-    Upload, Image as ImageIcon, Video, Loader2, FileText, Trash2, ExternalLink
+    AlertCircle, Info,
+    Upload, Video, Loader2, FileText, Trash2, ExternalLink, TrendingUp
 } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import {
-    Contract, ContractItem, ContractMeasurement,
+    Contract, ContractItem, ContractAddendum, ContractMeasurement,
     ContractMeasurementItem
 } from '../types';
 import { contractService } from '../services/contractService';
@@ -17,13 +17,14 @@ interface ContractMeasurementModalProps {
     onClose: () => void;
     contract: Contract;
     items: ContractItem[];
+    addendums?: ContractAddendum[];
     onSuccess: () => void;
     initialData?: ContractMeasurement;
     initialItems?: ContractMeasurementItem[];
 }
 
 const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
-    isOpen, onClose, contract, items, onSuccess, initialData, initialItems
+    isOpen, onClose, contract, items, addendums = [], onSuccess, initialData, initialItems
 }) => {
     const [loading, setLoading] = React.useState(false);
     const [periodStart, setPeriodStart] = React.useState(initialData?.period_start || '');
@@ -46,6 +47,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
             try {
                 const measurements = await contractService.listMeasurements(contract.id);
                 if (cancelled) return;
+
                 const allItems: ContractMeasurementItem[] = [];
                 for (const m of measurements) {
                     const mItems = await contractService.getMeasurementItems(m.id);
@@ -92,6 +94,14 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
         const qty = quantities[item.id] || 0;
         return sum + (qty * item.unit_price);
     }, 0);
+
+    // Use item-based previous value (qty × unit_price) to stay consistent with the
+    // "Saldo Ant." column in the table, avoiding drift from stored measurement totals.
+    const previousValueByItems = items.reduce((sum, item) => {
+        return sum + (previousItems[item.id] || 0) * item.unit_price;
+    }, 0);
+
+    const saldoAFaturar = contract.current_value - previousValueByItems - totalValue;
 
     const handleFileUpload = async (itemId: string, file: File) => {
         try {
@@ -227,7 +237,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-4 gap-6 mt-12 relative z-10 bg-white/5 p-6 rounded-3xl border border-white/10">
+                    <div className="grid grid-cols-5 gap-6 mt-12 relative z-10 bg-white/5 p-6 rounded-3xl border border-white/10">
                         <div className="space-y-2 text-left">
                             <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                 <Calendar className="w-3 h-3" /> Início Período
@@ -261,7 +271,14 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                 className="w-full bg-transparent text-white font-medium text-sm outline-none border-b border-white/10 focus:border-blue-500 transition-colors p-1"
                             />
                         </div>
-                        <div className="text-right flex flex-col justify-center">
+                        <div className="text-right flex flex-col justify-center border-l border-white/10 pl-6">
+                            <p className="text-[12px] font-medium text-emerald-400 uppercase tracking-widest mb-1">Saldo a Faturar</p>
+                            <p className={`text-2xl font-medium tracking-tighter ${saldoAFaturar < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                R$ {saldoAFaturar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                            <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest">após este período</p>
+                        </div>
+                        <div className="text-right flex flex-col justify-center border-l border-white/10 pl-6">
                             <p className="text-[12px] font-medium text-blue-400 uppercase tracking-widest mb-1">Total do Período</p>
                             <p className="text-3xl font-medium tracking-tighter">R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         </div>
@@ -321,6 +338,39 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                         </div>
                     </div>
                 </div>
+
+                {/* Aditivos Aprovados */}
+                {addendums.length > 0 && (
+                    <div className="mx-8 mb-2 mt-4 bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                        <div className="flex items-center gap-2 px-5 py-3 border-b border-white/10">
+                            <TrendingUp className="w-4 h-4 text-amber-400" />
+                            <p className="text-[12px] font-medium text-amber-400 uppercase tracking-widest">
+                                {addendums.length} Aditivo{addendums.length > 1 ? 's' : ''} Aprovado{addendums.length > 1 ? 's' : ''} — Valor atual inclui estes aditivos
+                            </p>
+                        </div>
+                        <div className="divide-y divide-white/5">
+                            {addendums.map(a => (
+                                <div key={a.id} className="flex items-center justify-between px-5 py-3 text-[12px]">
+                                    <div className="flex items-center gap-3">
+                                        <span className="font-medium text-gray-300">{a.number}</span>
+                                        <span className="text-gray-500">{a.description}</span>
+                                        {a.new_end_date && (
+                                            <span className="text-blue-400 flex items-center gap-1">
+                                                <Calendar className="w-3 h-3" />
+                                                Novo término: {new Date(a.new_end_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {a.value_impact !== 0 && (
+                                        <span className={`font-medium ${a.value_impact > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                            {a.value_impact > 0 ? '+' : ''}R$ {a.value_impact.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Body Table */}
                 <div className="flex-1 overflow-y-auto p-12 bg-white">

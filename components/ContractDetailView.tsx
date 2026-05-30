@@ -805,6 +805,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <span className="text-gray-400 font-medium uppercase tracking-wider">Retenções</span>
                                         <span className="font-medium text-amber-400">R$ {(totalMeasurements * (contract.retention_rate / 100)).toLocaleString('pt-BR')}</span>
                                     </div>
+                                    <div className="flex justify-between items-center text-[12px] pt-3 border-t border-white/10">
+                                        <span className="text-emerald-400 font-medium uppercase tracking-wider">Saldo a Faturar</span>
+                                        <span className="font-medium text-emerald-400">R$ {(contract.current_value - totalMeasurements).toLocaleString('pt-BR')}</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1433,6 +1437,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     }}
                     contract={contract}
                     items={items}
+                    addendums={addendums.filter(a => a.status === 'Aprovado')}
                     onSuccess={loadContractData}
                     initialData={editingMeasurement || undefined}
                     initialItems={editingMeasurementItems}

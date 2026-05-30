@@ -599,7 +599,6 @@ export const contractService = {
         if (fetchError) throw fetchError;
         if (addendum.status !== 'Pendente') throw new Error('Addendum is not pending approval');
 
-        // Start transaction-like update (Supabase RPC would be better here for atomic, but we can do it sequentially)
         const { error: updateAddendumError } = await supabase
             .from('contract_addendums')
             .update({
@@ -611,27 +610,38 @@ export const contractService = {
 
         if (updateAddendumError) throw updateAddendumError;
 
-        // Update contract current value
-        if (addendum.value_impact !== 0) {
+        // Update contract: value and/or end_date — evaluated independently
+        if (addendum.value_impact !== 0 || addendum.new_end_date) {
             const { data: contract, error: contractErr } = await supabase
                 .from('contracts')
-                .select('current_value')
+                .select('*')
                 .eq('id', addendum.contract_id)
                 .single();
 
             if (contractErr) throw contractErr;
 
-            const newValue = (contract.current_value || 0) + (addendum.value_impact || 0);
+            const contractUpdates: Record<string, any> = {};
+            if (addendum.value_impact !== 0) {
+                contractUpdates.current_value = (contract.current_value || 0) + (addendum.value_impact || 0);
+            }
+            if (addendum.new_end_date) {
+                contractUpdates.end_date = addendum.new_end_date;
+            }
 
             const { error: contractUpdateErr } = await supabase
                 .from('contracts')
-                .update({
-                    current_value: newValue,
-                    ...(addendum.new_end_date ? { end_date: addendum.new_end_date } : {})
-                })
+                .update(contractUpdates)
                 .eq('id', addendum.contract_id);
 
             if (contractUpdateErr) throw contractUpdateErr;
+
+            // Re-sync parcelado installments so Despesas/Conciliação reflect the new value
+            if (addendum.value_impact !== 0 && !contract.is_recurring && contract.payment_term_type === 'Parcelado') {
+                await syncParceladoScheduleToFinance({
+                    ...contract,
+                    current_value: contractUpdates.current_value
+                } as Contract);
+            }
         }
     },
 

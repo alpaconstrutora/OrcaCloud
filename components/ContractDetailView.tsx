@@ -426,11 +426,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             const { count } = await contractService.syncContractToFinance(contract);
             if (count === 0) {
                 notify("Nenhuma entrada gerada — verifique valor e datas do contrato.", "error");
+            } else if (contract.is_recurring) {
+                const horizon = contract.end_date ? 'até o fim do contrato' : 'próximos 12 ciclos';
+                notify(`Financeiro atualizado: parcelas geradas a partir do próximo vencimento (${horizon})`, "success");
             } else {
-                const label = contract.is_recurring
-                    ? `${count} parcela${count > 1 ? 's' : ''} gerada${count > 1 ? 's' : ''} (mês atual + próximos ${count - 1})`
-                    : `${count} lançamento${count > 1 ? 's' : ''} criado${count > 1 ? 's' : ''}`;
-                notify(`Financeiro atualizado: ${label}`, "success");
+                notify(`Financeiro atualizado: ${count} lançamento${count > 1 ? 's' : ''} criado${count > 1 ? 's' : ''}`, "success");
             }
         } catch (e) {
             notify("Erro ao lançar no financeiro. Tente novamente.", "error");

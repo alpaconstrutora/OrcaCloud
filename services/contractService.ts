@@ -186,31 +186,49 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
 }
 
 // Generate monthly financial entries for a recurring contract.
-// - With end_date: generates from current month until end_date.
-// - Without end_date: generates a rolling 12-month window from current month.
-// Never generates entries before today to avoid historical "Pending" flood.
+// - With end_date: generates from next due date until end_date.
+// - Without end_date: generates a rolling 12-month window from next due date.
+// "Next due date" = first occurrence of due_day that is strictly after today,
+// but never before the contract's own start_date.
 async function syncRecurringToFinance(contract: Contract) {
     if (!contract.is_recurring || !contract.original_value) return;
     try {
         const supplierName = await resolveSupplierName(contract.supplier_id, 'Contrato Recorrente');
 
         const today = new Date();
-        const firstOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1, 12, 0, 0);
+        today.setHours(12, 0, 0, 0);
         const contractStart = new Date(contract.start_date + 'T12:00:00');
 
-        // End: use contract end_date if set, otherwise roll 12 months ahead
+        // Find the next due date: start from the contract start month, advance until > today
+        let cur = new Date(contractStart);
+        const dueDay = contract.due_day ?? cur.getDate();
+        // Set to due_day in the contract's start month
+        cur.setDate(Math.min(dueDay, new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate()));
+
+        // Advance cycle-by-cycle until we reach a date strictly after today
+        while (cur <= today) {
+            if (contract.billing_cycle === 'Anual') cur.setFullYear(cur.getFullYear() + 1);
+            else if (contract.billing_cycle === 'Semestral') cur.setMonth(cur.getMonth() + 6);
+            else if (contract.billing_cycle === 'Bimestral') cur.setMonth(cur.getMonth() + 2);
+            else cur.setMonth(cur.getMonth() + 1);
+            // Re-align due_day after month change
+            cur.setDate(Math.min(dueDay, new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate()));
+        }
+
+        // End: use contract end_date if set, otherwise roll 12 cycles from the first due date
         const endDate = contract.end_date
             ? new Date(contract.end_date + 'T12:00:00')
-            : new Date(today.getFullYear(), today.getMonth() + 12, today.getDate(), 12, 0, 0);
-
-        // Start from the later of "first of current month" and "contract start"
-        let cur = new Date(Math.max(firstOfCurrentMonth.getTime(), contractStart.getTime()));
-
-        // Align to due_day within that month
-        if (contract.due_day) {
-            const maxDay = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
-            cur.setDate(Math.min(contract.due_day, maxDay));
-        }
+            : (() => {
+                const e = new Date(cur);
+                for (let i = 0; i < 11; i++) {
+                    if (contract.billing_cycle === 'Anual') e.setFullYear(e.getFullYear() + 1);
+                    else if (contract.billing_cycle === 'Semestral') e.setMonth(e.getMonth() + 6);
+                    else if (contract.billing_cycle === 'Bimestral') e.setMonth(e.getMonth() + 2);
+                    else e.setMonth(e.getMonth() + 1);
+                    e.setDate(Math.min(dueDay, new Date(e.getFullYear(), e.getMonth() + 1, 0).getDate()));
+                }
+                return e;
+            })();
 
         if (cur > endDate) return; // contract already ended
 
@@ -464,22 +482,9 @@ export const contractService = {
             await syncAVistaToFinance(contract);
             return { count: 1 };
         } else {
+            // syncRecurringToFinance returns void; count = 12 cycles (or less until end_date)
             await syncRecurringToFinance(contract);
-            // Count how many months were generated
-            const today = new Date();
-            const end = contract.end_date
-                ? new Date(contract.end_date + 'T12:00:00')
-                : new Date(today.getFullYear(), today.getMonth() + 12, today.getDate());
-            let cur = new Date(today.getFullYear(), today.getMonth(), 1);
-            let count = 0;
-            while (cur <= end) {
-                count++;
-                if (contract.billing_cycle === 'Anual') cur.setFullYear(cur.getFullYear() + 1);
-                else if (contract.billing_cycle === 'Semestral') cur.setMonth(cur.getMonth() + 6);
-                else if (contract.billing_cycle === 'Bimestral') cur.setMonth(cur.getMonth() + 2);
-                else cur.setMonth(cur.getMonth() + 1);
-            }
-            return { count };
+            return { count: contract.end_date ? -1 : 12 }; // -1 = unknown exact count with end_date
         }
     },
 

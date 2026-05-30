@@ -204,12 +204,12 @@ function advanceCycleAligned(date: Date, cycle: string | undefined, dueDay?: num
 // Generate financial entries for a recurring contract.
 //
 // Rules:
-//   • due_day   = fixed day of month for ALL payments (e.g. always the 10th)
+//   • due_day    = fixed day of month for ALL payments (e.g. always the 10th)
 //   • payment_days = minimum offset in days after start_date before first payment
 //   • First payment = first occurrence of due_day >= (start_date + payment_days)
 //   • Subsequent payments = same due_day, advancing by billing_cycle
-//   • Only future payments (> today) are generated; past = history
-//   • Without end_date: generates the next 12 cycles from the first future payment
+//   • ALL payments from start are generated (past ones = PAID, future = PENDING)
+//   • Without end_date: generates from start up to 12 cycles into the future
 async function syncRecurringToFinance(contract: Contract) {
     if (!contract.is_recurring || !contract.original_value) return;
     try {
@@ -218,7 +218,7 @@ async function syncRecurringToFinance(contract: Contract) {
         const today = new Date();
         today.setHours(23, 59, 59, 0);
 
-        const dueDay = contract.due_day; // fixed day of month, e.g. 10
+        const dueDay = contract.due_day;
 
         // Reference date = start_date + payment_days
         const ref = new Date(contract.start_date + 'T12:00:00');
@@ -229,44 +229,38 @@ async function syncRecurringToFinance(contract: Contract) {
         // First payment = first occurrence of due_day >= ref
         let cur: Date;
         if (dueDay) {
-            // Try due_day in the same month as ref
             const maxDaySameMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
             const samMonth = new Date(ref.getFullYear(), ref.getMonth(), Math.min(dueDay, maxDaySameMonth), 12, 0, 0);
-            if (samMonth >= ref) {
-                cur = samMonth;
-            } else {
-                // due_day already passed this month → first payment is next cycle's due_day
-                cur = new Date(samMonth);
-                advanceCycleAligned(cur, contract.billing_cycle, dueDay);
-            }
+            cur = samMonth >= ref ? samMonth : (() => {
+                const d = new Date(samMonth);
+                advanceCycleAligned(d, contract.billing_cycle, dueDay);
+                return d;
+            })();
         } else {
-            // No due_day: first payment = ref itself
             cur = new Date(ref);
         }
 
-        // Walk forward cycle by cycle until we find the first payment strictly after today
-        while (cur <= today) {
-            advanceCycleAligned(cur, contract.billing_cycle, dueDay);
-        }
-
-        // End boundary
+        // End boundary: contract end_date OR (last past payment + 12 future cycles)
         const endDate = contract.end_date
             ? new Date(contract.end_date + 'T12:00:00')
             : (() => {
+                // find the first future payment, then add 11 more cycles
                 const e = new Date(cur);
+                while (e <= today) advanceCycleAligned(e, contract.billing_cycle, dueDay);
                 for (let i = 0; i < 11; i++) advanceCycleAligned(e, contract.billing_cycle, dueDay);
                 return e;
             })();
 
-        if (cur > endDate) return; // contract already ended
+        if (cur > endDate) return;
 
         const transactions: Array<{
             id: string; date: string; type: 'EXPENSE'; category: string;
-            description: string; value: number; status: 'PENDING'; supplier: string; notes: string;
+            description: string; value: number; status: 'PAID' | 'PENDING'; supplier: string; notes: string;
         }> = [];
         let n = 1;
 
         while (cur <= endDate) {
+            const isPast = cur <= today;
             transactions.push({
                 id: crypto.randomUUID(),
                 date: cur.toISOString().split('T')[0] + 'T12:00:00.000Z',
@@ -274,7 +268,7 @@ async function syncRecurringToFinance(contract: Contract) {
                 category: 'Mão de Obra / Serviço',
                 description: `Fatura Contrato ${contract.number || ''} (${n}) - ${cur.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`,
                 value: contract.original_value,
-                status: 'PENDING',
+                status: isPast ? 'PAID' : 'PENDING',
                 supplier: supplierName,
                 notes: `[contract:${contract.id}] Gerado automaticamente do contrato ${contract.number || contract.id}`
             });

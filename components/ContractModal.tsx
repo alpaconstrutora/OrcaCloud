@@ -281,6 +281,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             if (!payload.supplier_id) payload.supplier_id = undefined;
             if (!payload.budget_id) payload.budget_id = undefined;
             if (!payload.project_id) payload.project_id = undefined;
+            // Sanitize DATE fields: empty string would fail Postgres date cast
+            if (!payload.end_date) payload.end_date = undefined;
+            if (!payload.start_date) payload.start_date = undefined;
             await onSubmit(payload);
         } catch (err: unknown) {
             const msg = err instanceof Error

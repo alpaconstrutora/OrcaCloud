@@ -136,6 +136,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
     React.useEffect(() => {
         if (initialData) {
+            if (initialData.number) numberInputRef.current = initialData.number;
             setFormData(prev => ({ ...prev, ...initialData }));
             if (initialData.payment_schedule?.length) {
                 setInstallmentSchedule(initialData.payment_schedule);
@@ -240,7 +241,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         e.preventDefault();
         setError(null);
 
-        const currentNumber = numberInputRef.current ?? formData.number ?? '';
+        const currentNumber = (numberInputRef.current || formData.number || '');
         if (!currentNumber || !/^\d{3}$/.test(currentNumber)) {
             setNumberError('Formato inválido. Use 3 dígitos (ex: 001, 042, 123).');
             return;

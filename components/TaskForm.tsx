@@ -67,17 +67,26 @@ const TaskForm: React.FC<Props> = ({ orgId, task, onClose, onSaved }) => {
       } else {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error('Usuário não autenticado')
-        const { error: e } = await supabase.from('tasks').insert({
+        if (!orgId) throw new Error('Nenhuma organização ativa — selecione uma no topo do app')
+        const insertPayload = {
           ...payload,
           org_id: orgId,
           user_id: user.id,
           source_module: 'manual',
-        })
-        if (e) throw e
+        }
+        console.log('[tasks] insert payload:', insertPayload)
+        const { data: inserted, error: e } = await supabase
+          .from('tasks')
+          .insert(insertPayload)
+          .select()
+          .single()
+        if (e) { console.error('[tasks] insert error:', e); throw e }
+        if (!inserted) throw new Error('Tarefa não foi salva — verifique se sua organização está selecionada no topo do app')
       }
       onSaved()
     } catch (e) {
-      setError((e as Error).message)
+      const err = e as { message?: string; details?: string; hint?: string }
+      setError(err.message || err.details || 'Erro desconhecido')
     } finally {
       setSaving(false)
     }

@@ -24,15 +24,19 @@ CREATE TABLE IF NOT EXISTS public.sst_regulatory_docs (
 
 ALTER TABLE public.sst_regulatory_docs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "sst_reg_docs_select" ON public.sst_regulatory_docs;
 CREATE POLICY "sst_reg_docs_select" ON public.sst_regulatory_docs
     FOR SELECT USING (is_org_member(org_id));
 
+DROP POLICY IF EXISTS "sst_reg_docs_insert" ON public.sst_regulatory_docs;
 CREATE POLICY "sst_reg_docs_insert" ON public.sst_regulatory_docs
     FOR INSERT WITH CHECK (is_org_member(org_id));
 
+DROP POLICY IF EXISTS "sst_reg_docs_update" ON public.sst_regulatory_docs;
 CREATE POLICY "sst_reg_docs_update" ON public.sst_regulatory_docs
     FOR UPDATE USING (is_org_member(org_id));
 
+DROP POLICY IF EXISTS "sst_reg_docs_delete" ON public.sst_regulatory_docs;
 CREATE POLICY "sst_reg_docs_delete" ON public.sst_regulatory_docs
     FOR DELETE USING (is_org_member(org_id));
 
@@ -45,6 +49,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS sst_reg_docs_updated_at ON public.sst_regulatory_docs;
 CREATE TRIGGER sst_reg_docs_updated_at
     BEFORE UPDATE ON public.sst_regulatory_docs
     FOR EACH ROW EXECUTE FUNCTION public.set_sst_reg_docs_updated_at();

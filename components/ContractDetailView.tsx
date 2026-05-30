@@ -418,13 +418,20 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const handleSyncFinance = async () => {
         if (!contract) return;
         if (!contract.original_value || contract.original_value <= 0) {
-            notify("Contrato sem valor definido — defina o valor antes de lançar no financeiro.", "error");
+            notify("Contrato sem valor definido — edite o contrato e informe o valor antes de lançar.", "error");
             return;
         }
         setSyncingFinance(true);
         try {
-            await contractService.syncContractToFinance(contract);
-            notify("Contrato lançado no financeiro com sucesso!", "success");
+            const { count } = await contractService.syncContractToFinance(contract);
+            if (count === 0) {
+                notify("Nenhuma entrada gerada — verifique valor e datas do contrato.", "error");
+            } else {
+                const label = contract.is_recurring
+                    ? `${count} parcela${count > 1 ? 's' : ''} gerada${count > 1 ? 's' : ''} (mês atual + próximos ${count - 1})`
+                    : `${count} lançamento${count > 1 ? 's' : ''} criado${count > 1 ? 's' : ''}`;
+                notify(`Financeiro atualizado: ${label}`, "success");
+            }
         } catch (e) {
             notify("Erro ao lançar no financeiro. Tente novamente.", "error");
         } finally {

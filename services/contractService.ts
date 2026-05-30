@@ -185,19 +185,23 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
     }
 }
 
-// Generate monthly financial entries for a recurring contract with end_date.
-// Starts from the CURRENT month (not from the historical start_date) to avoid
-// flooding the financial module with hundreds of past "Pending" entries.
+// Generate monthly financial entries for a recurring contract.
+// - With end_date: generates from current month until end_date.
+// - Without end_date: generates a rolling 12-month window from current month.
+// Never generates entries before today to avoid historical "Pending" flood.
 async function syncRecurringToFinance(contract: Contract) {
-    if (!contract.is_recurring || !contract.end_date || !contract.original_value) return;
+    if (!contract.is_recurring || !contract.original_value) return;
     try {
         const supplierName = await resolveSupplierName(contract.supplier_id, 'Contrato Recorrente');
 
         const today = new Date();
-        // First day of current month — never generate entries before today
         const firstOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1, 12, 0, 0);
         const contractStart = new Date(contract.start_date + 'T12:00:00');
-        const endDate = new Date(contract.end_date + 'T12:00:00');
+
+        // End: use contract end_date if set, otherwise roll 12 months ahead
+        const endDate = contract.end_date
+            ? new Date(contract.end_date + 'T12:00:00')
+            : new Date(today.getFullYear(), today.getMonth() + 12, today.getDate(), 12, 0, 0);
 
         // Start from the later of "first of current month" and "contract start"
         let cur = new Date(Math.max(firstOfCurrentMonth.getTime(), contractStart.getTime()));
@@ -450,14 +454,32 @@ export const contractService = {
     },
 
     // Re-lança o contrato no financeiro (uso retroativo ou manual).
-    // Para recorrentes: gera apenas a partir do mês atual (não retroage a 2014).
-    syncContractToFinance: async (contract: Contract): Promise<void> => {
+    // Para recorrentes sem end_date: gera os próximos 12 meses.
+    // Para recorrentes com end_date: gera do mês atual até o fim.
+    syncContractToFinance: async (contract: Contract): Promise<{ count: number }> => {
         if (!contract.is_recurring && contract.payment_term_type === 'Parcelado') {
             await syncParceladoScheduleToFinance(contract);
+            return { count: contract.payment_schedule?.length ?? 0 };
         } else if (!contract.is_recurring) {
             await syncAVistaToFinance(contract);
-        } else if (contract.is_recurring && contract.start_date && contract.end_date) {
+            return { count: 1 };
+        } else {
             await syncRecurringToFinance(contract);
+            // Count how many months were generated
+            const today = new Date();
+            const end = contract.end_date
+                ? new Date(contract.end_date + 'T12:00:00')
+                : new Date(today.getFullYear(), today.getMonth() + 12, today.getDate());
+            let cur = new Date(today.getFullYear(), today.getMonth(), 1);
+            let count = 0;
+            while (cur <= end) {
+                count++;
+                if (contract.billing_cycle === 'Anual') cur.setFullYear(cur.getFullYear() + 1);
+                else if (contract.billing_cycle === 'Semestral') cur.setMonth(cur.getMonth() + 6);
+                else if (contract.billing_cycle === 'Bimestral') cur.setMonth(cur.getMonth() + 2);
+                else cur.setMonth(cur.getMonth() + 1);
+            }
+            return { count };
         }
     },
 

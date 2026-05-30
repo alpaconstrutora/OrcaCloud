@@ -473,7 +473,7 @@ export interface Employee {
     contract_type_extra?: string;
     // CNH
     cnh_numero?: string;
-    cnh_categoria?: string;
+    cnh_categoria?: string | null;
     cnh_validade?: string;
     // Dependentes
     num_dependentes?: number;

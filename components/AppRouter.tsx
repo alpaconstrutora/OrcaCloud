@@ -59,6 +59,9 @@ import TasksModule from './TasksModule';
 import ServicesCommercialModule from './ServicesCommercialModule';
 import NotificationsCenter from './NotificationsCenter';
 import ProjectTypeTemplateEditor from './ProjectTypeTemplateEditor';
+import WarrantyModule from './WarrantyModule';
+import DREReport from './DREReport';
+import CashFlowDashboard from './CashFlowDashboard';
 
 export interface AppRouterProps {
   activeView: string;
@@ -745,6 +748,32 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           projects={typedProjects}
           activeSection={activeView}
           onChangeView={setActiveView}
+        />
+      );
+
+    // ── Pós-Obra & Garantia ────────────────────────────────────────────────────
+    case 'pos-obra':
+      return (
+        <WarrantyModule
+          activeOrganizationId={activeOrganizationId ?? undefined}
+          projects={typedProjects
+            .filter(p => p.settings?.classification === 'OBRA')
+            .map(p => ({ id: p.id, name: p.name }))}
+        />
+      );
+
+    // ── Financeiro — DRE & Fluxo de Caixa ─────────────────────────────────────
+    case 'financial-dre':
+      return (
+        <DREReport
+          organizationId={activeOrganizationId || organizations[0]?.id || ''}
+        />
+      );
+
+    case 'financial-cashflow':
+      return (
+        <CashFlowDashboard
+          organizationId={activeOrganizationId || organizations[0]?.id || ''}
         />
       );
 

@@ -398,6 +398,7 @@ const Layout: React.FC<LayoutProps> = ({
                   <NavItem id="eng-orcamentos" icon={FolderOpen} label="Orçamentos" />
                   <NavItem id="operacional" icon={ClipboardList} label="Controle Operacional" />
                   <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" />
+                  <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" />
                   <NavItem id="explorer" icon={BookOpen} label="Composições" />
                 </>
               )}
@@ -485,10 +486,12 @@ const Layout: React.FC<LayoutProps> = ({
                       onChangeView('project-financial');
                     }}
                   />
-                  <NavItem id="financial-boletos" icon={FileText} label="Boletos" />
-                  <NavItem id="contas-a-pagar" icon={TrendingDown} label="Contas a Pagar" />
-                  <NavItem id="bank-reconciliation" icon={Receipt} label="Conciliação Bancária" />
-                  <NavItem id="financial-categories" icon={Layers} label="Categorias" />
+                  <NavItem id="financial-dre"        icon={BarChart3}    label="DRE" />
+                  <NavItem id="financial-cashflow"   icon={TrendingUp}   label="Fluxo de Caixa" />
+                  <NavItem id="financial-boletos"    icon={FileText}     label="Boletos" />
+                  <NavItem id="contas-a-pagar"       icon={TrendingDown} label="Contas a Pagar" />
+                  <NavItem id="bank-reconciliation"  icon={Receipt}      label="Conciliação Bancária" />
+                  <NavItem id="financial-categories" icon={Layers}       label="Categorias" />
                 </>
               )}
               {(mod.fiscal || isDev) && (

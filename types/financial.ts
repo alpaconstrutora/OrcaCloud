@@ -218,3 +218,94 @@ export interface ReconciliationAuditLog {
     integrity_hash?: string;
     created_at?: string;
 }
+
+// ────────────────────────────────────────────────────────────
+// DRE — Demonstrativo de Resultado do Exercício
+// ────────────────────────────────────────────────────────────
+
+export type DREGroup =
+    | 'RECEITA_BRUTA'
+    | 'DEDUCOES'
+    | 'CUSTO_OBRA'
+    | 'CUSTO_SERVICO'
+    | 'DESPESA_ADM'
+    | 'DESPESA_COMERCIAL'
+    | 'FINANCEIRO'
+    | 'IMPOSTOS'
+    | 'NAO_OPERACIONAL'
+    | 'SEM_CLASSIFICACAO';
+
+export type FinancialNature = 'REVENUE' | 'COST' | 'EXPENSE';
+
+export interface FinancialCategory {
+    id: string;
+    organization_id?: string;
+    name: string;
+    parent_id?: string;
+    dre_group?: DREGroup;
+    nature?: FinancialNature;
+    sort_order?: number;
+    created_at?: string;
+}
+
+export interface DRELine {
+    dre_group: DREGroup;
+    nature: FinancialNature;
+    sort_order: number;
+    category_name: string;
+    total_credit: number;
+    total_debit: number;
+    net: number;             // positivo = favorável
+    pending_credit: number;
+    pending_debit: number;
+}
+
+export interface DRESummaryLine {
+    linha: string;
+    valor_realizado: number;
+    valor_previsto: number;
+}
+
+export interface DRESummary {
+    period_from: string;
+    period_to: string;
+    lines: DRESummaryLine[];
+    detail: DRELine[];
+    receita_bruta: number;
+    receita_liquida: number;
+    lucro_bruto: number;
+    ebitda: number;
+    resultado_liquido: number;
+    margem_bruta_pct: number | null;
+    margem_ebitda_pct: number | null;
+    margem_liquida_pct: number | null;
+}
+
+// ────────────────────────────────────────────────────────────
+// Fluxo de Caixa
+// ────────────────────────────────────────────────────────────
+
+export type CashFlowGranularity = 'day' | 'week' | 'month';
+
+export interface CashFlowPoint {
+    period_start: string;
+    period_label: string;
+    credit_real: number;
+    debit_real: number;
+    saldo_real: number;
+    credit_prev: number;
+    debit_prev: number;
+    saldo_prev: number;
+    saldo_acumulado: number;
+}
+
+export interface CashFlowSummary {
+    period_from: string;
+    period_to: string;
+    granularity: CashFlowGranularity;
+    points: CashFlowPoint[];
+    total_entradas: number;
+    total_saidas: number;
+    saldo_final: number;
+    saldo_previsto_final: number;
+}

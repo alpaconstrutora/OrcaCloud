@@ -2,29 +2,29 @@ import React from 'react';
 import { supabase } from '../lib/supabase';
 import { MOCK_SINAPI_DB } from '../constants';
 import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw } from 'lucide-react';
-import { zApiService, ZApiConfig } from '../services/zApiService';
+import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 
 const Settings: React.FC = () => {
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [message, setMessage] = React.useState('');
 
-    // Z-API state
-    const [zapiForm, setZapiForm] = React.useState<ZApiConfig>(() => zApiService.getConfig());
+    // WhatsApp Business (Cloud API oficial)
+    const [waForm, setWaForm] = React.useState<WhatsAppConfig>(() => whatsappService.getConfig());
     const [showToken, setShowToken] = React.useState(false);
-    const [zapiSaved, setZapiSaved] = React.useState(false);
-    const isZapiActive = zApiService.isConfigured();
+    const [waSaved, setWaSaved] = React.useState(false);
+    const isWaActive = whatsappService.isConfigured();
 
-    const handleZapiSave = () => {
-        zApiService.saveConfig(zapiForm);
-        setZapiSaved(true);
-        setTimeout(() => setZapiSaved(false), 3000);
+    const handleWaSave = () => {
+        whatsappService.saveConfig(waForm);
+        setWaSaved(true);
+        setTimeout(() => setWaSaved(false), 3000);
     };
 
-    const handleZapiClear = () => {
-        if (!confirm('Remover as credenciais Z-API salvas?')) return;
-        zApiService.clearConfig();
-        setZapiForm({ instanceId: '', token: '', baseUrl: 'https://api.z-api.io' });
+    const handleWaClear = () => {
+        if (!confirm('Remover as credenciais WhatsApp salvas?')) return;
+        whatsappService.clearConfig();
+        setWaForm({ phoneNumberId: '', accessToken: '' });
     };
 
     // App settings state
@@ -247,35 +247,37 @@ const Settings: React.FC = () => {
                     </div>
                     <div className="flex-1">
                         <div className="flex items-center gap-3">
-                            <h2 className="text-lg font-semibold text-gray-800">WhatsApp via Z-API</h2>
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${isZapiActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                                {isZapiActive ? 'Configurado' : 'Não configurado'}
+                            <h2 className="text-lg font-semibold text-gray-800">WhatsApp Business (API Oficial)</h2>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${isWaActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                {isWaActive ? 'Configurado' : 'Não configurado'}
                             </span>
                         </div>
                         <p className="text-sm text-gray-500 mt-1">
-                            Envio automático de mensagens aos fornecedores ao marcar pedidos como "Enviado".
+                            Envio automático via <strong>Meta Cloud API</strong> ao marcar pedidos como "Enviado". Configure em{' '}
+                            <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">developers.facebook.com</a>.
                         </p>
                     </div>
                 </div>
 
                 <div className="mt-6 border-t border-gray-100 pt-6 space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Instance ID</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Phone Number ID</label>
                         <input
                             type="text"
-                            value={zapiForm.instanceId}
-                            onChange={e => setZapiForm(f => ({ ...f, instanceId: e.target.value }))}
-                            placeholder="ex: 3ABC123DEF"
+                            value={waForm.phoneNumberId}
+                            onChange={e => setWaForm(f => ({ ...f, phoneNumberId: e.target.value }))}
+                            placeholder="ex: 123456789012345"
                             className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
                         />
+                        <p className="text-xs text-gray-400 mt-1">Encontrado em Meta for Developers → seu app → WhatsApp → API Setup.</p>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Token</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Access Token</label>
                         <div className="relative">
                             <input
                                 type={showToken ? 'text' : 'password'}
-                                value={zapiForm.token}
-                                onChange={e => setZapiForm(f => ({ ...f, token: e.target.value }))}
+                                value={waForm.accessToken}
+                                onChange={e => setWaForm(f => ({ ...f, accessToken: e.target.value }))}
                                 placeholder="••••••••••••••••"
                                 className="w-full px-4 py-3 pr-12 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
                             />
@@ -287,33 +289,24 @@ const Settings: React.FC = () => {
                                 {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                         </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Base URL <span className="text-gray-400 font-normal normal-case">(opcional)</span></label>
-                        <input
-                            type="text"
-                            value={zapiForm.baseUrl}
-                            onChange={e => setZapiForm(f => ({ ...f, baseUrl: e.target.value }))}
-                            placeholder="https://api.z-api.io"
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
-                        />
+                        <p className="text-xs text-gray-400 mt-1">Use um token permanente de System User para produção.</p>
                     </div>
 
                     <div className="flex items-center justify-between pt-2">
                         <button
-                            onClick={handleZapiClear}
+                            onClick={handleWaClear}
                             className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-red-600 transition-colors"
                         >
                             <Trash2 className="w-3.5 h-3.5" />
                             Limpar credenciais
                         </button>
                         <button
-                            onClick={handleZapiSave}
-                            disabled={!zapiForm.instanceId || !zapiForm.token}
+                            onClick={handleWaSave}
+                            disabled={!waForm.phoneNumberId || !waForm.accessToken}
                             className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-black hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                         >
-                            {zapiSaved ? <CheckCircle className="w-4 h-4" /> : <MessageCircle className="w-4 h-4" />}
-                            {zapiSaved ? 'Salvo!' : 'Salvar'}
+                            {waSaved ? <CheckCircle className="w-4 h-4" /> : <MessageCircle className="w-4 h-4" />}
+                            {waSaved ? 'Salvo!' : 'Salvar'}
                         </button>
                     </div>
                 </div>

@@ -3,7 +3,7 @@ import { Package, Truck, Printer, Pencil, ArrowLeft, Building2, CreditCard, Chev
 import { PurchaseOrder, Invoice, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
 import { receiptService, PurchaseReceipt } from '../services/receiptService';
-import { zApiService } from '../services/zApiService';
+import { whatsappService } from '../services/whatsappService';
 import { discrepancyService, PurchaseDiscrepancy, DiscrepancyStatus } from '../services/discrepancyService';
 import { notificationLogService, NotificationLogEntry } from '../services/notificationLogService';
 import { supplierService } from '../services/supplierService';
@@ -303,14 +303,14 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const handleWhatsAppShare = async () => {
         if (!order) return;
 
-        // Se Z-API configurado e fornecedor tem telefone: enviar programaticamente
-        if (zApiService.isConfigured() && supplierEmail) {
+        // WhatsApp Cloud API (oficial) — se configurado e fornecedor tem telefone
+        if (whatsappService.isConfigured() && supplierEmail) {
             try {
                 setIsSendingWhatsApp(true);
                 const supplier = await supplierService.getById(order.supplierId);
                 if (supplier?.phone) {
                     const total = order.items.reduce((sum, item) => sum + (item.total || 0), 0);
-                    const message = zApiService.buildOrderSentMessage({
+                    const message = whatsappService.buildOrderSentMessage({
                         supplierName: supplier.name,
                         orderNumber:  order.number || order.id,
                         projectName,
@@ -318,9 +318,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         total,
                         deliveryDate: order.deliveryDate,
                     });
-                    await zApiService.sendText(supplier.phone, message, order.id);
-                    await loadOrderData(); // atualiza notification log
-                    notify('WhatsApp enviado com sucesso via Z-API!');
+                    await whatsappService.sendText(supplier.phone, message, order.id);
+                    await loadOrderData();
+                    notify('WhatsApp enviado com sucesso!');
                     return;
                 }
             } catch (err: unknown) {
@@ -605,7 +605,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         onClick={handleWhatsAppShare}
                         disabled={isSendingWhatsApp}
                         className="p-3 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 rounded-2xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                        title={zApiService.isConfigured() ? 'Enviar WhatsApp via Z-API' : 'Compartilhar via WhatsApp'}
+                        title={whatsappService.isConfigured() ? 'Enviar WhatsApp (API Oficial)' : 'Compartilhar via WhatsApp'}
                     >
                         {isSendingWhatsApp
                             ? <Loader2 className="w-5 h-5 animate-spin" />

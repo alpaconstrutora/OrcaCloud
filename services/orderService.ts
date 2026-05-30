@@ -9,7 +9,7 @@ import { projectService } from './projectService';
 import { receiptService, CreateReceiptItemInput } from './receiptService';
 import { discrepancyService } from './discrepancyService';
 import { notificationLogService } from './notificationLogService';
-import { zApiService } from './zApiService';
+import { whatsappService } from './whatsappService';
 import { appSettingsService } from './appSettingsService';
 
 type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; chart_of_accounts?: string; notes?: string; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
@@ -340,8 +340,8 @@ export const orderService = {
                 }
             }
 
-            // 4. WhatsApp via Z-API if status Enviado and supplier has phone
-            if (updates.status === 'Enviado' && zApiService.isConfigured()) {
+            // 4. WhatsApp automático quando status muda para Enviado
+            if (updates.status === 'Enviado' && whatsappService.isConfigured()) {
                 try {
                     const supplierForWa = data.supplier_id
                         ? await supplierService.getById(data.supplier_id) : undefined;
@@ -351,7 +351,7 @@ export const orderService = {
                         const orderTotal = (data.items as PurchaseOrderItem[] || []).reduce(
                             (s: number, i: PurchaseOrderItem) => s + (i.total || 0), 0
                         );
-                        const message = zApiService.buildOrderSentMessage({
+                        const message = whatsappService.buildOrderSentMessage({
                             supplierName: supplierForWa.name,
                             orderNumber:  data.number || id,
                             projectName:  projectForWa?.name || 'Obra',
@@ -359,11 +359,11 @@ export const orderService = {
                             total:        orderTotal,
                             deliveryDate: data.delivery_date,
                         });
-                        await zApiService.sendText(supplierForWa.phone, message, data.id);
+                        await whatsappService.sendText(supplierForWa.phone, message, data.id);
                     }
                 } catch (waError: unknown) {
-                    console.error('[ZAPI] Auto WhatsApp send failed:', waError);
-                    // error already logged inside zApiService.sendText
+                    console.error('[WhatsApp] Auto-send failed:', waError);
+                    // erro já registrado em notificationLogService dentro de whatsappService.sendText
                 }
             }
         }

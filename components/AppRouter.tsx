@@ -55,6 +55,7 @@ import FinancialCategoriesManager from './FinancialCategoriesManager';
 import BankReconciliation from './BankReconciliation';
 import { FiscalModule } from './fiscal/FiscalModule';
 import OperacionalModule from './OperacionalModule';
+import StructuralModule from './StructuralModule';
 import TasksModule from './TasksModule';
 import ServicesCommercialModule from './ServicesCommercialModule';
 import NotificationsCenter from './NotificationsCenter';
@@ -732,6 +733,17 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <TasksModule
           activeOrganizationId={activeOrganizationId ?? undefined}
           organizations={organizations}
+          projects={typedProjects}
+          onChangeView={setActiveView}
+        />
+      );
+
+    // ── Estrutural / Ferragem Armada ───────────────────────────────────────────
+    case 'estrutural':
+      return (
+        <StructuralModule
+          activeOrganizationId={activeOrganizationId ?? undefined}
+          projectId={projectId}
           projects={typedProjects}
           onChangeView={setActiveView}
         />

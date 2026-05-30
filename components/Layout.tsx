@@ -397,6 +397,7 @@ const Layout: React.FC<LayoutProps> = ({
                   <NavItem id="eng-obras" icon={Building2} label="Obras" />
                   <NavItem id="eng-orcamentos" icon={FolderOpen} label="Orçamentos" />
                   <NavItem id="operacional" icon={ClipboardList} label="Controle Operacional" />
+                  <NavItem id="estrutural" icon={Layers} label="Ferragem & Aço" />
                   <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" />
                   <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" />
                   <NavItem id="explorer" icon={BookOpen} label="Composições" />

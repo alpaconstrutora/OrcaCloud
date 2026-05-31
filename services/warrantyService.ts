@@ -144,6 +144,15 @@ export const warrantyService = {
         return data as WarrantyClaim;
     },
 
+    async delete(id: string, organizationId: string): Promise<void> {
+        const { error } = await supabase
+            .from('warranty_claims')
+            .delete()
+            .eq('id', id)
+            .eq('organization_id', organizationId);
+        if (error) throw error;
+    },
+
     // ── Evidências ────────────────────────────────────────────
     async getEvidence(claimId: string): Promise<WarrantyClaimEvidence[]> {
         const { data, error } = await supabase

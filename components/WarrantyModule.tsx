@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star } from 'lucide-react';
+import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Pencil, Trash2 } from 'lucide-react';
 import { warrantyService } from '../services/warrantyService';
 import { useToast } from '../hooks/useToast';
 import type { WarrantyClaim, ClaimState, WarrantyKPIs, ClaimFilters } from '../types/warranty';
@@ -454,11 +454,63 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     const [triaging, setTriaging] = React.useState(false);
     const [closing, setClosing] = React.useState(false);
     const [npsNota, setNpsNota] = React.useState<number | ''>('');
+    const [editMode, setEditMode] = React.useState(false);
+    const [saving, setSaving] = React.useState(false);
+    const [confirmDelete, setConfirmDelete] = React.useState(false);
+    const [deleting, setDeleting] = React.useState(false);
+    const [editForm, setEditForm] = React.useState({
+        sistema_descricao: claim.sistema_descricao,
+        local_afetado:     claim.local_afetado || '',
+        descricao:         claim.descricao,
+        severity:          claim.severity as string,
+        client_name:       claim.client_name || '',
+        unidade_ref:       claim.unidade_ref || '',
+        project_id:        claim.project_id || '',
+    });
 
     React.useEffect(() => {
         warrantyService.getEvents(claim.id).then(setEvents).catch(console.error);
         if (claim.visits) setVisits(claim.visits);
     }, [claim]);
+
+    const handleSave = async () => {
+        if (saving) return;
+        setSaving(true);
+        try {
+            await warrantyService.update(claim.id, organizationId, {
+                sistema_descricao: editForm.sistema_descricao,
+                local_afetado:     editForm.local_afetado || undefined,
+                descricao:         editForm.descricao,
+                severity:          editForm.severity as WarrantyClaim['severity'],
+                client_name:       editForm.client_name || undefined,
+                unidade_ref:       editForm.unidade_ref || undefined,
+                project_id:        editForm.project_id || undefined,
+            });
+            showToast('Chamado atualizado', 'success');
+            setEditMode(false);
+            onRefresh();
+        } catch (e: unknown) {
+            showToast('Erro ao salvar chamado', 'error');
+            console.error('[EditClaim]', e);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (deleting) return;
+        setDeleting(true);
+        try {
+            await warrantyService.delete(claim.id, organizationId);
+            showToast('Chamado excluído', 'success');
+            onRefresh();
+        } catch (e: unknown) {
+            showToast('Erro ao excluir chamado', 'error');
+            console.error('[DeleteClaim]', e);
+            setDeleting(false);
+            setConfirmDelete(false);
+        }
+    };
 
     const handleTriage = async (inWarranty: boolean) => {
         if (triaging) return;
@@ -540,8 +592,47 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                         <h2 className="text-base font-black text-gray-900 mt-1 truncate">{claim.sistema_descricao}</h2>
                         <p className="text-xs text-gray-400">{claim.client_name || 'Cliente não informado'} · {claim.unidade_ref || '—'}</p>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700 flex-shrink-0 transition-colors">✕</button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                            onClick={() => { setEditMode(e => !e); setTab('info'); setConfirmDelete(false); }}
+                            title="Editar chamado"
+                            className={`p-1.5 rounded-lg transition-colors ${editMode ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                        >
+                            <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => { setConfirmDelete(true); setEditMode(false); }}
+                            title="Excluir chamado"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors ml-1">✕</button>
+                    </div>
                 </div>
+
+                {/* Confirmação de exclusão */}
+                {confirmDelete && (
+                    <div className="mx-6 mt-3 border border-red-200 bg-red-50 rounded-xl p-4 flex flex-col gap-3">
+                        <p className="text-sm font-semibold text-red-700">Excluir este chamado permanentemente?</p>
+                        <p className="text-xs text-red-500">Esta ação não pode ser desfeita. Todo o histórico e evidências serão removidos.</p>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={handleDelete}
+                                disabled={deleting}
+                                className="flex-1 py-2 bg-red-600 text-white rounded-xl text-xs font-black hover:bg-red-700 transition-all disabled:opacity-60"
+                            >
+                                {deleting ? 'Excluindo...' : 'Sim, excluir'}
+                            </button>
+                            <button
+                                onClick={() => setConfirmDelete(false)}
+                                className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Tabs */}
                 <div className="flex gap-1 px-6 pt-3 border-b border-gray-100">
@@ -559,7 +650,99 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                    {tab === 'info' && (
+                    {tab === 'info' && editMode && (
+                        <div className="space-y-3">
+                            <p className="text-xs font-black text-blue-700 uppercase tracking-wider">Editando chamado</p>
+                            {projects.length > 0 && (
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Obra</label>
+                                    <select
+                                        value={editForm.project_id}
+                                        onChange={e => setEditForm(f => ({ ...f, project_id: e.target.value }))}
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                    >
+                                        <option value="">Sem obra vinculada</option>
+                                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                </div>
+                            )}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Sistema afetado *</label>
+                                <input
+                                    value={editForm.sistema_descricao}
+                                    onChange={e => setEditForm(f => ({ ...f, sistema_descricao: e.target.value }))}
+                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                    required
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Severidade</label>
+                                    <select
+                                        value={editForm.severity}
+                                        onChange={e => setEditForm(f => ({ ...f, severity: e.target.value }))}
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                    >
+                                        <option value="baixa">Baixa</option>
+                                        <option value="media">Média</option>
+                                        <option value="alta">Alta</option>
+                                        <option value="critica">Crítica</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Local / Cômodo</label>
+                                    <input
+                                        value={editForm.local_afetado}
+                                        onChange={e => setEditForm(f => ({ ...f, local_afetado: e.target.value }))}
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Nome do cliente</label>
+                                    <input
+                                        value={editForm.client_name}
+                                        onChange={e => setEditForm(f => ({ ...f, client_name: e.target.value }))}
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Unidade / Apt</label>
+                                    <input
+                                        value={editForm.unidade_ref}
+                                        onChange={e => setEditForm(f => ({ ...f, unidade_ref: e.target.value }))}
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Descrição do problema *</label>
+                                <textarea
+                                    value={editForm.descricao}
+                                    onChange={e => setEditForm(f => ({ ...f, descricao: e.target.value }))}
+                                    rows={4}
+                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none"
+                                    required
+                                />
+                            </div>
+                            <div className="flex gap-2 pt-1">
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving || !editForm.sistema_descricao || !editForm.descricao}
+                                    className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all disabled:opacity-60"
+                                >
+                                    {saving ? 'Salvando...' : 'Salvar alterações'}
+                                </button>
+                                <button
+                                    onClick={() => setEditMode(false)}
+                                    className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {tab === 'info' && !editMode && (
                         <>
                             <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
                                 {obraName && (

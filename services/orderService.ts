@@ -351,19 +351,21 @@ export const orderService = {
                         const orderTotal = (data.items as PurchaseOrderItem[] || []).reduce(
                             (s: number, i: PurchaseOrderItem) => s + (i.total || 0), 0
                         );
-                        const message = whatsappService.buildOrderSentMessage({
+                        const shareToken = await whatsappService.generateShareToken(data.id);
+                        await whatsappService.sendOrderTemplate({
+                            phone:        supplierForWa.phone,
+                            orderId:      data.id,
                             supplierName: supplierForWa.name,
                             orderNumber:  data.number || id,
                             projectName:  projectForWa?.name || 'Obra',
                             itemCount:    (data.items || []).length,
                             total:        orderTotal,
                             deliveryDate: data.delivery_date,
+                            shareToken,
                         });
-                        await whatsappService.sendText(supplierForWa.phone, message, data.id);
                     }
                 } catch (waError: unknown) {
                     console.error('[WhatsApp] Auto-send failed:', waError);
-                    // erro já registrado em notificationLogService dentro de whatsappService.sendText
                 }
             }
         }

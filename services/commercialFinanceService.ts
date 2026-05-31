@@ -39,7 +39,9 @@ export const commercialFinanceService = {
         const globalStates: PaymentInstallment[] = [];
         if (!isGlobalSync) {
             console.log(`[COMMERCIAL-FINANCE] Omniscient Purge for Deal #${deal.id.substring(0,8)}...`);
-            const { data: allProj } = await supabase.from('projects').select('settings').eq('name', 'Gestão Comercial');
+            const { data: allProj } = await supabase.from('projects').select('settings')
+                .eq('name', 'Gestão Comercial')
+                .filter('settings->>organizationId', 'eq', orgToUse);
             allProj?.forEach(p => {
                 const insts: PaymentInstallment[] | undefined = (p.settings as ProjectSettings)?.financialInfo?.installments;
                 if (insts) {
@@ -466,15 +468,14 @@ export const commercialFinanceService = {
      * Remove todas as parcelas vinculadas a um negócio.
      * Bloqueia a remoção se houver parcelas já pagas (PAID).
      */
-    async deleteDealInstallments(dealId: string, organizationId?: string) {
+    async deleteDealInstallments(dealId: string, organizationId: string | undefined) {
+        if (!organizationId) throw new Error('[COMMERCIAL-FINANCE] organizationId obrigatório — acesso cross-tenant não permitido');
         console.log(`[COMMERCIAL-FINANCE] Cleanup for Deal ${dealId} (Org: ${organizationId})`);
 
-        // Filtra por organizationId quando disponível — evita varredura cross-tenant.
-        let query = supabase.from('projects').select('id, name, settings');
-        if (organizationId) {
-            query = query.filter('settings->>organizationId', 'eq', organizationId);
-        }
-        const { data: allProjects, error } = await query;
+        const { data: allProjects, error } = await supabase
+            .from('projects')
+            .select('id, name, settings')
+            .filter('settings->>organizationId', 'eq', organizationId);
         if (error || !allProjects) {
             console.error(`[COMMERCIAL-FINANCE] Failed to load ALL projects for global cleanup:`, error);
             return;
@@ -637,17 +638,16 @@ export const commercialFinanceService = {
      * Se todas as parcelas estiverem PAID, o status do Deal será COMPLETED.
      * Se houver qualquer parcela PENDING/OVERDUE, o status volta para PENDING.
      */
-    async reconcileDealStatusWithFinance(dealId: string, organizationId?: string) {
+    async reconcileDealStatusWithFinance(dealId: string, organizationId: string | undefined) {
         if (!dealId) return;
+        if (!organizationId) throw new Error('[COMMERCIAL-RECONCILE] organizationId obrigatório — acesso cross-tenant não permitido');
 
-        console.log(`[COMMERCIAL-RECONCILE] Checking financial health for Deal ${dealId} (Org: ${organizationId ?? 'all'})...`);
+        console.log(`[COMMERCIAL-RECONCILE] Checking financial health for Deal ${dealId} (Org: ${organizationId})...`);
 
-        // Filtra por org quando disponível — evita varredura cross-tenant.
-        let query = supabase.from('projects').select('id, name, settings');
-        if (organizationId) {
-            query = query.filter('settings->>organizationId', 'eq', organizationId);
-        }
-        const { data: allProjects, error: fetchProjError } = await query;
+        const { data: allProjects, error: fetchProjError } = await supabase
+            .from('projects')
+            .select('id, name, settings')
+            .filter('settings->>organizationId', 'eq', organizationId);
         if (fetchProjError || !allProjects) {
             console.error('[COMMERCIAL-RECONCILE] Error fetching ALL projects:', fetchProjError);
             return;

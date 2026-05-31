@@ -162,36 +162,60 @@ export const usePersistenceSync = ({
     setViewingImovibStudyId
   ]);
 
-  // Auto-save: persiste budget + sincroniza snapshot da versão ativa
+  // Auto-save: persiste budget + sincroniza snapshot da versão ativa.
+  // O cleanup dispara um save imediato quando o projeto é trocado para evitar
+  // perda silenciosa dos dados do projeto anterior (o debounce de 2 s seria
+  // cancelado antes de disparar na troca normal de projeto).
   useEffect(() => {
     if (!projectId || !session?.user?.id || isRehydrating || !projectSettings) return;
-    const savedProjectId = projectId; // captura do closure para comparação
-    const timeoutId = setTimeout(async () => {
-      // Cancela silenciosamente se o projeto foi trocado durante o debounce
-      if (currentProjectIdRef.current !== savedProjectId) return;
 
-      // Se há versão ativa, atualiza o snapshot dela com o budget atual
-      let settingsToSave = projectSettings;
-      if (projectSettings.activeVersionId && (projectSettings.versions?.length ?? 0) > 0) {
-        const updatedVersions = projectSettings.versions!.map(v =>
-          v.id === projectSettings.activeVersionId
-            ? { ...v, budget: JSON.parse(JSON.stringify(budget)) }
+    const savedProjectId = projectId;
+    const capturedBudget = budget;
+    const capturedSettings = projectSettings;
+
+    const buildSettingsToSave = (settings: ProjectSettings, bgt: BudgetEntry[]) => {
+      if (settings.activeVersionId && (settings.versions?.length ?? 0) > 0) {
+        const updatedVersions = settings.versions!.map(v =>
+          v.id === settings.activeVersionId
+            ? { ...v, budget: JSON.parse(JSON.stringify(bgt)) }
             : v
         );
-        settingsToSave = { ...projectSettings, versions: updatedVersions };
+        return { ...settings, versions: updatedVersions };
       }
+      return settings;
+    };
+
+    const doSave = async (id: string, settings: ProjectSettings, bgt: BudgetEntry[]) => {
+      const settingsToSave = buildSettingsToSave(settings, bgt);
+      await projectService.saveProject({
+        id,
+        name: settingsToSave.name,
+        settings: settingsToSave,
+        budget: bgt,
+      });
+    };
+
+    const timeoutId = setTimeout(async () => {
+      // Cancela se o projeto foi trocado durante o debounce
+      if (currentProjectIdRef.current !== savedProjectId) return;
       try {
-        await projectService.saveProject({
-          id: savedProjectId,
-          name: settingsToSave.name,
-          settings: settingsToSave,
-          budget: budget
-        });
+        await doSave(savedProjectId, capturedSettings, capturedBudget);
       } catch (error) {
         console.error('Erro no salvamento automático:', error);
       }
     }, 2000);
-    return () => clearTimeout(timeoutId);
+
+    return () => {
+      clearTimeout(timeoutId);
+      // Se o projeto foi trocado, salva imediatamente o projeto que está saindo.
+      // Isso evita perda silenciosa quando o usuário troca de projeto dentro do
+      // janela de debounce de 2 s.
+      if (currentProjectIdRef.current !== savedProjectId) {
+        doSave(savedProjectId, capturedSettings, capturedBudget).catch(err =>
+          console.error('Erro no salvamento ao trocar projeto:', err)
+        );
+      }
+    };
   }, [budget, projectSettings, projectId, session?.user?.id, isRehydrating]);
 
   // Rehydrate project data

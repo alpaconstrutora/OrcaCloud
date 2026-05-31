@@ -5,6 +5,7 @@ import { buildCutTable, summarizeCutTable } from '../../utils/cutTable'
 import { buildProjectBarPlan } from '../../utils/cuttingStock'
 import type { CutTableRow } from '../../utils/cutTable'
 import StructuralBarPlan from './StructuralBarPlan'
+import RebarShapeSvg from './RebarShapeSvg'
 
 interface Props {
   orgId: string
@@ -239,7 +240,7 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
                   <th className="px-3 py-3">Tipo</th>
                   <th className="px-3 py-3">Bitola</th>
                   <th className="px-3 py-3">Tipo Aço</th>
-                  <th className="px-3 py-3">Formato</th>
+                  <th className="px-3 py-3 min-w-[88px]">Forma</th>
                   <th className="px-3 py-3 text-right">Comp. (cm)</th>
                   <th className="px-3 py-3 text-right">Qtd</th>
                   <th className="px-3 py-3 text-right">Peso (kg)</th>
@@ -261,9 +262,16 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
                           {row.elementTipo}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 font-bold">Ø {row.bitolaMm}</td>
+                      <td className="px-3 py-2.5 font-bold tabular-nums">Ø {row.bitolaMm}</td>
                       <td className="px-3 py-2.5 text-slate-500 text-xs">{row.tipo}</td>
-                      <td className="px-3 py-2.5 text-slate-500 text-xs">{row.formatoDobra}</td>
+                      <td className="px-1.5 py-1.5">
+                        <RebarShapeSvg
+                          formato={row.formatoDobra}
+                          comprimentoCm={row.comprimentoCm}
+                          bitolaMm={row.bitolaMm}
+                          size={80}
+                        />
+                      </td>
                       <td className="px-3 py-2.5 text-right font-bold tabular-nums">{row.comprimentoCm.toFixed(1)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{row.qtdPecas}</td>
                       <td className="px-3 py-2.5 text-right font-bold tabular-nums">{row.pesoTotalKg.toFixed(3)}</td>

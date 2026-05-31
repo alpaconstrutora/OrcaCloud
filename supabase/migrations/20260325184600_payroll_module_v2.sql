@@ -28,6 +28,17 @@ CREATE TABLE IF NOT EXISTS public.employee_allocations (
 
 -- 3. Eventos e Runs
 -- Note: Reutilizando estrutura ou adaptando para o nome exato solicitado
+
+-- GUARD: aborta se houver dados de folha — evita perda acidental em prod.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'payroll_runs')
+     AND (SELECT COUNT(*) FROM public.payroll_runs) > 0 THEN
+    RAISE EXCEPTION 'payroll_module_v2: payroll_runs tem dados — DROP TABLE abortado para evitar perda. Faça backup antes de prosseguir.';
+  END IF;
+END;
+$$;
+
 DROP TABLE IF EXISTS public.payroll_events CASCADE;
 CREATE TABLE public.payroll_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

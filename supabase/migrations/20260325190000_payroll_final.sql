@@ -17,6 +17,17 @@ ALTER TABLE public.time_entries
 
 -- 3. Infraestrutura de Folha
 -- Note: Tabelas recriadas para garantir compatibilidade com a Spec V2
+
+-- GUARD: aborta se houver dados de folha — evita perda acidental em prod.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'payroll_runs')
+     AND (SELECT COUNT(*) FROM public.payroll_runs) > 0 THEN
+    RAISE EXCEPTION 'payroll_final: payroll_runs tem dados — DROP TABLE abortado para evitar perda. Faça backup antes de prosseguir.';
+  END IF;
+END;
+$$;
+
 DROP TABLE IF EXISTS public.payroll_items CASCADE;
 DROP TABLE IF EXISTS public.payroll_results CASCADE;
 DROP TABLE IF EXISTS public.payroll_events CASCADE;

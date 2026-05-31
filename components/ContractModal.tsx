@@ -90,7 +90,30 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     React.useEffect(() => {
         if (isOpen) {
             loadDependencies();
-            if (!initialData) setNumberError(null);
+            if (!initialData) {
+                setNumberError(null);
+                numberInputRef.current = '';
+                setFormData({
+                    number: '',
+                    title: '',
+                    description: '',
+                    contract_type: 'Empreitada Global',
+                    nature: 'Fornecimento',
+                    start_date: new Date().toISOString().split('T')[0],
+                    end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+                    status: 'Rascunho',
+                    original_value: 0,
+                    retention_rate: 0,
+                    reajuste_index: 'INCC',
+                    payment_method: 'Boleto Bancário',
+                    payment_installments: 1,
+                    project_id: projectId || '',
+                    is_recurring: false,
+                    billing_cycle: 'Mensal',
+                    due_day: 10,
+                });
+                setInstallmentSchedule([]);
+            }
         }
     }, [isOpen, organizationId]);
 

@@ -3,7 +3,8 @@ import {
     Search, Plus, Filter, MoreHorizontal,
     FileText, Calendar, Building2, DollarSign,
     ArrowRight, Clock, Shield, LayoutGrid,
-    List, RotateCcw, Copy, Trash2, Pencil
+    List, RotateCcw, Copy, Trash2, Pencil,
+    ChevronUp, ChevronDown, ChevronsUpDown
 } from 'lucide-react';
 import { contractService } from '../services/contractService';
 import { supplierService } from '../services/supplierService';
@@ -33,7 +34,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     const [supplierMap, setSupplierMap] = React.useState<Record<string, string>>({});
     const [projectMap, setProjectMap] = React.useState<Record<string, string>>({});
     const [loading, setLoading] = React.useState(true);
-    const [sortBy, setSortBy] = React.useState<string>('date-desc');
+    const [sortBy, setSortBy] = React.useState<string>('number-asc');
     const [searchTerm, setSearchTerm] = React.useState('');
     const [statusFilter, setStatusFilter] = React.useState<string>('all');
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
@@ -122,7 +123,24 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         }
     };
 
+    const handleSort = (field: string) => {
+        setSortBy(prev => {
+            const [prevField, prevDir] = prev.split('-');
+            if (prevField === field) return `${field}-${prevDir === 'asc' ? 'desc' : 'asc'}`;
+            return `${field}-asc`;
+        });
+    };
+
+    const SortIcon = ({ field }: { field: string }) => {
+        const [f, dir] = sortBy.split('-');
+        if (f !== field) return <ChevronsUpDown className="w-3 h-3 ml-1 opacity-30" />;
+        return dir === 'asc'
+            ? <ChevronUp className="w-3 h-3 ml-1 text-blue-500" />
+            : <ChevronDown className="w-3 h-3 ml-1 text-blue-500" />;
+    };
+
     const filteredContracts = React.useMemo(() => {
+        const [field, dir] = sortBy.split('-');
         return (contracts || [])
             .filter(contract => statusFilter === 'all' || contract.status === statusFilter)
             .filter(contract =>
@@ -131,14 +149,17 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 contract.contract_type?.toLowerCase().includes(searchTerm.toLowerCase())
             )
             .sort((a, b) => {
-                if (sortBy === 'date-desc') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
-                if (sortBy === 'date-asc') return new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime();
-                if (sortBy === 'value-desc') return b.current_value - a.current_value;
-                if (sortBy === 'value-asc') return a.current_value - b.current_value;
-                if (sortBy === 'title-asc') return (a.title || '').localeCompare(b.title || '');
-                return 0;
+                let cmp = 0;
+                if (field === 'number')   cmp = (a.number || '').localeCompare(b.number || '', undefined, { numeric: true });
+                if (field === 'title')    cmp = (a.title || '').localeCompare(b.title || '');
+                if (field === 'project')  cmp = (projectMap[a.project_id || ''] || '').localeCompare(projectMap[b.project_id || ''] || '');
+                if (field === 'supplier') cmp = (supplierMap[a.supplier_id || ''] || '').localeCompare(supplierMap[b.supplier_id || ''] || '');
+                if (field === 'date')     cmp = new Date(a.start_date || '').getTime() - new Date(b.start_date || '').getTime();
+                if (field === 'status')   cmp = (a.status || '').localeCompare(b.status || '');
+                if (field === 'value')    cmp = a.current_value - b.current_value;
+                return dir === 'asc' ? cmp : -cmp;
             });
-    }, [contracts, searchTerm, sortBy]);
+    }, [contracts, searchTerm, sortBy, supplierMap, projectMap]);
 
     // Dashboard data
     const stats = {
@@ -322,17 +343,6 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         <option value="Encerrado">Encerrado</option>
                         <option value="Cancelado">Cancelado</option>
                     </select>
-                    <select
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
-                        className="px-6 py-4 bg-white border border-gray-100 rounded-2xl text-[12px] font-medium text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-all uppercase tracking-widest"
-                    >
-                        <option value="date-desc">Mais Recentes</option>
-                        <option value="date-asc">Mais Antigos</option>
-                        <option value="value-desc">Maior Valor</option>
-                        <option value="value-asc">Menor Valor</option>
-                        <option value="title-asc">Título A-Z</option>
-                    </select>
                 </div>
             </div>
 
@@ -434,12 +444,26 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50/50">
-                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Contrato</th>
-                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Obra</th>
-                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Fornecedor</th>
-                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Vigência</th>
-                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Status</th>
-                                    <th className="px-6 py-4 text-right text-[12px] font-medium text-gray-400 uppercase tracking-widest">Valor Atual</th>
+                                    {[
+                                        { label: 'Código',     field: 'number',   align: '' },
+                                        { label: 'Contrato',   field: 'title',    align: '' },
+                                        { label: 'Obra',       field: 'project',  align: '' },
+                                        { label: 'Fornecedor', field: 'supplier', align: '' },
+                                        { label: 'Vigência',   field: 'date',     align: '' },
+                                        { label: 'Status',     field: 'status',   align: '' },
+                                        { label: 'Valor Atual',field: 'value',    align: 'text-right' },
+                                    ].map(col => (
+                                        <th
+                                            key={col.field}
+                                            onClick={() => handleSort(col.field)}
+                                            className={`px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest cursor-pointer select-none hover:text-blue-500 transition-colors ${col.align}`}
+                                        >
+                                            <span className="inline-flex items-center gap-0.5">
+                                                {col.label}
+                                                <SortIcon field={col.field} />
+                                            </span>
+                                        </th>
+                                    ))}
                                     <th className="px-6 py-4 w-10"></th>
                                 </tr>
                             </thead>
@@ -451,14 +475,14 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         onClick={() => onViewDetails(contract.id)}
                                     >
                                         <td className="px-6 py-5">
+                                            <span className="text-[12px] font-medium text-blue-500 uppercase tracking-widest">{contract.number || '—'}</span>
+                                        </td>
+                                        <td className="px-6 py-5">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
                                                     <FileText className="w-5 h-5" />
                                                 </div>
-                                                <div>
-                                                    <p className="text-[12px] font-medium text-blue-500 uppercase tracking-widest mb-0.5">{contract.number}</p>
-                                                    <p className="text-[12px] font-medium text-gray-900 group-hover:text-blue-600 transition-colors uppercase">{contract.title}</p>
-                                                </div>
+                                                <p className="text-[12px] font-medium text-gray-900 group-hover:text-blue-600 transition-colors uppercase">{contract.title}</p>
                                             </div>
                                         </td>
                                         <td className="px-6 py-5">

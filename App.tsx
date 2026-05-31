@@ -54,6 +54,7 @@ const PortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
     </div>
   );
 };
+import PublicOrderView from './components/PublicOrderView';
 import { ContractModal } from './components/ContractModal';
 import SupplyChainQuotationForm from './components/SupplyChainQuotationForm';
 import SupplyChainOrderForm from './components/SupplyChainOrderForm';
@@ -244,6 +245,14 @@ const App: React.FC = () => {
     return null;
   }, []);
   if (portalToken) return <PortalTokenGate token={portalToken} />;
+
+  // ── Guard público: pedido de compra via share_token ──────────────────────────
+  const orderShareToken = React.useMemo(() => {
+    const match = window.location.pathname.match(/^\/pedido\/([0-9a-f-]{36})$/i);
+    return match ? match[1] : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (orderShareToken) return <PublicOrderView token={orderShareToken} />;
 
   // ── Guards de autenticação ───────────────────────────────────────────────────
   if (isResettingPassword) return <ResetPassword onComplete={() => setIsResettingPassword(false)} />;

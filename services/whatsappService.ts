@@ -1,16 +1,19 @@
 /**
  * WhatsApp Cloud API — Meta Business Platform (oficial)
  * Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/messages
- *
- * Credenciais necessárias no painel Meta for Developers:
- *  - Phone Number ID  (aba "API Setup" do app)
- *  - Access Token     (token permanente ou temporário do System User)
  */
 import { notificationLogService } from './notificationLogService';
 import { appSettingsService } from './appSettingsService';
+import { supabase } from '../lib/supabase';
 
 const LS_KEY   = 'whatsapp_config';
 const API_BASE = 'https://graph.facebook.com/v20.0';
+
+// URL base do app em produção — usada no link público do pedido
+const APP_BASE_URL = import.meta.env.VITE_APP_URL || 'https://orca-cloud.vercel.app';
+
+// Nome do template aprovado na Meta para pedido enviado
+export const WA_TEMPLATE_ORDER_SENT = import.meta.env.VITE_WA_TEMPLATE_ORDER_SENT || 'orcacloud_pedido_enviado';
 
 export interface WhatsAppConfig {
     phoneNumberId: string;
@@ -26,8 +29,8 @@ function getConfig(): WhatsAppConfig {
         }
     } catch { /* ignore */ }
     return {
-        phoneNumberId: import.meta.env.VITE_WA_PHONE_NUMBER_ID  || '',
-        accessToken:   import.meta.env.VITE_WA_ACCESS_TOKEN     || '',
+        phoneNumberId: import.meta.env.VITE_WA_PHONE_NUMBER_ID || '',
+        accessToken:   import.meta.env.VITE_WA_ACCESS_TOKEN    || '',
     };
 }
 
@@ -55,21 +58,75 @@ export const whatsappService = {
         return `55${withoutLeadingZero}`;
     },
 
-    /** Envia mensagem de texto simples via WhatsApp Cloud API */
-    async sendText(phone: string, message: string, orderId?: string): Promise<void> {
+    /** Gera share_token para o pedido e salva no banco. Retorna o token. */
+    async generateShareToken(orderId: string): Promise<string> {
+        const token = crypto.randomUUID();
+        const { error } = await supabase
+            .from('purchase_orders')
+            .update({ share_token: token })
+            .eq('id', orderId);
+        if (error) throw new Error(`Erro ao gerar link do pedido: ${error.message}`);
+        return token;
+    },
+
+    /** Monta a URL pública do pedido */
+    buildShareUrl(token: string): string {
+        return `${APP_BASE_URL}/pedido/${token}`;
+    },
+
+    /** Envia template de pedido enviado via WhatsApp Cloud API */
+    async sendOrderTemplate(params: {
+        phone:        string;
+        orderId:      string;
+        supplierName: string;
+        orderNumber:  string;
+        projectName:  string;
+        itemCount:    number;
+        total:        number;
+        deliveryDate?: string;
+        shareToken:   string;
+    }): Promise<void> {
         if (!this.isConfigured()) {
-            throw new Error('WhatsApp não configurado. Acesse Configurações → Integrações para configurar.');
+            throw new Error('WhatsApp não configurado. Acesse Configurações → Integrações.');
         }
 
         const { phoneNumberId, accessToken } = getConfig();
-        const to = this.normalizePhone(phone);
+        const to  = this.normalizePhone(params.phone);
         const url = `${API_BASE}/${phoneNumberId}/messages`;
+
+        const totalFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(params.total);
+        const delivery = params.deliveryDate
+            ? new Date(params.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR')
+            : 'A definir';
+        const shareUrl = this.buildShareUrl(params.shareToken);
 
         const body = {
             messaging_product: 'whatsapp',
             to,
-            type: 'text',
-            text: { preview_url: false, body: message },
+            type: 'template',
+            template: {
+                name: WA_TEMPLATE_ORDER_SENT,
+                language: { code: 'pt_BR' },
+                components: [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: params.supplierName },
+                            { type: 'text', text: params.orderNumber },
+                            { type: 'text', text: params.projectName },
+                            { type: 'text', text: String(params.itemCount) },
+                            { type: 'text', text: totalFmt },
+                            { type: 'text', text: delivery },
+                        ],
+                    },
+                    {
+                        type: 'button',
+                        sub_type: 'url',
+                        index: '0',
+                        parameters: [{ type: 'text', text: params.shareToken }],
+                    },
+                ],
+            },
         };
 
         try {
@@ -89,47 +146,24 @@ export const whatsappService = {
             }
 
             notificationLogService.log({
-                orderId,
-                channel: 'whatsapp',
+                orderId:   params.orderId,
+                channel:   'whatsapp',
                 recipient: to,
-                body: message,
-                status: 'sent',
-                metadata: { to, phoneNumberId },
+                body:      `Template: ${WA_TEMPLATE_ORDER_SENT} | Link: ${shareUrl}`,
+                status:    'sent',
+                metadata:  { to, phoneNumberId, shareUrl },
             });
         } catch (error: any) {
             notificationLogService.log({
-                orderId,
-                channel: 'whatsapp',
+                orderId:   params.orderId,
+                channel:   'whatsapp',
                 recipient: to,
-                body: message,
-                status: 'failed',
-                error: error.message || String(error),
-                metadata: { to },
+                status:    'failed',
+                error:     error.message || String(error),
+                metadata:  { to },
             });
             throw error;
         }
-    },
-
-    buildOrderSentMessage(params: {
-        supplierName: string;
-        orderNumber:  string;
-        projectName:  string;
-        itemCount:    number;
-        total:        number;
-        deliveryDate?: string;
-    }): string {
-        const totalFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(params.total);
-        const delivery = params.deliveryDate
-            ? new Date(params.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR')
-            : 'A definir';
-        return appSettingsService.interpolateOrderSent({
-            supplierName: params.supplierName,
-            orderNumber:  params.orderNumber,
-            projectName:  params.projectName,
-            itemCount:    params.itemCount,
-            total:        totalFmt,
-            deliveryDate: delivery,
-        });
     },
 
     buildStatusChangeMessage(params: {

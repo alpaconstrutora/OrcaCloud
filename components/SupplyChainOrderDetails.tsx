@@ -303,7 +303,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const handleWhatsAppShare = async () => {
         if (!order) return;
 
-        // WhatsApp Cloud API (oficial) — se configurado, envia direto
+        // WhatsApp Cloud API (oficial) — envia template com link público do pedido
         if (whatsappService.isConfigured()) {
             try {
                 setIsSendingWhatsApp(true);
@@ -312,16 +312,19 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     notify('Fornecedor sem telefone cadastrado. Adicione o telefone na ficha do fornecedor.', 'error');
                     return;
                 }
+                const shareToken = await whatsappService.generateShareToken(order.id);
                 const total = order.items.reduce((sum, item) => sum + (item.total || 0), 0);
-                const message = whatsappService.buildOrderSentMessage({
+                await whatsappService.sendOrderTemplate({
+                    phone:        supplier.phone,
+                    orderId:      order.id,
                     supplierName: supplier.name,
                     orderNumber:  order.number || order.id,
                     projectName,
                     itemCount:    order.items.length,
                     total,
                     deliveryDate: order.deliveryDate,
+                    shareToken,
                 });
-                await whatsappService.sendText(supplier.phone, message, order.id);
                 await loadOrderData();
                 notify('WhatsApp enviado com sucesso!');
                 return;

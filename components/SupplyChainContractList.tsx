@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { contractService } from '../services/contractService';
 import { supplierService } from '../services/supplierService';
+import { projectService } from '../services/projectService';
 import { Contract } from '../types';
 
 interface SupplyChainContractListProps {
@@ -30,6 +31,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
 }) => {
     const [contracts, setContracts] = React.useState<Contract[]>([]);
     const [supplierMap, setSupplierMap] = React.useState<Record<string, string>>({});
+    const [projectMap, setProjectMap] = React.useState<Record<string, string>>({});
     const [loading, setLoading] = React.useState(true);
     const [sortBy, setSortBy] = React.useState<string>('date-desc');
     const [searchTerm, setSearchTerm] = React.useState('');
@@ -52,12 +54,14 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         try {
             setLoading(true);
             const targetProjectId = localShowAll ? undefined : (projectId || undefined);
-            const [data, suppliers] = await Promise.all([
+            const [data, suppliers, projects] = await Promise.all([
                 contractService.listContracts(targetProjectId, organizationId),
                 supplierService.listSuppliers(organizationId).catch(() => []),
+                projectService.listProjects(undefined, organizationId).catch(() => []),
             ]);
             setContracts(data);
             setSupplierMap(Object.fromEntries(suppliers.map(s => [s.id, s.name])));
+            setProjectMap(Object.fromEntries(projects.map((p: { id: string; name: string }) => [p.id, p.name])));
         } catch (error) {
             console.error("ERRO CRÍTICO AO CARREGAR CONTRATOS:", error);
             notify("Erro ao carregar contratos. Verifique a conexão com o banco de dados.", "error");
@@ -398,7 +402,9 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                             <div className="space-y-4 mb-8 flex-1">
                                 <div className="flex items-center gap-3 text-gray-500">
                                     <Building2 className="w-4 h-4 text-gray-400" />
-                                    <span className="text-[12px] font-medium truncate">Projeto Vinculado</span>
+                                    <span className="text-[12px] font-medium truncate">
+                                        {contract.project_id ? (projectMap[contract.project_id] ?? '—') : '—'}
+                                    </span>
                                 </div>
                                 <div className="flex items-center gap-3 text-gray-500">
                                     <Calendar className="w-4 h-4 text-gray-400" />
@@ -429,7 +435,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                             <thead>
                                 <tr className="bg-gray-50/50">
                                     <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Contrato</th>
-                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Tipo / Natureza</th>
+                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Obra</th>
                                     <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Fornecedor</th>
                                     <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Vigência</th>
                                     <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Status</th>
@@ -456,10 +462,9 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                             </div>
                                         </td>
                                         <td className="px-6 py-5">
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-[12px] font-medium text-gray-700">{contract.contract_type}</span>
-                                                <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">{contract.nature}</span>
-                                            </div>
+                                            <span className="text-[12px] font-medium text-gray-700">
+                                                {contract.project_id ? (projectMap[contract.project_id] ?? '—') : '—'}
+                                            </span>
                                         </td>
                                         <td className="px-6 py-5">
                                             <span className="text-[12px] font-medium text-gray-700">

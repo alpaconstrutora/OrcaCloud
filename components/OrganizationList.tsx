@@ -255,8 +255,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
-                                        <tr 
-                                            onClick={() => setActiveOrganizationId(null)}
+                                        <tr
+                                            onClick={() => { setActiveOrganizationId(null); setManagingOrgId(null); }}
                                             className={`hover:bg-blue-50/30 transition-all duration-200 group cursor-pointer ${!activeOrganizationId ? 'bg-blue-50/50' : ''}`}
                                         >
                                             <td className="px-8 py-4">
@@ -278,7 +278,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                             <td className="px-8 py-4">
                                                 <div className="flex items-center justify-center">
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(null); }}
+                                                        onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(null); setManagingOrgId(null); }}
                                                         className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${!activeOrganizationId ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                                                     >
                                                         {!activeOrganizationId ? 'ATIVO' : 'SELECIONAR'}

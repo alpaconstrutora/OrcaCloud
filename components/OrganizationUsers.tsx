@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { OrganizationMember, OrganizationRole, UserPermissions, OrganizationCustomRole } from '../types';
-import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2 } from 'lucide-react';
+import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send } from 'lucide-react';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { supabase } from '../lib/supabase';
 
@@ -416,16 +416,13 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     >
                                                         <Edit2 className="w-4 h-4" />
                                                     </button>
-                                                    <button
-                                                        type="button"
-                                                        title="Reenviar convite por e-mail"
-                                                        onClick={() => handleResendInvite(member)}
-                                                        className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                                                    >
-                                                        <Mail className="w-4 h-4" />
-                                                    </button>
                                                     <InlineDisclosureMenu
                                                         menuItems={[
+                                                            {
+                                                                icon: <Send className="w-[18px] h-[18px]" />,
+                                                                label: 'Reenviar Convite',
+                                                                onClick: () => handleResendInvite(member),
+                                                            },
                                                             {
                                                                 icon: <Shield className="w-[18px] h-[18px]" />,
                                                                 label: editingMemberId === member.id ? 'Fechar Permissões' : 'Permissões',

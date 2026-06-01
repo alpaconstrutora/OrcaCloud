@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
     UserSearch, Plus, X, ChevronDown, Loader2, Search,
     Star, Phone, Mail, FileText, Check, ChevronRight,
-    Trash2, Eye, Users, Briefcase, Calendar, AlertTriangle,
+    Trash2, Eye, Pencil, Users, Briefcase, Calendar, AlertTriangle,
     Building2, DollarSign, MessageSquare, Award, UserCheck
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -634,8 +634,8 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
                                                 className="flex items-center gap-1 px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-[10px] font-black">
                                                 Pipeline <ChevronRight className="w-3 h-3" />
                                             </button>
-                                            <button onClick={() => { setEditingJob(j); setShowJobForm(true); }} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700">
-                                                <Eye className="w-3.5 h-3.5" />
+                                            <button onClick={() => { setEditingJob(j); setShowJobForm(true); }} className="p-1.5 hover:bg-indigo-50 rounded-lg text-slate-400 hover:text-indigo-600" title="Editar vaga">
+                                                <Pencil className="w-3.5 h-3.5" />
                                             </button>
                                             <button onClick={() => { if (confirm('Cancelar esta vaga?')) deleteJobMutation.mutate(j.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600">
                                                 <Trash2 className="w-3.5 h-3.5" />

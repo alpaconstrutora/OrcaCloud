@@ -6,9 +6,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 declare const Deno: { env: { get(key: string): string | undefined } };
 
 const corsHeaders = {
-    'Access-Control-Allow-Origin': Deno.env.get('FRONTEND_URL') ?? '*',
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+        status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
+const ALLOWED_ROLES = ['admin', 'owner'];
 
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') {
@@ -16,21 +24,13 @@ serve(async (req: Request) => {
     }
 
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-            status: 401,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-    }
+    if (!authHeader) return json({ error: 'Unauthorized' }, 401);
 
     try {
         const { email, name, organizationId, role = 'member' } = await req.json();
 
         if (!email || !organizationId) {
-            return new Response(JSON.stringify({ error: 'email and organizationId are required' }), {
-                status: 400,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
+            return json({ error: 'email e organizationId são obrigatórios' }, 400);
         }
 
         const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
@@ -42,56 +42,45 @@ serve(async (req: Request) => {
             global: { headers: { Authorization: authHeader } },
         });
         const { data: { user }, error: authError } = await userClient.auth.getUser();
-        if (authError || !user) {
-            return new Response(JSON.stringify({ error: 'Invalid token' }), {
-                status: 401,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
+        if (authError || !user?.email) {
+            return json({ error: 'Token inválido' }, 401);
         }
 
-        // Use admin client to verify caller is org admin
         const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+        // Verify caller has admin or owner role in this org
         const { data: callerMember } = await adminClient
             .from('organization_members')
             .select('role')
             .eq('organization_id', organizationId)
-            .eq('email', user.email!.toLowerCase())
-            .single();
+            .eq('email', user.email.toLowerCase())
+            .maybeSingle();
 
-        if (!callerMember || callerMember.role !== 'admin') {
-            return new Response(JSON.stringify({ error: 'Somente administradores podem convidar membros' }), {
-                status: 403,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
+        if (!callerMember || !ALLOWED_ROLES.includes(callerMember.role)) {
+            return json({ error: 'Somente administradores ou proprietários podem convidar membros' }, 403);
         }
 
         const frontendUrl = Deno.env.get('FRONTEND_URL') ?? '';
 
-        // Send Supabase Auth invite email
         const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
             data: { full_name: name, invited_org_id: organizationId, invited_role: role },
             redirectTo: frontendUrl ? `${frontendUrl}/?org=${organizationId}` : undefined,
         });
 
         if (inviteError) {
-            // User already registered — still valid, membership was added on the client side
-            if (inviteError.message.toLowerCase().includes('already registered') ||
-                inviteError.message.toLowerCase().includes('already been registered')) {
-                return new Response(JSON.stringify({ success: true, alreadyRegistered: true }), {
-                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                });
+            const msg = inviteError.message.toLowerCase();
+            // User already has an account — treat as success (membership was already added)
+            if (msg.includes('already') || msg.includes('registered')) {
+                return json({ success: true, alreadyRegistered: true });
             }
-            throw inviteError;
+            // Return the actual Supabase error message instead of throwing
+            return json({ error: inviteError.message }, 422);
         }
 
-        return new Response(JSON.stringify({ success: true }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return json({ success: true });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Internal error';
-        return new Response(JSON.stringify({ error: message }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        const message = err instanceof Error ? err.message : 'Erro interno';
+        console.error('[invite-member]', message);
+        return json({ error: message }, 500);
     }
 });

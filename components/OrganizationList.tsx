@@ -69,14 +69,22 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const { activeOrganizationId, setActiveOrganizationId } = useStore();
 
     const handleResendInviteFromList = async (orgId: string, email: string, name: string, role: string) => {
-        try {
-            const { error } = await supabase.functions.invoke('invite-member', {
-                body: { email, name, organizationId: orgId, role },
-            });
-            if (error) alert(`Não foi possível reenviar o convite: ${error.message}`);
-            else alert(`Convite reenviado para ${email}`);
-        } catch {
-            alert('Erro ao reenviar convite. Tente novamente.');
+        const { data, error } = await supabase.functions.invoke('invite-member', {
+            body: { email, name, organizationId: orgId, role },
+        });
+        if (error) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const ctx = (error as any).context;
+            let msg = error.message;
+            try {
+                const body = ctx ? await ctx.json() : null;
+                if (body?.error) msg = body.error;
+            } catch { /* ignore */ }
+            alert(`Não foi possível reenviar o convite: ${msg}`);
+        } else if (data?.error) {
+            alert(`Não foi possível reenviar o convite: ${data.error}`);
+        } else {
+            alert(`Convite reenviado para ${email}`);
         }
     };
 

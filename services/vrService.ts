@@ -203,11 +203,9 @@ export const vrService = {
     // ── Regras ────────────────────────────────────────────────────────────────
 
     async listRegras(orgId: string): Promise<VrRegra[]> {
-        const { data, error } = await supabase
-            .from('vr_regras')
-            .select('*')
-            .eq('org_id', orgId)
-            .order('nome');
+        let q = supabase.from('vr_regras').select('*').order('nome');
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data ?? [];
     },
@@ -230,7 +228,8 @@ export const vrService = {
     // ── Feriados ──────────────────────────────────────────────────────────────
 
     async listFeriados(orgId: string, ano?: number): Promise<VrFeriado[]> {
-        let q = supabase.from('vr_feriados').select('*').eq('org_id', orgId).order('data');
+        let q = supabase.from('vr_feriados').select('*').order('data');
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
         if (ano) {
             q = q.gte('data', `${ano}-01-01`).lte('data', `${ano}-12-31`);
         }
@@ -265,8 +264,8 @@ export const vrService = {
                 vr_regras!regra_id(nome),
                 projects!project_id(name)
             `)
-            .eq('org_id', orgId)
             .order('mes_referencia', { ascending: false });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
         if (mes) q = q.eq('mes_referencia', mes);
         const { data, error } = await q;
         if (error) throw error;

@@ -64,6 +64,7 @@ const RegraModal: React.FC<RegraModalProps> = ({ regra, orgId, projects, onClose
     const set = (k: keyof VrRegra, v: any) => setForm(f => ({ ...f, [k]: v }));
 
     const handleSave = async () => {
+        if (!orgId || orgId === 'all') { setErr('Selecione uma organização específica no topo do módulo antes de criar regras.'); return; }
         if (!form.nome?.trim()) { setErr('Nome é obrigatório'); return; }
         if (!form.valor_diario || form.valor_diario <= 0) { setErr('Valor diário deve ser positivo'); return; }
         setSaving(true);
@@ -289,6 +290,7 @@ const AbaCalendario: React.FC<{ orgId: string; projects: { id: string; name: str
     });
 
     const handleAdd = async () => {
+        if (!orgId || orgId === 'all') { alert('Selecione uma organização específica no topo do módulo antes de cadastrar feriados.'); return; }
         if (!form.data || !form.descricao.trim()) return;
         setSaving(true);
         try {
@@ -452,6 +454,7 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
     };
 
     const handleGerarTodos = async () => {
+        if (!orgId || orgId === 'all') { alert('Selecione uma organização específica no topo do módulo antes de gerar o cálculo.'); return; }
         if (!regra) { alert('Selecione uma regra antes de gerar o cálculo'); return; }
         const ativos = employees.filter(e => e.status === 'ATIVO');
         if (ativos.length === 0) { alert('Nenhum colaborador ativo'); return; }

@@ -484,6 +484,8 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                     mesReferencia: new Date(ano, mes, 1),
                     feriados: Array.from(feriadosSet),
                     ausencias: ausMap[emp.id] ?? [],
+                    admissao: (emp as any).hire_date || undefined,
+                    desligamento: (emp as any).termination_date || undefined,
                 });
             }
             await refetch();

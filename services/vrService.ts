@@ -84,6 +84,8 @@ export interface VrCalculoInput {
         data_fim: string;
         status: string;
     }>;
+    admissao?: string;         // hire_date — dias anteriores não geram VR
+    desligamento?: string;     // termination_date — dias posteriores não geram VR
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -129,9 +131,15 @@ export function calcularVrMensal(
     year: number,
     month: number,           // 0-based
     feriadosSet: Set<string>,
-    ausencias: Array<{ tipo: string; data_inicio: string; data_fim: string; status: string }>
+    ausencias: Array<{ tipo: string; data_inicio: string; data_fim: string; status: string }>,
+    admissao?: string,       // ISO 'YYYY-MM-DD' — dias anteriores não geram VR
+    desligamento?: string    // ISO 'YYYY-MM-DD' — dias posteriores não geram VR
 ): VrCalculoResult {
     const diasDoMes = datesInMonth(year, month);
+
+    // normaliza para comparar só a parte da data (ignora hora)
+    const adm = admissao ? admissao.slice(0, 10) : undefined;
+    const des = desligamento ? desligamento.slice(0, 10) : undefined;
 
     let diasUteis = 0;
     let diasFaltas = 0;
@@ -143,6 +151,11 @@ export function calcularVrMensal(
     for (const d of diasDoMes) {
         const dow = d.getDay();      // 0=dom, 6=sab
         const iso = toIso(d);
+
+        // 0. Fora do período de vínculo (antes da admissão ou após o desligamento) → não conta
+        if (adm && iso < adm) continue;
+        if (des && iso > des) continue;
+
         const isFeriado = feriadosSet.has(iso);
         const isSabado = dow === 6;
         const isDomingo = dow === 0;
@@ -278,7 +291,7 @@ export const vrService = {
     },
 
     async gerarCalculoMensal(input: VrCalculoInput): Promise<VrCalculo> {
-        const { orgId, regraId, employeeId, projectId, mesReferencia, feriados, ausencias } = input;
+        const { orgId, regraId, employeeId, projectId, mesReferencia, feriados, ausencias, admissao, desligamento } = input;
 
         const { data: regra, error: regraErr } = await supabase
             .from('vr_regras')
@@ -291,7 +304,7 @@ export const vrService = {
         const month = mesReferencia.getMonth();
         const feriadosSet = new Set(feriados);
 
-        const resultado = calcularVrMensal(regra as VrRegra, year, month, feriadosSet, ausencias);
+        const resultado = calcularVrMensal(regra as VrRegra, year, month, feriadosSet, ausencias, admissao, desligamento);
 
         const mesIso = `${year}-${String(month + 1).padStart(2, '0')}-01`;
 

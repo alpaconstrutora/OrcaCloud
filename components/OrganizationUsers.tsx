@@ -132,31 +132,30 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
             permissions: newMemberPermissions
         };
 
+        let emailError: string | null = null;
         try {
             if (organizationId) {
                 const { error: fnError } = await supabase.functions.invoke('invite-member', {
-                    body: {
-                        email: newMemberEmail,
-                        name: newMemberName,
-                        organizationId,
-                        role: newMemberRole,
-                    },
+                    body: { email: newMemberEmail, name: newMemberName, organizationId, role: newMemberRole },
                 });
-
-                if (fnError) {
-                    console.warn('Email invite failed:', fnError.message);
-                    setInviteError(`Membro adicionado, mas o e-mail de convite não pôde ser enviado: ${fnError.message}`);
-                }
+                if (fnError) emailError = fnError.message;
             }
-        } catch (err) {
-            console.warn('Could not send invite email:', err);
+        } catch (err: unknown) {
+            emailError = err instanceof Error ? err.message : 'Erro desconhecido';
         } finally {
             setIsInviting(false);
         }
 
+        // Always add the member to the local list
         onUpdateMembers([...members, newMember]);
-        setIsInviteModalOpen(false);
-        resetInviteForm();
+
+        if (emailError) {
+            setInviteError(`Membro adicionado, mas o e-mail de convite não pôde ser enviado: ${emailError}`);
+            // Leave modal open so user can see the warning
+        } else {
+            setIsInviteModalOpen(false);
+            resetInviteForm();
+        }
     };
 
     const resetInviteForm = () => {
@@ -168,9 +167,25 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     };
 
     const handleOpenEditMember = (member: OrganizationMember) => {
-        setEditingMember(member);
         setEditMemberName(member.name);
         setEditMemberRole(member.role);
+        setEditingMember(member);
+    };
+
+    const handleResendInvite = async (member: OrganizationMember) => {
+        if (!organizationId) return;
+        try {
+            const { error } = await supabase.functions.invoke('invite-member', {
+                body: { email: member.email, name: member.name, organizationId, role: member.role },
+            });
+            if (error) {
+                alert(`Não foi possível reenviar o convite: ${error.message}`);
+            } else {
+                alert(`Convite reenviado para ${member.email}`);
+            }
+        } catch {
+            alert('Erro ao reenviar convite. Tente novamente.');
+        }
     };
 
     const handleSaveEditMember = (e: React.FormEvent) => {
@@ -383,24 +398,37 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                             <td className="px-6 py-4 text-sm text-gray-500">
                                                 {new Date(member.joinedAt).toLocaleDateString('pt-BR')}
                                             </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <InlineDisclosureMenu
-                                                    menuItems={[
-                                                        {
-                                                            icon: <Edit2 className="w-[18px] h-[18px]" />,
-                                                            label: 'Editar',
-                                                            onClick: () => handleOpenEditMember(member),
-                                                        },
-                                                        {
-                                                            icon: <Shield className="w-[18px] h-[18px]" />,
-                                                            label: editingMemberId === member.id ? 'Fechar Permissões' : 'Permissões',
-                                                            onClick: () => setEditingMemberId(editingMemberId === member.id ? null : member.id),
-                                                        },
-                                                    ]}
-                                                    showDelete
-                                                    onDelete={() => handleRemoveMember(member.id)}
-                                                    deleteDisabledTitle="Remover membro"
-                                                />
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <button
+                                                        type="button"
+                                                        title="Editar membro"
+                                                        onClick={() => handleOpenEditMember(member)}
+                                                        className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                    >
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        title="Reenviar convite por e-mail"
+                                                        onClick={() => handleResendInvite(member)}
+                                                        className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                    >
+                                                        <Mail className="w-4 h-4" />
+                                                    </button>
+                                                    <InlineDisclosureMenu
+                                                        menuItems={[
+                                                            {
+                                                                icon: <Shield className="w-[18px] h-[18px]" />,
+                                                                label: editingMemberId === member.id ? 'Fechar Permissões' : 'Permissões',
+                                                                onClick: () => setEditingMemberId(editingMemberId === member.id ? null : member.id),
+                                                            },
+                                                        ]}
+                                                        showDelete
+                                                        onDelete={() => handleRemoveMember(member.id)}
+                                                        deleteDisabledTitle="Remover membro"
+                                                    />
+                                                </div>
                                             </td>
                                         </tr>
                                         {editingMemberId === member.id && (

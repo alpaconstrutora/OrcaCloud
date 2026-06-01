@@ -240,7 +240,7 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
                   <th className="px-3 py-3">Tipo</th>
                   <th className="px-3 py-3">Bitola</th>
                   <th className="px-3 py-3">Tipo Aço</th>
-                  <th className="px-3 py-3 min-w-[88px]">Forma</th>
+                  <th className="px-3 py-3 min-w-[128px]">Forma</th>
                   <th className="px-3 py-3 text-right">Comp. (cm)</th>
                   <th className="px-3 py-3 text-right">Qtd</th>
                   <th className="px-3 py-3 text-right">Peso (kg)</th>
@@ -264,12 +264,12 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
                       </td>
                       <td className="px-3 py-2.5 font-bold tabular-nums">Ø {row.bitolaMm}</td>
                       <td className="px-3 py-2.5 text-slate-500 text-xs">{row.tipo}</td>
-                      <td className="px-1.5 py-1.5">
+                      <td className="px-2 py-2">
                         <RebarShapeSvg
                           formato={row.formatoDobra}
                           comprimentoCm={row.comprimentoCm}
                           bitolaMm={row.bitolaMm}
-                          size={80}
+                          size={120}
                         />
                       </td>
                       <td className="px-3 py-2.5 text-right font-bold tabular-nums">{row.comprimentoCm.toFixed(1)}</td>

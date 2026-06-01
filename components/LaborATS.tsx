@@ -275,8 +275,10 @@ const KanbanColumn: React.FC<{
     onStageChange: (id: string, stage: CandidateStage) => void;
     onDiscard: (id: string, stage: CandidateStage) => void;
     isOver: boolean;
-}> = ({ stage, candidates, onSelect, onStageChange, onDiscard, isOver }) => {
-    const { setNodeRef } = useDroppable({ id: stage.id });
+    isDragging: boolean;
+}> = ({ stage, candidates, onSelect, onStageChange, onDiscard, isOver, isDragging }) => {
+    const blocked = stage.id === 'CONTRATADO';
+    const { setNodeRef } = useDroppable({ id: stage.id, disabled: blocked });
     return (
         <div className="w-64 shrink-0">
             <div className={`flex items-center justify-between px-3 py-2 rounded-xl ${stage.bg} mb-3`}>
@@ -285,7 +287,9 @@ const KanbanColumn: React.FC<{
             </div>
             <div
                 ref={setNodeRef}
-                className={`space-y-3 min-h-[80px] rounded-2xl transition-colors ${isOver ? 'bg-indigo-50/60 ring-2 ring-indigo-200 ring-dashed p-2' : ''}`}
+                className={`space-y-3 min-h-[80px] rounded-2xl transition-colors
+                    ${isOver ? 'bg-indigo-50/60 ring-2 ring-indigo-200 ring-dashed p-2' : ''}
+                    ${blocked && isDragging ? 'opacity-40 cursor-not-allowed' : ''}`}
             >
                 {candidates.map(c => (
                     <CandidateCard
@@ -550,6 +554,10 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
         setOverStage(null);
         if (!over) return;
         const newStage = String(over.id) as CandidateStage;
+        if (newStage === 'CONTRATADO') {
+            alert('Para contratar, abra o candidato e use o botão "Contratar" — isso cria o colaborador automaticamente.');
+            return;
+        }
         const cand = candidates.find(c => c.id === String(active.id));
         if (cand && cand.stage !== newStage) {
             stageMutation.mutate({ id: String(active.id), stage: newStage });
@@ -663,6 +671,7 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
                                         onStageChange={(id, s) => stageMutation.mutate({ id, stage: s })}
                                         onDiscard={(id, s) => stageMutation.mutate({ id, stage: s })}
                                         isOver={overStage === stage.id}
+                                        isDragging={!!draggingId}
                                     />
                                 );
                             })}

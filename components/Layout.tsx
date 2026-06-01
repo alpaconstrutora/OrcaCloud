@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -444,6 +444,7 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownItem id="labor-payroll" label="Folha" icon={Calculator} />
                   <DropdownItem id="labor-rubrics" label="Rubricas" icon={Shield} />
                   <DropdownItem id="labor-encargos" label="Encargos Sociais" icon={Percent} />
+                  <DropdownItem id="labor-vale-refeicao" label="Vale Refeição" icon={UtensilsCrossed} />
                   <DropdownItem id="labor-esocial" label="eSocial" icon={FileText} />
 
                   <DropdownGroupLabel label="Estratégico" />

@@ -326,6 +326,39 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
     const [savingNote, setSavingNote] = useState(false);
     const [hireDate, setHireDate] = useState(new Date().toISOString().split('T')[0]);
     const [hiring, setHiring] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [editForm, setEditForm] = useState({
+        nome: candidate.nome,
+        telefone: candidate.telefone || '',
+        email: candidate.email || '',
+        cpf: candidate.cpf || '',
+        origem: candidate.origem,
+        pretensao_salarial: candidate.pretensao_salarial ?? '',
+        experiencia_anos: candidate.experiencia_anos ?? '',
+        disponibilidade: candidate.disponibilidade || '',
+        observacoes: candidate.observacoes || '',
+    });
+
+    const handleSaveEdit = async () => {
+        setSaving(true);
+        try {
+            await atsService.updateCandidate(candidate.id, {
+                nome: editForm.nome,
+                telefone: editForm.telefone || undefined,
+                email: editForm.email || undefined,
+                cpf: editForm.cpf || undefined,
+                origem: editForm.origem as CandidateOrigem,
+                pretensao_salarial: editForm.pretensao_salarial !== '' ? Number(editForm.pretensao_salarial) : undefined,
+                experiencia_anos: editForm.experiencia_anos !== '' ? Number(editForm.experiencia_anos) : undefined,
+                disponibilidade: editForm.disponibilidade || undefined,
+                observacoes: editForm.observacoes || undefined,
+            });
+            setEditing(false);
+            onSaved();
+        } catch (err: any) { alert('Erro: ' + err.message); }
+        finally { setSaving(false); }
+    };
 
     const interviewsKey = ['interviews', candidate.id];
     const { data: interviews = [] } = useQuery({
@@ -383,31 +416,85 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
                             )}
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-white/60 hover:bg-white rounded-xl"><X className="w-5 h-5" /></button>
+                    <div className="flex items-center gap-2">
+                        {!editing ? (
+                            <button onClick={() => setEditing(true)} className="p-2 bg-white/60 hover:bg-white rounded-xl" title="Editar candidato">
+                                <Pencil className="w-4 h-4 text-slate-500" />
+                            </button>
+                        ) : (
+                            <>
+                                <button onClick={() => { setEditing(false); }} className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-white/60 hover:bg-white rounded-xl">Cancelar</button>
+                                <button onClick={handleSaveEdit} disabled={saving} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl disabled:opacity-50">
+                                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Salvar
+                                </button>
+                            </>
+                        )}
+                        <button onClick={onClose} className="p-2 bg-white/60 hover:bg-white rounded-xl"><X className="w-5 h-5" /></button>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5 space-y-5">
                     {/* Dados */}
-                    <div className="grid grid-cols-2 gap-3">
-                        {[
-                            { label: 'Telefone', value: candidate.telefone, icon: Phone },
-                            { label: 'E-mail', value: candidate.email, icon: Mail },
-                            { label: 'Origem', value: ORIGEM_LABELS[candidate.origem], icon: UserSearch },
-                            { label: 'Pretensão', value: candidate.pretensao_salarial ? `R$ ${candidate.pretensao_salarial.toLocaleString('pt-BR')}` : '—', icon: DollarSign },
-                            { label: 'Disponibilidade', value: candidate.disponibilidade || '—', icon: Calendar },
-                            { label: 'Experiência', value: candidate.experiencia_anos ? `${candidate.experiencia_anos} anos` : '—', icon: Briefcase },
-                        ].map(({ label, value, icon: Icon }) => (
-                            <div key={label}>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Icon className="w-3 h-3" />{label}</p>
-                                <p className="text-sm font-bold text-slate-800 mt-0.5">{value || '—'}</p>
+                    {editing ? (
+                        <div className="space-y-3">
+                            <InputGroup label="Nome">
+                                <input value={editForm.nome} onChange={e => setEditForm(p => ({ ...p, nome: e.target.value }))} className={inputCls} />
+                            </InputGroup>
+                            <div className="grid grid-cols-2 gap-3">
+                                <InputGroup label="Telefone">
+                                    <input value={editForm.telefone} onChange={e => setEditForm(p => ({ ...p, telefone: e.target.value }))} className={inputCls} placeholder="(00) 00000-0000" />
+                                </InputGroup>
+                                <InputGroup label="E-mail">
+                                    <input value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} className={inputCls} />
+                                </InputGroup>
+                                <InputGroup label="CPF">
+                                    <input value={editForm.cpf} onChange={e => setEditForm(p => ({ ...p, cpf: e.target.value }))} className={inputCls} placeholder="000.000.000-00" />
+                                </InputGroup>
+                                <InputGroup label="Origem">
+                                    <div className="relative">
+                                        <select value={editForm.origem} onChange={e => setEditForm(p => ({ ...p, origem: e.target.value as CandidateOrigem }))} className={inputCls + ' appearance-none pr-8'}>
+                                            {(Object.entries(ORIGEM_LABELS) as [CandidateOrigem, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                        </select>
+                                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                    </div>
+                                </InputGroup>
+                                <InputGroup label="Pretensão (R$)">
+                                    <input type="number" min="0" step="100" value={editForm.pretensao_salarial} onChange={e => setEditForm(p => ({ ...p, pretensao_salarial: e.target.value }))} className={inputCls} />
+                                </InputGroup>
+                                <InputGroup label="Experiência (anos)">
+                                    <input type="number" min="0" step="1" value={editForm.experiencia_anos} onChange={e => setEditForm(p => ({ ...p, experiencia_anos: e.target.value }))} className={inputCls} />
+                                </InputGroup>
                             </div>
-                        ))}
-                    </div>
-
-                    {candidate.observacoes && (
-                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                            <p className="text-xs font-bold text-slate-600">{candidate.observacoes}</p>
+                            <InputGroup label="Disponibilidade">
+                                <input value={editForm.disponibilidade} onChange={e => setEditForm(p => ({ ...p, disponibilidade: e.target.value }))} className={inputCls} placeholder="Ex: Imediata, 30 dias..." />
+                            </InputGroup>
+                            <InputGroup label="Observações">
+                                <textarea value={editForm.observacoes} onChange={e => setEditForm(p => ({ ...p, observacoes: e.target.value }))} className={inputCls + ' resize-none h-16'} />
+                            </InputGroup>
                         </div>
+                    ) : (
+                        <>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    { label: 'Telefone', value: candidate.telefone, icon: Phone },
+                                    { label: 'E-mail', value: candidate.email, icon: Mail },
+                                    { label: 'Origem', value: ORIGEM_LABELS[candidate.origem], icon: UserSearch },
+                                    { label: 'Pretensão', value: candidate.pretensao_salarial ? `R$ ${candidate.pretensao_salarial.toLocaleString('pt-BR')}` : '—', icon: DollarSign },
+                                    { label: 'Disponibilidade', value: candidate.disponibilidade || '—', icon: Calendar },
+                                    { label: 'Experiência', value: candidate.experiencia_anos ? `${candidate.experiencia_anos} anos` : '—', icon: Briefcase },
+                                ].map(({ label, value, icon: Icon }) => (
+                                    <div key={label}>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Icon className="w-3 h-3" />{label}</p>
+                                        <p className="text-sm font-bold text-slate-800 mt-0.5">{value || '—'}</p>
+                                    </div>
+                                ))}
+                            </div>
+                            {candidate.observacoes && (
+                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <p className="text-xs font-bold text-slate-600">{candidate.observacoes}</p>
+                                </div>
+                            )}
+                        </>
                     )}
 
                     {/* Botão de Contratar */}

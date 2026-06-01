@@ -88,7 +88,12 @@ const JobForm: React.FC<JobFormProps> = ({ orgId, job, projects, onClose, onSave
         setSaving(true);
         try {
             const project = projects.find(p => p.id === form.project_id);
-            const payload = { ...form, project_name: project?.name || '' } as any;
+            const payload = {
+                ...form,
+                project_id: form.project_id || null,
+                data_limite: form.data_limite || null,
+                project_name: project?.name || '',
+            } as any;
             if (isEditing && job?.id) {
                 await atsService.updateJob(job.id, payload);
             } else {

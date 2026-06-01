@@ -79,6 +79,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     // Edit member state
     const [editingMember, setEditingMember] = useState<OrganizationMember | null>(null);
     const [editMemberName, setEditMemberName] = useState('');
+    const [editMemberEmail, setEditMemberEmail] = useState('');
     const [editMemberRole, setEditMemberRole] = useState<OrganizationRole>('member');
 
     // Invite loading state
@@ -168,6 +169,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
 
     const handleOpenEditMember = (member: OrganizationMember) => {
         setEditMemberName(member.name);
+        setEditMemberEmail(member.email);
         setEditMemberRole(member.role);
         setEditingMember(member);
     };
@@ -199,7 +201,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         if (!editingMember) return;
         onUpdateMembers(members.map(m =>
             m.id === editingMember.id
-                ? { ...m, name: editMemberName, role: editMemberRole, permissions: getDefaultPermissions(editMemberRole) }
+                ? { ...m, name: editMemberName, email: editMemberEmail.trim().toLowerCase(), role: editMemberRole, permissions: getDefaultPermissions(editMemberRole) }
                 : m
         ));
         setEditingMember(null);
@@ -577,11 +579,11 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
                                 <input
                                     type="email"
-                                    disabled
-                                    value={editingMember.email}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 cursor-not-allowed"
+                                    required
+                                    value={editMemberEmail}
+                                    onChange={(e) => setEditMemberEmail(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                                 />
-                                <p className="text-xs text-gray-400 mt-1">O e-mail não pode ser alterado pois é o identificador do membro.</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>

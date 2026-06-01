@@ -498,23 +498,23 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                     </span>
                                                 </td>
                                                 <td className="px-8 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-1">
+                                                    <div className="flex items-center justify-end gap-2">
                                                         <button
-                                                            title="Reenviar convite por e-mail"
                                                             onClick={() => handleResendInviteFromList(org.id, member.email, member.name, member.role)}
-                                                            className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100"
+                                                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-colors"
                                                         >
-                                                            <Send className="w-4 h-4" />
+                                                            <Send className="w-3.5 h-3.5" />
+                                                            Reenviar
                                                         </button>
                                                         <button
-                                                            title="Gerenciar usuários desta organização"
                                                             onClick={() => {
                                                                 setManagingOrgId(org.id);
                                                                 onTabChange('users');
                                                             }}
-                                                            className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100"
+                                                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-colors"
                                                         >
-                                                            <Edit2 className="w-4 h-4" />
+                                                            <Users className="w-3.5 h-3.5" />
+                                                            Gerenciar
                                                         </button>
                                                     </div>
                                                 </td>

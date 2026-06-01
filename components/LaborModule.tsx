@@ -591,7 +591,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         <LaborValeRefeicao
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees}
-                            projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
+                            projects={projects
+                                .filter((p: any) => p.settings?.classification === 'OBRA' && p.name !== 'Gestão Comercial')
+                                .map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
                         />
                     )}
             </div>

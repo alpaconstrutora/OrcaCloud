@@ -75,54 +75,34 @@ CREATE TABLE IF NOT EXISTS vr_ajustes (
     created_at  timestamptz NOT NULL DEFAULT now()
 );
 
--- ─── 5. RLS ───────────────────────────────────────────────────────────────────
+-- ─── 5. RLS (padrão do projeto: public.is_org_member) ─────────────────────────
 ALTER TABLE vr_regras    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vr_feriados  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vr_calculos  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vr_ajustes   ENABLE ROW LEVEL SECURITY;
 
--- vr_regras
-CREATE POLICY "org members vr_regras" ON vr_regras
-    USING (org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid()));
+DROP POLICY IF EXISTS "vr_regras_org_access"   ON vr_regras;
+DROP POLICY IF EXISTS "vr_feriados_org_access" ON vr_feriados;
+DROP POLICY IF EXISTS "vr_calculos_org_access" ON vr_calculos;
+DROP POLICY IF EXISTS "vr_ajustes_org_access"  ON vr_ajustes;
 
-CREATE POLICY "org members insert vr_regras" ON vr_regras FOR INSERT
-    WITH CHECK (org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid()));
+CREATE POLICY "vr_regras_org_access" ON vr_regras
+    FOR ALL USING (public.is_org_member(org_id));
 
-CREATE POLICY "org members update vr_regras" ON vr_regras FOR UPDATE
-    USING (org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid()));
+CREATE POLICY "vr_feriados_org_access" ON vr_feriados
+    FOR ALL USING (public.is_org_member(org_id));
 
--- vr_feriados
-CREATE POLICY "org members vr_feriados" ON vr_feriados
-    USING (org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid()));
+CREATE POLICY "vr_calculos_org_access" ON vr_calculos
+    FOR ALL USING (public.is_org_member(org_id));
 
-CREATE POLICY "org members insert vr_feriados" ON vr_feriados FOR INSERT
-    WITH CHECK (org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid()));
-
-CREATE POLICY "org members delete vr_feriados" ON vr_feriados FOR DELETE
-    USING (org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid()));
-
--- vr_calculos
-CREATE POLICY "org members vr_calculos" ON vr_calculos
-    USING (org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid()));
-
-CREATE POLICY "org members insert vr_calculos" ON vr_calculos FOR INSERT
-    WITH CHECK (org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid()));
-
-CREATE POLICY "org members update vr_calculos" ON vr_calculos FOR UPDATE
-    USING (org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid()));
-
--- vr_ajustes
-CREATE POLICY "org members vr_ajustes" ON vr_ajustes
-    USING (calculo_id IN (
-        SELECT id FROM vr_calculos
-        WHERE org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid())
-    ));
-
-CREATE POLICY "org members insert vr_ajustes" ON vr_ajustes FOR INSERT
-    WITH CHECK (calculo_id IN (
-        SELECT id FROM vr_calculos
-        WHERE org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid())
-    ));
+CREATE POLICY "vr_ajustes_org_access" ON vr_ajustes
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM vr_calculos c
+            WHERE c.id = vr_ajustes.calculo_id
+              AND public.is_org_member(c.org_id)
+        )
+    );
 
 -- ─── 6. updated_at triggers ───────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION update_vr_updated_at()
@@ -131,6 +111,9 @@ SET search_path = public
 AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;
 $$;
+
+DROP TRIGGER IF EXISTS vr_regras_updated_at   ON vr_regras;
+DROP TRIGGER IF EXISTS vr_calculos_updated_at ON vr_calculos;
 
 CREATE TRIGGER vr_regras_updated_at
     BEFORE UPDATE ON vr_regras

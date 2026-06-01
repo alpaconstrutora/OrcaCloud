@@ -407,32 +407,38 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                 {new Date(member.joinedAt).toLocaleDateString('pt-BR')}
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="flex items-center justify-end gap-1">
+                                                <div className="flex items-center justify-end gap-2">
                                                     <button
                                                         type="button"
-                                                        title="Editar membro"
                                                         onClick={() => handleOpenEditMember(member)}
-                                                        className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-colors"
                                                     >
-                                                        <Edit2 className="w-4 h-4" />
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                        Editar
                                                     </button>
-                                                    <InlineDisclosureMenu
-                                                        menuItems={[
-                                                            {
-                                                                icon: <Send className="w-[18px] h-[18px]" />,
-                                                                label: 'Reenviar Convite',
-                                                                onClick: () => handleResendInvite(member),
-                                                            },
-                                                            {
-                                                                icon: <Shield className="w-[18px] h-[18px]" />,
-                                                                label: editingMemberId === member.id ? 'Fechar Permissões' : 'Permissões',
-                                                                onClick: () => setEditingMemberId(editingMemberId === member.id ? null : member.id),
-                                                            },
-                                                        ]}
-                                                        showDelete
-                                                        onDelete={() => handleRemoveMember(member.id)}
-                                                        deleteDisabledTitle="Remover membro"
-                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleResendInvite(member)}
+                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-colors"
+                                                    >
+                                                        <Send className="w-3.5 h-3.5" />
+                                                        Reenviar
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setEditingMemberId(editingMemberId === member.id ? null : member.id)}
+                                                        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors ${editingMemberId === member.id ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50 border-transparent hover:border-blue-100'}`}
+                                                    >
+                                                        <Shield className="w-3.5 h-3.5" />
+                                                        Permissões
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveMember(member.id)}
+                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>

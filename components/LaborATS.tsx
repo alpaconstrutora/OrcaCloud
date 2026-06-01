@@ -374,7 +374,7 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
         setSavingNote(true);
         try {
             await atsService.createInterview({
-                org_id: orgId,
+                org_id: candidate.org_id || orgId,
                 candidate_id: candidate.id,
                 tipo: 'CONTATO',
                 data_hora: new Date().toISOString(),
@@ -386,6 +386,8 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
             qc.invalidateQueries({ queryKey: interviewsKey });
             setNewNote('');
             setNewNota(undefined);
+        } catch (err: any) {
+            alert('Erro ao registrar: ' + err.message);
         } finally { setSavingNote(false); }
     };
 

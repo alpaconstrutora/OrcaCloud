@@ -3,10 +3,11 @@ import {
     Building2, Mail, Plus, Search,
     Trash2, Edit2, LayoutDashboard, Table2,
     Activity, Users, Briefcase, UserPlus,
-    TrendingUp, HandCoins, Filter, Truck, Settings
+    TrendingUp, HandCoins, Filter, Truck, Settings, Send
 } from 'lucide-react';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Organization, BudgetEntry } from '../types';
+import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import ProjectList from './ProjectList';
 import OrganizationUsers from './OrganizationUsers';
@@ -66,6 +67,18 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const [sortBy, setSortBy] = useState<string>('name-asc');
     const [managingOrgId, setManagingOrgId] = useState<string | null>(null);
     const { activeOrganizationId, setActiveOrganizationId } = useStore();
+
+    const handleResendInviteFromList = async (orgId: string, email: string, name: string, role: string) => {
+        try {
+            const { error } = await supabase.functions.invoke('invite-member', {
+                body: { email, name, organizationId: orgId, role },
+            });
+            if (error) alert(`Não foi possível reenviar o convite: ${error.message}`);
+            else alert(`Convite reenviado para ${email}`);
+        } catch {
+            alert('Erro ao reenviar convite. Tente novamente.');
+        }
+    };
 
     // Financial Registries State
     const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
@@ -477,15 +490,25 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                     </span>
                                                 </td>
                                                 <td className="px-8 py-4 text-right">
-                                                    <button 
-                                                        onClick={() => {
-                                                            setManagingOrgId(org.id);
-                                                            onTabChange('users');
-                                                        }}
-                                                        className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100"
-                                                    >
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <button
+                                                            title="Reenviar convite por e-mail"
+                                                            onClick={() => handleResendInviteFromList(org.id, member.email, member.name, member.role)}
+                                                            className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100"
+                                                        >
+                                                            <Send className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            title="Gerenciar usuários desta organização"
+                                                            onClick={() => {
+                                                                setManagingOrgId(org.id);
+                                                                onTabChange('users');
+                                                            }}
+                                                            className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100"
+                                                        >
+                                                            <Edit2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )))}

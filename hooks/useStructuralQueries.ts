@@ -9,9 +9,8 @@ import { STALE } from '../lib/queryClient'
 
 export function useSteelCatalog(orgId?: string) {
     return useQuery({
-        queryKey: structuralKeys.catalog(orgId ?? 'none'),
-        queryFn: () => structuralService.listSteelCatalog(orgId as string),
-        enabled: !!orgId,
+        queryKey: structuralKeys.catalog(orgId ?? 'global'),
+        queryFn: () => structuralService.listSteelCatalog(orgId),
         staleTime: STALE.normal,
     })
 }

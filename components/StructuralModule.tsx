@@ -158,10 +158,11 @@ const SteelForm: React.FC<{
 }
 
 // ── Catálogo de aço ───────────────────────────────────────────────────────────
-const SteelCatalog: React.FC<{ orgId: string }> = ({ orgId }) => {
+const SteelCatalog: React.FC<{ orgId?: string }> = ({ orgId }) => {
   const { data: catalog = [], isLoading } = useSteelCatalog(orgId)
-  const upsert = useUpsertSteel(orgId)
-  const remove = useDeleteSteel(orgId)
+  const upsert = useUpsertSteel(orgId ?? '')
+  const remove = useDeleteSteel(orgId ?? '')
+  const canEdit = !!orgId  // edição requer org específica selecionada
 
   const [editing, setEditing] = useState<SteelFormState | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -200,7 +201,7 @@ const SteelCatalog: React.FC<{ orgId: string }> = ({ orgId }) => {
   const submit = (s: SteelFormState) => {
     const input: UpsertSteelInput = {
       id: s.id,
-      orgId,
+      orgId: orgId ?? '',
       tipo: s.tipo,
       bitolaMm: parseFloat(s.bitolaMm),
       pesoLinearKgM: parseFloat(s.pesoLinearKgM),
@@ -230,12 +231,14 @@ const SteelCatalog: React.FC<{ orgId: string }> = ({ orgId }) => {
             Linhas <span className="font-bold">Global (NBR 7480)</span> são padrão; adicione as bitolas/custos da sua organização.
           </p>
         </div>
-        <button
-          onClick={startNew}
-          className="flex items-center gap-2 bg-blue-600 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" /> Novo aço
-        </button>
+        {canEdit && (
+          <button
+            onClick={startNew}
+            className="flex items-center gap-2 bg-blue-600 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" /> Novo aço
+          </button>
+        )}
       </div>
 
       {error && (
@@ -301,7 +304,7 @@ const SteelCatalog: React.FC<{ orgId: string }> = ({ orgId }) => {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        {isGlobal ? (
+                        {canEdit && isGlobal ? (
                           <button
                             onClick={() => startCopy(item)}
                             title="Copiar para a organização (definir custo)"
@@ -309,7 +312,7 @@ const SteelCatalog: React.FC<{ orgId: string }> = ({ orgId }) => {
                           >
                             <Plus className="w-4 h-4" />
                           </button>
-                        ) : (
+                        ) : canEdit && (
                           <>
                             <button
                               onClick={() => startEdit(item)}
@@ -434,21 +437,23 @@ const StructuralModule: React.FC<Props> = ({ activeOrganizationId, projects = []
   const [tab, setTab] = useState<ModuleTab>('catalogo')
   const [projectId, setProjectId] = useState<string | null>(null)
 
-  if (!activeOrganizationId) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-        <Construction className="w-12 h-12 mb-3 opacity-30" />
-        <p className="font-bold">Selecione uma organização</p>
-        <p className="text-xs mt-1">O catálogo de aço é por organização.</p>
-      </div>
-    )
-  }
+  type ProjectRow = { settings?: { organizationId?: string; classification?: string; isSystemProject?: boolean } }
 
+  // Obras visíveis: filtra por org quando uma está selecionada; mostra todas quando em modo "todas as orgs"
   const obras = projects.filter(p => {
-    const s = (p as { settings?: { organizationId?: string; classification?: string; isSystemProject?: boolean } }).settings
-    return s?.organizationId === activeOrganizationId && s?.classification === 'OBRA' && !s?.isSystemProject
+    const s = (p as ProjectRow).settings
+    if (!s?.classification || s.classification !== 'OBRA' || s.isSystemProject) return false
+    return activeOrganizationId ? s.organizationId === activeOrganizationId : true
   })
-  const projectName = obras.find(p => p.id === projectId)?.name ?? ''
+
+  const selectedProject = obras.find(p => p.id === projectId)
+  const projectName = selectedProject?.name ?? ''
+
+  // orgId efetivo: org ativa → orgId da obra selecionada → undefined (catálogo global)
+  const effectiveOrgId: string | undefined =
+    activeOrganizationId ??
+    (selectedProject as ProjectRow | undefined)?.settings?.organizationId ??
+    undefined
 
   return (
     <div className="p-6 space-y-5 max-w-6xl mx-auto">
@@ -468,7 +473,7 @@ const StructuralModule: React.FC<Props> = ({ activeOrganizationId, projects = []
         <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
           <Building2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
           {obras.length === 0 ? (
-            <span className="text-sm text-slate-400">Nenhuma obra nesta organização — crie uma em Engenharia → Obras</span>
+            <span className="text-sm text-slate-400">Nenhuma obra encontrada — crie uma em Engenharia → Obras</span>
           ) : (
             <select
               value={projectId ?? ''}
@@ -490,15 +495,15 @@ const StructuralModule: React.FC<Props> = ({ activeOrganizationId, projects = []
         <TabBtn active={tab === 'quantitativo'} icon={Calculator} label="Quantitativo" onClick={() => setTab('quantitativo')} />
       </div>
 
-      {tab === 'catalogo' && <SteelCatalog orgId={activeOrganizationId} />}
+      {tab === 'catalogo' && <SteelCatalog orgId={effectiveOrgId} />}
       {tab === 'obra' && (
-        <ObraTab orgId={activeOrganizationId} projectId={projectId} />
+        <ObraTab orgId={effectiveOrgId ?? ''} projectId={projectId} />
       )}
       {tab === 'corte' && (
-        <StructuralCutTable orgId={activeOrganizationId} projectId={projectId} projectName={projectName} />
+        <StructuralCutTable orgId={effectiveOrgId ?? ''} projectId={projectId} projectName={projectName} />
       )}
       {tab === 'quantitativo' && (
-        <StructuralQuantitative orgId={activeOrganizationId} projectId={projectId} projectName={projectName} />
+        <StructuralQuantitative orgId={effectiveOrgId ?? ''} projectId={projectId} projectName={projectName} />
       )}
     </div>
   )

@@ -20,13 +20,12 @@ export const structuralService = {
 
   // ── Catálogo de aço ───────────────────────────────────────
   // Traz o catálogo base global (org_id NULL) + o da própria org.
-  async listSteelCatalog(orgId: string): Promise<SteelCatalogItem[]> {
-    const { data, error } = await supabase
-      .from('structural_steel_catalog')
-      .select('*')
-      .or(`org_id.is.null,org_id.eq.${orgId}`)
-      .order('bitola_mm', { ascending: true })
-
+  async listSteelCatalog(orgId?: string): Promise<SteelCatalogItem[]> {
+    const query = supabase.from('structural_steel_catalog').select('*')
+    const filtered = orgId
+      ? query.or(`org_id.is.null,org_id.eq.${orgId}`)
+      : query.is('org_id', null)   // sem org → só catálogo global NBR 7480
+    const { data, error } = await filtered.order('bitola_mm', { ascending: true })
     if (error) throw error
     return (data ?? []) as SteelCatalogItem[]
   },

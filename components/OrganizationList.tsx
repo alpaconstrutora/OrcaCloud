@@ -435,6 +435,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                 {activeTab === 'users' && (
                     currentOrg ? (
                         <OrganizationUsers
+                            organizationId={currentOrg.id}
                             members={currentOrg.members || []}
                             onUpdateMembers={(members) => (onSave ?? onEdit)({ ...currentOrg, members })}
                             customRoles={currentOrg.customRoles || []}

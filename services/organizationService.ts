@@ -145,7 +145,7 @@ export const organizationService = {
                 })),
                 members: allMembers.filter(m => m.organization_id === org.id).map(m => ({
                     id: m.id,
-                    name: m.email.split('@')[0],
+                    name: m.name || m.email.split('@')[0],
                     email: m.email,
                     role: m.role,
                     customRoleId: m.custom_role_id,
@@ -269,6 +269,7 @@ export const organizationService = {
                     .upsert({
                         organization_id: id,
                         email: member.email.toLowerCase(),
+                        name: member.name,
                         role: member.role,
                         custom_role_id: member.customRoleId,
                         permissions: member.permissions

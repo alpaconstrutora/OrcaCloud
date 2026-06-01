@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { OrganizationMember, OrganizationRole, UserPermissions, OrganizationCustomRole } from '../types';
-import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users } from 'lucide-react';
+import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2 } from 'lucide-react';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+import { supabase } from '../lib/supabase';
 
 interface OrganizationUsersProps {
+    organizationId?: string;
     members: OrganizationMember[];
     onUpdateMembers: (updatedMembers: OrganizationMember[]) => void;
     customRoles: OrganizationCustomRole[];
@@ -56,6 +58,7 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
 };
 
 const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
+    organizationId,
     members = [],
     onUpdateMembers,
     customRoles = [],
@@ -72,6 +75,15 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const [newMemberName, setNewMemberName] = useState('');
     const [newMemberPermissions, setNewMemberPermissions] = useState<UserPermissions>(getDefaultPermissions('member'));
     const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+
+    // Edit member state
+    const [editingMember, setEditingMember] = useState<OrganizationMember | null>(null);
+    const [editMemberName, setEditMemberName] = useState('');
+    const [editMemberRole, setEditMemberRole] = useState<OrganizationRole>('member');
+
+    // Invite loading state
+    const [isInviting, setIsInviting] = useState(false);
+    const [inviteError, setInviteError] = useState<string | null>(null);
 
     // Role State
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
@@ -105,8 +117,10 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         }));
     };
 
-    const handleInvite = (e: React.FormEvent) => {
+    const handleInvite = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsInviting(true);
+        setInviteError(null);
 
         const newMember: OrganizationMember = {
             id: crypto.randomUUID(),
@@ -117,6 +131,28 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
             joinedAt: new Date().toISOString(),
             permissions: newMemberPermissions
         };
+
+        try {
+            if (organizationId) {
+                const { error: fnError } = await supabase.functions.invoke('invite-member', {
+                    body: {
+                        email: newMemberEmail,
+                        name: newMemberName,
+                        organizationId,
+                        role: newMemberRole,
+                    },
+                });
+
+                if (fnError) {
+                    console.warn('Email invite failed:', fnError.message);
+                    setInviteError(`Membro adicionado, mas o e-mail de convite não pôde ser enviado: ${fnError.message}`);
+                }
+            }
+        } catch (err) {
+            console.warn('Could not send invite email:', err);
+        } finally {
+            setIsInviting(false);
+        }
 
         onUpdateMembers([...members, newMember]);
         setIsInviteModalOpen(false);
@@ -129,6 +165,23 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         setNewMemberCustomRoleId('');
         setNewMemberName('');
         setNewMemberPermissions(getDefaultPermissions('member'));
+    };
+
+    const handleOpenEditMember = (member: OrganizationMember) => {
+        setEditingMember(member);
+        setEditMemberName(member.name);
+        setEditMemberRole(member.role);
+    };
+
+    const handleSaveEditMember = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingMember) return;
+        onUpdateMembers(members.map(m =>
+            m.id === editingMember.id
+                ? { ...m, name: editMemberName, role: editMemberRole, permissions: getDefaultPermissions(editMemberRole) }
+                : m
+        ));
+        setEditingMember(null);
     };
 
     const handleRemoveMember = (id: string) => {
@@ -334,6 +387,11 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                 <InlineDisclosureMenu
                                                     menuItems={[
                                                         {
+                                                            icon: <Edit2 className="w-[18px] h-[18px]" />,
+                                                            label: 'Editar',
+                                                            onClick: () => handleOpenEditMember(member),
+                                                        },
+                                                        {
                                                             icon: <Shield className="w-[18px] h-[18px]" />,
                                                             label: editingMemberId === member.id ? 'Fechar Permissões' : 'Permissões',
                                                             onClick: () => setEditingMemberId(editingMemberId === member.id ? null : member.id),
@@ -460,6 +518,58 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                 </div>
             )}
 
+            {/* Edit Member Modal */}
+            {editingMember && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md animate-in fade-in zoom-in duration-200 border border-gray-200">
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-gray-900">Editar Membro</h3>
+                            <button onClick={() => setEditingMember(null)} className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveEditMember} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={editMemberName}
+                                    onChange={(e) => setEditMemberName(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                                <input
+                                    type="email"
+                                    disabled
+                                    value={editingMember.email}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 cursor-not-allowed"
+                                />
+                                <p className="text-xs text-gray-400 mt-1">O e-mail não pode ser alterado pois é o identificador do membro.</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>
+                                <select
+                                    value={editMemberRole}
+                                    onChange={(e) => setEditMemberRole(e.target.value as OrganizationRole)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="admin">Administrador</option>
+                                    <option value="member">Membro</option>
+                                    <option value="viewer">Visualizador</option>
+                                </select>
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button type="button" onClick={() => setEditingMember(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
+                                <button type="submit" className="px-6 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all shadow-md shadow-blue-100">Salvar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
             {/* Invite Modal */}
             {isInviteModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -571,9 +681,16 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     </div>
                                 </div>
 
+                                {inviteError && (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                                        {inviteError}
+                                    </div>
+                                )}
                                 <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 mt-6">
-                                    <button type="button" onClick={() => setIsInviteModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
-                                    <button type="submit" className="px-6 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all shadow-md shadow-blue-100">Enviar Convite</button>
+                                    <button type="button" onClick={() => { setIsInviteModalOpen(false); setInviteError(null); }} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
+                                    <button type="submit" disabled={isInviting} className="px-6 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all shadow-md shadow-blue-100 disabled:opacity-60 disabled:cursor-not-allowed">
+                                        {isInviting ? 'Enviando...' : 'Enviar Convite'}
+                                    </button>
                                 </div>
                             </form>
                         </div>

@@ -85,12 +85,15 @@ const JobForm: React.FC<JobFormProps> = ({ orgId, job, projects, onClose, onSave
 
     const handleSave = async () => {
         if (!form.titulo?.trim() || !form.cargo?.trim()) { alert('Título e cargo são obrigatórios.'); return; }
+        if (!orgId) { alert('Organização não identificada. Recarregue a página.'); return; }
         setSaving(true);
         try {
             const project = projects.find(p => p.id === form.project_id);
             const payload = {
                 ...form,
+                org_id: orgId,
                 project_id: form.project_id || null,
+                responsavel_id: (form as any).responsavel_id || null,
                 data_limite: form.data_limite || null,
                 project_name: project?.name || '',
             } as any;

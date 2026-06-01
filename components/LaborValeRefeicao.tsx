@@ -303,6 +303,8 @@ const AbaCalendario: React.FC<{ orgId: string; projects: { id: string; name: str
             });
             setForm({ data: '', descricao: '', escopo: 'municipal', project_id: '' });
             qc.invalidateQueries({ queryKey: ['vr_feriados', orgId, ano] });
+        } catch (e: any) {
+            alert('Erro ao adicionar feriado: ' + (e.message ?? e));
         } finally {
             setSaving(false);
         }

@@ -254,7 +254,7 @@ export const vrService = {
     async upsertFeriado(feriado: Omit<VrFeriado, 'id' | 'created_at'>): Promise<VrFeriado> {
         const { data, error } = await supabase
             .from('vr_feriados')
-            .upsert(feriado, { onConflict: 'org_id,data,project_id' })
+            .insert(feriado)
             .select()
             .single();
         if (error) throw error;

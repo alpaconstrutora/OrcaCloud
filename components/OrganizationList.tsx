@@ -117,6 +117,15 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
         }
     }, [activeTab, activeOrganizationId, managingOrgId, loadRegistries]);
 
+    // Reset managingOrgId whenever the user navigates away from the users tab
+    // while in global context (no active org). This ensures the consolidated
+    // view appears correctly when coming back to the users tab.
+    React.useEffect(() => {
+        if (activeTab !== 'users' && !activeOrganizationId) {
+            setManagingOrgId(null);
+        }
+    }, [activeTab, activeOrganizationId]);
+
     const managingOrg = organizations.find(o => o.id === managingOrgId);
     const activeOrg = organizations.find(o => o.id === activeOrganizationId);
     const currentOrg = managingOrg || activeOrg;

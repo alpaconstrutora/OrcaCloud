@@ -106,6 +106,7 @@ const Layout: React.FC<LayoutProps> = ({
       };
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
+  const [isVendasOpen, setIsVendasOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
   React.useEffect(() => { if (activeView.startsWith('labor-')) setIsLaborOpen(true); }, [activeView]);
@@ -328,9 +329,6 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavGroup label="Inteligência de Negócios" />
               <NavItem id="bi-executivo" icon={BarChart3} label="BI Executivo" />
-              {(mod.incorporacao || isDev) && (
-                <NavItem id="imovib" icon={TrendingUp} label="Estudos de Viabilidade" />
-              )}
 
               <NavGroup label="Corporativo" />
 
@@ -504,12 +502,30 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
-              {(mod.crm || isDev) && (
+              {(mod.crm || mod.incorporacao || mod.broker_portal || isDev) && (
                 <>
-                  <NavGroup label="Comercial" />
-                  <NavItem id="services-commercial" icon={Briefcase} label="CRM Serviços" />
-                  <NavItem id="sales" icon={TrendingUp} label="Vendas" />
-                  <NavItem id="rentals" icon={Building2} label="Aluguéis" />
+                  <NavGroup label="Gestão de Vendas" />
+                  <NavDropdown
+                    label="Gestão de Vendas"
+                    icon={TrendingUp}
+                    isOpen={isVendasOpen}
+                    onToggle={() => setIsVendasOpen(!isVendasOpen)}
+                    hasActiveChild={['sales','rentals','services-commercial','broker-area','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib'].includes(activeView)}
+                  >
+                    {(mod.crm || isDev) && (
+                      <>
+                        <DropdownItem id="sales" label="Espelho de Vendas" icon={Building2} />
+                        <DropdownItem id="rentals" label="Aluguéis" icon={Building2} />
+                        <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />
+                      </>
+                    )}
+                    {(mod.broker_portal || isDev) && (
+                      <DropdownItem id="broker-area" label="Portal do Corretor" icon={Briefcase} />
+                    )}
+                    {(mod.incorporacao || isDev) && (
+                      <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
+                    )}
+                  </NavDropdown>
                 </>
               )}
 
@@ -529,9 +545,6 @@ const Layout: React.FC<LayoutProps> = ({
               ) : (
                 <>
                   <NavItem id="client-area" icon={User} label="Visão do Cliente" />
-                  {mod.broker_portal && (
-                    <NavItem id="broker-area" icon={Briefcase} label="Portal do Corretor" />
-                  )}
                 </>
               )}
             </>

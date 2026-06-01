@@ -8,6 +8,9 @@ import { propertyExportService } from '../services/propertyExportService';
 import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
+import DealWorkflowBar from './DealWorkflowBar';
+import { DealWorkflowStatus } from '../lib/dealWorkflow';
+import DealSignaturePanel from './DealSignaturePanel';
 
 interface DealModalProps {
     isOpen: boolean;
@@ -115,7 +118,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         if (formData.id) {
             setLoading(true);
             try {
-                const { hasPaid, paidCount } = await commercialFinanceService.hasPaidInstallments(formData.id);
+                const orgId = formData.organization_id || organizationId || '';
+                const { hasPaid, paidCount } = await commercialFinanceService.hasPaidInstallments(formData.id, orgId);
                 if (hasPaid) {
                     alert(`Não é possível regerar as parcelas. Esta negociação possui ${paidCount} parcela(s) com status "PAGO" no módulo financeiro. Para habilitar a regeração, você deve primeiro reverter o status dessas parcelas para "PENDENTE" no financeiro.`);
                     setLoading(false);
@@ -743,30 +747,25 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                     )}
 
-                                    {/* Status */}
+                                    {/* Workflow de Status */}
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Status do Processo</label>
-                                        <div className="relative">
-                                            <select
-                                                value={formData.status}
-                                                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner appearance-none"
-                                            >
-                                                <option value="IN_NEGOTIATION">🔄 Em Negociação</option>
-                                                <option value="PENDING">✍️ Aguardando Assinatura</option>
-                                                <option value="WAITING_PAYMENT">💰 Aguardando Pagamentos</option>
-                                                <option value="COMPLETED" disabled={formData.payment_method === 'INSTALLMENTS' || formData.payment_method === 'FINANCING'}>
-                                                    ✅ {formData.type === 'RENTAL' ? 'Alugado / Liquidado' : 'Vendido / Liquidado'} (Automático pelo Financeiro)
-                                                </option>
-                                                <option value="CANCELLED">❌ Cancelado</option>
-                                            </select>
-                                            <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none">
-                                                <Info className="w-4 h-4 text-purple-400" />
-                                            </div>
-                                        </div>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Etapa da Negociação</label>
+                                        <DealWorkflowBar
+                                            currentStatus={(formData.status as DealWorkflowStatus) || 'IN_NEGOTIATION'}
+                                            deal={formData}
+                                            organizationId={formData.organization_id || organizationId}
+                                            onTransition={(to, meta) => {
+                                                const updates: Partial<typeof formData> = { status: to };
+                                                if (meta?.reason) {
+                                                    const distratNotes = `[DISTRATO ${new Date().toLocaleDateString('pt-BR')}] Motivo: ${meta.reason}${meta.refundAmount ? ` | Devolução: R$ ${meta.refundAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}`;
+                                                    updates.notes = formData.notes ? `${formData.notes}\n${distratNotes}` : distratNotes;
+                                                }
+                                                setFormData({ ...formData, ...updates });
+                                            }}
+                                        />
                                         {(formData.payment_method === 'INSTALLMENTS' || formData.payment_method === 'FINANCING') && (
                                             <p className="text-[9px] font-black text-purple-500 uppercase tracking-tighter px-2 flex items-center gap-1">
-                                                <AlertCircle className="w-3 h-3" /> Status "Liquidado" será ativado automaticamente após a baixa da última parcela.
+                                                <AlertCircle className="w-3 h-3" /> Status "Concluído" será ativado automaticamente após a baixa da última parcela.
                                             </p>
                                         )}
                                     </div>
@@ -800,6 +799,20 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         />
                     </div>
                 </form>
+
+                {/* Painel de Assinatura — visível quando em Reserva/Contrato */}
+                {formData.id && formData.status === 'WAITING_PAYMENT' && (
+                    <div className="px-8 pb-4">
+                        <DealSignaturePanel
+                            deal={formData}
+                            client={selectedClient}
+                            organizationId={formData.organization_id || organizationId || ''}
+                            onStatusChange={(sigStatus: 'PENDING' | 'SIGNED') => {
+                                setFormData(prev => ({ ...prev, signature_status: sigStatus } as any));
+                            }}
+                        />
+                    </div>
+                )}
 
                 {/* Footer Executivo Premium */}
                 <div className="p-8 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between shrink-0">

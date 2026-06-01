@@ -82,12 +82,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [globalClientInstallments, setGlobalClientInstallments] = React.useState<PaymentInstallment[]>([]);
     
     React.useEffect(() => {
-        if (clientProfile && activeTab === 'financeiro') {
-            commercialFinanceService.listAllClientInstallments(clientProfile.id).then(installments => {
+        const orgId = settings.organizationId || (settings as any).organization_id;
+        if (clientProfile && activeTab === 'financeiro' && orgId) {
+            commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId).then(installments => {
                 setGlobalClientInstallments(installments);
             }).catch(console.error);
         }
-    }, [clientProfile, activeTab]);
+    }, [clientProfile, activeTab, settings]);
 
     React.useEffect(() => {
         const fetchOrders = async () => {

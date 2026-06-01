@@ -22,8 +22,9 @@ export const commercialFinanceService = {
      */
     async syncDealToFinance(deal: PropertyDeal, targetOrganizationId?: string, currentSettings?: ProjectSettings, isGlobalSync: boolean = false) {
         const orgToUse = targetOrganizationId || deal.organization_id;
+        if (!orgToUse) throw new Error('[COMMERCIAL-FINANCE] organizationId obrigatório — acesso cross-tenant não permitido');
         console.log(`[COMMERCIAL-FINANCE] Processing Deal #${deal.id} for Org: ${orgToUse}`);
-        
+
         const allowedStatuses = ['COMPLETED', 'PENDING', 'WAITING_PAYMENT', 'APPROVED'];
         if (!allowedStatuses.includes(deal.status || '')) {
             console.log(`[COMMERCIAL-FINANCE] Skip: Invalid status "${deal.status}"`);
@@ -376,18 +377,16 @@ export const commercialFinanceService = {
      * Sincroniza todas as negociações finalizadas de uma organização.
      * Útil para recuperar dados históricos ou forçar atualização total.
      */
-    async syncAllOrganizationDeals(organizationId?: string) {
-        console.log(`[COMMERCIAL-FINANCE] Starting batch sync for Org ${organizationId || 'ALL'}`);
+    async syncAllOrganizationDeals(organizationId: string) {
+        if (!organizationId) throw new Error('[COMMERCIAL-FINANCE] organizationId obrigatório — acesso cross-tenant não permitido');
+        console.log(`[COMMERCIAL-FINANCE] Starting batch sync for Org ${organizationId}`);
 
-        // 1. Listar todas as negociações finalizadas
-        let query = supabase
+        // 1. Listar todas as negociações finalizadas da organização
+        const query = supabase
             .from('commercial_deals')
             .select('*')
-            .eq('status', 'COMPLETED');
-
-        if (organizationId) {
-            query = query.eq('organization_id', organizationId);
-        }
+            .eq('status', 'COMPLETED')
+            .eq('organization_id', organizationId);
 
         const { data: deals, error } = await query;
         if (error) {
@@ -424,15 +423,17 @@ export const commercialFinanceService = {
      * Verifica se existem parcelas já pagas para uma determinada negociação.
      * Varredura global em todos os cofres comerciais da base para máxima segurança.
      */
-    async hasPaidInstallments(dealId: string): Promise<{ hasPaid: boolean, paidCount: number }> {
+    async hasPaidInstallments(dealId: string, organizationId: string): Promise<{ hasPaid: boolean, paidCount: number }> {
+        if (!organizationId) throw new Error('[COMMERCIAL-FINANCE] organizationId obrigatório — acesso cross-tenant não permitido');
         try {
-            console.log(`[COMMERCIAL-FINANCE] Global audit for paid installments on Deal ${dealId}`);
-            
-            // 1. Carregar TODOS os projetos de Gestão Comercial
+            console.log(`[COMMERCIAL-FINANCE] Auditing paid installments for Deal ${dealId} (Org: ${organizationId})`);
+
+            // 1. Carregar projetos de Gestão Comercial da organização
             const { data: projects, error } = await supabase
                 .from('projects')
                 .select('id, settings')
-                .eq('name', 'Gestão Comercial');
+                .eq('name', 'Gestão Comercial')
+                .filter('settings->>organizationId', 'eq', organizationId);
 
             if (error || !projects) return { hasPaid: false, paidCount: 0 };
 
@@ -604,20 +605,21 @@ export const commercialFinanceService = {
         }
     },
     /**
-     * Busca TODAS as parcelas vinculadas a um ID de cliente em qualquer projeto "Gestão Comercial".
-     * Ignora o organizationId para permitir visão unificada no Portal do Cliente (externo).
+     * Busca parcelas vinculadas a um cliente dentro da organização do cliente.
+     * Escoped por organizationId para evitar vazamento cross-tenant.
      */
-    async listAllClientInstallments(clientId: string) {
-        console.log(`[COMMERCIAL-FINANCE] Listing all global installments for Client ${clientId}`);
-        
-        // Buscar todos os projetos com nome "Gestão Comercial" na base
+    async listAllClientInstallments(clientId: string, organizationId: string) {
+        if (!organizationId) throw new Error('[COMMERCIAL-FINANCE] organizationId obrigatório — acesso cross-tenant não permitido');
+        console.log(`[COMMERCIAL-FINANCE] Listing installments for Client ${clientId} (Org: ${organizationId})`);
+
         const { data: projects, error } = await supabase
             .from('projects')
             .select('id, settings')
-            .eq('name', 'Gestão Comercial');
+            .eq('name', 'Gestão Comercial')
+            .filter('settings->>organizationId', 'eq', organizationId);
 
         if (error) {
-            console.error('[COMMERCIAL-FINANCE] Error fetching global commercial projects for client view:', error);
+            console.error('[COMMERCIAL-FINANCE] Error fetching commercial projects for client view:', error);
             return [];
         }
 

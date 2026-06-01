@@ -895,6 +895,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                             if (!confirm('Sincronizar todas as negociações com o Financeiro?')) return;
                                             const { commercialFinanceService } = await import('../services/commercialFinanceService');
                                             try {
+                                                if (!organizationId) { alert('Organização não selecionada.'); return; }
                                                 const count = await commercialFinanceService.syncAllOrganizationDeals(organizationId);
                                                 alert(`${count} negociações foram recriadas no Financeiro!`);
                                             } catch (err: any) {

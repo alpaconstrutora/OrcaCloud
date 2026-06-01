@@ -1057,8 +1057,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 }
             }
 
-            // 3. Sincronizar dados comerciais (Vendas/Aluguéis)
-            await commercialFinanceService.syncAllOrganizationDeals(orgToUse || undefined);
+            // 3. Sincronizar dados comerciais (Vendas/Aluguéis) — requer org isolada
+            if (orgToUse) {
+                await commercialFinanceService.syncAllOrganizationDeals(orgToUse);
+            }
 
             // 4. Recarregar transações no componente
             await loadTransactions();

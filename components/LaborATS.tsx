@@ -5,6 +5,12 @@ import {
     Trash2, Eye, Pencil, Users, Briefcase, Calendar, AlertTriangle,
     Building2, DollarSign, MessageSquare, Award, UserCheck
 } from 'lucide-react';
+import {
+    DndContext, DragEndEvent, DragOverlay, DragStartEvent,
+    PointerSensor, useSensor, useSensors, useDroppable, useDraggable,
+    closestCenter,
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     atsService,
@@ -184,17 +190,21 @@ const JobForm: React.FC<JobFormProps> = ({ orgId, job, projects, onClose, onSave
 
 // ── Card de Candidato ────────────────────────────────────────────────────────
 
-const CandidateCard: React.FC<{
+const CandidateCardInner: React.FC<{
     candidate: Candidate;
     onSelect: () => void;
     onStageChange: (stage: CandidateStage) => void;
     onDiscard: (stage: CandidateStage) => void;
-}> = ({ candidate, onSelect, onStageChange, onDiscard }) => {
+    isDragging?: boolean;
+}> = ({ candidate, onSelect, onStageChange, onDiscard, isDragging }) => {
     const stageIdx = STAGES.findIndex(s => s.id === candidate.stage);
     const nextStage = STAGES[stageIdx + 1];
 
     return (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 hover:shadow-md transition-all cursor-pointer group" onClick={onSelect}>
+        <div
+            className={`bg-white rounded-2xl border shadow-sm p-4 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group ${isDragging ? 'border-indigo-300 shadow-lg rotate-1 opacity-90' : 'border-slate-100'}`}
+            onClick={onSelect}
+        >
             <div className="flex items-start justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2 min-w-0">
                     <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-xs font-black text-indigo-600 shrink-0">
@@ -212,7 +222,6 @@ const CandidateCard: React.FC<{
                     </div>
                 )}
             </div>
-            {/* Contato */}
             <div className="space-y-1 mb-3">
                 {candidate.telefone && (
                     <p className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -228,7 +237,6 @@ const CandidateCard: React.FC<{
                     <p className="text-xs text-slate-400">{candidate.experiencia_anos} ano{candidate.experiencia_anos > 1 ? 's' : ''} de experiência</p>
                 )}
             </div>
-            {/* Avançar / Reprovar */}
             <div className="flex items-center gap-2 pt-2 border-t border-slate-50 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                 {nextStage && (
                     <button onClick={() => onStageChange(nextStage.id)}
@@ -240,6 +248,59 @@ const CandidateCard: React.FC<{
                     className="p-1.5 hover:bg-red-50 text-slate-300 hover:text-rose-500 rounded-lg transition-colors">
                     <X className="w-3.5 h-3.5" />
                 </button>
+            </div>
+        </div>
+    );
+};
+
+const CandidateCard: React.FC<{
+    candidate: Candidate;
+    onSelect: () => void;
+    onStageChange: (stage: CandidateStage) => void;
+    onDiscard: (stage: CandidateStage) => void;
+}> = (props) => {
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: props.candidate.id });
+    const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
+    return (
+        <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
+            <CandidateCardInner {...props} isDragging={isDragging} />
+        </div>
+    );
+};
+
+const KanbanColumn: React.FC<{
+    stage: typeof STAGES[number];
+    candidates: Candidate[];
+    onSelect: (c: Candidate) => void;
+    onStageChange: (id: string, stage: CandidateStage) => void;
+    onDiscard: (id: string, stage: CandidateStage) => void;
+    isOver: boolean;
+}> = ({ stage, candidates, onSelect, onStageChange, onDiscard, isOver }) => {
+    const { setNodeRef } = useDroppable({ id: stage.id });
+    return (
+        <div className="w-64 shrink-0">
+            <div className={`flex items-center justify-between px-3 py-2 rounded-xl ${stage.bg} mb-3`}>
+                <span className={`text-xs font-black uppercase tracking-widest ${stage.color}`}>{stage.label}</span>
+                <span className={`text-xs font-black px-2 py-0.5 rounded-full bg-white/60 ${stage.color}`}>{candidates.length}</span>
+            </div>
+            <div
+                ref={setNodeRef}
+                className={`space-y-3 min-h-[80px] rounded-2xl transition-colors ${isOver ? 'bg-indigo-50/60 ring-2 ring-indigo-200 ring-dashed p-2' : ''}`}
+            >
+                {candidates.map(c => (
+                    <CandidateCard
+                        key={c.id}
+                        candidate={c}
+                        onSelect={() => onSelect(c)}
+                        onStageChange={(s) => onStageChange(c.id, s)}
+                        onDiscard={(s) => { if (confirm('Reprovar candidato?')) onDiscard(c.id, s); }}
+                    />
+                ))}
+                {candidates.length === 0 && !isOver && (
+                    <div className="h-20 rounded-2xl border-2 border-dashed border-slate-100 flex items-center justify-center">
+                        <p className="text-[10px] text-slate-300 font-bold">Sem candidatos</p>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -433,6 +494,10 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
     const [editingJob, setEditingJob] = useState<JobOpening | null>(null);
     const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
     const [showAddCandidate, setShowAddCandidate] = useState(false);
+    const [draggingId, setDraggingId] = useState<string | null>(null);
+    const [overStage, setOverStage] = useState<string | null>(null);
+
+    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
     const jobsKey      = ['ats', 'jobs', orgId];
     const candidatesKey = ['ats', 'candidates', orgId, selectedJobId];
@@ -464,19 +529,39 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
 
     const stageMutation = useMutation({
         mutationFn: ({ id, stage }: { id: string; stage: CandidateStage }) => atsService.updateCandidateStage(id, stage),
-        onSuccess: invalidate,
+        onMutate: async ({ id, stage }) => {
+            await qc.cancelQueries({ queryKey: candidatesKey });
+            const prev = qc.getQueryData<Candidate[]>(candidatesKey);
+            qc.setQueryData<Candidate[]>(candidatesKey, old =>
+                old ? old.map(c => c.id === id ? { ...c, stage } : c) : old
+            );
+            return { prev };
+        },
+        onError: (_err, _vars, ctx) => {
+            if (ctx?.prev) qc.setQueryData(candidatesKey, ctx.prev);
+        },
+        onSettled: invalidate,
     });
+
+    const handleDragStart = ({ active }: DragStartEvent) => setDraggingId(String(active.id));
+    const handleDragOver = ({ over }: { over: { id: string | number } | null }) => setOverStage(over ? String(over.id) : null);
+    const handleDragEnd = ({ active, over }: DragEndEvent) => {
+        setDraggingId(null);
+        setOverStage(null);
+        if (!over) return;
+        const newStage = String(over.id) as CandidateStage;
+        const cand = candidates.find(c => c.id === String(active.id));
+        if (cand && cand.stage !== newStage) {
+            stageMutation.mutate({ id: String(active.id), stage: newStage });
+        }
+    };
 
     const deleteJobMutation  = useMutation({ mutationFn: (id: string) => atsService.deleteJob(id), onSuccess: invalidate });
 
     const activeJobs = jobs.filter(j => j.status === 'ABERTA');
     const selectedJob = jobs.find(j => j.id === selectedJobId);
 
-    // Agrupar candidatos por stage
-    const candidatesByStage = STAGES.reduce((acc, s) => {
-        acc[s.id] = candidates.filter(c => c.stage === s.id && !search || candidates.filter(c => c.stage === s.id && c.nome.toLowerCase().includes(search.toLowerCase())));
-        return acc;
-    }, {} as Record<CandidateStage, Candidate[]>);
+    const draggingCandidate = draggingId ? candidates.find(c => c.id === draggingId) : null;
 
     const filteredCandidates = candidates.filter(c =>
         STAGES.some(s => s.id === c.stage) &&
@@ -555,40 +640,46 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
 
             {/* Kanban Pipeline */}
             {view === 'kanban' && (
-                <div className="overflow-x-auto">
-                    <div className="flex gap-4 min-w-max pb-4">
-                        {STAGES.map(stage => {
-                            const stageCands = candidates.filter(c =>
-                                c.stage === stage.id &&
-                                (!search || c.nome.toLowerCase().includes(search.toLowerCase()))
-                            );
-                            return (
-                                <div key={stage.id} className="w-64 shrink-0">
-                                    <div className={`flex items-center justify-between px-3 py-2 rounded-xl ${stage.bg} mb-3`}>
-                                        <span className={`text-xs font-black uppercase tracking-widest ${stage.color}`}>{stage.label}</span>
-                                        <span className={`text-xs font-black px-2 py-0.5 rounded-full bg-white/60 ${stage.color}`}>{stageCands.length}</span>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {stageCands.map(c => (
-                                            <CandidateCard
-                                                key={c.id}
-                                                candidate={c}
-                                                onSelect={() => setSelectedCandidate(c)}
-                                                onStageChange={(newStage) => stageMutation.mutate({ id: c.id, stage: newStage })}
-                                                onDiscard={(newStage) => { if (confirm('Reprovar candidato?')) stageMutation.mutate({ id: c.id, stage: newStage }); }}
-                                            />
-                                        ))}
-                                        {stageCands.length === 0 && (
-                                            <div className="h-20 rounded-2xl border-2 border-dashed border-slate-100 flex items-center justify-center">
-                                                <p className="text-[10px] text-slate-300 font-bold">Sem candidatos</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDragEnd={handleDragEnd}
+                >
+                    <div className="overflow-x-auto">
+                        <div className="flex gap-4 min-w-max pb-4">
+                            {STAGES.map(stage => {
+                                const stageCands = candidates.filter(c =>
+                                    c.stage === stage.id &&
+                                    (!search || c.nome.toLowerCase().includes(search.toLowerCase()))
+                                );
+                                return (
+                                    <KanbanColumn
+                                        key={stage.id}
+                                        stage={stage}
+                                        candidates={stageCands}
+                                        onSelect={setSelectedCandidate}
+                                        onStageChange={(id, s) => stageMutation.mutate({ id, stage: s })}
+                                        onDiscard={(id, s) => stageMutation.mutate({ id, stage: s })}
+                                        isOver={overStage === stage.id}
+                                    />
+                                );
+                            })}
+                        </div>
                     </div>
-                </div>
+                    <DragOverlay>
+                        {draggingCandidate && (
+                            <CandidateCardInner
+                                candidate={draggingCandidate}
+                                onSelect={() => {}}
+                                onStageChange={() => {}}
+                                onDiscard={() => {}}
+                                isDragging
+                            />
+                        )}
+                    </DragOverlay>
+                </DndContext>
             )}
 
             {/* Lista de Vagas */}

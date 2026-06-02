@@ -385,27 +385,33 @@ export const payrollEngine = {
 
     /**
      * RECIBO DE ADIANTAMENTO
-     * Gera apenas o item ADIANTAMENTO com o valor lançado manualmente via evento.
-     * Sem cálculo de salário base, INSS, IRRF ou FGTS.
+     * Usa a rubrica ADIANTAMENTO já configurada (percentual do salário, ex: 40%).
+     * No recibo, o valor é exibido como provento (o que o colaborador recebe).
+     * Sem INSS, IRRF ou FGTS — o adiantamento não tem incidência própria.
      */
     async processAdvance(ctx: PayrollContext) {
-        const { events } = ctx;
+        const { employee, rubrics } = ctx;
         const items: Omit<PayrollItem, 'payroll_run_id' | 'employee_id'>[] = [];
 
-        const advanceEvent = events.find(e => e.rubric_code === 'ADIANTAMENTO');
-        const amount = advanceEvent?.amount ?? 0;
+        const baseSalary = employee.base_salary || 0;
+        const hourly_rate = baseSalary / 220;
+        const baseValues: Record<string, number> = { SALARIO: baseSalary, SALARIO_REFERENCE: 30 };
 
-        if (amount > 0) {
-            items.push({
-                code: 'ADIANTAMENTO',
-                type: 'provento',
-                amount,
-                base_amount: amount,
-                reference: 1,
-            });
+        const advRubric = rubrics.find(r => r.code === 'ADIANTAMENTO' && r.active);
+        if (advRubric) {
+            const result = this.calculateRubricValue(advRubric, baseValues, hourly_rate, []);
+            if (result && result.amount > 0) {
+                items.push({
+                    code: 'ADIANTAMENTO',
+                    type: 'provento',
+                    amount: result.amount,
+                    base_amount: result.base_amount,
+                    reference: result.reference,
+                });
+            }
         }
 
-        const gross = amount;
+        const gross = items.reduce((s, i) => s + i.amount, 0);
         return this.persistResults(ctx, items, gross, 0, 0, { base_inss: 0, base_fgts: 0, base_irrf: 0 });
     },
 

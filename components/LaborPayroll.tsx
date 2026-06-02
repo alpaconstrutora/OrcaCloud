@@ -45,7 +45,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
     // ── Modal state ───────────────────────────────────────────────────────────
     const [showNewRunModal, setShowNewRunModal] = useState(false);
     const [showEventModal, setShowEventModal]   = useState<{ employeeId: string; employeeName: string } | null>(null);
-    const [showPaystub, setShowPaystub]         = useState<{ runId: string; employeeId: string; adiantamentoOnly?: boolean } | null>(null);
+    const [showPaystub, setShowPaystub]         = useState<{ runId: string; employeeId: string } | null>(null);
 
     // ── Effects ───────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -424,7 +424,6 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                     executing={executing}
                     onClose={() => setShowEventModal(null)}
                     onEventSaved={handleEventSaved}
-                    onViewPaystub={(runId, empId) => setShowPaystub({ runId, employeeId: empId, adiantamentoOnly: true })}
                 />
             )}
 
@@ -434,7 +433,6 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                     orgId={orgId}
                     runId={showPaystub.runId}
                     employeeId={showPaystub.employeeId}
-                    adiantamentoOnly={showPaystub.adiantamentoOnly}
                     onClose={() => setShowPaystub(null)}
                 />
             )}

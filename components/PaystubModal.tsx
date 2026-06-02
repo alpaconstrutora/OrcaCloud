@@ -1,18 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    X, Printer, Loader2, FileText, AlertCircle, Download, Plus
+    X, Printer, Loader2, FileText, AlertCircle, Download
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { payrollService, PayrollItem, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
-import { payrollEngine } from '../services/payrollEngine';
 
 interface PaystubModalProps {
     orgId: string;
     runId: string;
     employeeId: string;
     onClose: () => void;
-    adiantamentoOnly?: boolean;
 }
 
 const formatDate = (dateStr: string) => {
@@ -37,14 +35,13 @@ const formatMonthYear = (dateStr: string) => {
     return `${months[parseInt(month) - 1]} de ${year}`;
 };
 
-const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, onClose, adiantamentoOnly = false }) => {
+const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, onClose }) => {
     const [result, setResult] = useState<PayrollResultWithEmployee | null>(null);
     const [items, setItems] = useState<PayrollItem[]>([]);
     const [events, setEvents] = useState<PayrollEvent[]>([]);
     const [rubrics, setRubrics] = useState<PayrollRubric[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [noValue, setNoValue] = useState(false);
     const [run, setRun] = useState<PayrollRun | null>(null);
     const [exporting, setExporting] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
@@ -57,72 +54,24 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
         try {
             setLoading(true);
             setError(null);
-            setNoValue(false);
 
             const [runData, resData, itemsData, rubricsData, eventsData] = await Promise.all([
                 payrollService.getRun(runId),
-                payrollService.getPayrollResult(runId, employeeId).catch(() => null),
-                payrollService.getEmployeeItems(runId, employeeId).catch(() => []),
+                payrollService.getPayrollResult(runId, employeeId),
+                payrollService.getEmployeeItems(runId, employeeId),
                 payrollService.listRubrics(),
                 payrollService.listEvents('all', runId)
             ]);
-
-            setRun(runData);
-            setRubrics(rubricsData);
-            const empEvents = eventsData.filter((e) => e.employee_id === employeeId);
-            setEvents(empEvents);
-
-            // Recibo de adiantamento: gerado a partir do evento, em qualquer tipo de run
-            if (adiantamentoOnly || runData.type === 'adiantamento') {
-                let advEv = empEvents.find(
-                    e => e.rubric_code === 'ADIANTAMENTO' || e.code === 'ADIANTAMENTO'
-                );
-                // Fallback: busca em qualquer run do mesmo período (ex: evento na folha mensal)
-                if (!advEv || advEv.amount <= 0) {
-                    advEv = await payrollService.findAdiantamentoEvent(
-                        employeeId, runData.start_date, runData.end_date
-                    ) ?? undefined;
-                }
-
-                if (advEv && advEv.amount > 0) {
-                    const syntheticItem = {
-                        id: advEv.id ?? 'synthetic',
-                        payroll_run_id: runId,
-                        employee_id: employeeId,
-                        code: 'ADIANTAMENTO',
-                        type: 'provento' as const,
-                        amount: advEv.amount,
-                        base_amount: advEv.amount,
-                        reference: 1,
-                    };
-                    const baseResult = resData ?? {
-                        employee_id: employeeId,
-                        payroll_run_id: runId,
-                        gross: 0, discounts: 0, net: 0, employer_cost: 0,
-                        base_inss: 0, base_fgts: 0, base_irrf: 0,
-                        employee: undefined,
-                    } as unknown as PayrollResultWithEmployee;
-                    setItems([syntheticItem]);
-                    setResult({ ...baseResult, gross: advEv.amount, discounts: 0, net: advEv.amount, employer_cost: advEv.amount });
-                    // Força o badge "Recibo de Adiantamento" independente do tipo do run
-                    setRun({ ...runData, type: 'adiantamento' });
-                    if (runData.type === 'adiantamento') {
-                        payrollEngine.calculateEmployeePayroll(employeeId, runId).catch(console.error);
-                    }
-                    return;
-                }
-
-                // Adiantamento sem evento lançado → tela orientativa (não é erro)
-                setNoValue(true);
-                return;
-            }
 
             if (!resData) {
                 setError('Nenhum dado financeiro encontrado para este colaborador.');
                 return;
             }
 
+            setRun(runData);
             setResult(resData);
+            setRubrics(rubricsData);
+            setEvents(eventsData.filter((e) => e.employee_id === employeeId));
             setItems(itemsData);
         } catch (err: unknown) {
             console.error('Error loading paystub data:', err);
@@ -178,29 +127,6 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                 </button>
                 <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Gerando Holerite...</p>
-            </div>
-        </div>
-    );
-
-    if (noValue) return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center space-y-4">
-                <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mx-auto">
-                    <Plus className="w-8 h-8" />
-                </div>
-                <h3 className="text-xl font-black text-slate-900 uppercase">Valor não lançado</h3>
-                <p className="text-sm font-bold text-slate-500 leading-relaxed">
-                    Nenhum adiantamento foi lançado para este colaborador ainda.
-                </p>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                    Volte à listagem da folha, clique em <strong className="text-indigo-600">+</strong> ao lado do colaborador e adicione a rubrica <strong className="text-indigo-600">ADIANTAMENTO</strong> com o valor desejado.
-                </p>
-                <button
-                    onClick={onClose}
-                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-colors"
-                >
-                    Voltar
-                </button>
             </div>
         </div>
     );

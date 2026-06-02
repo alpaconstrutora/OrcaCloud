@@ -208,7 +208,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                                 <YAxis dataKey="name" type="category" axisLine={false} tickLine={false}
                                     tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} width={70} />
                                 <Tooltip
-                                    formatter={(val: any, name: string) => [
+                                    formatter={(val: any, name: any) => [
                                         formatCurrencyFull(Number(val)),
                                         name === 'estimado' ? 'Estimado (Folha)' : 'Real (Aprovado)',
                                     ]}

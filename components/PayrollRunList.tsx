@@ -34,8 +34,16 @@ const TYPE_LABELS: Record<string, string> = {
     mensal: 'Mensal',
     adiantamento: 'Adiantamento',
     ferias: 'Férias',
-    decimo_terceiro: '13º',
+    decimo_terceiro: '13º Salário',
     rescisao: 'Rescisão',
+};
+
+const TYPE_COLORS: Record<string, string> = {
+    mensal:          'bg-indigo-100 text-indigo-700 border-indigo-200',
+    adiantamento:    'bg-amber-100 text-amber-700 border-amber-200',
+    ferias:          'bg-emerald-100 text-emerald-700 border-emerald-200',
+    decimo_terceiro: 'bg-violet-100 text-violet-700 border-violet-200',
+    rescisao:        'bg-rose-100 text-rose-700 border-rose-200',
 };
 
 const PayrollRunList: React.FC<PayrollRunListProps> = ({
@@ -58,7 +66,7 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                 onClick={() => onTypeFilter(t)}
                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${typeFilter === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                             >
-                                {t === 'all' ? 'Todas' : t.replace('_', ' ')}
+                                {t === 'all' ? 'Todas' : (TYPE_LABELS[t] ?? t)}
                             </button>
                         ))}
                     </div>
@@ -131,7 +139,7 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
         {/* Tabela de Runs */}
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
             {/* Cabeçalho */}
-            <div className="grid grid-cols-[1fr_1fr_140px_90px_100px_40px] gap-0 border-b border-slate-100 bg-slate-50 px-4 py-2">
+            <div className="grid grid-cols-[1fr_1fr_140px_120px_100px_40px] gap-0 border-b border-slate-100 bg-slate-50 px-4 py-2">
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Período</span>
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Organização</span>
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 text-right">Valor Total</span>
@@ -155,7 +163,7 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                         <div
                             key={run.id}
                             onClick={() => onSelectRun(run)}
-                            className={`grid grid-cols-[1fr_1fr_140px_90px_100px_40px] gap-0 items-center px-4 py-3 cursor-pointer group transition-colors hover:bg-slate-50 ${idx !== 0 ? 'border-t border-slate-100' : ''}`}
+                            className={`grid grid-cols-[1fr_1fr_140px_120px_100px_40px] gap-0 items-center px-4 py-3 cursor-pointer group transition-colors hover:bg-slate-50 ${idx !== 0 ? 'border-t border-slate-100' : ''}`}
                         >
                             {/* Período */}
                             <div className="flex items-center gap-2 min-w-0">
@@ -177,7 +185,7 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
 
                             {/* Tipo */}
                             <div className="flex justify-center">
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px] font-black uppercase tracking-tighter border border-slate-200">
+                                <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tighter border ${TYPE_COLORS[run.type] ?? 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                                     {TYPE_LABELS[run.type] ?? run.type}{run.subtype ? ` · ${run.subtype}` : ''}
                                 </span>
                             </div>

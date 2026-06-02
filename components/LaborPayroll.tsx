@@ -352,6 +352,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                                     }}
                                 >
                                     <option value="mensal">Mensal Padrão</option>
+                                    <option value="adiantamento">Adiantamento</option>
                                     <option value="ferias">Férias</option>
                                     <option value="decimo_terceiro">13º Salário</option>
                                     <option value="rescisao">Rescisão</option>
@@ -423,6 +424,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                     executing={executing}
                     onClose={() => setShowEventModal(null)}
                     onEventSaved={handleEventSaved}
+                    onViewPaystub={(runId, empId) => setShowPaystub({ runId, employeeId: empId })}
                 />
             )}
 

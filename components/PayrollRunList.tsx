@@ -32,6 +32,7 @@ const fmtBRL = (v: number) =>
 
 const TYPE_LABELS: Record<string, string> = {
     mensal: 'Mensal',
+    adiantamento: 'Adiantamento',
     ferias: 'Férias',
     decimo_terceiro: '13º',
     rescisao: 'Rescisão',
@@ -51,7 +52,7 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                 <div className="flex flex-wrap items-center gap-3">
                     {/* Tipos de Folha */}
                     <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-                        {['all', 'mensal', 'ferias', 'decimo_terceiro', 'rescisao'].map(t => (
+                        {['all', 'mensal', 'adiantamento', 'ferias', 'decimo_terceiro', 'rescisao'].map(t => (
                             <button
                                 key={t}
                                 onClick={() => onTypeFilter(t)}

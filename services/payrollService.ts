@@ -76,7 +76,7 @@ export interface PayrollRun {
     start_date: string;
     end_date: string;
     status: string;
-    type: 'mensal' | 'ferias' | 'decimo_terceiro' | 'rescisao';
+    type: 'mensal' | 'adiantamento' | 'ferias' | 'decimo_terceiro' | 'rescisao';
     subtype?: string;
     vacation_start?: string;
     vacation_end?: string;

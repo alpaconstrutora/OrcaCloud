@@ -95,6 +95,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
         setEventUnit('fixed');
         setEventQuantity(0);
         setEditingEvent(null);
+        setAdiantamentoSalvo(false);
     };
 
     const handleSave = async () => {

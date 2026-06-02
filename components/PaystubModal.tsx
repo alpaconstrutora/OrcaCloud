@@ -163,7 +163,9 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                         </div>
                         <div>
                             <h3 className="text-lg font-black text-slate-900 uppercase">Recibo de Pagamento</h3>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Referência: {formatMonthYear(run?.start_date || '')}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                                {run?.type === 'adiantamento' ? 'Adiantamento — ' : 'Referência: '}{formatMonthYear(run?.start_date || '')}
+                            </p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -200,7 +202,8 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                             </div>
                             <div className="text-right">
                                 <span className="px-3 py-1 bg-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest">
-                                    {run?.type === 'mensal' ? 'Folha Mensal' : 
+                                    {run?.type === 'mensal' ? 'Folha Mensal' :
+                                     run?.type === 'adiantamento' ? 'Recibo de Adiantamento' :
                                      run?.type === 'ferias' ? 'Recibo de Férias' :
                                      run?.type === 'decimo_terceiro' ? `13º Salário ${run.subtype ? `(${run.subtype})` : ''}` :
                                      run?.type === 'rescisao' ? 'Rescisão de Contrato' : 'Folha de Pagamento'}

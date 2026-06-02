@@ -271,7 +271,7 @@ const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string 
 
 // ─── Aba Calendário ───────────────────────────────────────────────────────────
 
-const AbaCalendario: React.FC<{ orgId: string; projects: { id: string; name: string }[] }> = ({ orgId, projects }) => {
+const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name: string }[]; projects: { id: string; name: string }[] }> = ({ orgId, organizations, projects }) => {
     const qc = useQueryClient();
     const anoAtual = new Date().getFullYear();
     const [ano, setAno] = useState(anoAtual);
@@ -290,17 +290,23 @@ const AbaCalendario: React.FC<{ orgId: string; projects: { id: string; name: str
     });
 
     const handleAdd = async () => {
-        if (!orgId || orgId === 'all') { alert('Selecione uma organização específica no topo do módulo antes de cadastrar feriados.'); return; }
         if (!form.data || !form.descricao.trim()) return;
         setSaving(true);
         try {
-            await vrService.upsertFeriado({
-                org_id: orgId,
-                data: form.data,
-                descricao: form.descricao,
-                escopo: form.escopo,
-                project_id: form.project_id || null,
-            });
+            // Modo consolidado → insere em todas as orgs do usuário
+            const orgsAlvo = (!orgId || orgId === 'all')
+                ? organizations.map(o => o.id)
+                : [orgId];
+
+            for (const oid of orgsAlvo) {
+                await vrService.upsertFeriado({
+                    org_id: oid,
+                    data: form.data,
+                    descricao: form.descricao,
+                    escopo: form.escopo,
+                    project_id: form.project_id || null,
+                });
+            }
             setForm({ data: '', descricao: '', escopo: 'municipal', project_id: '' });
             qc.invalidateQueries({ queryKey: ['vr_feriados', orgId, ano] });
         } catch (e: any) {
@@ -760,6 +766,7 @@ type VrTab = 'regras' | 'calendario' | 'calculo' | 'historico';
 
 interface LaborValeRefeicaoProps {
     orgId: string;
+    organizations: { id: string; name: string }[];
     employees: Employee[];
     projects: { id: string; name: string }[];
 }
@@ -771,7 +778,7 @@ const TABS: { id: VrTab; label: string; icon: React.ElementType }[] = [
     { id: 'historico',  label: 'Histórico',       icon: FileText },
 ];
 
-const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, employees, projects }) => {
+const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, organizations, employees, projects }) => {
     const [tab, setTab] = useState<VrTab>('calculo');
 
     return (
@@ -803,7 +810,7 @@ const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, employees,
 
             {/* Content */}
             {tab === 'regras'     && <AbaRegras orgId={orgId} projects={projects} />}
-            {tab === 'calendario' && <AbaCalendario orgId={orgId} projects={projects} />}
+            {tab === 'calendario' && <AbaCalendario orgId={orgId} organizations={organizations} projects={projects} />}
             {tab === 'calculo'    && <AbaCalculo orgId={orgId} employees={employees} projects={projects} />}
             {tab === 'historico'  && <AbaHistorico orgId={orgId} />}
         </div>

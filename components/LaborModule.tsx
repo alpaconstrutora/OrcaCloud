@@ -590,6 +590,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     {activeTab === 'vale_refeicao' && (
                         <LaborValeRefeicao
                             orgId={currentOrgId || activeOrganizationId || ''}
+                            organizations={organizations.map(o => ({ id: o.id, name: o.name }))}
                             employees={employees}
                             projects={projects
                                 .filter((p: any) => p.settings?.classification === 'OBRA' && p.name !== 'Gestão Comercial')

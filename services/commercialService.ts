@@ -170,6 +170,29 @@ export const commercialService = {
         }
 
         if (deal.id) {
+            // 1.1 — Ao avançar para WAITING_PAYMENT via update, verifica se a unidade
+            // ainda está disponível (outro deal pode ter reservado no intervalo)
+            if (dbPayload.status === 'WAITING_PAYMENT' && dbPayload.property_id) {
+                const { data: prop } = await supabase
+                    .from('commercial_properties')
+                    .select('status')
+                    .eq('id', dbPayload.property_id)
+                    .single();
+                if (prop && prop.status !== 'AVAILABLE' && prop.status !== 'RESERVED') {
+                    throw new Error(`Unidade não disponível para reserva (status atual: ${prop.status}). Verifique se já foi vendida ou alugada.`);
+                }
+                // Também verifica se há outro deal ativo (não este) para a mesma unidade
+                const { data: otherDeals } = await supabase
+                    .from('commercial_deals')
+                    .select('id, status')
+                    .eq('property_id', dbPayload.property_id)
+                    .neq('id', deal.id)
+                    .neq('status', 'CANCELLED');
+                if (otherDeals && otherDeals.length > 0) {
+                    throw new Error('Já existe outro contrato ativo para esta unidade. Cancele-o antes de reservar.');
+                }
+            }
+
             const { data, error } = await supabase
                 .from('commercial_deals')
                 .update(dbPayload)
@@ -185,7 +208,7 @@ export const commercialService = {
         } else {
             // REGRA: Unicidade de Unidade (Uma Unidade, Uma Venda Ativa)
             if (dbPayload.property_id && (dbPayload.type === 'SALE' || dbPayload.type === 'RENTAL')) {
-                const { data: existingDeals, error: checkError } = await supabase
+                const { data: existingDeals } = await supabase
                     .from('commercial_deals')
                     .select('id, status')
                     .eq('property_id', dbPayload.property_id)
@@ -234,7 +257,10 @@ export const commercialService = {
                     linked_project_id: deal.linked_project_id || (result as any).linked_project_id
                 };
 
-                const syncResult = await commercialFinanceService.syncDealToFinance(finalDealToSync);
+                // 0.1 — passa organization_id explicitamente para evitar vazamento cross-tenant
+                const orgId = result.organization_id || dbPayload.organization_id;
+                if (!orgId) throw new Error('[COMMERCIAL SERVICE] organization_id ausente — impossível sincronizar financeiro.');
+                const syncResult = await commercialFinanceService.syncDealToFinance(finalDealToSync, orgId);
                 
                 // PERSISTÊNCIA IMEDIATA: Gravar as parcelas calculadas no cofre financeiro
                 // Antes, o resultado do syncDealToFinance era descartado, e o Global Sync posterior
@@ -259,14 +285,22 @@ export const commercialService = {
                 console.error('[COMMERCIAL SERVICE] Sync or Property update failed:', err);
             }
         } else if (result.status === 'CANCELLED') {
-            try {
-                if (result.property_id) {
-                    await supabase.from('commercial_properties').update({ status: 'AVAILABLE', client_id: null }).eq('id', result.property_id);
-                    console.log(`[COMMERCIAL SERVICE] Property ${result.property_id} reverted to AVAILABLE due to deal cancellation`);
-                }
-            } catch (err) {
-                console.error('[COMMERCIAL SERVICE] Error reverting property status:', err);
-            }
+            // 1.3 — Distrato: reverte unidade + estorna parcelas pendentes do vault financeiro
+            const cancelOrgId = result.organization_id || dbPayload.organization_id;
+            await Promise.allSettled([
+                // (a) Libera a unidade no espelho
+                result.property_id
+                    ? supabase.from('commercial_properties')
+                        .update({ status: 'AVAILABLE', client_id: null })
+                        .eq('id', result.property_id)
+                        .then(() => console.log(`[COMMERCIAL SERVICE] Property ${result.property_id} reverted to AVAILABLE (distrato)`))
+                    : Promise.resolve(),
+                // (b) Estorna parcelas pendentes do vault (deleteDealInstallments ignora PAID, remove PENDING)
+                cancelOrgId
+                    ? commercialFinanceService.deleteDealInstallments(result.id, cancelOrgId)
+                        .then(() => console.log(`[COMMERCIAL SERVICE] Installments reversed for deal ${result.id} (distrato)`))
+                    : Promise.resolve(),
+            ]);
         }
 
         return result;

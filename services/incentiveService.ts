@@ -371,7 +371,7 @@ export const incentiveService = {
         for (const rule of rules) {
             const scopeProject = projectId || rule.project_id || null;
             const targets = await this.ruleTargets(orgId, rule, scopeProject);
-            const proposals = await this.evaluateRule(orgId, rule, targets, { monthStart, monthEnd });
+            const proposals = await this.evaluateRule(orgId, rule, targets, { monthStart, monthEnd }, scopeProject);
 
             for (const p of proposals) {
                 if (p.amount <= 0) { result.skipped++; continue; }
@@ -511,6 +511,7 @@ export const incentiveService = {
         rule: IncentiveRule,
         targets: string[],
         period: { monthStart: string; monthEnd: string },
+        projectId: string | null = null,
     ): Promise<{ employee_id: string; amount: number; reason: string }[]> {
         if (targets.length === 0) return [];
         const cond = rule.condition || {};
@@ -570,7 +571,33 @@ export const incentiveService = {
             return out;
         }
 
-        // SEGURANCA / PRAZO / META_OBRA / QUALIDADE / RETENCAO: valor fixo ao escopo
+        if (rule.rule_type === 'SEGURANCA') {
+            // Prêmio coletivo: ninguém recebe se houve acidente na janela "dias sem acidente".
+            const dias = Number(cond.dias_sem_acidente ?? 60);
+            const excludeNearMiss = cond.exclude_quase_acidente !== false; // padrão: ignora QUASE_ACIDENTE
+            const windowStart = new Date(period.monthEnd);
+            windowStart.setDate(windowStart.getDate() - dias);
+            const windowStartStr = windowStart.toISOString().split('T')[0];
+
+            let q = supabase
+                .from('accidents')
+                .select('id, tipo, data_acidente')
+                .eq('org_id', orgId)
+                .gte('data_acidente', windowStartStr)
+                .lte('data_acidente', period.monthEnd);
+            if (projectId) q = q.eq('project_id', projectId);
+            if (excludeNearMiss) q = q.neq('tipo', 'QUASE_ACIDENTE');
+
+            const { data: accidents } = await q;
+            const count = (accidents || []).length;
+            if (count > 0) return []; // streak quebrada — sem prêmio
+
+            const fixed = Number(rule.amount || 0);
+            if (fixed <= 0) return [];
+            return targets.map(id => ({ employee_id: id, amount: fixed, reason: `${dias} dias sem acidente${projectId ? ' (na obra)' : ''}` }));
+        }
+
+        // PRAZO / META_OBRA / QUALIDADE / RETENCAO: valor fixo ao escopo (disparo manual)
         const fixed = Number(rule.amount || 0);
         return targets.map(id => ({ employee_id: id, amount: fixed, reason: `${rule.name} (valor fixo)` }));
     },

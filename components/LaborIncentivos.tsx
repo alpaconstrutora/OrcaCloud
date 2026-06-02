@@ -575,7 +575,8 @@ const RuleEditor: React.FC<{ rule: IncentiveRule; setRule: (r: IncentiveRule) =>
                             const defaults: Record<RuleType, Record<string, unknown>> = {
                                 ASSIDUIDADE: { min_days: 22, max_faltas: 0 },
                                 PRODUTIVIDADE: { min_productivity_pct: 100, rate_per_unit: 0 },
-                                SEGURANCA: {}, PRAZO: {}, META_OBRA: {}, QUALIDADE: {}, RETENCAO: {},
+                                SEGURANCA: { dias_sem_acidente: 60, exclude_quase_acidente: true },
+                                PRAZO: {}, META_OBRA: {}, QUALIDADE: {}, RETENCAO: {},
                             };
                             upd({ rule_type: rt, condition: defaults[rt], target_rubric_code: `INC_${rt}` });
                         }}>
@@ -621,7 +622,18 @@ const RuleEditor: React.FC<{ rule: IncentiveRule; setRule: (r: IncentiveRule) =>
                         <div className="col-span-2"><Label>Valor fixo alternativo (R$)</Label><input type="number" step="0.01" className={inputCls} value={rule.amount || ''} onChange={e => upd({ amount: parseFloat(e.target.value) || 0 })} /></div>
                     </div>
                 )}
-                {!['ASSIDUIDADE', 'PRODUTIVIDADE'].includes(rule.rule_type) && (
+                {rule.rule_type === 'SEGURANCA' && (
+                    <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl">
+                        <div><Label>Dias sem acidente</Label><input type="number" className={inputCls} value={c.dias_sem_acidente ?? 60} onChange={e => updCond({ dias_sem_acidente: parseInt(e.target.value) || 0 })} /></div>
+                        <div><Label>Prêmio coletivo (R$/pessoa)</Label><input type="number" step="0.01" className={inputCls} value={rule.amount || ''} onChange={e => upd({ amount: parseFloat(e.target.value) || 0 })} /></div>
+                        <label className="col-span-2 flex items-center gap-2 text-[11px] font-bold text-slate-500 cursor-pointer">
+                            <input type="checkbox" checked={(rule.condition as Record<string, unknown>).exclude_quase_acidente !== false} onChange={e => updCond({ exclude_quase_acidente: e.target.checked })} />
+                            Ignorar "quase-acidentes" na contagem
+                        </label>
+                        <p className="col-span-2 text-[10px] text-slate-400 font-bold flex items-start gap-1"><ShieldAlert size={12} className="mt-0.5 shrink-0" /> Lê o módulo SST (acidentes). Se houve acidente na janela, ninguém do escopo recebe. Restrinja a uma obra no campo "Obra" acima para premiar por canteiro.</p>
+                    </div>
+                )}
+                {!['ASSIDUIDADE', 'PRODUTIVIDADE', 'SEGURANCA'].includes(rule.rule_type) && (
                     <div className="p-4 bg-slate-50 rounded-2xl">
                         <Label>Valor fixo por colaborador do escopo (R$)</Label>
                         <input type="number" step="0.01" className={inputCls} value={rule.amount || ''} onChange={e => upd({ amount: parseFloat(e.target.value) || 0 })} />

@@ -565,11 +565,16 @@ export const payrollService = {
             reference: item.reference || null
         }));
 
-        const { error: itemsError } = await supabase
-            .from('payroll_items')
-            .insert(itemsToInsert);
+        // Supabase retorna 400 em .insert([]); só insere se houver itens.
+        // Sem este guard, uma folha sem itens lança erro e o resultado nunca é
+        // persistido, deixando o ciclo órfão (getPayrollResult.single() falha).
+        if (itemsToInsert.length > 0) {
+            const { error: itemsError } = await supabase
+                .from('payroll_items')
+                .insert(itemsToInsert);
 
-        if (itemsError) throw itemsError;
+            if (itemsError) throw itemsError;
+        }
 
         // 3. Atualizar/Inserir resultado (Incluindo bases de cálculo após abatimentos)
         const resultToUpsert = {

@@ -55,13 +55,16 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
             setLoading(true);
             setError(null);
 
-            const [runData, resData, itemsData, rubricsData, eventsData] = await Promise.all([
-                payrollService.getRun(runId),
-                payrollService.getPayrollResult(runId, employeeId),
-                payrollService.getEmployeeItems(runId, employeeId),
-                payrollService.listRubrics(),
-                payrollService.listEvents('all', runId)
-            ]);
+            const runData    = await payrollService.getRun(runId)
+                .catch(e => { throw Object.assign(new Error(`getRun: ${e?.message ?? e}`), { cause: e }); });
+            const resData    = await payrollService.getPayrollResult(runId, employeeId)
+                .catch(e => { throw Object.assign(new Error(`getPayrollResult: ${e?.message ?? e}`), { cause: e }); });
+            const itemsData  = await payrollService.getEmployeeItems(runId, employeeId)
+                .catch(e => { throw Object.assign(new Error(`getEmployeeItems: ${e?.message ?? e}`), { cause: e }); });
+            const rubricsData = await payrollService.listRubrics()
+                .catch(e => { throw Object.assign(new Error(`listRubrics: ${e?.message ?? e}`), { cause: e }); });
+            const eventsData = await payrollService.listEvents('all', runId)
+                .catch(e => { throw Object.assign(new Error(`listEvents: ${e?.message ?? e}`), { cause: e }); });
 
             if (!resData) {
                 setError('Nenhum dado financeiro encontrado para este colaborador.');
@@ -74,8 +77,9 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
             setEvents(eventsData.filter((e) => e.employee_id === employeeId));
             setItems(itemsData);
         } catch (err: unknown) {
-            console.error('Error loading paystub data:', err);
-            setError(err instanceof Error ? err.message : 'Falha ao carregar dados do holerite.');
+            const msg = err instanceof Error ? err.message : JSON.stringify(err);
+            console.error('[PaystubModal] Falha:', msg, err);
+            setError(msg || 'Falha ao carregar dados do holerite.');
         } finally {
             setLoading(false);
         }

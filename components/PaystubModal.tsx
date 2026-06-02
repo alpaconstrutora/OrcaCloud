@@ -55,33 +55,27 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
         try {
             setLoading(true);
             setError(null);
-            
+
             const [runData, resData, itemsData, rubricsData, eventsData] = await Promise.all([
                 payrollService.getRun(runId),
-                payrollService.getPayrollResult(runId, employeeId),
-                payrollService.getEmployeeItems(runId, employeeId),
+                payrollService.getPayrollResult(runId, employeeId).catch(() => null),
+                payrollService.getEmployeeItems(runId, employeeId).catch(() => []),
                 payrollService.listRubrics(),
                 payrollService.listEvents('all', runId)
             ]);
-            
-            console.log(`[PaystubModal] Dados carregados para ${employeeId}:`, { itemsData, eventsData });
-            
-            if (!resData) {
-                setError('Nenhum dado financeiro encontrado para este colaborador.');
-                return;
-            }
 
             setRun(runData);
             setRubrics(rubricsData);
             const empEvents = eventsData.filter((e) => e.employee_id === employeeId);
             setEvents(empEvents);
 
-            // Para runs de adiantamento sem itens processados, constrói os itens
-            // diretamente dos eventos para não exibir holerite zerado.
-            // Dispara reprocessamento silencioso em background para persistir no banco.
-            if (runData.type === 'adiantamento' && itemsData.length === 0) {
-                const advEv = empEvents.find(e => e.rubric_code === 'ADIANTAMENTO');
-                if (advEv) {
+            // Runs de adiantamento: reconstruir do evento quando itens estão ausentes
+            if (runData.type === 'adiantamento') {
+                const advEv = empEvents.find(
+                    e => e.rubric_code === 'ADIANTAMENTO' || e.code === 'ADIANTAMENTO'
+                );
+
+                if (advEv && advEv.amount > 0) {
                     const syntheticItem = {
                         id: advEv.id ?? 'synthetic',
                         payroll_run_id: runId,
@@ -92,17 +86,27 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                         base_amount: advEv.amount,
                         reference: 1,
                     };
+                    const baseResult = resData ?? {
+                        employee_id: employeeId,
+                        payroll_run_id: runId,
+                        gross: 0, discounts: 0, net: 0, employer_cost: 0,
+                        base_inss: 0, base_fgts: 0, base_irrf: 0,
+                        employee: undefined,
+                    } as unknown as PayrollResultWithEmployee;
                     setItems([syntheticItem]);
-                    setResult({
-                        ...resData,
-                        gross: advEv.amount,
-                        discounts: 0,
-                        net: advEv.amount,
-                        employer_cost: advEv.amount,
-                    });
+                    setResult({ ...baseResult, gross: advEv.amount, discounts: 0, net: advEv.amount, employer_cost: advEv.amount });
                     payrollEngine.calculateEmployeePayroll(employeeId, runId).catch(console.error);
                     return;
                 }
+
+                // Adiantamento sem evento lançado → mensagem orientativa
+                setError('Nenhum valor de adiantamento lançado para este colaborador.\nAdicione o valor via botão "+" na listagem da folha.');
+                return;
+            }
+
+            if (!resData) {
+                setError('Nenhum dado financeiro encontrado para este colaborador.');
+                return;
             }
 
             setResult(resData);

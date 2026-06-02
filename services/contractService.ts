@@ -985,6 +985,92 @@ export const contractService = {
         if (error) throw error;
     },
 
+    // ─── Aprovação Multinível ─────────────────────────────────────────────────
+
+    submitForApproval: async (contractId: string): Promise<Contract> => {
+        const { data, error } = await supabase
+            .from('contracts')
+            .update({ approval_status: 'PENDENTE' })
+            .eq('id', contractId)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as Contract;
+    },
+
+    approveContract: async (
+        contractId: string,
+        level: 1 | 2,
+        approvedBy: string,
+        notes?: string
+    ): Promise<Contract> => {
+        const { data: contract, error: fetchErr } = await supabase
+            .from('contracts')
+            .select('approval_chain, approval_required_levels, approval_status')
+            .eq('id', contractId)
+            .single();
+        if (fetchErr) throw fetchErr;
+        if (contract.approval_status !== 'PENDENTE') throw new Error('Contrato não está em aprovação pendente.');
+
+        const chain: ContractApprovalStep[] = contract.approval_chain ?? [];
+        const step: ContractApprovalStep = {
+            level, role: level === 1 ? 'Gestor' : 'Financeiro/Diretoria',
+            action: 'APROVADO', approved_by: approvedBy,
+            approved_at: new Date().toISOString(),
+            ...(notes ? { notes } : {}),
+        };
+        chain.push(step);
+
+        const required = contract.approval_required_levels ?? 1;
+        const approvedLevels = chain.filter(s => s.action === 'APROVADO').map(s => s.level);
+        const allApproved = required === 1
+            ? approvedLevels.includes(1)
+            : approvedLevels.includes(1) && approvedLevels.includes(2);
+
+        const { data, error } = await supabase
+            .from('contracts')
+            .update({
+                approval_chain: chain,
+                approval_status: allApproved ? 'APROVADO' : 'PENDENTE',
+                ...(allApproved ? { status: 'Ativo' } : {}),
+            })
+            .eq('id', contractId)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as Contract;
+    },
+
+    rejectContract: async (
+        contractId: string,
+        rejectedBy: string,
+        reason: string
+    ): Promise<Contract> => {
+        const { data: contract, error: fetchErr } = await supabase
+            .from('contracts')
+            .select('approval_chain')
+            .eq('id', contractId)
+            .single();
+        if (fetchErr) throw fetchErr;
+
+        const chain: ContractApprovalStep[] = contract.approval_chain ?? [];
+        chain.push({
+            level: 1, role: 'Rejeição',
+            action: 'REJEITADO', approved_by: rejectedBy,
+            approved_at: new Date().toISOString(),
+            notes: reason,
+        });
+
+        const { data, error } = await supabase
+            .from('contracts')
+            .update({ approval_chain: chain, approval_status: 'REJEITADO', status: 'Rascunho' })
+            .eq('id', contractId)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as Contract;
+    },
+
     // ─── Reajuste contratual ──────────────────────────────────────────────────
 
     /**

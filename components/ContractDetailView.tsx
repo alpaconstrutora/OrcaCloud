@@ -745,6 +745,27 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {activeTab === 'overview' && (
                 <div className="grid grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
                     <div className="col-span-2 space-y-6">
+                        {/* Workflow de Aprovação */}
+                        {contract.approval_status && contract.approval_status !== 'RASCUNHO' && (
+                            <ApprovalWorkflowCard
+                                contract={contract}
+                                onSubmit={async () => {
+                                    const updated = await contractService.submitForApproval(contract.id);
+                                    setContract(updated);
+                                    notify('Contrato enviado para aprovação.', 'success');
+                                }}
+                                onApprove={async (level, notes) => {
+                                    const updated = await contractService.approveContract(contract.id, level, 'Usuário', notes);
+                                    setContract(updated);
+                                    notify(updated.approval_status === 'APROVADO' ? 'Contrato aprovado!' : 'Nível aprovado. Aguardando próximo aprovador.', 'success');
+                                }}
+                                onReject={async (reason) => {
+                                    const updated = await contractService.rejectContract(contract.id, 'Usuário', reason);
+                                    setContract(updated);
+                                    notify('Contrato rejeitado e retornado para rascunho.', 'info');
+                                }}
+                            />
+                        )}
                         {/* Status & Timing */}
                         <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-8">
                             <div className="flex justify-between items-center">

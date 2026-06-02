@@ -45,6 +45,10 @@ const mapToDbClient = (client: Partial<Client>): DbClientRow => {
         delete dbClient.visualGallery;
     }
 
+    // Remove computed/join fields that don't exist as DB columns
+    delete dbClient.organization_name;
+    delete dbClient.organizations;
+
     return dbClient;
 };
 

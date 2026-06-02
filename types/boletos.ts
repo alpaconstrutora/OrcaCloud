@@ -33,6 +33,10 @@ export interface BoletoExtractionResult {
         beneficiario_cnpj: BoletoCampoExtraido<string>;
         banco_codigo: BoletoCampoExtraido<string>;
         banco_nome: BoletoCampoExtraido<string>;
+        multa: BoletoCampoExtraido<number>;
+        multa_percentual: BoletoCampoExtraido<number>;
+        juros_dia: BoletoCampoExtraido<number>;
+        juros_dia_tipo: BoletoCampoExtraido<'valor' | 'percentual'>;
     };
     raw: Record<string, any>;
     erros: string[];
@@ -68,6 +72,11 @@ export interface Boleto {
 
     pagador_nome?: string;
     pagador_cnpj?: string;
+
+    multa?: number;
+    multa_percentual?: number;
+    juros_dia?: number;
+    juros_dia_tipo?: 'valor' | 'percentual';
 
     metodo_extracao?: BoletoMetodoExtracao;
     confidence_score?: number;

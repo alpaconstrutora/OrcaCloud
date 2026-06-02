@@ -43,6 +43,10 @@ function mapRowToBoleto(row: any): Boleto {
         beneficiario_conta: row.beneficiario_conta,
         pagador_nome: row.pagador_nome,
         pagador_cnpj: row.pagador_cnpj,
+        multa: row.multa !== null ? Number(row.multa) : undefined,
+        multa_percentual: row.multa_percentual !== null ? Number(row.multa_percentual) : undefined,
+        juros_dia: row.juros_dia !== null ? Number(row.juros_dia) : undefined,
+        juros_dia_tipo: row.juros_dia_tipo ?? undefined,
         metodo_extracao: row.metodo_extracao,
         confidence_score: row.confidence_score,
         engine_versao: row.engine_versao,
@@ -80,6 +84,10 @@ function extractionToColumns(ext: BoletoExtractionResult) {
         beneficiario_cnpj: ext.campos.beneficiario_cnpj.valor,
         banco_codigo: ext.campos.banco_codigo.valor,
         banco_nome: ext.campos.banco_nome.valor,
+        multa: ext.campos.multa.valor,
+        multa_percentual: ext.campos.multa_percentual.valor,
+        juros_dia: ext.campos.juros_dia.valor,
+        juros_dia_tipo: ext.campos.juros_dia_tipo.valor,
         metodo_extracao: ext.metodo,
         confidence_score: ext.confidence_score,
         engine_versao: ext.engine_versao,
@@ -175,6 +183,10 @@ export const boletoService = {
                     beneficiario_cnpj: { valor: null, confidence: 0 },
                     banco_codigo: { valor: null, confidence: 0 },
                     banco_nome: { valor: null, confidence: 0 },
+                    multa: { valor: null, confidence: 0 },
+                    multa_percentual: { valor: null, confidence: 0 },
+                    juros_dia: { valor: null, confidence: 0 },
+                    juros_dia_tipo: { valor: null, confidence: 0 },
                 },
                 raw: { error: String(err) },
                 erros: ['Falha na extração automática'],
@@ -264,7 +276,8 @@ export const boletoService = {
      */
     async associar(boletoId: string, organizationId: string, fields: Partial<Pick<Boleto,
         'supplier_id' | 'cost_center_id' | 'project_id' | 'chart_of_accounts_id' |
-        'observacoes' | 'valor' | 'vencimento' | 'beneficiario_nome' | 'beneficiario_cnpj'
+        'observacoes' | 'valor' | 'vencimento' | 'beneficiario_nome' | 'beneficiario_cnpj' |
+        'multa' | 'multa_percentual' | 'juros_dia' | 'juros_dia_tipo'
     >>, userEmail?: string): Promise<Boleto> {
         const { data, error } = await supabase
             .from(TABLE)

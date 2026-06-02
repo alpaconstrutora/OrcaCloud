@@ -102,6 +102,108 @@ function emptyCampo<T>(): { valor: T | null; confidence: number } {
 }
 
 /**
+ * Extrai multa e juros do texto livre do boleto.
+ *
+ * Bancos não seguem formato único — cobrimos os padrões mais comuns:
+ *   "Multa: R$ 10,00"  /  "Multa de 2%"  /  "Mora: R$ 0,50/dia"
+ *   "Juros ao dia: R$ 0,10"  /  "Juros de 1% a.m."  /  "Mora 0,033% a.d."
+ *
+ * Confidence reflete a ambiguidade: ~50 quando encontrado via heurística de texto.
+ */
+export function extractMultaJurosFromText(text: string): {
+    multa:           { valor: number | null; confidence: number };
+    multa_percentual:{ valor: number | null; confidence: number };
+    juros_dia:       { valor: number | null; confidence: number };
+    juros_dia_tipo:  { valor: 'valor' | 'percentual' | null; confidence: number };
+} {
+    const empty = emptyCampo<number>();
+    const emptyTipo = emptyCampo<'valor' | 'percentual'>();
+
+    const t = text.replace(/\s+/g, ' ');
+
+    // ── Multa em R$ ──────────────────────────────────────────────────────────
+    // "Multa: R$ 10,00"  |  "Multa por atraso R$ 5,50"  |  "Multa R$10.00"
+    const multaValorMatch = t.match(
+        /multa\b[^%\d]{0,30}R\$\s*([\d.,]+)/i,
+    );
+    const multaValor = multaValorMatch ? parseBRL(multaValorMatch[1]) : null;
+
+    // ── Multa em % ───────────────────────────────────────────────────────────
+    // "Multa de 2%"  |  "Multa: 2,00%"  |  "Multa 2 %"
+    const multaPctMatch = !multaValor
+        ? t.match(/multa\b[^R\d]{0,20}([\d.,]+)\s*%/i)
+        : null;
+    const multaPct = multaPctMatch ? parseFloat(multaPctMatch[1].replace(',', '.')) : null;
+
+    // ── Juros por dia em R$ ──────────────────────────────────────────────────
+    // "Juros ao dia: R$ 0,10"  |  "Mora R$ 0,50 por dia"  |  "Juros R$0.10/dia"
+    const jurosDiaValorMatch = t.match(
+        /(?:juros|mora)\b[^%]{0,40}R\$\s*([\d.,]+)\s*(?:\/?\s*dia|ao\s+dia|por\s+dia|a\.?d\.?)/i,
+    );
+    // Fallback: "Juros: R$ 0,10" sem menção a "dia" (campo típico em boletos onde o rótulo já implica diário)
+    const jurosFallbackMatch = !jurosDiaValorMatch
+        ? t.match(/(?:juros|mora)\b[^%\d]{0,20}R\$\s*([\d.,]+)/i)
+        : null;
+    const jurosDiaR = jurosDiaValorMatch
+        ? parseBRL(jurosDiaValorMatch[1])
+        : jurosFallbackMatch
+            ? parseBRL(jurosFallbackMatch[1])
+            : null;
+
+    // ── Juros por dia em % ───────────────────────────────────────────────────
+    // "Juros 0,033% a.d."  |  "Mora 1% a.m." (convertemos a.m. → /30)
+    // "Juros ao dia: 0,5%"
+    let jurosDiaPct: number | null = null;
+    if (!jurosDiaR) {
+        const jurosPctDiaMatch = t.match(
+            /(?:juros|mora)\b[^R\d]{0,30}([\d.,]+)\s*%\s*(?:a\.?\s*d\.?|ao\s+dia|por\s+dia|\/\s*dia)/i,
+        );
+        if (jurosPctDiaMatch) {
+            jurosDiaPct = parseFloat(jurosPctDiaMatch[1].replace(',', '.'));
+        } else {
+            // Juros % a.m. → dividir por 30
+            const jurosPctMesMatch = t.match(
+                /(?:juros|mora)\b[^R\d]{0,30}([\d.,]+)\s*%\s*(?:a\.?\s*m\.?|ao\s+m[eê]s|por\s+m[eê]s|\/\s*m[eê]s)/i,
+            );
+            if (jurosPctMesMatch) {
+                jurosDiaPct = parseFloat(jurosPctMesMatch[1].replace(',', '.')) / 30;
+            }
+        }
+    }
+
+    const temJuros = jurosDiaR !== null || jurosDiaPct !== null;
+    const jurosDiaValor = jurosDiaR ?? jurosDiaPct;
+    const jurosTipo: 'valor' | 'percentual' | null = temJuros
+        ? (jurosDiaR !== null ? 'valor' : 'percentual')
+        : null;
+
+    return {
+        multa:            multaValor !== null
+            ? { valor: multaValor, confidence: 50 }
+            : empty as { valor: number | null; confidence: number },
+        multa_percentual: multaPct !== null
+            ? { valor: multaPct, confidence: 50 }
+            : empty as { valor: number | null; confidence: number },
+        juros_dia:        jurosDiaValor !== null
+            ? { valor: jurosDiaValor, confidence: jurosDiaValorMatch ? 50 : 35 }
+            : empty as { valor: number | null; confidence: number },
+        juros_dia_tipo:   jurosTipo !== null
+            ? { valor: jurosTipo, confidence: 50 }
+            : emptyTipo as { valor: 'valor' | 'percentual' | null; confidence: number },
+    };
+}
+
+/** Converte string "1.234,56" ou "1234.56" para número. */
+function parseBRL(s: string): number | null {
+    // Remove separadores de milhar (ponto antes de vírgula ou 3 dígitos no final)
+    const normalized = s.includes(',')
+        ? s.replace(/\./g, '').replace(',', '.')
+        : s;
+    const n = parseFloat(normalized);
+    return isNaN(n) || n <= 0 ? null : n;
+}
+
+/**
  * Constrói um ExtractionResult a partir de uma linha digitável já isolada.
  * Reutilizado tanto pelo fluxo de PDF quanto pelo manual.
  */
@@ -129,6 +231,10 @@ export function buildExtractionFromLinhaDigitavel(
             beneficiario_cnpj:  emptyCampo<string>(),
             banco_codigo:       { valor: parsed.bancoCodigo ?? null, confidence: parsed.bancoCodigo ? 100 : 0 },
             banco_nome:         { valor: nomeBanco(parsed.bancoCodigo) ?? null, confidence: parsed.bancoCodigo ? 90 : 0 },
+            multa:              emptyCampo<number>(),
+            multa_percentual:   emptyCampo<number>(),
+            juros_dia:          emptyCampo<number>(),
+            juros_dia_tipo:     emptyCampo<'valor' | 'percentual'>(),
         },
         raw: { linhaDigitavel: ldigits, parsed },
         erros: parsed.erros,
@@ -143,24 +249,29 @@ export function buildExtractionFromLinhaDigitavel(
  */
 export async function extractFromPdfFile(file: File, referenceDate = new Date()): Promise<BoletoExtractionResult> {
     const { text, paginas } = await extractTextFromPdf(file);
+    const emptyFields = () => ({
+        linha_digitavel: emptyCampo<string>(),
+        codigo_barras: emptyCampo<string>(),
+        qr_pix: emptyCampo<string>(),
+        valor: emptyCampo<number>(),
+        valor_original: emptyCampo<number>(),
+        vencimento: emptyCampo<string>(),
+        beneficiario_nome: emptyCampo<string>(),
+        beneficiario_cnpj: emptyCampo<string>(),
+        banco_codigo: emptyCampo<string>(),
+        banco_nome: emptyCampo<string>(),
+        multa: emptyCampo<number>(),
+        multa_percentual: emptyCampo<number>(),
+        juros_dia: emptyCampo<number>(),
+        juros_dia_tipo: emptyCampo<'valor' | 'percentual'>(),
+    });
+
     if (!text || text.length < 50) {
-        // PDF sem camada de texto (escaneado) — devolve resultado vazio para fallback manual
         return {
             metodo: 'pdf_text',
             confidence_score: 0,
             engine_versao: ENGINE_VERSAO,
-            campos: {
-                linha_digitavel: emptyCampo(),
-                codigo_barras: emptyCampo(),
-                qr_pix: emptyCampo(),
-                valor: emptyCampo(),
-                valor_original: emptyCampo(),
-                vencimento: emptyCampo(),
-                beneficiario_nome: emptyCampo(),
-                beneficiario_cnpj: emptyCampo(),
-                banco_codigo: emptyCampo(),
-                banco_nome: emptyCampo(),
-            },
+            campos: emptyFields(),
             raw: { paginas, pdfText: text.slice(0, 500) },
             erros: ['PDF sem camada de texto extraível — informe a linha digitável manualmente'],
         };
@@ -172,18 +283,7 @@ export async function extractFromPdfFile(file: File, referenceDate = new Date())
             metodo: 'pdf_text',
             confidence_score: 0,
             engine_versao: ENGINE_VERSAO,
-            campos: {
-                linha_digitavel: emptyCampo(),
-                codigo_barras: emptyCampo(),
-                qr_pix: emptyCampo(),
-                valor: emptyCampo(),
-                valor_original: emptyCampo(),
-                vencimento: emptyCampo(),
-                beneficiario_nome: emptyCampo(),
-                beneficiario_cnpj: emptyCampo(),
-                banco_codigo: emptyCampo(),
-                banco_nome: emptyCampo(),
-            },
+            campos: emptyFields(),
             raw: { paginas, pdfText: text.slice(0, 500) },
             erros: ['Linha digitável não encontrada no texto extraído'],
         };
@@ -202,6 +302,13 @@ export async function extractFromPdfFile(file: File, referenceDate = new Date())
     if (benefMatch) {
         base.campos.beneficiario_nome = { valor: benefMatch[1].trim(), confidence: 60 };
     }
+
+    // Heurística: multa e juros — texto livre do boleto
+    const mj = extractMultaJurosFromText(text);
+    if (mj.multa.valor !== null)            base.campos.multa            = mj.multa;
+    if (mj.multa_percentual.valor !== null) base.campos.multa_percentual = mj.multa_percentual;
+    if (mj.juros_dia.valor !== null)        base.campos.juros_dia        = mj.juros_dia;
+    if (mj.juros_dia_tipo.valor !== null)   base.campos.juros_dia_tipo   = mj.juros_dia_tipo;
 
     base.raw = { ...base.raw, paginas, pdfTextPreview: text.slice(0, 500) };
     return base;

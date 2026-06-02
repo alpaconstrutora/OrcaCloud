@@ -59,6 +59,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const [observacoes, setObservacoes] = useState<string>(initial?.observacoes ?? '');
     const [valor, setValor] = useState<string>(initial?.valor != null ? String(initial.valor) : '');
     const [vencimento, setVencimento] = useState<string>(initial?.vencimento ?? '');
+    const [multa, setMulta] = useState<string>(initial?.multa != null ? String(initial.multa) : '');
+    const [multaPercentual, setMultaPercentual] = useState<string>(initial?.multa_percentual != null ? String(initial.multa_percentual) : '');
+    const [jurosDia, setJurosDia] = useState<string>(initial?.juros_dia != null ? String(initial.juros_dia) : '');
+    const [jurosDiaTipo, setJurosDiaTipo] = useState<'valor' | 'percentual'>(initial?.juros_dia_tipo ?? 'valor');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isCreating = !boleto;
@@ -161,6 +165,14 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             if (extraction) {
                 setValor(extraction.campos.valor.valor != null ? String(extraction.campos.valor.valor) : '');
                 setVencimento(extraction.campos.vencimento.valor ?? '');
+                if (extraction.campos.multa.valor != null)
+                    setMulta(String(extraction.campos.multa.valor));
+                if (extraction.campos.multa_percentual.valor != null)
+                    setMultaPercentual(String(extraction.campos.multa_percentual.valor));
+                if (extraction.campos.juros_dia.valor != null)
+                    setJurosDia(String(extraction.campos.juros_dia.valor));
+                if (extraction.campos.juros_dia_tipo.valor != null)
+                    setJurosDiaTipo(extraction.campos.juros_dia_tipo.valor);
             }
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
@@ -188,6 +200,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 observacoes:          observacoes || undefined,
                 valor:                valor ? Number(valor) : undefined,
                 vencimento:           vencimento || undefined,
+                multa:                multa ? Number(multa) : undefined,
+                multa_percentual:     multaPercentual ? Number(multaPercentual) : undefined,
+                juros_dia:            jurosDia ? Number(jurosDia) : undefined,
+                juros_dia_tipo:       jurosDia ? jurosDiaTipo : undefined,
             }, userEmail);
             setPendingFile(null);
             setPendingExtraction(null);
@@ -224,6 +240,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setBoleto(updated);
             setValor(updated.valor != null ? String(updated.valor) : '');
             setVencimento(updated.vencimento ?? '');
+            setMulta(updated.multa != null ? String(updated.multa) : '');
+            setMultaPercentual(updated.multa_percentual != null ? String(updated.multa_percentual) : '');
+            setJurosDia(updated.juros_dia != null ? String(updated.juros_dia) : '');
+            if (updated.juros_dia_tipo) setJurosDiaTipo(updated.juros_dia_tipo);
             setLinhaManual('');
             setInfo('Linha digitável processada com sucesso.');
         } catch (err: unknown) {
@@ -247,6 +267,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 observacoes: observacoes || undefined,
                 valor: valor ? Number(valor) : undefined,
                 vencimento: vencimento || undefined,
+                multa: multa ? Number(multa) : undefined,
+                multa_percentual: multaPercentual ? Number(multaPercentual) : undefined,
+                juros_dia: jurosDia ? Number(jurosDia) : undefined,
+                juros_dia_tipo: jurosDia ? jurosDiaTipo : undefined,
             }, userEmail);
             setBoleto(updated);
             setInfo('Boleto atualizado.');
@@ -504,6 +528,13 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </FormField>
                                 </div>
 
+                                <MultaJurosFields
+                                    multa={multa} setMulta={setMulta}
+                                    multaPercentual={multaPercentual} setMultaPercentual={setMultaPercentual}
+                                    jurosDia={jurosDia} setJurosDia={setJurosDia}
+                                    jurosDiaTipo={jurosDiaTipo} setJurosDiaTipo={setJurosDiaTipo}
+                                />
+
                                 <FormField label="Obra / Projeto">
                                     <select value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
@@ -644,6 +675,13 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         />
                                     </FormField>
                                 </div>
+
+                                <MultaJurosFields
+                                    multa={multa} setMulta={setMulta}
+                                    multaPercentual={multaPercentual} setMultaPercentual={setMultaPercentual}
+                                    jurosDia={jurosDia} setJurosDia={setJurosDia}
+                                    jurosDiaTipo={jurosDiaTipo} setJurosDiaTipo={setJurosDiaTipo}
+                                />
 
                                 {/* Beneficiário só aparece quando não há fornecedor vinculado — evita duplicidade */}
                                 {boleto.beneficiario_nome && !supplierId && (() => {
@@ -994,6 +1032,74 @@ const ReadOnlyField: React.FC<{ label: string; value: string; icon?: React.Compo
         </div>
     </div>
 );
+
+interface MultaJurosFieldsProps {
+    multa: string; setMulta: (v: string) => void;
+    multaPercentual: string; setMultaPercentual: (v: string) => void;
+    jurosDia: string; setJurosDia: (v: string) => void;
+    jurosDiaTipo: 'valor' | 'percentual'; setJurosDiaTipo: (v: 'valor' | 'percentual') => void;
+}
+
+const MultaJurosFields: React.FC<MultaJurosFieldsProps> = ({
+    multa, setMulta, multaPercentual, setMultaPercentual,
+    jurosDia, setJurosDia, jurosDiaTipo, setJurosDiaTipo,
+}) => {
+    const temDados = multa || multaPercentual || jurosDia;
+    return (
+        <details open={!!temDados} className="group">
+            <summary className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-widest text-gray-400 cursor-pointer select-none list-none mb-2">
+                <span className="group-open:rotate-90 inline-block transition-transform">▶</span>
+                Multa &amp; Juros
+                {temDados && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />}
+            </summary>
+            <div className="grid grid-cols-2 gap-3 pt-1">
+                <FormField label="Multa (R$)">
+                    <input
+                        type="number" step="0.01" min="0"
+                        value={multa}
+                        onChange={e => { setMulta(e.target.value); if (e.target.value) setMultaPercentual(''); }}
+                        placeholder="0,00"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                    />
+                </FormField>
+                <FormField label="Multa (%)">
+                    <input
+                        type="number" step="0.0001" min="0" max="100"
+                        value={multaPercentual}
+                        onChange={e => { setMultaPercentual(e.target.value); if (e.target.value) setMulta(''); }}
+                        placeholder="2,00"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                    />
+                </FormField>
+                <FormField label="Juros/dia">
+                    <div className="flex gap-1">
+                        <input
+                            type="number" step="0.0001" min="0"
+                            value={jurosDia}
+                            onChange={e => setJurosDia(e.target.value)}
+                            placeholder="0,033"
+                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                        />
+                        <select
+                            value={jurosDiaTipo}
+                            onChange={e => setJurosDiaTipo(e.target.value as 'valor' | 'percentual')}
+                            className="px-2 py-2 border border-gray-200 rounded-lg text-xs font-bold bg-white"
+                        >
+                            <option value="valor">R$</option>
+                            <option value="percentual">%</option>
+                        </select>
+                    </div>
+                </FormField>
+                <div className="flex items-end pb-1">
+                    <p className="text-[10px] text-gray-400 leading-tight">
+                        Extraídos do texto do boleto.<br />
+                        Confidence baixa — revise antes de aprovar.
+                    </p>
+                </div>
+            </div>
+        </details>
+    );
+};
 
 export default BoletoFormModal;
 export { formatBRL };

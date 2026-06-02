@@ -19,18 +19,20 @@ interface PayrollEventModalProps {
     executing: boolean;
     onClose: () => void;
     onEventSaved: () => Promise<void>;
+    onViewPaystub?: (runId: string, employeeId: string) => void;
 }
 
 const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
     run, orgId, employeeId, employeeName,
     rubrics, runEvents, results, executing,
-    onClose, onEventSaved,
+    onClose, onEventSaved, onViewPaystub,
 }) => {
     const [runItems, setRunItems]               = useState<PayrollItem[]>([]);
     const [eventHistory, setEventHistory]       = useState<PayrollAuditLog[]>([]);
     const [showEventHistory, setShowEventHistory] = useState(false);
     const [editingEvent, setEditingEvent]       = useState<string | null>(null);
     const [localExecuting, setLocalExecuting]   = useState(false);
+    const [adiantamentoSalvo, setAdiantamentoSalvo] = useState(false);
 
     // Form state
     const [selectedRubricCode, setSelectedRubricCode] = useState('');
@@ -140,6 +142,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
             await onEventSaved();
             await loadRunItems();
             if (showEventHistory) await loadEventHistory();
+            if (selectedRubricCode === 'ADIANTAMENTO') setAdiantamentoSalvo(true);
             resetForm();
         } catch (err) {
             console.error(err);
@@ -288,6 +291,32 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                         <button onClick={resetForm} className="text-[10px] font-black text-emerald-400 uppercase hover:text-emerald-600 underline">
                             Cancelar Edição
                         </button>
+                    </div>
+                )}
+
+                {/* Banner: Recibo de Adiantamento disponível */}
+                {adiantamentoSalvo && onViewPaystub && (
+                    <div className="mb-4 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between animate-in slide-in-from-top-2">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-indigo-500 rounded-full" />
+                            <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">
+                                Adiantamento registrado — Recibo de Pagamento disponível
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => onViewPaystub(run.id, employeeId)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors"
+                            >
+                                Ver Recibo
+                            </button>
+                            <button
+                                onClick={() => setAdiantamentoSalvo(false)}
+                                className="p-1 text-indigo-300 hover:text-indigo-600 transition-colors"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
                     </div>
                 )}
 

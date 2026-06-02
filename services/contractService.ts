@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { financialService } from './financialService';
 import {
     Contract,
+    ContractApprovalStep,
     ContractItem,
     ContractAddendum,
     ContractMeasurement,
@@ -418,11 +419,25 @@ export const contractService = {
     },
 
     createContract: async (contract: Omit<Contract, 'id' | 'created_at' | 'current_value'>): Promise<Contract> => {
+        // Captura snapshot do orçamento se budget_id informado
+        let budgetSnapshot: unknown = undefined;
+        if (contract.budget_id) {
+            try {
+                const { data: proj } = await supabase
+                    .from('projects')
+                    .select('budget')
+                    .eq('id', contract.project_id)
+                    .maybeSingle();
+                if (proj?.budget) budgetSnapshot = proj.budget;
+            } catch { /* snapshot opcional, não bloqueia */ }
+        }
+
         const { data, error } = await supabase
             .from('contracts')
             .insert({
                 ...contract,
-                current_value: contract.original_value // Initial current value matches original
+                current_value: contract.original_value,
+                ...(budgetSnapshot !== undefined ? { budget_snapshot: budgetSnapshot } : {}),
             })
             .select()
             .single();
@@ -811,6 +826,28 @@ export const contractService = {
         measurement: Omit<ContractMeasurement, 'id' | 'created_at'>,
         items: Omit<ContractMeasurementItem, 'id' | 'measurement_id' | 'created_at'>[]
     ): Promise<ContractMeasurement> => {
+        // Regra 3: medição não pode ultrapassar saldo contratual
+        const { data: contract, error: contractErr } = await supabase
+            .from('contracts')
+            .select('current_value, retention_rate')
+            .eq('id', measurement.contract_id)
+            .single();
+        if (contractErr) throw contractErr;
+
+        const { data: prevMeasurements } = await supabase
+            .from('contract_measurements')
+            .select('total_value')
+            .eq('contract_id', measurement.contract_id)
+            .neq('status', 'Cancelada');
+        const previousTotal = (prevMeasurements ?? []).reduce((s: number, m: { total_value: number }) => s + m.total_value, 0);
+        const availableBalance = (contract.current_value ?? 0) - previousTotal;
+
+        if (measurement.total_value > availableBalance + 0.01) {
+            throw new Error(
+                `Saldo insuficiente: disponível R$ ${availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, solicitado R$ ${measurement.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+            );
+        }
+
         // 1. Create measurement header
         const { data: mData, error: mError } = await supabase
             .from('contract_measurements')
@@ -946,5 +983,56 @@ export const contractService = {
             .eq('id', id);
 
         if (error) throw error;
-    }
+    },
+
+    // ─── Reajuste contratual ──────────────────────────────────────────────────
+
+    /**
+     * Aplica reajuste ao contrato usando a fórmula padrão:
+     *   novo_valor = current_value × (indexValue / indexBase)
+     * onde indexBase e indexValue são fornecidos pelo chamador (ex: INCC/IPCA manual ou via API).
+     * Atualiza current_value, reajuste_data_base (nova base = hoje) e reajuste_proximo (+ 12 meses),
+     * e re-sincroniza parcelas/recorrência ao módulo financeiro.
+     */
+    applyReajuste: async (
+        contractId: string,
+        indexBase: number,
+        indexValue: number,
+        notes?: string
+    ): Promise<Contract> => {
+        if (indexBase <= 0) throw new Error('Índice base deve ser maior que zero.');
+        if (indexValue <= 0) throw new Error('Índice atual deve ser maior que zero.');
+
+        const { data: contract, error: fetchErr } = await supabase
+            .from('contracts')
+            .select('*')
+            .eq('id', contractId)
+            .single();
+        if (fetchErr) throw fetchErr;
+
+        const fator = indexValue / indexBase;
+        const novoValor = parseFloat((contract.current_value * fator).toFixed(2));
+        const hoje = new Date().toISOString().split('T')[0];
+        const proximo = new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0];
+
+        const { data: updated, error: updateErr } = await supabase
+            .from('contracts')
+            .update({
+                current_value: novoValor,
+                reajuste_data_base: hoje,
+                reajuste_proximo: proximo,
+                ...(notes ? { description: `[Reajuste ${hoje}] ${notes}\n${contract.description || ''}` } : {}),
+            })
+            .eq('id', contractId)
+            .select()
+            .single();
+        if (updateErr) throw updateErr;
+
+        // Re-sync parcelas futuras se parcelado
+        if (!updated.is_recurring && updated.payment_term_type === 'Parcelado') {
+            await syncParceladoScheduleToFinance(updated as Contract);
+        }
+
+        return updated as Contract;
+    },
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle, FileText, Layers, X, ArrowRight } from 'lucide-react';
+import { CheckCircle, FileText, Layers, ArrowRight } from 'lucide-react';
 
 interface Props {
   contactName: string;
@@ -7,6 +7,7 @@ interface Props {
   projectName: string | null;
   onClose: () => void;
   onGoToProject?: () => void;
+  onGoToContract?: () => void;
 }
 
 const ServicesWonModal: React.FC<Props> = ({
@@ -15,6 +16,7 @@ const ServicesWonModal: React.FC<Props> = ({
   projectName,
   onClose,
   onGoToProject,
+  onGoToContract,
 }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
@@ -58,6 +60,14 @@ const ServicesWonModal: React.FC<Props> = ({
 
       {/* Ações */}
       <div className="px-6 pb-5 flex flex-col gap-2">
+        {onGoToContract && (
+          <button
+            onClick={onGoToContract}
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 transition-colors"
+          >
+            <FileText size={15} /> Abrir contrato completo
+          </button>
+        )}
         {onGoToProject && projectName && (
           <button
             onClick={onGoToProject}

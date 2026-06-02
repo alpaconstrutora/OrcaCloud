@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { FileText, ArrowLeft, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Clock, ExternalLink } from 'lucide-react';
 import { servicesCommercialService, ServiceContract } from '../../services/servicesCommercialService';
 import { ServicesView } from '../ServicesCommercialModule';
 
 interface Props {
   organizationId: string;
   onNavigate: (view: ServicesView, opportunityId?: string) => void;
+  onGoToContract: (contractId: string) => void;
 }
 
 const STATUS_LABELS: Record<ServiceContract['status'], string> = {
@@ -29,8 +30,10 @@ const STATUS_ICON: Record<ServiceContract['status'], React.ReactNode> = {
 const fmt = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
 
-const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate }) => {
-  const [contracts, setContracts] = useState<ServiceContract[]>([]);
+type ContractWithRich = ServiceContract & { rich_contract_id: string | null };
+
+const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoToContract }) => {
+  const [contracts, setContracts] = useState<ContractWithRich[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ServiceContract['status'] | 'all'>('all');
@@ -38,7 +41,7 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate }) => {
   const load = useCallback(() => {
     setLoading(true);
     servicesCommercialService.listContracts(organizationId)
-      .then(setContracts)
+      .then(data => setContracts(data as ContractWithRich[]))
       .finally(() => setLoading(false));
   }, [organizationId]);
 
@@ -53,6 +56,14 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate }) => {
   });
 
   const totalActive = contracts.filter(c => c.status === 'active').reduce((s, c) => s + c.total_value, 0);
+
+  const handleRowClick = (c: ContractWithRich) => {
+    if (c.rich_contract_id) {
+      onGoToContract(c.rich_contract_id);
+    } else if (c.opportunity_id) {
+      onNavigate('opportunity', c.opportunity_id);
+    }
+  };
 
   return (
     <div className="p-6 space-y-5 max-w-4xl mx-auto">
@@ -116,17 +127,15 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate }) => {
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Início</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Oportunidade</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ação</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
               {filtered.map(c => (
                 <tr
                   key={c.id}
-                  className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${
-                    c.opportunity_id ? 'cursor-pointer' : ''
-                  }`}
-                  onClick={() => c.opportunity_id && onNavigate('opportunity', c.opportunity_id)}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer"
+                  onClick={() => handleRowClick(c)}
                 >
                   <td className="px-4 py-3 font-mono text-xs font-semibold text-blue-700 dark:text-blue-400">
                     {c.contract_number}
@@ -143,8 +152,14 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate }) => {
                   <td className="px-4 py-3 text-gray-500 text-xs">
                     {c.start_date ? new Date(c.start_date).toLocaleDateString('pt-BR') : '—'}
                   </td>
-                  <td className="px-4 py-3 text-xs text-blue-600 dark:text-blue-400">
-                    {c.opportunity_id ? 'Ver oportunidade →' : '—'}
+                  <td className="px-4 py-3 text-xs">
+                    {c.rich_contract_id ? (
+                      <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
+                        <ExternalLink size={12} /> Ver contrato
+                      </span>
+                    ) : c.opportunity_id ? (
+                      <span className="text-gray-400">Ver oportunidade →</span>
+                    ) : '—'}
                   </td>
                 </tr>
               ))}

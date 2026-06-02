@@ -6,6 +6,7 @@ import ServicesVisit from './services/ServicesVisit';
 import ServicesBudget from './services/ServicesBudget';
 import ServicesProposal from './services/ServicesProposal';
 import ServicesContracts from './services/ServicesContracts';
+import ContractDetailView from './ContractDetailView';
 
 export type ServicesView =
   | 'dashboard'
@@ -14,7 +15,8 @@ export type ServicesView =
   | 'visit'
   | 'budget'
   | 'proposal'
-  | 'contracts';
+  | 'contracts'
+  | 'contract-detail';
 
 interface Props {
   organizationId: string;
@@ -24,10 +26,16 @@ interface Props {
 const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProject }) => {
   const [view, setView] = useState<ServicesView>('pipeline');
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
+  const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
 
   const navigate = useCallback((nextView: ServicesView, opportunityId?: string) => {
     if (opportunityId !== undefined) setSelectedOpportunityId(opportunityId);
     setView(nextView);
+  }, []);
+
+  const goToContract = useCallback((contractId: string) => {
+    setSelectedContractId(contractId);
+    setView('contract-detail');
   }, []);
 
   const renderView = () => {
@@ -54,6 +62,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
             onNavigate={navigate}
             onBack={() => navigate('pipeline')}
             onGoToProject={onGoToProject}
+            onGoToContract={goToContract}
           />
         ) : null;
       case 'visit':
@@ -85,8 +94,17 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
           <ServicesContracts
             organizationId={organizationId}
             onNavigate={navigate}
+            onGoToContract={goToContract}
           />
         );
+      case 'contract-detail':
+        return selectedContractId ? (
+          <ContractDetailView
+            contractId={selectedContractId}
+            onBack={() => setView('contracts')}
+            budget={[]}
+          />
+        ) : null;
       default:
         return null;
     }

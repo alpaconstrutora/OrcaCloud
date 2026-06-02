@@ -27,6 +27,7 @@ export interface ServiceOpportunity {
   lost_at: string | null;
   converted_project_id: string | null;
   converted_contract_id: string | null;
+  rich_contract_id: string | null;
   budget_source: BudgetSource;
   engineering_project_id: string | null;
   engineering_request_status: EngineeringRequestStatus;
@@ -166,7 +167,7 @@ export const servicesCommercialService = {
   },
 
   async createOpportunity(
-    payload: Omit<ServiceOpportunity, 'id' | 'created_at' | 'updated_at' | 'won_at' | 'lost_at' | 'converted_project_id' | 'converted_contract_id' | 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email'> & Partial<Pick<ServiceOpportunity, 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email'>>
+    payload: Omit<ServiceOpportunity, 'id' | 'created_at' | 'updated_at' | 'won_at' | 'lost_at' | 'converted_project_id' | 'converted_contract_id' | 'rich_contract_id' | 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email'> & Partial<Pick<ServiceOpportunity, 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email'>>
   ): Promise<ServiceOpportunity> {
     const { data, error } = await supabase
       .from('services_opportunities')
@@ -510,14 +511,18 @@ export const servicesCommercialService = {
 
   // ─── Contracts listing ────────────────────────────────────────────────────
 
-  async listContracts(organizationId: string): Promise<ServiceContract[]> {
+  async listContracts(organizationId: string): Promise<(ServiceContract & { rich_contract_id: string | null })[]> {
     const { data, error } = await supabase
       .from('services_contracts')
-      .select('*')
+      .select('*, opportunity:services_opportunities!services_contracts_opportunity_id_fkey(rich_contract_id)')
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return data ?? [];
+    return (data ?? []).map((row: any) => ({
+      ...row,
+      rich_contract_id: row.opportunity?.rich_contract_id ?? null,
+      opportunity: undefined,
+    }));
   },
 
   // ─── Pipeline stage counts (for dashboard chart) ─────────────────────────
@@ -544,6 +549,7 @@ export const servicesCommercialService = {
     projectName: string | null;
     projectId: string | null;
     contractId: string | null;
+    richContractId: string | null;
   }> {
     const [contractResult, projectResult] = await Promise.all([
       opp.converted_contract_id
@@ -566,6 +572,7 @@ export const servicesCommercialService = {
       projectName: projectResult.data?.name ?? null,
       projectId: opp.converted_project_id,
       contractId: opp.converted_contract_id,
+      richContractId: opp.rich_contract_id ?? null,
     };
   },
 

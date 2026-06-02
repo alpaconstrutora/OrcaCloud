@@ -20,6 +20,7 @@ interface Props {
   onNavigate: (view: ServicesView, opportunityId?: string) => void;
   onBack: () => void;
   onGoToProject: (projectId: string) => void;
+  onGoToContract: (contractId: string) => void;
 }
 
 const STAGE_LABELS: Record<OpportunityStage, string> = {
@@ -40,7 +41,7 @@ const NEXT_STAGES: Partial<Record<OpportunityStage, OpportunityStage>> = {
   lead: 'visit', visit: 'budget', budget: 'proposal', proposal: 'won',
 };
 
-const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizationId, onNavigate, onBack, onGoToProject }) => {
+const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizationId, onNavigate, onBack, onGoToProject, onGoToContract }) => {
   const [opp, setOpp] = useState<ServiceOpportunity | null>(null);
   const [events, setEvents] = useState<ServiceOpportunityEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +52,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
     projectName: string | null;
     projectId: string | null;
     contractId: string | null;
+    richContractId: string | null;
   } | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [engineeringSummary, setEngineeringSummary] = useState<EngineeringProjectSummary | null>(null);
@@ -513,6 +515,10 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
           onGoToProject={wonResult.projectId ? () => {
             setWonResult(null);
             onNavigate('pipeline');
+          } : undefined}
+          onGoToContract={wonResult.richContractId ? () => {
+            setWonResult(null);
+            onGoToContract(wonResult.richContractId!);
           } : undefined}
         />
       )}

@@ -22,6 +22,8 @@ export interface Contract {
     original_value: number;
     current_value: number;
     reajuste_index?: string;
+    reajuste_data_base?: string;
+    reajuste_proximo?: string;
     retention_rate: number;
     responsible_email?: string;
     signed_contract_url?: string;
@@ -33,7 +35,20 @@ export interface Contract {
     payment_days?: number;
     payment_installments?: number;
     payment_schedule?: ContractInstallment[];
+    budget_snapshot?: unknown;
+    approval_status?: 'RASCUNHO' | 'PENDENTE' | 'APROVADO' | 'REJEITADO';
+    approval_chain?: ContractApprovalStep[];
+    approval_required_levels?: 1 | 2;
     created_at?: string;
+}
+
+export interface ContractApprovalStep {
+    level: 1 | 2;
+    role: string;
+    action: 'APROVADO' | 'REJEITADO';
+    approved_by: string;
+    approved_at: string;
+    notes?: string;
 }
 
 export interface ContractInstallment {

@@ -7,9 +7,10 @@ import {
 
 export const imovibService = {
     async getStudies(organizationId?: string): Promise<ImovibStudy[]> {
+        // Campos numéricos de cenário omitidos na lista (carregados em getStudyById)
         let query = supabase
             .from('imovib_studies')
-            .select('*')
+            .select('id, organization_id, name, cnpj, developer, manager, version, segment, status, location, city, standard, total_area, created_at, updated_at')
             .order('created_at', { ascending: false });
 
         if (organizationId) {

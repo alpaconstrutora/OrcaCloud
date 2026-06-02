@@ -170,6 +170,7 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_PARCELADO',
                 reference_id: `${contract.id}:p${i + 1}`,
+                project_id: contract.project_id ?? null,
                 transaction_date: tx.date.split('T')[0],
                 amount: tx.value,
                 direction: 'DEBIT',
@@ -296,6 +297,7 @@ async function syncRecurringToFinance(contract: Contract) {
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_RECURRING',
                 reference_id: contract.id,
+                project_id: contract.project_id ?? null,
                 transaction_date: tx.date.split('T')[0],
                 amount: tx.value,
                 direction: 'DEBIT',
@@ -371,6 +373,7 @@ async function syncAVistaToFinance(contract: Contract) {
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_AVISTA',
                 reference_id: contract.id,
+                project_id: contract.project_id ?? null,
                 transaction_date: dueDate,
                 amount: contract.original_value,
                 direction: 'DEBIT',
@@ -389,9 +392,10 @@ async function syncAVistaToFinance(contract: Contract) {
 export const contractService = {
     // Contracts
     listContracts: async (projectId?: string, organizationId?: string, empresaId?: string): Promise<Contract[]> => {
+        // payment_schedule (array JSONB) omitido na listagem — carregado em getContractById
         let query = supabase
             .from('contracts')
-            .select('*')
+            .select('id, organization_id, project_id, supplier_id, budget_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, signature_status, signature_url, approval_status, approval_required_levels, template_id, created_at')
             .order('created_at', { ascending: false });
 
         if (projectId) {

@@ -11,62 +11,71 @@ interface CurrentProfile {
 }
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 
-// Views
+// Views — carregamento estático (crítico para primeira renderização)
 import Dashboard from './Dashboard';
-import BudgetEditor from './BudgetEditor';
-import ParametricEstimator from './ParametricEstimator';
-import { FinancialSchedule } from './FinancialSchedule';
-import PlanningDashboard from './PlanningDashboard';
 import ProjectList from './ProjectList';
-import ExcelImportModal from './ExcelImportModal';
-import ProjectDiaryManager from './ProjectDiaryManager';
-import DiaryReportViewer from './DiaryReportViewer';
-import DiaryDashboard from './DiaryDashboard';
-import LaborDashboard from './LaborDashboard';
-import LaborModule from './LaborModule';
 import ProjectOverview from './ProjectOverview';
-import ProjectFinancialManager from './ProjectFinancialManager';
-import ReportViewer from './ReportViewer';
-import ProjectSettingsView from './ProjectSettingsView';
-import SupplyChainOrderList from './SupplyChainOrderList';
-import SupplyChainOrderDetails from './SupplyChainOrderDetails';
-import SupplyChainQuotationList from './SupplyChainQuotationList';
-import SupplyChainQuotationComparison from './SupplyChainQuotationComparison';
-import SupplyChainContractList from './SupplyChainContractList';
-import ContractDetailView from './ContractDetailView';
-import ContractsDashboard from './ContractsDashboard';
-import ContractTemplateManager from './ContractTemplateManager';
-import ContractIndexManager from './ContractIndexManager';
-import SupplyChainReceiptManager from './SupplyChainReceiptManager';
-import AutomationManager from './AutomationManager';
-import ImovibDashboard from './ImovibDashboard';
-import ImovibForm from './ImovibForm';
-import ImovibDetailView from './ImovibDetailView';
 import Settings from './Settings';
 import { ClientArea } from './ClientArea';
-import InvestorDashboard from './InvestorDashboard';
-import SupplierDashboard from './SupplierDashboard';
-import BrokerPortal from './BrokerPortal';
 import OrganizationList from './OrganizationList';
-import SalesModule from './SalesModule';
-import RentalsModule from './RentalsModule';
-import DatabaseExplorer from './DatabaseExplorer';
-import QualityModule from './QualityModule';
-import BoletoManager from './BoletoManager';
-import ContasPagarManager from './ContasPagarManager';
-import FinancialCategoriesManager from './FinancialCategoriesManager';
-import BankReconciliation from './BankReconciliation';
-import { FiscalModule } from './fiscal/FiscalModule';
-import OperacionalModule from './OperacionalModule';
-import StructuralModule from './StructuralModule';
-import TasksModule from './TasksModule';
-import ServicesCommercialModule from './ServicesCommercialModule';
-import NotificationsCenter from './NotificationsCenter';
-import ProjectTypeTemplateEditor from './ProjectTypeTemplateEditor';
-import WarrantyModule from './WarrantyModule';
-import DREReport from './DREReport';
-import CashFlowDashboard from './CashFlowDashboard';
-import BIDashboard from './BIDashboard';
+
+// Views — lazy (carregadas apenas quando acessadas)
+const BudgetEditor          = React.lazy(() => import('./BudgetEditor'));
+const ParametricEstimator   = React.lazy(() => import('./ParametricEstimator'));
+const FinancialScheduleL    = React.lazy(() => import('./FinancialSchedule').then(m => ({ default: m.FinancialSchedule })));
+const PlanningDashboard     = React.lazy(() => import('./PlanningDashboard'));
+const ExcelImportModal      = React.lazy(() => import('./ExcelImportModal'));
+const ProjectDiaryManager   = React.lazy(() => import('./ProjectDiaryManager'));
+const DiaryReportViewer     = React.lazy(() => import('./DiaryReportViewer'));
+const DiaryDashboard        = React.lazy(() => import('./DiaryDashboard'));
+const LaborDashboard        = React.lazy(() => import('./LaborDashboard'));
+const LaborModule           = React.lazy(() => import('./LaborModule'));
+const ProjectFinancialManager = React.lazy(() => import('./ProjectFinancialManager'));
+const ReportViewer          = React.lazy(() => import('./ReportViewer'));
+const ProjectSettingsView   = React.lazy(() => import('./ProjectSettingsView'));
+const SupplyChainOrderList  = React.lazy(() => import('./SupplyChainOrderList'));
+const SupplyChainOrderDetails = React.lazy(() => import('./SupplyChainOrderDetails'));
+const SupplyChainQuotationList = React.lazy(() => import('./SupplyChainQuotationList'));
+const SupplyChainQuotationComparison = React.lazy(() => import('./SupplyChainQuotationComparison'));
+const SupplyChainContractList = React.lazy(() => import('./SupplyChainContractList'));
+const ContractDetailView    = React.lazy(() => import('./ContractDetailView'));
+const ContractsDashboard    = React.lazy(() => import('./ContractsDashboard'));
+const ContractTemplateManager = React.lazy(() => import('./ContractTemplateManager'));
+const ContractIndexManager  = React.lazy(() => import('./ContractIndexManager'));
+const SupplyChainReceiptManager = React.lazy(() => import('./SupplyChainReceiptManager'));
+const AutomationManager     = React.lazy(() => import('./AutomationManager'));
+const ImovibDashboard       = React.lazy(() => import('./ImovibDashboard'));
+const ImovibForm            = React.lazy(() => import('./ImovibForm'));
+const ImovibDetailView      = React.lazy(() => import('./ImovibDetailView'));
+const InvestorDashboard     = React.lazy(() => import('./InvestorDashboard'));
+const SupplierDashboard     = React.lazy(() => import('./SupplierDashboard'));
+const BrokerPortal          = React.lazy(() => import('./BrokerPortal'));
+const SalesModule           = React.lazy(() => import('./SalesModule'));
+const RentalsModule         = React.lazy(() => import('./RentalsModule'));
+const DatabaseExplorer      = React.lazy(() => import('./DatabaseExplorer'));
+const QualityModule         = React.lazy(() => import('./QualityModule'));
+const BoletoManager         = React.lazy(() => import('./BoletoManager'));
+const ContasPagarManager    = React.lazy(() => import('./ContasPagarManager'));
+const FinancialCategoriesManager = React.lazy(() => import('./FinancialCategoriesManager'));
+const BankReconciliation    = React.lazy(() => import('./BankReconciliation'));
+const FiscalModuleL         = React.lazy(() => import('./fiscal/FiscalModule').then(m => ({ default: m.FiscalModule })));
+const OperacionalModule     = React.lazy(() => import('./OperacionalModule'));
+const StructuralModule      = React.lazy(() => import('./StructuralModule'));
+const TasksModule           = React.lazy(() => import('./TasksModule'));
+const ServicesCommercialModule = React.lazy(() => import('./ServicesCommercialModule'));
+const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
+const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
+const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
+const DREReport             = React.lazy(() => import('./DREReport'));
+const CashFlowDashboard     = React.lazy(() => import('./CashFlowDashboard'));
+const BIDashboard           = React.lazy(() => import('./BIDashboard'));
+
+// Suspense fallback
+const Spinner = () => (
+    <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+    </div>
+);
 
 export interface AppRouterProps {
   activeView: string;
@@ -184,6 +193,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     prevEditingOrderIdRef.current = editingOrderId;
   }, [editingOrderId]);
 
+  // ── Render interno (envolto em Suspense para lazy components) ───────────────
+  const renderContent = () => {
   // ── Portais de perfil específico (acesso direto sem switch) ─────────────────
   if (currentProfile.group === ProfileGroup.CLIENT) {
     return (
@@ -264,7 +275,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     case 'planning-view':
       return (
-        <FinancialSchedule
+        <FinancialScheduleL
           settings={settingsWithId}
           budget={budget}
           projects={typedProjects}
@@ -540,7 +551,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       );
 
     case 'fiscal-nfe':
-      return <FiscalModule />;
+      return <FiscalModuleL />;
 
     case 'automation':
       return <AutomationManager settings={settingsWithId} onUpdateSettings={handleUpdateSettings} organizationId={activeOrganizationId || undefined} />;
@@ -820,6 +831,13 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       }
       return <Dashboard settings={settingsWithId} budget={budget} onNavigate={setActiveView} />;
   }
+  }; // fim renderContent
+
+  return (
+    <React.Suspense fallback={<Spinner />}>
+      {renderContent()}
+    </React.Suspense>
+  );
 };
 
 // ─── ContractsDashboardShell ──────────────────────────────────────────────────

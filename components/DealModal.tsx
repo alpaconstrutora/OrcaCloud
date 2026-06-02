@@ -11,6 +11,7 @@ import { commercialFinanceService } from '../services/commercialFinanceService';
 import DealWorkflowBar from './DealWorkflowBar';
 import { DealWorkflowStatus } from '../lib/dealWorkflow';
 import DealSignaturePanel from './DealSignaturePanel';
+import CreditAnalysisPanel from './CreditAnalysisPanel';
 
 interface DealModalProps {
     isOpen: boolean;
@@ -810,6 +811,17 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             onStatusChange={(sigStatus: 'PENDING' | 'SIGNED') => {
                                 setFormData(prev => ({ ...prev, signature_status: sigStatus } as any));
                             }}
+                        />
+                    </div>
+                )}
+
+                {/* Análise de Crédito — visível quando há id de deal */}
+                {formData.id && (formData.organization_id || organizationId) && (
+                    <div className="px-8 pb-4">
+                        <CreditAnalysisPanel
+                            dealId={formData.id}
+                            organizationId={(formData.organization_id || organizationId) as string}
+                            clientName={selectedClient?.name}
                         />
                     </div>
                 )}

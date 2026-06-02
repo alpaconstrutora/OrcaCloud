@@ -746,7 +746,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 <div className="grid grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
                     <div className="col-span-2 space-y-6">
                         {/* Workflow de Aprovação */}
-                        {contract.approval_status && contract.approval_status !== 'RASCUNHO' && (
+                        {contract.approval_status && (
                             <ApprovalWorkflowCard
                                 contract={contract}
                                 onSubmit={async () => {
@@ -1009,6 +1009,52 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     </a>
                                 )}
                             </div>
+
+                            {/* Assinatura Eletrônica */}
+                            <SignaturePanel
+                                contract={contract}
+                                onSend={async (signers) => {
+                                    if (!contract.signed_contract_url) {
+                                        notify('Anexe o PDF do contrato antes de enviar para assinatura.', 'error');
+                                        return;
+                                    }
+                                    try {
+                                        notify('Enviando para ZapSign…', 'info');
+                                        // Busca o PDF como base64
+                                        const pdfResp = await fetch(contract.signed_contract_url);
+                                        const blob = await pdfResp.blob();
+                                        const base64 = await new Promise<string>((res, rej) => {
+                                            const fr = new FileReader();
+                                            fr.onload = () => res((fr.result as string).split(',')[1]);
+                                            fr.onerror = rej;
+                                            fr.readAsDataURL(blob);
+                                        });
+                                        await contractService.sendForSignature(
+                                            contract.id,
+                                            contract.organization_id,
+                                            base64,
+                                            `Contrato ${contract.number} — ${contract.title}`,
+                                            signers
+                                        );
+                                        const updated = await contractService.getContractById(contract.id);
+                                        if (updated) setContract(updated);
+                                        notify('Contrato enviado para assinatura!', 'success');
+                                    } catch (e) {
+                                        notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
+                                    }
+                                }}
+                                onRefreshStatus={async () => {
+                                    if (!contract.signature_token) return;
+                                    try {
+                                        await contractService.getSignatureStatus(contract.signature_token);
+                                        const updated = await contractService.getContractById(contract.id);
+                                        if (updated) setContract(updated);
+                                        notify('Status atualizado.', 'info');
+                                    } catch (e) {
+                                        notify(`Erro ao consultar status: ${e instanceof Error ? e.message : ''}`, 'error');
+                                    }
+                                }}
+                            />
                         </div>
                     </div>
                 </div>
@@ -2154,5 +2200,277 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
     );
 };
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─── SignaturePanel ───────────────────────────────────────────────────────────
+interface SignaturePanelProps {
+    contract: Contract;
+    onSend: (signers: { name: string; email: string; phone?: string }[]) => Promise<void>;
+    onRefreshStatus: () => Promise<void>;
+}
+
+const SIGNATURE_STATUS_LABEL: Record<string, string> = {
+    PENDING: 'Pendente', SENT: 'Enviado — Aguardando assinatura',
+    SIGNED: 'Assinado', EXPIRED: 'Expirado', CANCELLED: 'Cancelado',
+};
+const SIGNATURE_STATUS_COLOR: Record<string, string> = {
+    PENDING: 'bg-amber-100 text-amber-700',
+    SENT: 'bg-blue-100 text-blue-700',
+    SIGNED: 'bg-emerald-100 text-emerald-700',
+    EXPIRED: 'bg-red-100 text-red-600',
+    CANCELLED: 'bg-gray-100 text-gray-500',
+};
+
+const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRefreshStatus }) => {
+    const [showForm, setShowForm] = React.useState(false);
+    const [busy, setBusy] = React.useState(false);
+    const [signers, setSigners] = React.useState([{ name: '', email: '', phone: '' }]);
+
+    const hasSig = !!contract.signature_status;
+    const isSigned = contract.signature_status === 'SIGNED';
+
+    const addSigner = () => setSigners(s => [...s, { name: '', email: '', phone: '' }]);
+    const removeSigner = (i: number) => setSigners(s => s.filter((_, idx) => idx !== i));
+    const updateSigner = (i: number, field: string, value: string) =>
+        setSigners(s => s.map((sg, idx) => idx === i ? { ...sg, [field]: value } : sg));
+
+    const handleSend = async () => {
+        const valid = signers.every(s => s.name.trim() && s.email.trim());
+        if (!valid) return;
+        setBusy(true);
+        try {
+            await onSend(signers.filter(s => s.name && s.email).map(s => ({
+                name: s.name, email: s.email, phone: s.phone || undefined,
+            })));
+            setShowForm(false);
+        } finally { setBusy(false); }
+    };
+
+    if (isSigned) return (
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div className="flex-1">
+                <p className="text-[12px] font-semibold text-emerald-700 uppercase tracking-wide">Contrato Assinado Eletronicamente</p>
+                {contract.signature_completed_at && (
+                    <p className="text-[11px] text-emerald-600 mt-0.5">
+                        {new Date(contract.signature_completed_at).toLocaleString('pt-BR')}
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="space-y-3 border-t border-gray-100 pt-4">
+            <div className="flex items-center justify-between">
+                <p className="text-[12px] font-medium text-gray-500 uppercase tracking-wide">Assinatura Eletrônica</p>
+                {hasSig && (
+                    <button onClick={() => { setBusy(true); onRefreshStatus().finally(() => setBusy(false)); }} disabled={busy}
+                        className="text-[11px] text-blue-600 hover:underline disabled:opacity-50">
+                        {busy ? 'Atualizando…' : '↻ Atualizar status'}
+                    </button>
+                )}
+            </div>
+
+            {hasSig && contract.signature_status && (
+                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${SIGNATURE_STATUS_COLOR[contract.signature_status] ?? ''}`}>
+                    {SIGNATURE_STATUS_LABEL[contract.signature_status] ?? contract.signature_status}
+                </div>
+            )}
+
+            {contract.signature_url && contract.signature_status === 'SENT' && (
+                <a href={contract.signature_url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-[12px] text-blue-600 hover:underline">
+                    <ExternalLink size={12} /> Link de assinatura
+                </a>
+            )}
+
+            {!hasSig && !showForm && (
+                <button onClick={() => setShowForm(true)}
+                    className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+                    <Send size={14} /> Enviar para Assinatura (ZapSign)
+                </button>
+            )}
+
+            {showForm && (
+                <div className="space-y-3 p-4 bg-gray-50 rounded-2xl">
+                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Signatários</p>
+                    {signers.map((s, i) => (
+                        <div key={i} className="grid grid-cols-3 gap-2 items-end">
+                            <input value={s.name} onChange={e => updateSigner(i, 'name', e.target.value)}
+                                placeholder="Nome *" className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            <input value={s.email} onChange={e => updateSigner(i, 'email', e.target.value)}
+                                placeholder="E-mail *" type="email" className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            <div className="flex gap-1">
+                                <input value={s.phone} onChange={e => updateSigner(i, 'phone', e.target.value)}
+                                    placeholder="WhatsApp" className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                {signers.length > 1 && (
+                                    <button onClick={() => removeSigner(i)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    <button onClick={addSigner} className="text-[12px] text-blue-600 hover:underline">+ Adicionar signatário</button>
+                    <div className="flex gap-2 pt-1">
+                        <button onClick={() => setShowForm(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">Cancelar</button>
+                        <button onClick={handleSend} disabled={busy || !signers.every(s => s.name && s.email)}
+                            className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                            {busy ? 'Enviando…' : 'Enviar'}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ─── ApprovalWorkflowCard ─────────────────────────────────────────────────────
+interface ApprovalWorkflowCardProps {
+    contract: Contract;
+    onSubmit: () => Promise<void>;
+    onApprove: (level: 1 | 2, notes?: string) => Promise<void>;
+    onReject: (reason: string) => Promise<void>;
+}
+
+const ApprovalWorkflowCard: React.FC<ApprovalWorkflowCardProps> = ({ contract, onSubmit, onApprove, onReject }) => {
+    const [busy, setBusy] = React.useState(false);
+    const [rejectReason, setRejectReason] = React.useState('');
+    const [approveNotes, setApproveNotes] = React.useState('');
+    const [showRejectInput, setShowRejectInput] = React.useState(false);
+    const [showApproveInput, setShowApproveInput] = React.useState(false);
+
+    const status = contract.approval_status ?? 'RASCUNHO';
+    const chain = contract.approval_chain ?? [];
+    const required = contract.approval_required_levels ?? 1;
+    const approvedLevels = chain.filter(s => s.action === 'APROVADO').map(s => s.level);
+    const nextLevel = (approvedLevels.includes(1) ? 2 : 1) as 1 | 2;
+    const needsLevel2 = required === 2 && !approvedLevels.includes(2) && approvedLevels.includes(1);
+
+    const act = async (fn: () => Promise<void>) => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
+
+    const STATUS_COLOR: Record<string, string> = {
+        RASCUNHO: 'bg-gray-100 text-gray-600',
+        PENDENTE: 'bg-amber-100 text-amber-700',
+        APROVADO: 'bg-emerald-100 text-emerald-700',
+        REJEITADO: 'bg-red-100 text-red-700',
+    };
+
+    return (
+        <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+                <h4 className="text-[12px] font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" /> Workflow de Aprovação
+                </h4>
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLOR[status] ?? STATUS_COLOR.RASCUNHO}`}>
+                    {status}
+                </span>
+            </div>
+
+            {/* Cadeia de aprovação */}
+            {chain.length > 0 && (
+                <div className="space-y-2">
+                    {chain.map((step, i) => (
+                        <div key={i} className={`flex items-start gap-3 p-3 rounded-xl text-sm ${step.action === 'APROVADO' ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                            {step.action === 'APROVADO'
+                                ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                : <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />}
+                            <div className="flex-1 min-w-0">
+                                <p className="font-medium text-gray-800 text-[12px]">
+                                    {step.role} — <span className={step.action === 'APROVADO' ? 'text-emerald-700' : 'text-red-700'}>{step.action}</span>
+                                </p>
+                                <p className="text-[11px] text-gray-400">{step.approved_by} · {new Date(step.approved_at).toLocaleDateString('pt-BR')}</p>
+                                {step.notes && <p className="text-[11px] text-gray-500 italic mt-0.5">"{step.notes}"</p>}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Ações */}
+            {status === 'PENDENTE' && (
+                <div className="space-y-3 pt-1">
+                    {showApproveInput ? (
+                        <div className="space-y-2">
+                            <input
+                                type="text"
+                                placeholder="Observação (opcional)"
+                                value={approveNotes}
+                                onChange={e => setApproveNotes(e.target.value)}
+                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            />
+                            <div className="flex gap-2">
+                                <button onClick={() => setShowApproveInput(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={() => act(() => onApprove(nextLevel, approveNotes || undefined).then(() => { setShowApproveInput(false); setApproveNotes(''); }))}
+                                    disabled={busy}
+                                    className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+                                >
+                                    {busy ? 'Aprovando…' : `Aprovar (Nível ${nextLevel})`}
+                                </button>
+                            </div>
+                        </div>
+                    ) : showRejectInput ? (
+                        <div className="space-y-2">
+                            <input
+                                type="text"
+                                placeholder="Motivo da rejeição *"
+                                value={rejectReason}
+                                onChange={e => setRejectReason(e.target.value)}
+                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                            />
+                            <div className="flex gap-2">
+                                <button onClick={() => setShowRejectInput(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={() => { if (!rejectReason.trim()) return; act(() => onReject(rejectReason.trim()).then(() => { setShowRejectInput(false); setRejectReason(''); })); }}
+                                    disabled={busy || !rejectReason.trim()}
+                                    className="flex-1 py-2 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                                >
+                                    {busy ? 'Rejeitando…' : 'Rejeitar'}
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setShowApproveInput(true)}
+                                className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700"
+                            >
+                                {needsLevel2 ? 'Aprovar — Nível 2' : 'Aprovar'}
+                            </button>
+                            <button
+                                onClick={() => setShowRejectInput(true)}
+                                className="flex-1 py-2 bg-red-100 text-red-700 rounded-xl text-sm font-medium hover:bg-red-200"
+                            >
+                                Rejeitar
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {status === 'RASCUNHO' && (
+                <button
+                    onClick={() => act(onSubmit)}
+                    disabled={busy}
+                    className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                    {busy ? 'Enviando…' : 'Enviar para Aprovação'}
+                </button>
+            )}
+
+            {status === 'APROVADO' && (
+                <p className="text-[12px] text-emerald-600 font-medium text-center">Contrato aprovado e ativo.</p>
+            )}
+            {status === 'REJEITADO' && (
+                <p className="text-[12px] text-red-600 font-medium text-center">Contrato rejeitado — retornado para rascunho para edição.</p>
+            )}
+        </div>
+    );
+};
 
 export default ContractDetailView;

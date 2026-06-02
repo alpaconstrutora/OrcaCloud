@@ -16,7 +16,6 @@ const json = (body: unknown, status = 200) =>
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-// ZapSign API base URL
 const ZAPSIGN_API = 'https://api.zapsign.com.br/api/v1';
 
 serve(async (req: Request) => {
@@ -29,7 +28,7 @@ serve(async (req: Request) => {
     const anonKey    = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
     const zapToken   = Deno.env.get('ZAPSIGN_API_TOKEN') ?? '';
 
-    if (!zapToken) return json({ error: 'Serviço de assinatura não configurado' }, 503);
+    if (!zapToken) return json({ error: 'Serviço de assinatura não configurado. Configure ZAPSIGN_API_TOKEN.' }, 503);
 
     const userClient = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: authHeader } },
@@ -37,15 +36,25 @@ serve(async (req: Request) => {
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) return json({ error: 'Token inválido' }, 401);
 
-    try {
-        const { action, dealId, documentBase64, documentName, signers, organizationId } = await req.json();
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const adminClient = createClient(supabaseUrl, serviceKey);
 
-        if (!action || !dealId || !organizationId) {
-            return json({ error: 'action, dealId e organizationId são obrigatórios' }, 400);
+    try {
+        const body = await req.json();
+        const { action, organizationId } = body;
+
+        // Suporte duplo: dealId (commercial_deals) e contractId (contracts)
+        const dealId: string | undefined = body.dealId;
+        const contractId: string | undefined = body.contractId;
+        const target = contractId ? 'contract' : 'deal';
+
+        if (!action || (!dealId && !contractId) || !organizationId) {
+            return json({ error: 'action, (dealId ou contractId) e organizationId são obrigatórios' }, 400);
         }
 
         // ── ENVIAR DOCUMENTO PARA ASSINATURA ─────────────────────────────────
         if (action === 'send') {
+            const { documentBase64, documentName, signers } = body;
             if (!documentBase64 || !documentName || !signers?.length) {
                 return json({ error: 'documentBase64, documentName e signers são obrigatórios para send' }, 400);
             }
@@ -84,27 +93,28 @@ serve(async (req: Request) => {
             }
 
             const zapDoc = await zapResp.json();
+            const signUrl = zapDoc.signers?.[0]?.sign_url ?? null;
 
-            // Persistir token do documento na deal para rastrear webhook
-            const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-            const adminClient = createClient(supabaseUrl, serviceKey);
-            await adminClient.from('commercial_deals').update({
-                signature_token: zapDoc.token,
-                signature_status: 'PENDING',
-                signature_url: zapDoc.signers?.[0]?.sign_url ?? null,
-            }).eq('id', dealId);
+            if (target === 'contract') {
+                await adminClient.from('contracts').update({
+                    signature_token: zapDoc.token,
+                    signature_status: 'SENT',
+                    signature_url: signUrl,
+                }).eq('id', contractId);
+            } else {
+                await adminClient.from('commercial_deals').update({
+                    signature_token: zapDoc.token,
+                    signature_status: 'PENDING',
+                    signature_url: signUrl,
+                }).eq('id', dealId);
+            }
 
-            return json({
-                success: true,
-                token: zapDoc.token,
-                sign_url: zapDoc.signers?.[0]?.sign_url,
-                signers: zapDoc.signers,
-            });
+            return json({ success: true, token: zapDoc.token, sign_url: signUrl, signers: zapDoc.signers });
         }
 
         // ── CONSULTAR STATUS ──────────────────────────────────────────────────
         if (action === 'status') {
-            const { signatureToken } = await req.json().catch(() => ({}));
+            const { signatureToken } = body;
             if (!signatureToken) return json({ error: 'signatureToken obrigatório' }, 400);
 
             const zapResp = await fetch(`${ZAPSIGN_API}/docs/${signatureToken}/`, {
@@ -116,16 +126,25 @@ serve(async (req: Request) => {
             return json({ status: zapDoc.status, signers: zapDoc.signers, signed_file: zapDoc.signed_file });
         }
 
-        // ── WEBHOOK (chamado pelo ZapSign quando assinatura é concluída) ──────
+        // ── WEBHOOK (chamado pelo ZapSign — sem auth de usuário, mas validado por token) ──
         if (action === 'webhook') {
-            const { token, status } = await req.json().catch(() => ({}));
+            const { token, status, signed_file } = body;
             if (!token) return json({ error: 'token obrigatório' }, 400);
 
-            const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-            const adminClient = createClient(supabaseUrl, serviceKey);
+            const isSigned = status === 'finished';
 
+            // Atualizar contracts (se token bate)
+            await adminClient.from('contracts')
+                .update({
+                    signature_status: isSigned ? 'SIGNED' : 'SENT',
+                    ...(isSigned ? { signature_completed_at: new Date().toISOString() } : {}),
+                    ...(isSigned && signed_file ? { signed_contract_url: signed_file } : {}),
+                })
+                .eq('signature_token', token);
+
+            // Atualizar commercial_deals (backward compat)
             await adminClient.from('commercial_deals')
-                .update({ signature_status: status === 'finished' ? 'SIGNED' : 'PENDING' })
+                .update({ signature_status: isSigned ? 'SIGNED' : 'PENDING' })
                 .eq('signature_token', token);
 
             return json({ received: true });

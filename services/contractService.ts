@@ -985,6 +985,34 @@ export const contractService = {
         if (error) throw error;
     },
 
+    // ─── Assinatura Eletrônica ────────────────────────────────────────────────
+
+    sendForSignature: async (
+        contractId: string,
+        organizationId: string,
+        documentBase64: string,
+        documentName: string,
+        signers: { name: string; email: string; phone?: string }[]
+    ): Promise<{ token: string; sign_url: string }> => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('Não autenticado.');
+
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('sign-contract', {
+            body: { action: 'send', contractId, organizationId, documentBase64, documentName, signers },
+        });
+        if (fnError) throw new Error(fnError.message ?? 'Erro ao invocar serviço de assinatura.');
+        if (!fnData?.success) throw new Error(fnData?.error ?? 'Falha ao enviar para assinatura.');
+        return { token: fnData.token, sign_url: fnData.sign_url };
+    },
+
+    getSignatureStatus: async (signatureToken: string): Promise<{ status: string; signed_file?: string }> => {
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('sign-contract', {
+            body: { action: 'status', signatureToken, organizationId: 'query', dealId: 'query' },
+        });
+        if (fnError) throw new Error(fnError.message);
+        return fnData;
+    },
+
     // ─── Aprovação Multinível ─────────────────────────────────────────────────
 
     submitForApproval: async (contractId: string): Promise<Contract> => {

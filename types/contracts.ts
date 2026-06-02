@@ -36,6 +36,10 @@ export interface Contract {
     payment_installments?: number;
     payment_schedule?: ContractInstallment[];
     budget_snapshot?: unknown;
+    signature_status?: 'PENDING' | 'SENT' | 'SIGNED' | 'EXPIRED' | 'CANCELLED';
+    signature_token?: string;
+    signature_url?: string;
+    signature_completed_at?: string;
     approval_status?: 'RASCUNHO' | 'PENDENTE' | 'APROVADO' | 'REJEITADO';
     approval_chain?: ContractApprovalStep[];
     approval_required_levels?: 1 | 2;

@@ -17,8 +17,8 @@ export const kpiService = {
         const completed = orders.filter(o => CLOSED_STATUSES.includes(o.status));
         const active = orders.filter(o => ACTIVE_STATUSES.includes(o.status));
 
-        // Lead Time: avg days from created_at to receivedAt for completed orders
-        const withLeadTime = completed.filter(o => o.created_at && o.receivedAt);
+        // Lead Time: apenas pedidos 'Recebido' (sem divergência) — espelha SQL vw_bi_supply
+        const withLeadTime = completed.filter(o => o.status === 'Recebido' && o.created_at && o.receivedAt);
         let leadTimeDays: number | null = null;
         if (withLeadTime.length > 0) {
             const totalDays = withLeadTime.reduce((sum, o) => {

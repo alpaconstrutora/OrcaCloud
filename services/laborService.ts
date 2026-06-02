@@ -701,6 +701,16 @@ export const laborService = {
             .select()
             .single();
         if (error) throw error;
+
+        // Auto-cria período aquisitivo para CLT com data de admissão
+        if (data && employee.contract_type === 'CLT' && employee.hire_date) {
+            await supabase.rpc('create_vacation_period', {
+                p_employee_id: data.id,
+                p_org_id: employee.org_id,
+                p_hire_date: employee.hire_date,
+            }).then(); // fire-and-forget — não bloqueia o cadastro
+        }
+
         return data;
     },
 

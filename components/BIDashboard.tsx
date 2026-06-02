@@ -11,6 +11,8 @@ import { biService } from '../services/biService';
 import { useToast } from '../hooks/useToast';
 import type { BIExecutiveSummary, KPIvsTarget } from '../types/bi';
 import MyTasksWidget from './MyTasksWidget';
+import BINarrativeCard from './BINarrativeCard';
+import BIReportScheduler from './BIReportScheduler';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
 
@@ -122,16 +124,26 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
     const now = new Date();
     const [dateFrom, setDateFrom] = React.useState(`${now.getFullYear()}-01-01`);
     const [dateTo,   setDateTo]   = React.useState(`${now.getFullYear()}-12-31`);
-    const [summary, setSummary]   = React.useState<BIExecutiveSummary | null>(null);
-    const [loading, setLoading]   = React.useState(false);
-    const [activeTab, setActiveTab] = React.useState<'visao_geral' | 'tendencia' | 'metas'>('visao_geral');
+    const [summary, setSummary]     = React.useState<BIExecutiveSummary | null>(null);
+    const [loading, setLoading]     = React.useState(false);
+    const [activeTab, setActiveTab] = React.useState<'visao_geral' | 'tendencia' | 'metas' | 'ia_relatorios'>('visao_geral');
+    const [orgName, setOrgName]     = React.useState('');
+    const [narrative, setNarrative] = React.useState<string | null>(null);
 
     const load = React.useCallback(async () => {
         if (!organizationId) return;
         setLoading(true);
         try {
-            const s = await biService.getSummary(organizationId, dateFrom, dateTo);
+            const [s, orgRes] = await Promise.all([
+                biService.getSummary(organizationId, dateFrom, dateTo),
+                (async () => {
+                    const { data } = await (await import('../lib/supabase')).supabase
+                        .from('organizations').select('name').eq('id', organizationId).maybeSingle();
+                    return (data as { name?: string } | null)?.name ?? '';
+                })(),
+            ]);
             setSummary(s);
+            if (orgRes) setOrgName(orgRes);
         } catch (e: unknown) {
             showToast('Erro ao carregar BI executivo', 'error');
             console.error('[BIDashboard]', e);
@@ -209,7 +221,7 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
 
                     {/* ── Tabs ── */}
                     <div className="flex gap-1 border-b border-gray-100">
-                        {(['visao_geral', 'tendencia', 'metas'] as const).map(t => (
+                        {(['visao_geral', 'tendencia', 'metas', 'ia_relatorios'] as const).map(t => (
                             <button key={t} onClick={() => setActiveTab(t)}
                                 className={`px-4 py-2 text-xs font-bold capitalize transition-colors ${
                                     activeTab === t
@@ -217,7 +229,10 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
                                         : 'text-gray-400 hover:text-gray-700'
                                 }`}
                             >
-                                {t === 'visao_geral' ? 'Visão Geral' : t === 'tendencia' ? 'Tendência 12 Meses' : 'vs. Metas'}
+                                {t === 'visao_geral' ? 'Visão Geral'
+                                    : t === 'tendencia' ? 'Tendência 12 Meses'
+                                    : t === 'metas' ? 'vs. Metas'
+                                    : '✦ IA & Relatórios'}
                             </button>
                         ))}
                     </div>
@@ -426,6 +441,29 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
                                 </p>
                             )}
                         </div>
+                    )}
+                    {/* ── IA & Relatórios ── */}
+                    {activeTab === 'ia_relatorios' && summary && (
+                        <div className="space-y-6">
+                            <BINarrativeCard
+                                summary={summary}
+                                dateFrom={dateFrom}
+                                dateTo={dateTo}
+                                organizationName={orgName}
+                                onNarrativeChange={setNarrative}
+                            />
+                            <BIReportScheduler
+                                orgId={organizationId}
+                                organizationName={orgName || 'Empresa'}
+                                summary={summary}
+                                dateFrom={dateFrom}
+                                dateTo={dateTo}
+                                narrative={narrative}
+                            />
+                        </div>
+                    )}
+                    {activeTab === 'ia_relatorios' && !summary && !loading && (
+                        <p className="py-12 text-center text-sm text-gray-400">Carregue os dados do BI primeiro (botão Atualizar).</p>
                     )}
                 </>
             )}

@@ -5,6 +5,7 @@ import {
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { payrollService, PayrollItem, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
+import { payrollEngine } from '../services/payrollEngine';
 
 interface PaystubModalProps {
     orgId: string;
@@ -71,10 +72,40 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
             }
 
             setRun(runData);
-            setResult(resData);
             setRubrics(rubricsData);
             const empEvents = eventsData.filter((e) => e.employee_id === employeeId);
             setEvents(empEvents);
+
+            // Para runs de adiantamento sem itens processados, constrói os itens
+            // diretamente dos eventos para não exibir holerite zerado.
+            // Dispara reprocessamento silencioso em background para persistir no banco.
+            if (runData.type === 'adiantamento' && itemsData.length === 0) {
+                const advEv = empEvents.find(e => e.rubric_code === 'ADIANTAMENTO');
+                if (advEv) {
+                    const syntheticItem = {
+                        id: advEv.id ?? 'synthetic',
+                        payroll_run_id: runId,
+                        employee_id: employeeId,
+                        code: 'ADIANTAMENTO',
+                        type: 'provento' as const,
+                        amount: advEv.amount,
+                        base_amount: advEv.amount,
+                        reference: 1,
+                    };
+                    setItems([syntheticItem]);
+                    setResult({
+                        ...resData,
+                        gross: advEv.amount,
+                        discounts: 0,
+                        net: advEv.amount,
+                        employer_cost: advEv.amount,
+                    });
+                    payrollEngine.calculateEmployeePayroll(employeeId, runId).catch(console.error);
+                    return;
+                }
+            }
+
+            setResult(resData);
             setItems(itemsData);
         } catch (err: unknown) {
             console.error('Error loading paystub data:', err);

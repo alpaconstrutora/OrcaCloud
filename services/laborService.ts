@@ -1864,6 +1864,30 @@ export const laborService = {
         return (data || [] as VBRow[]).map((v: VBRow) => ({ ...v, employee_name: v.employee?.name }));
     },
 
+    // Colaboradores que completaram o período aquisitivo e têm saldo disponível
+    // mas NÃO estão na janela de urgência dos 60 dias (esses ficam em getVacationAlerts)
+    async getVacationReady(orgId: string): Promise<VacationBalance[]> {
+        const today = new Date().toISOString().split('T')[0];
+        const in60 = new Date();
+        in60.setDate(in60.getDate() + 60);
+        const in60Str = in60.toISOString().split('T')[0];
+
+        const { data, error } = await supabase
+            .from('vacation_balance')
+            .select(`*, employee:employees!employee_id(name, status)`)
+            .eq('org_id', orgId)
+            .lte('periodo_fim', today)       // período aquisitivo já completou 12 meses
+            .gt('vencimento', in60Str)       // mas ainda não está na zona de urgência
+            .gt('dias_restantes', 0)
+            .order('periodo_fim', { ascending: true });
+        if (error) throw error;
+
+        type VBRow = VacationBalance & { employee?: { name: string; status: string } };
+        return (data || [] as VBRow[])
+            .filter((v: VBRow) => v.employee?.status === 'ATIVO')
+            .map((v: VBRow) => ({ ...v, employee_name: v.employee?.name }));
+    },
+
     // ── EPI CATALOG ────────────────────────────────────────
 
     async listEpiCatalog(orgId: string): Promise<EpiCatalogItem[]> {

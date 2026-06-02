@@ -445,7 +445,8 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
 
     const absencesKey = [...laborKeys.all, 'absences', orgId, filterTipo, filterStatus, filterEmployee];
     const balancesKey = [...laborKeys.all, 'vacationBalances', orgId, filterEmployee];
-    const alertsKey   = [...laborKeys.all, 'vacationAlerts', orgId];
+    const alertsKey = [...laborKeys.all, 'vacationAlerts', orgId];
+    const readyKey  = [...laborKeys.all, 'vacationReady',  orgId];
 
     const { data: absences = [], isLoading: loadingAbs } = useQuery({
         queryKey: absencesKey,
@@ -473,10 +474,18 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
         enabled: !!orgId,
     });
 
+    const { data: vacationReady = [] } = useQuery({
+        queryKey: readyKey,
+        queryFn: () => laborService.getVacationReady(orgId),
+        staleTime: STALE.normal,
+        enabled: !!orgId,
+    });
+
     const invalidate = () => {
         qc.invalidateQueries({ queryKey: [...laborKeys.all, 'absences', orgId] });
         qc.invalidateQueries({ queryKey: [...laborKeys.all, 'vacationBalances', orgId] });
         qc.invalidateQueries({ queryKey: alertsKey });
+        qc.invalidateQueries({ queryKey: readyKey });
     };
 
     const approveMutation = useMutation({
@@ -517,13 +526,35 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
 
     return (
         <div className="space-y-6">
+            {/* Alerta: férias disponíveis para agendar */}
+            {vacationReady.length > 0 && (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
+                    <Umbrella className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                        <p className="text-xs font-black text-emerald-900 uppercase tracking-tight">
+                            {vacationReady.length} colaborador{vacationReady.length > 1 ? 'es' : ''} com férias disponíveis para agendar
+                        </p>
+                        <p className="text-[11px] text-emerald-700 mt-1">
+                            {vacationReady.slice(0, 3).map(v => `${v.employee_name} (${v.dias_restantes}d disponíveis · vence ${v.vencimento})`).join(' · ')}
+                            {vacationReady.length > 3 && ` e mais ${vacationReady.length - 3}…`}
+                        </p>
+                        <button
+                            onClick={() => setView('balances')}
+                            className="mt-2 text-[10px] font-black text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
+                        >
+                            Ver saldos →
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Alerta de férias vencendo */}
             {vacationAlerts.length > 0 && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
                         <p className="text-xs font-black text-amber-900 uppercase tracking-tight">
-                            {vacationAlerts.length} período{vacationAlerts.length > 1 ? 's' : ''} de férias vencendo em 60 dias
+                            {vacationAlerts.length} período{vacationAlerts.length > 1 ? 's' : ''} de férias vencendo em 60 dias — risco de pagamento em dobro
                         </p>
                         <p className="text-[11px] text-amber-700 mt-1">
                             {vacationAlerts.slice(0, 3).map(a => `${a.employee_name} (vence ${a.vencimento})`).join(' · ')}
@@ -534,12 +565,13 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
             )}
 
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {[
                     { label: 'Solicitações Pendentes', value: pending,    color: 'text-amber-700',   bg: 'bg-amber-50' },
                     { label: 'Ausências Aprovadas',    value: approved,   color: 'text-emerald-700', bg: 'bg-emerald-50' },
                     { label: 'Dias Afastados',         value: totalDaysOut, color: 'text-indigo-700', bg: 'bg-indigo-50' },
-                    { label: 'Alertas de Férias',      value: vacationAlerts.length, color: 'text-rose-700', bg: 'bg-rose-50' },
+                    { label: 'Disponíveis p/ Agendar',  value: vacationReady.length,  color: 'text-emerald-700', bg: 'bg-emerald-50' },
+            { label: 'Alertas de Vencimento',   value: vacationAlerts.length, color: 'text-rose-700', bg: 'bg-rose-50' },
                 ].map(({ label, value, color, bg }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
@@ -719,7 +751,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/50">
-                                    {['Colaborador', 'Período Aquisitivo', 'Vencimento', 'Direito', 'Gozados', 'Vendidos', 'Restantes', 'Status'].map(h => (
+                                    {['Colaborador', 'Período Aquisitivo', 'Prazo Concessivo', 'Direito', 'Gozados', 'Vendidos', 'Restantes', 'Status'].map(h => (
                                         <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
@@ -733,10 +765,30 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                                         <tr key={bal.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 py-3 text-sm font-bold text-slate-900">{bal.employee_name}</td>
                                             <td className="px-4 py-3 text-xs text-slate-600 font-medium">{bal.periodo_inicio} → {bal.periodo_fim}</td>
-                                            <td className="px-4 py-3">
-                                                <span className={`text-xs font-black ${vencido ? 'text-rose-700' : vencendo ? 'text-amber-700' : 'text-slate-600'}`}>
-                                                    {vencido ? '⚠ ' : vencendo ? '⏰ ' : ''}{bal.vencimento}
-                                                </span>
+                                            <td className="px-4 py-3 min-w-[180px]">
+                                                {(() => {
+                                                    // Barra de progresso do período concessivo
+                                                    // concessivo = periodo_fim → vencimento (12 meses)
+                                                    const start = new Date(bal.periodo_fim).getTime();
+                                                    const end   = new Date(bal.vencimento!).getTime();
+                                                    const now   = Date.now();
+                                                    const pct   = Math.min(100, Math.max(0, Math.round((now - start) / (end - start) * 100)));
+                                                    const barColor = vencido ? 'bg-rose-500' : vencendo ? 'bg-amber-400' : pct > 50 ? 'bg-indigo-400' : 'bg-emerald-400';
+                                                    const daysLeft = Math.ceil((end - now) / 86400000);
+                                                    return (
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className={`text-[10px] font-black ${vencido ? 'text-rose-700' : vencendo ? 'text-amber-700' : 'text-slate-600'}`}>
+                                                                    {vencido ? '⚠ Vencido' : vencendo ? `⏰ ${daysLeft}d restantes` : `${daysLeft}d restantes`}
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-400">{bal.vencimento}</span>
+                                                            </div>
+                                                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                                <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </td>
                                             <td className="px-4 py-3 text-sm font-black text-slate-700">{bal.dias_direito}d</td>
                                             <td className="px-4 py-3 text-sm font-black text-indigo-700">{bal.dias_gozados}d</td>

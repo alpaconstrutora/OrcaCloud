@@ -485,7 +485,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
-                                    {isObraContext && (
+                                    {(isObraContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
                                         <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-20 text-center">Código</th>
                                     )}
                                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
@@ -520,7 +520,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
                                         className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                                     >
-                                        {isObraContext && (
+                                        {(isObraContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
                                             <td className="px-4 py-4 text-center">
                                                 <span className="text-sm font-black font-mono text-blue-700">
                                                     {project.code || project.settings?.code || '—'}

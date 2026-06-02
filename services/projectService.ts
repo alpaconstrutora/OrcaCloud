@@ -84,6 +84,15 @@ export const projectService = {
                 }
             }
 
+            // Auto-generate sequential code for ORCAMENTO projects if not provided
+            if (!codeToUse && classification === 'ORCAMENTO' && orgId) {
+                const { data: rpcData, error: rpcError } = await supabase
+                    .rpc('get_next_orcamento_code', { p_org_id: orgId });
+                if (!rpcError && rpcData) {
+                    codeToUse = rpcData as string;
+                }
+            }
+
             const settingsWithCode = codeToUse
                 ? { ...rest.settings, code: codeToUse }
                 : rest.settings;

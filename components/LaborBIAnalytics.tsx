@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
     TrendingUp, TrendingDown, Users, UserPlus, UserMinus,
     Target, BarChart3, Activity, Calendar, Loader2, RefreshCw,
@@ -346,6 +346,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
     const [showEventForm, setShowEventForm] = useState(false);
     const [showTargetForm, setShowTargetForm] = useState(false);
     const [generating, setGenerating] = useState(false);
+    const backfillRan = useRef(false);
 
     // Queries
     const { data: snapshots = [], isLoading: loadSnap, refetch: refetchSnap } = useQuery({
@@ -388,6 +389,17 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
         onSuccess: () => qc.invalidateQueries({ queryKey: ['hr-turnover-events', orgId] }),
         onError: (e: any) => alert(e.message || 'Erro.'),
     });
+
+    // Auto-backfill: se snapshots carregou e está vazio, gera os últimos 12 meses uma única vez
+    useEffect(() => {
+        if (!loadSnap && snapshots.length === 0 && orgId && !backfillRan.current) {
+            backfillRan.current = true;
+            setGenerating(true);
+            hrAnalyticsService.backfillSnapshots(orgId, 12)
+                .then(() => refetchSnap())
+                .finally(() => setGenerating(false));
+        }
+    }, [loadSnap, snapshots.length, orgId]);
 
     const handleGenerateSnapshot = async () => {
         setGenerating(true);

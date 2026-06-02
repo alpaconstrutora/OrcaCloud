@@ -128,6 +128,20 @@ export const hrAnalyticsService = {
         return data;
     },
 
+    async backfillSnapshots(orgId: string, months = 12): Promise<void> {
+        const base = new Date();
+        base.setDate(1);
+        for (let i = months - 1; i >= 0; i--) {
+            const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+            const anoMes = d.toISOString().slice(0, 7) + '-01';
+            try {
+                await hrAnalyticsService.generateSnapshot(orgId, anoMes);
+            } catch {
+                // mês sem dados — ignora e continua
+            }
+        }
+    },
+
     async upsertSnapshot(snap: Partial<HrMonthlySnapshot> & { org_id: string; ano_mes: string }): Promise<void> {
         const { error } = await supabase
             .from('hr_monthly_snapshots')

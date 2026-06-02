@@ -12,6 +12,7 @@ interface PaystubModalProps {
     runId: string;
     employeeId: string;
     onClose: () => void;
+    adiantamentoOnly?: boolean;
 }
 
 const formatDate = (dateStr: string) => {
@@ -36,7 +37,7 @@ const formatMonthYear = (dateStr: string) => {
     return `${months[parseInt(month) - 1]} de ${year}`;
 };
 
-const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, onClose }) => {
+const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, onClose, adiantamentoOnly = false }) => {
     const [result, setResult] = useState<PayrollResultWithEmployee | null>(null);
     const [items, setItems] = useState<PayrollItem[]>([]);
     const [events, setEvents] = useState<PayrollEvent[]>([]);
@@ -71,8 +72,8 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
             const empEvents = eventsData.filter((e) => e.employee_id === employeeId);
             setEvents(empEvents);
 
-            // Runs de adiantamento: reconstruir do evento quando itens estão ausentes
-            if (runData.type === 'adiantamento') {
+            // Recibo de adiantamento: gerado a partir do evento, em qualquer tipo de run
+            if (adiantamentoOnly || runData.type === 'adiantamento') {
                 const advEv = empEvents.find(
                     e => e.rubric_code === 'ADIANTAMENTO' || e.code === 'ADIANTAMENTO'
                 );
@@ -97,7 +98,11 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                     } as unknown as PayrollResultWithEmployee;
                     setItems([syntheticItem]);
                     setResult({ ...baseResult, gross: advEv.amount, discounts: 0, net: advEv.amount, employer_cost: advEv.amount });
-                    payrollEngine.calculateEmployeePayroll(employeeId, runId).catch(console.error);
+                    // Força o badge "Recibo de Adiantamento" independente do tipo do run
+                    setRun({ ...runData, type: 'adiantamento' });
+                    if (runData.type === 'adiantamento') {
+                        payrollEngine.calculateEmployeePayroll(employeeId, runId).catch(console.error);
+                    }
                     return;
                 }
 

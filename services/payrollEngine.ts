@@ -153,6 +153,8 @@ export const payrollEngine = {
         const ctx = await this.buildContext(employeeId, runId);
 
         switch (ctx.run.type) {
+            case 'adiantamento':
+                return this.processAdvance(ctx);
             case 'ferias':
                 return this.processVacation(ctx);
             case 'decimo_terceiro':
@@ -379,6 +381,32 @@ export const payrollEngine = {
                 }
                 return null;
         }
+    },
+
+    /**
+     * RECIBO DE ADIANTAMENTO
+     * Gera apenas o item ADIANTAMENTO com o valor lançado manualmente via evento.
+     * Sem cálculo de salário base, INSS, IRRF ou FGTS.
+     */
+    async processAdvance(ctx: PayrollContext) {
+        const { events } = ctx;
+        const items: Omit<PayrollItem, 'payroll_run_id' | 'employee_id'>[] = [];
+
+        const advanceEvent = events.find(e => e.rubric_code === 'ADIANTAMENTO');
+        const amount = advanceEvent?.amount ?? 0;
+
+        if (amount > 0) {
+            items.push({
+                code: 'ADIANTAMENTO',
+                type: 'provento',
+                amount,
+                base_amount: amount,
+                reference: 1,
+            });
+        }
+
+        const gross = amount;
+        return this.persistResults(ctx, items, gross, 0, 0, { base_inss: 0, base_fgts: 0, base_irrf: 0 });
     },
 
     /**

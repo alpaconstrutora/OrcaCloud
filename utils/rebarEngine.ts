@@ -10,7 +10,7 @@
  *   NBR 6118 — cobrimentos, gancho de estribo, transpasse
  */
 
-import type { Rebar, StructuralElement, SteelCatalogItem } from '../types/structural'
+import type { Rebar, StructuralElement, SteelCatalogItem, BendSegment } from '../types/structural'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Funções elementares (exportadas para testes unitários)
@@ -63,6 +63,65 @@ export function calcStirrupCount(vaoUtilCm: number, espacamentoCm: number): numb
   return Math.floor(vaoUtilCm / espacamentoCm) + 1
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// E7 — Descontos de dobra (NBR 6118 item 8.1 / prática de centrais)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Fator de raio mínimo de dobra por aço (NBR 6118 Tab. 8.1, Ductilidade B).
+ * CA-50 Ø ≤ 10mm → r = 2d; Ø > 10mm → r = 3.5d  (conservador aqui: sempre 3.5)
+ * CA-60 → r = 3d (parafuso/nervurado fino)
+ * Usamos r_factor = 3.5 como padrão conservador (barra em uso geral CA-50).
+ */
+const DEFAULT_R_FACTOR = 3.5
+
+/**
+ * Desconto de dobra por ângulo (cm) — fórmula geométrica NBR 6118.
+ *
+ * `Δ = (2·(r + d/2)·tan(α/2) − r·α·π/180) / 10`
+ *
+ * onde r = r_factor · d (mm) e d = bitolaMm.
+ * Resultado em cm. Valores típicos CA-50 r_factor=3.5:
+ *   45°  → Δ ≈ 0.6·d/10 cm
+ *   90°  → Δ ≈ 2.0·d/10 cm
+ *   135° → Δ ≈ 4.3·d/10 cm
+ */
+export function bendDeductionCm(
+  angleDeg: number,
+  bitolaMm: number,
+  rFactor = DEFAULT_R_FACTOR,
+): number {
+  if (angleDeg <= 0 || bitolaMm <= 0) return 0
+  const r = rFactor * bitolaMm          // raio interno (mm)
+  const alpha = (angleDeg * Math.PI) / 180
+  const deductMm = 2 * (r + bitolaMm / 2) * Math.tan(alpha / 2) - r * alpha
+  return Math.max(0, Number((deductMm / 10).toFixed(4))) // mm → cm
+}
+
+/**
+ * Comprimento desenvolvido de UMA barra a partir do array de segmentos.
+ *
+ * Soma os trechos retos e subtrai os descontos de dobra de cada curva.
+ * Se `dobras` estiver vazio ou null → retorna null (sinaliza "use a lógica legada").
+ */
+export function calcDevelopedLength(
+  dobras: BendSegment[] | null | undefined,
+  bitolaMm: number,
+  rFactor = DEFAULT_R_FACTOR,
+): number | null {
+  if (!dobras || dobras.length === 0) return null
+
+  let total = 0
+  for (const seg of dobras) {
+    if (seg.tipo === 'reta' && seg.cm != null) {
+      total += seg.cm
+    } else if (seg.tipo === 'dobra' && seg.ang != null) {
+      total -= bendDeductionCm(seg.ang, bitolaMm, rFactor)
+    }
+  }
+  return Math.max(0, Number(total.toFixed(2)))
+}
+
 /**
  * Comprimento de transpasse (emenda) em cm.
  * NBR 6118: l_t = k · d  (k configurável por org; default conservador = 50).
@@ -80,6 +139,10 @@ export interface RebarCalcResult {
   rebarId: string
   /** Comprimento de uma barra/estribo (cm), sem emendas */
   comprimentoUnitCm: number
+  /** Comprimento desenvolvido bruto (cm) antes dos descontos — null se dobras não definido */
+  comprimentoDesenvolvidoCm: number | null
+  /** Soma dos descontos de dobra aplicados (cm) — 0 se sem dobras */
+  totalDeducaoCm: number
   /** Comprimento total (cm): unitário + emendas × qtd × qtd_elementos */
   comprimentoTotalCm: number
   /** Quantidade real de barras ou estribos (pode diferir da qtd cadastrada se espaçamento calculado) */
@@ -126,7 +189,12 @@ export function calcRebarResult(input: CalcRebarInput): RebarCalcResult {
   // ── 1. Comprimento unitário ──────────────────────────────────
   let comprimentoUnitCm: number
 
-  if (rebar.comprimento_unit_cm != null) {
+  // E7: se o array de dobras está definido, calcular comprimento desenvolvido
+  // subtraindo os descontos de dobra (NBR 6118). Tem prioridade sobre os demais caminhos.
+  const developedFromDobras = calcDevelopedLength(rebar.dobras, bitola)
+  if (developedFromDobras != null) {
+    comprimentoUnitCm = developedFromDobras
+  } else if (rebar.comprimento_unit_cm != null) {
     comprimentoUnitCm = rebar.comprimento_unit_cm
   } else if (rebar.funcao === 'estribo' || rebar.funcao === 'porta_estribo') {
     const b = geo.b ?? 0
@@ -170,9 +238,23 @@ export function calcRebarResult(input: CalcRebarInput): RebarCalcResult {
   const custoEstimado =
     catalogItem.custo_kg != null ? pesoComPerdaKg * catalogItem.custo_kg : null
 
+  // Comprimento bruto desenvolvido (soma das retas antes do desconto) e total deduzido
+  let comprimentoDesenvolvidoCm: number | null = null
+  let totalDeducaoCm = 0
+  if (rebar.dobras && rebar.dobras.length > 0) {
+    let bruto = 0
+    for (const seg of rebar.dobras) {
+      if (seg.tipo === 'reta' && seg.cm != null) bruto += seg.cm
+    }
+    comprimentoDesenvolvidoCm = Number(bruto.toFixed(2))
+    totalDeducaoCm = Number(Math.max(0, bruto - comprimentoUnitCm).toFixed(4))
+  }
+
   return {
     rebarId: rebar.id,
     comprimentoUnitCm,
+    comprimentoDesenvolvidoCm,
+    totalDeducaoCm,
     comprimentoTotalCm,
     qtdCalculada,
     nSplices,

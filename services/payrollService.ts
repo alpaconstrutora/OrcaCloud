@@ -490,18 +490,30 @@ export const payrollService = {
     },
 
     async getPayrollResult(runId: string, employeeId: string) {
-        const { data, error } = await supabase
+        // Usa maybeSingle para não lançar erro com 0 ou >1 linhas (duplicatas V1/V2).
+        // Tenta payroll_run_id (V2) primeiro, depois run_id (V1) como fallback.
+        const { data: v2 } = await supabase
             .from('payroll_results')
-            .select(`
-                *,
-                employee:employee_id(*)
-            `)
+            .select('*, employee:employee_id(*)')
             .eq('payroll_run_id', runId)
             .eq('employee_id', employeeId)
-            .single();
+            .order('id', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-        if (error) throw error;
-        return data as PayrollResultWithEmployee;
+        if (v2) return v2 as PayrollResultWithEmployee;
+
+        const { data: v1, error: e1 } = await supabase
+            .from('payroll_results')
+            .select('*, employee:employee_id(*)')
+            .eq('run_id', runId)
+            .eq('employee_id', employeeId)
+            .order('id', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (e1) throw e1;
+        return v1 as PayrollResultWithEmployee | null;
     },
 
     async getEmployeeItems(runId: string, employeeId: string) {

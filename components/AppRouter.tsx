@@ -34,6 +34,9 @@ import SupplyChainQuotationList from './SupplyChainQuotationList';
 import SupplyChainQuotationComparison from './SupplyChainQuotationComparison';
 import SupplyChainContractList from './SupplyChainContractList';
 import ContractDetailView from './ContractDetailView';
+import ContractsDashboard from './ContractsDashboard';
+import ContractTemplateManager from './ContractTemplateManager';
+import ContractIndexManager from './ContractIndexManager';
 import SupplyChainReceiptManager from './SupplyChainReceiptManager';
 import AutomationManager from './AutomationManager';
 import ImovibDashboard from './ImovibDashboard';
@@ -492,14 +495,15 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         return <ContractDetailView contractId={selectedContractId} onBack={() => setSelectedContractId(null)} budget={budget} />;
       }
       return (
-        <SupplyChainContractList
+        <ContractsDashboardShell
+          organizationId={activeOrganizationId || ''}
           projectId={projectId || ''}
-          onCreateNew={() => setIsCreatingContract(true)}
-          onViewDetails={(id) => setSelectedContractId(id)}
-          onEdit={(contract) => { setEditingContract(contract); setIsCreatingContract(true); }}
-          onDelete={() => setContractsVersion(v => v + 1)}
-          organizationId={activeOrganizationId || undefined}
-          version={contractsVersion}
+          contractsVersion={contractsVersion}
+          setContractsVersion={setContractsVersion}
+          setSelectedContractId={setSelectedContractId}
+          setIsCreatingContract={setIsCreatingContract}
+          setEditingContract={setEditingContract}
+          budget={budget}
         />
       );
 
@@ -816,6 +820,75 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       }
       return <Dashboard settings={settingsWithId} budget={budget} onNavigate={setActiveView} />;
   }
+};
+
+// ─── ContractsDashboardShell ──────────────────────────────────────────────────
+// Wrapper com tabs "Carteira" (dashboard org) / "Por Obra" (lista por projeto)
+interface ShellProps {
+    organizationId: string;
+    projectId: string;
+    contractsVersion: number;
+    setContractsVersion: (fn: (v: number) => number) => void;
+    setSelectedContractId: (id: string | null) => void;
+    setIsCreatingContract: (v: boolean) => void;
+    setEditingContract: (c: Contract | null) => void;
+    budget: BudgetEntry[];
+}
+
+const ContractsDashboardShell: React.FC<ShellProps> = ({
+    organizationId, projectId, contractsVersion, setContractsVersion,
+    setSelectedContractId, setIsCreatingContract, setEditingContract,
+}) => {
+    const [tab, setTab] = React.useState<'carteira' | 'obra' | 'templates' | 'indices'>('carteira');
+
+    const TABS = [
+        { id: 'carteira',  label: 'Carteira' },
+        { id: 'obra',      label: 'Por Obra' },
+        { id: 'templates', label: 'Templates' },
+        { id: 'indices',   label: 'Índices' },
+    ] as const;
+
+    return (
+        <div className="h-full flex flex-col">
+            <div className="flex items-center gap-1 px-4 pt-3 pb-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                {TABS.map(t => (
+                    <button key={t.id} onClick={() => setTab(t.id)}
+                        className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
+                            tab === t.id
+                                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                        }`}>
+                        {t.label}
+                    </button>
+                ))}
+            </div>
+            <div className="flex-1 overflow-auto">
+                {tab === 'carteira' && (
+                    <ContractsDashboard
+                        organizationId={organizationId}
+                        onViewContract={(id) => setSelectedContractId(id)}
+                    />
+                )}
+                {tab === 'obra' && (
+                    <SupplyChainContractList
+                        projectId={projectId}
+                        onCreateNew={() => setIsCreatingContract(true)}
+                        onViewDetails={(id) => setSelectedContractId(id)}
+                        onEdit={(contract) => { setEditingContract(contract); setIsCreatingContract(true); }}
+                        onDelete={() => setContractsVersion(v => v + 1)}
+                        organizationId={organizationId || undefined}
+                        version={contractsVersion}
+                    />
+                )}
+                {tab === 'templates' && (
+                    <ContractTemplateManager organizationId={organizationId} />
+                )}
+                {tab === 'indices' && (
+                    <ContractIndexManager organizationId={organizationId} />
+                )}
+            </div>
+        </div>
+    );
 };
 
 export default AppRouter;

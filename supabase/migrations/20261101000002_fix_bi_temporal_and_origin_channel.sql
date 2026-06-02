@@ -11,7 +11,10 @@
 -- 1. vw_fact_deal — adiciona origin_channel
 -- ────────────────────────────────────────────────────────────
 
-CREATE OR REPLACE VIEW public.vw_fact_deal AS
+-- DROP CASCADE garante que views/funções dependentes sejam recriadas
+DROP VIEW IF EXISTS public.vw_fact_deal CASCADE;
+
+CREATE VIEW public.vw_fact_deal AS
 SELECT
   d.id,
   COALESCE(d.organization_id, cp.organization_id) AS organization_id,

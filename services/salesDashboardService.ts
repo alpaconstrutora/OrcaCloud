@@ -57,7 +57,7 @@ export const salesDashboardService = {
       // 2. Fetch deals for VGV Vendido
       let dealsQuery = supabase
         .from('commercial_deals')
-        .select('id, value, status, type, date, property_id')
+        .select('id, value, status, type, date, property_id, origin_channel')
         .eq('organization_id', organizationId)
         .eq('type', 'SALE');
 
@@ -183,7 +183,16 @@ export const salesDashboardService = {
           { name: 'Vendas', value: completedDeals.length },
         ],
         salesCurve,
-        canais: [], // sem fonte de dados real — não exibir
+        canais: (() => {
+          const map = new Map<string, number>();
+          filteredDeals.forEach(d => {
+            const canal = d.origin_channel || 'Não informado';
+            map.set(canal, (map.get(canal) || 0) + 1);
+          });
+          return Array.from(map.entries())
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value);
+        })(),
         corretores: corretores.length > 0 ? corretores : [
             { id: '1', name: 'Nenhum dado', leads: 0, sales: 0, vgv: 0, responseTime: '---' }
         ],

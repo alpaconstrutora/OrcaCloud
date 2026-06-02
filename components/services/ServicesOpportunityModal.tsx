@@ -56,6 +56,7 @@ const ServicesOpportunityModal: React.FC<Props> = ({ organizationId, initial, on
         assigned_to: null,
         lost_reason: null,
         notes: form.notes || null,
+        rich_contract_id: null,
       };
       const saved = initial?.id
         ? await servicesCommercialService.updateOpportunity(initial.id, payload)

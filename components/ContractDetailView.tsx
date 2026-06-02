@@ -6,7 +6,7 @@ import {
     ArrowRight, Save, Trash2, Edit3, PlusCircle, Clock,
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown, Zap,
-    Package, Pencil, Settings, Search
+    Package, Pencil, Settings, Search, Lock as LockIcon
 } from 'lucide-react';
 import {
     Contract, ContractItem, ContractAddendum,
@@ -73,6 +73,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [syncingFinance, setSyncingFinance] = React.useState(false);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
+    const [reajusteModal, setReajusteModal] = React.useState(false);
+    const [reajusteBase, setReajusteBase] = React.useState('');
+    const [reajusteAtual, setReajusteAtual] = React.useState('');
+    const [reajusteNotes, setReajusteNotes] = React.useState('');
+    const [applyingReajuste, setApplyingReajuste] = React.useState(false);
 
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
@@ -389,6 +394,30 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         } catch (error) {
             console.error('Erro ao salvar item avulso:', error);
             notify('Erro ao salvar item avulso.', 'error');
+        }
+    };
+
+    const handleApplyReajuste = async () => {
+        if (!contract) return;
+        const base = parseFloat(reajusteBase.replace(',', '.'));
+        const atual = parseFloat(reajusteAtual.replace(',', '.'));
+        if (isNaN(base) || base <= 0 || isNaN(atual) || atual <= 0) {
+            notify('Informe índices válidos (maiores que zero).', 'error');
+            return;
+        }
+        setApplyingReajuste(true);
+        try {
+            const updated = await contractService.applyReajuste(contract.id, base, atual, reajusteNotes || undefined);
+            setContract(updated);
+            setReajusteModal(false);
+            setReajusteBase('');
+            setReajusteAtual('');
+            setReajusteNotes('');
+            notify(`Reajuste aplicado. Novo valor: R$ ${updated.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'success');
+        } catch (e) {
+            notify(`Erro ao aplicar reajuste: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
+        } finally {
+            setApplyingReajuste(false);
         }
     };
 
@@ -870,13 +899,42 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
                             <h4 className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2">Configurações</h4>
                             <div className="space-y-3">
+                                {contract.budget_snapshot != null && (
+                                    <div className="p-4 bg-emerald-50 rounded-2xl flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <LockIcon className="w-5 h-5 text-emerald-500" />
+                                            <span className="text-[12px] font-medium text-gray-700">Orçamento contratado</span>
+                                        </div>
+                                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wide">Congelado</span>
+                                    </div>
+                                )}
                                 <div className="p-4 bg-gray-50 rounded-2xl flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <Shield className="w-5 h-5 text-gray-400" />
                                         <span className="text-[12px] font-medium text-gray-700">Índice Reajuste</span>
                                     </div>
-                                    <span className="text-[12px] font-medium text-blue-600 uppercase">{contract.reajuste_index}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[12px] font-medium text-blue-600 uppercase">{contract.reajuste_index || '—'}</span>
+                                        {contract.reajuste_index && (
+                                            <button
+                                                onClick={() => setReajusteModal(true)}
+                                                className="text-[10px] font-semibold text-white bg-blue-600 hover:bg-blue-700 px-2 py-0.5 rounded-full transition-colors"
+                                            >
+                                                Aplicar
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
+                                {(contract.reajuste_data_base || contract.reajuste_proximo) && (
+                                    <div className="p-3 bg-blue-50 rounded-2xl text-[11px] text-blue-700 space-y-0.5">
+                                        {contract.reajuste_data_base && (
+                                            <p>Base: {new Date(contract.reajuste_data_base).toLocaleDateString('pt-BR')}</p>
+                                        )}
+                                        {contract.reajuste_proximo && (
+                                            <p>Próximo: {new Date(contract.reajuste_proximo).toLocaleDateString('pt-BR')}</p>
+                                        )}
+                                    </div>
+                                )}
                                 <div className="p-4 bg-gray-50 rounded-2xl flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <DollarSign className="w-5 h-5 text-gray-400" />
@@ -1671,6 +1729,75 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             )}
 
             {isTemplateModalOpen && renderTemplateModal()}
+
+            {/* Modal de Reajuste */}
+            {reajusteModal && contract && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-[32px] shadow-2xl p-8 max-w-sm w-full space-y-5 border border-gray-100">
+                        <div>
+                            <h3 className="text-base font-semibold text-gray-900">Aplicar Reajuste</h3>
+                            <p className="text-[12px] text-gray-400 mt-1">Índice: <span className="text-blue-600 font-semibold uppercase">{contract.reajuste_index}</span></p>
+                        </div>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Base (data de referência)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={reajusteBase}
+                                    onChange={e => setReajusteBase(e.target.value)}
+                                    placeholder="ex: 2850.00"
+                                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Atual (hoje)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={reajusteAtual}
+                                    onChange={e => setReajusteAtual(e.target.value)}
+                                    placeholder="ex: 3010.00"
+                                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            {reajusteBase && reajusteAtual && parseFloat(reajusteBase) > 0 && parseFloat(reajusteAtual) > 0 && (
+                                <div className="p-3 bg-blue-50 rounded-xl text-[12px] text-blue-700">
+                                    Fator: {(parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toFixed(5)} ·
+                                    Novo valor: R$ {(contract.current_value * parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </div>
+                            )}
+                            <div>
+                                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Observação (opcional)</label>
+                                <input
+                                    type="text"
+                                    value={reajusteNotes}
+                                    onChange={e => setReajusteNotes(e.target.value)}
+                                    placeholder="ex: INCC-M Janeiro/2027"
+                                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setReajusteModal(false); setReajusteBase(''); setReajusteAtual(''); setReajusteNotes(''); }}
+                                className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleApplyReajuste}
+                                disabled={applyingReajuste}
+                                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            >
+                                {applyingReajuste ? 'Aplicando…' : 'Aplicar Reajuste'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

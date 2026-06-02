@@ -1,8 +1,8 @@
 import React from 'react';
-import { TrendingUp, TrendingDown, Download, ChevronDown, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Download, ChevronDown, ChevronRight, Building2 } from 'lucide-react';
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
-import type { DRESummary, DRELine, DREGroup } from '../types/financial';
+import type { DRESummary, DRELine, DREGroup, DREProjectSummary } from '../types/financial';
 
 // ── Labels e ordem dos grupos ─────────────────────────────────────────────────
 
@@ -120,6 +120,71 @@ function DetailGroup({ group, lines }: { group: DREGroup; lines: DRELine[] }) {
     );
 }
 
+// ── Comparativo por Obra ──────────────────────────────────────────────────────
+
+function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSummary[]; onSelect: (projectId: string) => void }) {
+    if (projects.length === 0) {
+        return (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
+                Nenhuma obra com movimentação financeira no período.
+            </div>
+        );
+    }
+
+    const totals = projects.reduce(
+        (acc, p) => ({ receita: acc.receita + p.receita, custo: acc.custo + p.custo, margem: acc.margem + p.margem }),
+        { receita: 0, custo: 0, margem: 0 },
+    );
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <table className="w-full">
+                <thead>
+                    <tr className="bg-gray-50/80 border-b border-gray-100">
+                        <th className="px-4 py-3 text-left text-xs font-black text-gray-400 uppercase tracking-wider">Obra</th>
+                        <th className="px-4 py-3 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Receita</th>
+                        <th className="px-4 py-3 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Custo</th>
+                        <th className="px-4 py-3 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Margem</th>
+                        <th className="px-4 py-3 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Margem %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {projects.map(p => (
+                        <tr key={p.project_id}
+                            className="cursor-pointer hover:bg-blue-50/40 border-b border-gray-100 last:border-0"
+                            onClick={() => onSelect(p.project_id)}
+                            title="Ver DRE desta obra"
+                        >
+                            <td className="px-4 py-2.5 text-sm font-semibold text-gray-700 flex items-center gap-2">
+                                <Building2 className="w-3.5 h-3.5 text-gray-300" /> {p.project_name}
+                            </td>
+                            <td className="px-4 py-2.5 text-sm text-right tabular-nums text-gray-700">{formatBRL(p.receita)}</td>
+                            <td className="px-4 py-2.5 text-sm text-right tabular-nums text-red-600">{formatBRL(p.custo)}</td>
+                            <td className={`px-4 py-2.5 text-sm text-right font-bold tabular-nums ${p.margem < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                {formatBRL(p.margem)}
+                            </td>
+                            <td className={`px-4 py-2.5 text-sm text-right tabular-nums ${(p.margem_pct ?? 0) < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                                {formatPct(p.margem_pct)}
+                            </td>
+                        </tr>
+                    ))}
+                    <tr className="bg-gray-50 font-black border-t-2 border-gray-200">
+                        <td className="px-4 py-2.5 text-sm text-gray-900">Total</td>
+                        <td className="px-4 py-2.5 text-sm text-right tabular-nums text-gray-900">{formatBRL(totals.receita)}</td>
+                        <td className="px-4 py-2.5 text-sm text-right tabular-nums text-red-600">{formatBRL(totals.custo)}</td>
+                        <td className={`px-4 py-2.5 text-sm text-right tabular-nums ${totals.margem < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                            {formatBRL(totals.margem)}
+                        </td>
+                        <td className="px-4 py-2.5 text-sm text-right tabular-nums text-gray-500">
+                            {formatPct(totals.receita ? totals.margem / totals.receita * 100 : null)}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 // ── Componente Principal ──────────────────────────────────────────────────────
 
 interface DREReportProps {
@@ -136,22 +201,28 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
         `${now.getFullYear()}-12-31`
     );
     const [summary, setSummary] = React.useState<DRESummary | null>(null);
+    const [projects, setProjects] = React.useState<DREProjectSummary[]>([]);
+    const [projectId, setProjectId] = React.useState<string>('');   // '' = todas as obras
     const [loading, setLoading] = React.useState(false);
-    const [viewMode, setViewMode] = React.useState<'resumo' | 'detalhe'>('resumo');
+    const [viewMode, setViewMode] = React.useState<'resumo' | 'detalhe' | 'por_obra'>('resumo');
 
     const load = React.useCallback(async () => {
         if (!organizationId) return;
         setLoading(true);
         try {
-            const s = await financialReportService.getDRESummary(organizationId, dateFrom, dateTo);
+            const [s, p] = await Promise.all([
+                financialReportService.getDRESummary(organizationId, dateFrom, dateTo, projectId || undefined),
+                financialReportService.getDREByProject(organizationId, dateFrom, dateTo),
+            ]);
             setSummary(s);
+            setProjects(p);
         } catch (e: unknown) {
             showToast('Erro ao carregar DRE', 'error');
             console.error('[DRE]', e);
         } finally {
             setLoading(false);
         }
-    }, [organizationId, dateFrom, dateTo, showToast]);
+    }, [organizationId, dateFrom, dateTo, projectId, showToast]);
 
     React.useEffect(() => { load(); }, [load]);
 
@@ -182,6 +253,16 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                     <span className="text-gray-400 text-sm">até</span>
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                    <div className="relative">
+                        <Building2 className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <select value={projectId} onChange={e => setProjectId(e.target.value)}
+                            className="border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white max-w-[200px]">
+                            <option value="">Todas as obras</option>
+                            {projects.map(p => (
+                                <option key={p.project_id} value={p.project_id}>{p.project_name}</option>
+                            ))}
+                        </select>
+                    </div>
                     <button onClick={load}
                         className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all">
                         Atualizar
@@ -221,20 +302,23 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                         <KPICard label="Resultado Líquido" value={summary.resultado_liquido} pct={summary.margem_liquida_pct} positive={summary.resultado_liquido >= 0} />
                     </div>
 
-                    {/* Toggle resumo / detalhe */}
+                    {/* Toggle resumo / detalhe / por obra */}
                     <div className="flex gap-2">
-                        {(['resumo', 'detalhe'] as const).map(m => (
+                        {(['resumo', 'detalhe', 'por_obra'] as const).map(m => (
                             <button key={m} onClick={() => setViewMode(m)}
-                                className={`px-4 py-1.5 rounded-full text-xs font-bold capitalize transition-all ${
+                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
                                     viewMode === m ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-500 hover:border-blue-300'
                                 }`}
                             >
-                                {m === 'resumo' ? 'Resumo' : 'Por Categoria'}
+                                {m === 'resumo' ? 'Resumo' : m === 'detalhe' ? 'Por Categoria' : 'Por Obra'}
                             </button>
                         ))}
                     </div>
 
                     {/* Tabela */}
+                    {viewMode === 'por_obra' ? (
+                        <ProjectComparisonTable projects={projects} onSelect={pid => { setProjectId(pid); setViewMode('resumo'); }} />
+                    ) : (
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                         <table className="w-full">
                             <thead>
@@ -264,12 +348,14 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                             </tbody>
                         </table>
                     </div>
+                    )}
 
                     {/* Nota de rodapé */}
                     <p className="text-xs text-gray-400 text-center">
                         Realizado = transações conciliadas · Previsto = transações pendentes · Período: {
                             new Date(dateFrom + 'T00:00:00').toLocaleDateString('pt-BR')
                         } a {new Date(dateTo + 'T00:00:00').toLocaleDateString('pt-BR')}
+                        {viewMode === 'por_obra' && ' · Resultado por obra em regime de caixa (entradas/saídas conciliadas), não competência'}
                     </p>
                 </>
             )}

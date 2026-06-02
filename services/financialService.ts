@@ -43,6 +43,7 @@ export const financialService = {
                 organization_id: settings.organizationId,
                 source_system: 'PROJECT',
                 reference_id: newTx.id,
+                project_id: projectId,
                 transaction_date: newTx.date.split('T')[0],
                 amount: newTx.value,
                 direction: newTx.type === 'INCOME' ? 'CREDIT' : 'DEBIT',

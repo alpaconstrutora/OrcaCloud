@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type {
     DRELine, DRESummary, DRESummaryLine, CashFlowPoint, CashFlowSummary, CashFlowGranularity,
-    FinancialCategory,
+    FinancialCategory, DREProjectSummary,
 } from '../types/financial';
 
 export const financialReportService = {
@@ -33,12 +33,14 @@ export const financialReportService = {
         dateFrom: string,
         dateTo: string,
         empresaId?: string,
+        projectId?: string,
     ): Promise<DRELine[]> {
         const { data, error } = await supabase.rpc('fn_dre', {
             p_organization_id: organizationId,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
             p_empresa_id:      empresaId ?? null,
+            p_project_id:      projectId ?? null,
         });
         if (error) throw error;
         return (data || []) as DRELine[];
@@ -48,18 +50,21 @@ export const financialReportService = {
         organizationId: string,
         dateFrom: string,
         dateTo: string,
+        projectId?: string,
     ): Promise<DRESummary> {
         const [summaryRes, detailRes] = await Promise.all([
             supabase.rpc('fn_dre_summary', {
                 p_organization_id: organizationId,
                 p_date_from:       dateFrom,
                 p_date_to:         dateTo,
+                p_project_id:      projectId ?? null,
             }),
             supabase.rpc('fn_dre', {
                 p_organization_id: organizationId,
                 p_date_from:       dateFrom,
                 p_date_to:         dateTo,
                 p_empresa_id:      null,
+                p_project_id:      projectId ?? null,
             }),
         ]);
 
@@ -91,6 +96,24 @@ export const financialReportService = {
             margem_ebitda_pct:  receita_bruta ? (ebitda       / receita_bruta * 100) : null,
             margem_liquida_pct: receita_bruta ? (resultado_liquido / receita_bruta * 100) : null,
         };
+    },
+
+    // ── DRE por Obra (comparativo) ────────────────────────────
+    async getDREByProject(
+        organizationId: string,
+        dateFrom: string,
+        dateTo: string,
+    ): Promise<DREProjectSummary[]> {
+        const { data, error } = await supabase.rpc('fn_dre_projects_summary', {
+            p_organization_id: organizationId,
+            p_date_from:       dateFrom,
+            p_date_to:         dateTo,
+        });
+        if (error) throw error;
+        return ((data || []) as Omit<DREProjectSummary, 'margem_pct'>[]).map(r => ({
+            ...r,
+            margem_pct: r.receita ? (r.margem / r.receita * 100) : null,
+        }));
     },
 
     // ── Fluxo de Caixa ────────────────────────────────────────

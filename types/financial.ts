@@ -142,6 +142,8 @@ export interface InternalTransaction {
     category?: string;
     entity_name?: string;
     status: InternalTransactionStatus;
+    project_id?: string;
+    cost_center_id?: string;
     created_at?: string;
     updated_at?: string;
 }
@@ -279,6 +281,18 @@ export interface DRESummary {
     margem_bruta_pct: number | null;
     margem_ebitda_pct: number | null;
     margem_liquida_pct: number | null;
+}
+
+// Comparativo de resultado por obra (fn_dre_projects_summary)
+export interface DREProjectSummary {
+    project_id: string;
+    project_name: string;
+    receita: number;
+    custo: number;
+    margem: number;
+    receita_prev: number;
+    custo_prev: number;
+    margem_pct: number | null;   // calculado no front (evita div/0)
 }
 
 // ────────────────────────────────────────────────────────────

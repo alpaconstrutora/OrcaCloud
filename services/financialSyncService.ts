@@ -6,12 +6,15 @@ export const financialSyncService = {
      * Sincroniza os dados financeiros do projeto (parcelas e transações manuais)
      * com a tabela central de transações internas para conciliação.
      */
-    async syncFinancialData(project: { name: string; settings?: ProjectSettings }, organizationId: string) {
+    async syncFinancialData(project: { id?: string; name: string; settings?: ProjectSettings }, organizationId: string) {
         if (!project || !organizationId) return;
 
         const settings = project.settings as ProjectSettings;
         const info = settings.financialInfo;
         if (!info) return;
+
+        // Dimensão obra: só carimba quando há um project.id real (vaults org-level ficam null)
+        const projectId = project.id ?? null;
 
         const internalTxs: Record<string, unknown>[] = [];
 
@@ -22,6 +25,7 @@ export const financialSyncService = {
                     organization_id: organizationId,
                     source_system: 'PROJECT',
                     reference_id: inst.id,
+                    project_id: projectId,
                     transaction_date: inst.dueDate,
                     amount: inst.value,
                     direction: 'CREDIT',
@@ -40,6 +44,7 @@ export const financialSyncService = {
                     organization_id: organizationId,
                     source_system: 'PROJECT',
                     reference_id: tx.id,
+                    project_id: projectId,
                     transaction_date: tx.date,
                     amount: tx.value,
                     direction: tx.type === 'INCOME' ? 'CREDIT' : 'DEBIT',

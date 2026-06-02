@@ -662,6 +662,19 @@ export const payrollService = {
         return data as PayrollEvent[];
     },
 
+    async findAdiantamentoEvent(employeeId: string, start: string, end: string): Promise<PayrollEvent | null> {
+        const { data } = await supabase
+            .from('payroll_events')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .or('rubric_code.eq.ADIANTAMENTO,code.eq.ADIANTAMENTO')
+            .gte('reference_date', start)
+            .lte('reference_date', end)
+            .order('created_at', { ascending: false })
+            .limit(1);
+        return (data?.[0] as PayrollEvent) ?? null;
+    },
+
     async saveEvent(event: Omit<PayrollEvent, 'id'>) {
         // Mapeamento para garantir compatibilidade com o banco de dados
         const dbEvent = {

@@ -74,9 +74,15 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
 
             // Recibo de adiantamento: gerado a partir do evento, em qualquer tipo de run
             if (adiantamentoOnly || runData.type === 'adiantamento') {
-                const advEv = empEvents.find(
+                let advEv = empEvents.find(
                     e => e.rubric_code === 'ADIANTAMENTO' || e.code === 'ADIANTAMENTO'
                 );
+                // Fallback: busca em qualquer run do mesmo período (ex: evento na folha mensal)
+                if (!advEv || advEv.amount <= 0) {
+                    advEv = await payrollService.findAdiantamentoEvent(
+                        employeeId, runData.start_date, runData.end_date
+                    ) ?? undefined;
+                }
 
                 if (advEv && advEv.amount > 0) {
                     const syntheticItem = {

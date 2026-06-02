@@ -98,6 +98,19 @@ export const financialReportService = {
         };
     },
 
+    // ── Lista de obras (para filtro) ──────────────────────────
+    // Todas as obras da org, com ou sem movimentação. Exclui
+    // orçamentos/planejamentos/diários e o vault "Gestão Comercial".
+    async listObras(
+        organizationId: string,
+    ): Promise<{ project_id: string; project_name: string; code: string | null }[]> {
+        const { data, error } = await supabase.rpc('fn_list_obras', {
+            p_organization_id: organizationId,
+        });
+        if (error) throw error;
+        return (data || []) as { project_id: string; project_name: string; code: string | null }[];
+    },
+
     // ── DRE por Obra (comparativo) ────────────────────────────
     async getDREByProject(
         organizationId: string,

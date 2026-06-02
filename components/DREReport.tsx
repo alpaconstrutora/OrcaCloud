@@ -202,6 +202,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
     );
     const [summary, setSummary] = React.useState<DRESummary | null>(null);
     const [projects, setProjects] = React.useState<DREProjectSummary[]>([]);
+    const [obras, setObras] = React.useState<{ project_id: string; project_name: string; code: string | null }[]>([]);
     const [projectId, setProjectId] = React.useState<string>('');   // '' = todas as obras
     const [loading, setLoading] = React.useState(false);
     const [viewMode, setViewMode] = React.useState<'resumo' | 'detalhe' | 'por_obra'>('resumo');
@@ -223,6 +224,14 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
             setLoading(false);
         }
     }, [organizationId, dateFrom, dateTo, projectId, showToast]);
+
+    // Lista de obras para o filtro (independe do período) — todas as obras
+    React.useEffect(() => {
+        if (!organizationId) return;
+        financialReportService.listObras(organizationId)
+            .then(setObras)
+            .catch(e => console.error('[DRE] obras', e));
+    }, [organizationId]);
 
     React.useEffect(() => { load(); }, [load]);
 
@@ -258,8 +267,10 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                         <select value={projectId} onChange={e => setProjectId(e.target.value)}
                             className="border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white max-w-[200px]">
                             <option value="">Todas as obras</option>
-                            {projects.map(p => (
-                                <option key={p.project_id} value={p.project_id}>{p.project_name}</option>
+                            {obras.map(o => (
+                                <option key={o.project_id} value={o.project_id}>
+                                    {o.code ? `${o.code} · ${o.project_name}` : o.project_name}
+                                </option>
                             ))}
                         </select>
                     </div>

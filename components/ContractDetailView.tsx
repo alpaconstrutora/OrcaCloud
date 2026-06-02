@@ -14,6 +14,7 @@ import {
     ContractUtilityBill, SinapiItem, CustomDatabase, SinapiType
 } from '../types';
 import { contractService } from '../services/contractService';
+import { contractIndexService, IndexName } from '../services/contractIndexService';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { projectService } from '../services/projectService';
 import BudgetPickerModal from './BudgetPickerModal';
@@ -78,6 +79,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [reajusteAtual, setReajusteAtual] = React.useState('');
     const [reajusteNotes, setReajusteNotes] = React.useState('');
     const [applyingReajuste, setApplyingReajuste] = React.useState(false);
+    const [reajusteSuggestion, setReajusteSuggestion] = React.useState<{ base: number; atual: number; baseMonth: string; atualMonth: string } | null>(null);
 
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
@@ -938,7 +940,26 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <span className="text-[12px] font-medium text-blue-600 uppercase">{contract.reajuste_index || '—'}</span>
                                         {contract.reajuste_index && (
                                             <button
-                                                onClick={() => setReajusteModal(true)}
+                                                onClick={async () => {
+                                                    setReajusteModal(true);
+                                                    setReajusteSuggestion(null);
+                                                    try {
+                                                        const orgId = contract.organization_id;
+                                                        const dataBase = contract.reajuste_data_base ?? contract.start_date;
+                                                        const [baseRow, atualRow] = await Promise.all([
+                                                            contractIndexService.getClosestTo(contract.reajuste_index as IndexName, dataBase, orgId),
+                                                            contractIndexService.getClosestTo(contract.reajuste_index as IndexName, new Date().toISOString().slice(0, 10), orgId),
+                                                        ]);
+                                                        if (baseRow && atualRow && baseRow.id !== atualRow.id) {
+                                                            setReajusteSuggestion({
+                                                                base: baseRow.value, atual: atualRow.value,
+                                                                baseMonth: baseRow.reference_month, atualMonth: atualRow.reference_month,
+                                                            });
+                                                            setReajusteBase(baseRow.value.toString());
+                                                            setReajusteAtual(atualRow.value.toString());
+                                                        }
+                                                    } catch { /* sugestão é opcional */ }
+                                                }}
                                                 className="text-[10px] font-semibold text-white bg-blue-600 hover:bg-blue-700 px-2 py-0.5 rounded-full transition-colors"
                                             >
                                                 Aplicar
@@ -1805,6 +1826,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <h3 className="text-base font-semibold text-gray-900">Aplicar Reajuste</h3>
                             <p className="text-[12px] text-gray-400 mt-1">Índice: <span className="text-blue-600 font-semibold uppercase">{contract.reajuste_index}</span></p>
                         </div>
+                        {reajusteSuggestion && (
+                            <div className="p-3 bg-blue-50 rounded-xl text-[11px] text-blue-700 space-y-0.5">
+                                <p className="font-semibold">Valores preenchidos automaticamente do banco:</p>
+                                <p>Base: {reajusteSuggestion.base.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({reajusteSuggestion.baseMonth.slice(0, 7)})</p>
+                                <p>Atual: {reajusteSuggestion.atual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({reajusteSuggestion.atualMonth.slice(0, 7)})</p>
+                            </div>
+                        )}
                         <div className="space-y-3">
                             <div>
                                 <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Base (data de referência)</label>

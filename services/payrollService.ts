@@ -654,8 +654,6 @@ export const payrollService = {
         let query = supabase.from('payroll_events').select('*');
         if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (runId) query = query.eq('payroll_run_id', runId);
-        // Incentivos pendentes/rejeitados não entram na folha (só aprovados ou legados/nulos)
-        query = query.or('approval_status.is.null,approval_status.eq.APROVADO');
 
         const { data, error } = await query;
         if (error) throw error;

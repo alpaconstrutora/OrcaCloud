@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-    X, Printer, Calendar, DollarSign, ArrowDown, ArrowUp, Loader2, FileText, AlertCircle, Download 
+import {
+    X, Printer, Loader2, FileText, AlertCircle, Download, Plus
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -43,6 +43,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
     const [rubrics, setRubrics] = useState<PayrollRubric[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [noValue, setNoValue] = useState(false);
     const [run, setRun] = useState<PayrollRun | null>(null);
     const [exporting, setExporting] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
@@ -55,6 +56,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
         try {
             setLoading(true);
             setError(null);
+            setNoValue(false);
 
             const [runData, resData, itemsData, rubricsData, eventsData] = await Promise.all([
                 payrollService.getRun(runId),
@@ -99,8 +101,8 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                     return;
                 }
 
-                // Adiantamento sem evento lançado → mensagem orientativa
-                setError('Nenhum valor de adiantamento lançado para este colaborador.\nAdicione o valor via botão "+" na listagem da folha.');
+                // Adiantamento sem evento lançado → tela orientativa (não é erro)
+                setNoValue(true);
                 return;
             }
 
@@ -169,6 +171,29 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
         </div>
     );
 
+    if (noValue) return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center space-y-4">
+                <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mx-auto">
+                    <Plus className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-black text-slate-900 uppercase">Valor não lançado</h3>
+                <p className="text-sm font-bold text-slate-500 leading-relaxed">
+                    Nenhum adiantamento foi lançado para este colaborador ainda.
+                </p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                    Volte à listagem da folha, clique em <strong className="text-indigo-600">+</strong> ao lado do colaborador e adicione a rubrica <strong className="text-indigo-600">ADIANTAMENTO</strong> com o valor desejado.
+                </p>
+                <button
+                    onClick={onClose}
+                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-colors"
+                >
+                    Voltar
+                </button>
+            </div>
+        </div>
+    );
+
     if (error || !result) return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
             <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center space-y-4">
@@ -177,7 +202,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                 </div>
                 <h3 className="text-xl font-black text-slate-900 uppercase">Ops! Algo deu errado</h3>
                 <p className="text-sm font-bold text-slate-400 uppercase leading-relaxed">{error || 'Não foi possível gerar o documento.'}</p>
-                <button 
+                <button
                     onClick={onClose}
                     className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-colors"
                 >

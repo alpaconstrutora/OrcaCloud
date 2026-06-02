@@ -32,13 +32,13 @@ export const kpiService = {
         // Taxa Divergência: % dos pedidos fechados que chegaram como Divergência
         const divergenceCount = orders.filter(o => o.status === 'Divergência').length;
         const divergenceRate = completed.length > 0
-            ? Math.round((divergenceCount / completed.length) * 100)
+            ? Math.round((divergenceCount / completed.length) * 1000) / 10
             : null;
 
         // Aprovação Financeira: % of completed orders that are financially approved
         const approvedCount = completed.filter(o => o.isFinancialApproved).length;
         const financialApprovalRate = completed.length > 0
-            ? Math.round((approvedCount / completed.length) * 100)
+            ? Math.round((approvedCount / completed.length) * 1000) / 10
             : null;
 
         return {

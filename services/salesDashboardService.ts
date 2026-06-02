@@ -69,7 +69,8 @@ export const salesDashboardService = {
         ? deals?.filter(d => salesProps.some(p => p.id === d.property_id)) || []
         : deals || [];
 
-      const completedDeals = filteredDeals.filter(d => d.status === 'COMPLETED');
+      // VGV = apenas vendas (type='SALE') concluídas — locação/permuta excluída
+      const completedDeals = filteredDeals.filter(d => d.status === 'COMPLETED' && d.type === 'SALE');
       const vgvVendido = completedDeals.reduce((sum, d) => sum + (Number(d.value) || 0), 0);
 
       // 3. Fetch Proposals for Funnel and Brokers (Graceful error handling)
@@ -90,7 +91,8 @@ export const salesDashboardService = {
       try {
         const { count, error: leadsError } = await supabase
           .from('clients')
-          .select('*', { count: 'exact', head: true });
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', organizationId);
         
         if (!leadsError) leadsCount = count || 0;
       } catch (e) {
@@ -177,22 +179,19 @@ export const salesDashboardService = {
         unidadesTotal,
         funil: [
           { name: 'Leads', value: leadsCount || 0 },
-          { name: 'Atendimentos', value: Math.round((leadsCount || 0) * 0.8) }, // Estimativa baseada em CRM
-          { name: 'Visitas', value: Math.round((leadsCount || 0) * 0.4) },
           { name: 'Propostas', value: filteredProposals.length },
           { name: 'Vendas', value: completedDeals.length },
         ],
         salesCurve,
-        canais: [
-          { name: 'Portal Imobiliário', value: 45 },
-          { name: 'Tráfego Pago', value: 30 },
-          { name: 'Indicação', value: 15 },
-        ],
+        canais: [], // sem fonte de dados real — não exibir
         corretores: corretores.length > 0 ? corretores : [
             { id: '1', name: 'Nenhum dado', leads: 0, sales: 0, vgv: 0, responseTime: '---' }
         ],
-        distratos: filteredDeals.filter(d => d.status === 'CANCELLED').length,
-        reprovacaoCredito: filteredDeals.length > 0 ? (filteredDeals.filter(d => d.status === 'CANCELLED').length / filteredDeals.length) * 100 : 0
+        distratos: filteredDeals.filter(d => d.status === 'CANCELLED' && d.type === 'SALE').length,
+        reprovacaoCredito: completedDeals.length + filteredDeals.filter(d => d.status === 'CANCELLED' && d.type === 'SALE').length > 0
+          ? (filteredDeals.filter(d => d.status === 'CANCELLED' && d.type === 'SALE').length
+             / (completedDeals.length + filteredDeals.filter(d => d.status === 'CANCELLED' && d.type === 'SALE').length)) * 100
+          : 0
       };
     } catch (error) {
       console.error('Error fetching sales dashboard metrics:', error);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed, Gift } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -446,6 +446,7 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownItem id="labor-esocial" label="eSocial" icon={FileText} />
 
                   <DropdownGroupLabel label="Estratégico" />
+                  <DropdownItem id="labor-incentivos" label="Incentivos & Produtividade" icon={Gift} />
                   <DropdownItem id="labor-evaluation" label="Avaliação 360°" icon={Trophy} />
                   <DropdownItem id="labor-bi-analytics" label="BI Analytics RH" icon={BarChart3} />
                   <DropdownItem id="labor-comunicacao" label="Comunicação" icon={MessageSquare} />

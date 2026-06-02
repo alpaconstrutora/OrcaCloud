@@ -433,6 +433,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'labor-bi-analytics':
     case 'labor-esocial':
     case 'labor-vale-refeicao':
+    case 'labor-incentivos':
       return <LaborModule activeOrganizationId={activeOrganizationId || undefined} projects={typedProjects} activeSection={activeView} onChangeView={setActiveView} />;
 
     case 'labor-analytics':

@@ -782,6 +782,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <BIDashboard
           organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          onNavigate={setActiveView}
         />
       );
 

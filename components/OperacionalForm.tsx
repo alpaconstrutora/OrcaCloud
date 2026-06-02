@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Save, X, Loader2, AlertCircle, ChevronDown, Search, Link2, Unlink, CalendarDays } from 'lucide-react'
 import { workOrderService } from '../services/workOrderService'
+import { taskService } from '../services/taskService'
 import { supabase } from '../lib/supabase'
 import type { WorkOrderType, WorkOrderPriority, BudgetItemRef, PlanningItemRef } from '../types/operational-control'
 import type { BudgetEntry } from '../types'
@@ -333,6 +334,7 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
   const [selectedPlanningItem, setSelectedPlanningItem] = useState<PlanningItemRef | null>(null)
   const [showPlanningPicker, setShowPlanningPicker] = useState(false)
 
+  const [projectName, setProjectName] = useState('')
   const [loading, setLoading] = useState(isEditing)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -369,12 +371,13 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
         if (workOrderId) q = q.neq('id', workOrderId)
         return q.order('code')
       })(),
-      supabase.from('projects').select('budget').eq('id', projectId).single(),
+      supabase.from('projects').select('budget, name').eq('id', projectId).single(),
     ])
     if (teamsRes.data) setTeams(teamsRes.data)
     if (empRes.data) setEmployees(empRes.data)
     if (templatesRes.data) setTemplates(templatesRes.data)
     if (siblingsRes.data) setSiblings(siblingsRes.data)
+    if ((projectRes.data as { name?: string } | null)?.name) setProjectName((projectRes.data as { name: string }).name)
     if (projectRes.data?.budget) {
       // budget is stored as JSON array of BudgetEntry
       const rawBudget = projectRes.data.budget as BudgetEntry[]
@@ -474,12 +477,28 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
       }
 
       let savedId: string
+      let savedCode = ''
       if (isEditing && workOrderId) {
         const data = await workOrderService.update(workOrderId, payload)
         savedId = data.id
+        savedCode = (data as { code?: string }).code ?? ''
       } else {
         const data = await workOrderService.create(payload)
         savedId = data.id
+        savedCode = (data as { code?: string }).code ?? ''
+      }
+
+      // Gerador automático de tarefa (não-bloqueante) — só dispara se há responsável
+      if (payload.responsibleId) {
+        taskService.ensureTaskForWorkOrder({
+          workOrderId: savedId,
+          workOrderCode: savedCode,
+          workOrderTitle: payload.title as string,
+          projectName,
+          responsibleEmployeeId: payload.responsibleId as string,
+          dueDate: payload.plannedEndDate as string ?? null,
+          orgId,
+        }).catch(() => {});
       }
 
       onSave(savedId)

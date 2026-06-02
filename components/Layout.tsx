@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
 import { notificationService } from '../services/notificationService';
+import { taskService } from '../services/taskService';
 import { viewUrl } from '../lib/tabRouter';
 
 interface LayoutProps {
@@ -111,8 +112,14 @@ const Layout: React.FC<LayoutProps> = ({
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
   React.useEffect(() => { if (activeView.startsWith('labor-')) setIsLaborOpen(true); }, [activeView]);
   const [unreadCount, setUnreadCount] = React.useState(0);
+  const [openTaskCount, setOpenTaskCount] = React.useState(0);
   const [toast, setToast] = React.useState<{ title: string; message: string } | null>(null);
   const toastTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    taskService.openCount().then(setOpenTaskCount).catch(() => {});
+    // Atualiza ao navegar para manter o badge sincronizado
+  }, [activeView]);
 
   const fetchUnreadCount = React.useCallback(async () => {
     if (!profile.email && profile.group !== 'DESENVOLVEDOR') return;
@@ -325,7 +332,7 @@ const Layout: React.FC<LayoutProps> = ({
           {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR') && (
             <>
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
-              <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" />
+              <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
               <NavItem id="bi-executivo" icon={BarChart3} label="BI Executivo" />

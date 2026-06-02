@@ -10,6 +10,7 @@ import {
 import { biService } from '../services/biService';
 import { useToast } from '../hooks/useToast';
 import type { BIExecutiveSummary, KPIvsTarget } from '../types/bi';
+import MyTasksWidget from './MyTasksWidget';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
 
@@ -113,9 +114,10 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 
 interface BIDashboardProps {
     organizationId: string;
+    onNavigate?: (view: string) => void;
 }
 
-const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId }) => {
+const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate }) => {
     const { showToast } = useToast();
     const now = new Date();
     const [dateFrom, setDateFrom] = React.useState(`${now.getFullYear()}-01-01`);
@@ -427,6 +429,9 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId }) => {
                     )}
                 </>
             )}
+
+            {/* Widget de tarefas — sempre visível, não depende de kpis */}
+            <MyTasksWidget orgId={organizationId} onNavigate={onNavigate} />
         </div>
     );
 };

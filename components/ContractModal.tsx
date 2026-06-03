@@ -139,7 +139,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         prevTermType.current = formData.payment_term_type;
     }, [formData.payment_term_type]);
 
-    // Auto-fetch next sequential number for new contracts
+    // Auto-fetch next sequential number for new contracts — sequence separada por direction
+    const contractDirection = direction ?? (initialData?.direction as string | undefined);
     React.useEffect(() => {
         if (!isOpen || initialData?.id || !organizationId) return;
         let cancelled = false;
@@ -148,10 +149,16 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             numberInputRef.current = '';
             setFormData(prev => ({ ...prev, number: '' }));
             try {
-                const { data: rows } = await supabase
+                let numQuery = supabase
                     .from('contracts')
                     .select('number')
                     .eq('organization_id', organizationId);
+                if (contractDirection === 'OUTGOING') {
+                    numQuery = numQuery.eq('direction', 'OUTGOING');
+                } else {
+                    numQuery = (numQuery as any).or('direction.eq.INCOMING,direction.is.null');
+                }
+                const { data: rows } = await numQuery;
                 if (cancelled) return;
                 const usedNums = new Set(
                     (rows ?? []).map(r => parseInt(r.number ?? '', 10)).filter(n => !isNaN(n))
@@ -227,7 +234,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             return;
         }
 
-        // Check uniqueness
+        // Check uniqueness dentro da mesma direction
         if (!organizationId) return;
         setIsCheckingNumber(true);
         setNumberError(null);
@@ -237,6 +244,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 .select('id')
                 .eq('organization_id', organizationId)
                 .eq('number', value);
+            if (contractDirection === 'OUTGOING') {
+                query = query.eq('direction', 'OUTGOING');
+            } else {
+                query = (query as any).or('direction.eq.INCOMING,direction.is.null');
+            }
             if (initialData?.id) query = query.neq('id', initialData.id);
             const { data } = await query.maybeSingle();
             if (data) setNumberError(`Número ${value} já está em uso.`);
@@ -285,13 +297,18 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             return;
         }
 
-        // Verificação de unicidade obrigatória antes de salvar
+        // Verificação de unicidade obrigatória antes de salvar — por direction
         if (organizationId) {
             let dupQuery = supabase
                 .from('contracts')
                 .select('id')
                 .eq('organization_id', organizationId)
                 .eq('number', currentNumber);
+            if (contractDirection === 'OUTGOING') {
+                dupQuery = dupQuery.eq('direction', 'OUTGOING');
+            } else {
+                dupQuery = (dupQuery as any).or('direction.eq.INCOMING,direction.is.null');
+            }
             if (initialData?.id) dupQuery = dupQuery.neq('id', initialData.id);
             const { data: dup } = await dupQuery.maybeSingle();
             if (dup) {

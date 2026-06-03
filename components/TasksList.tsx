@@ -73,7 +73,7 @@ function dueDot(iso: string | null): { dot: string; label: string } {
   return               { dot: 'bg-emerald-400',  label: fmt(iso) }
 }
 
-const COL  = 'px-3 py-2.5 text-xs text-slate-700 whitespace-nowrap'
+const COL  = 'px-3 py-2.5 text-sm text-slate-700 whitespace-nowrap'
 const HEAD = 'px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 text-left select-none'
 
 function SortIcon({ col, active, dir }: { col: string; active: SortCol | null; dir: SortDir }) {
@@ -226,8 +226,8 @@ const TasksList: React.FC<Props> = ({
               <span className="w-3.5 flex-shrink-0">{depth > 0 && <span className="text-slate-300">↳</span>}</span>
             )}
             <button onClick={() => onEdit(t)} className="text-left min-w-0">
-              <div className={`font-bold text-slate-900 truncate text-xs ${isDone ? 'line-through' : ''}`}>{t.title}</div>
-              {t.description && <div className="text-[11px] text-slate-400 truncate">{t.description}</div>}
+              <div className={`font-bold text-slate-900 truncate text-sm ${isDone ? 'line-through' : ''}`}>{t.title}</div>
+              {t.description && <div className="text-xs text-slate-400 truncate">{t.description}</div>}
             </button>
             {children.length > 0 && (
               <span className="ml-1 text-[10px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md flex-shrink-0">

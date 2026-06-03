@@ -29,7 +29,9 @@ const DRE_LINE_ORDER = [
     '= EBITDA',
     '(-) Resultado Financeiro',
     '(-) Impostos sobre Resultado',
+    '(+/-) Resultado Não Operacional',
     '= Resultado Líquido',
+    '(!) Sem Classificação',
 ];
 
 function formatBRL(v: number): string {
@@ -66,6 +68,25 @@ function KPICard({ label, value, pct, positive }: { label: string; value: number
 function SummaryRow({ linha, realizado, previsto }: { linha: string; realizado: number; previsto: number }) {
     const isTotal = linha.startsWith('=');
     const isDeduction = linha.startsWith('(-)');
+    const isUnclassified = linha.startsWith('(!)');
+
+    // Linha informativa de Sem Classificação — destaque âmbar, fora do total
+    if (isUnclassified) {
+        const hasValue = realizado !== 0 || previsto !== 0;
+        return (
+            <tr className={`border-t-2 border-gray-100 ${hasValue ? 'bg-amber-50' : ''}`}>
+                <td className="px-4 py-2.5 text-sm font-semibold text-amber-700 pl-8" title="Lançamentos sem categoria mapeada no plano de contas — não entram no Resultado Líquido. Classifique-os no Plano de Contas.">
+                    ⚠ {linha.replace('(!) ', '')}
+                </td>
+                <td className={`px-4 py-2.5 text-sm text-right tabular-nums font-semibold ${realizado < 0 ? 'text-red-600' : 'text-amber-700'}`}>
+                    {formatBRL(realizado)}
+                </td>
+                <td className="px-4 py-2.5 text-sm text-right tabular-nums text-amber-500">
+                    {formatBRL(previsto)}
+                </td>
+            </tr>
+        );
+    }
 
     return (
         <tr className={`${isTotal ? 'bg-gray-50 font-black' : ''} border-b border-gray-100 last:border-0`}>

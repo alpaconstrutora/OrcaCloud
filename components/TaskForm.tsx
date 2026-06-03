@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { X, Loader2, Save, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import type { TaskStatus } from '../services/taskService'
 
 export type TaskRecord = {
   id: string
@@ -12,6 +13,7 @@ export type TaskRecord = {
   due_date: string | null
   priority: number
   status: 'open' | 'done' | 'snoozed'
+  status_id: string | null
   source_module: string
   source_ref: { type?: string; id?: string; route?: string } | null
   assignee_employee_id: string | null
@@ -30,6 +32,7 @@ interface Props {
   orgs: OrgOption[]
   employees: EmployeeOption[]
   projects: ProjectOption[]
+  statuses?: TaskStatus[]
   task?: TaskRecord | null
   parentTaskId?: string | null
   parentTaskTitle?: string | null
@@ -52,7 +55,7 @@ function toLocalInput(iso: string | null): string {
 }
 
 const TaskForm: React.FC<Props> = ({
-  orgId, orgs, employees, projects, task,
+  orgId, orgs, employees, projects, statuses = [], task,
   parentTaskId = null, parentTaskTitle = null,
   onClose, onSaved, onOrgChange,
 }) => {
@@ -62,10 +65,21 @@ const TaskForm: React.FC<Props> = ({
   const [startDate, setStartDate]     = useState(toLocalInput(task?.start_date ?? null))
   const [due, setDue]                 = useState(toLocalInput(task?.due_date ?? null))
   const [priority, setPriority]       = useState<number>(task?.priority ?? 3)
+  const [statusId, setStatusId]       = useState<string>(
+    task?.status_id ?? statuses.find(s => s.is_default)?.id ?? ''
+  )
   const [assigneeId, setAssigneeId]   = useState<string>(task?.assignee_employee_id ?? '')
   const [projectId, setProjectId]     = useState<string>(task?.project_id ?? '')
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
+
+  // Update statusId default when statuses load
+  useEffect(() => {
+    if (!statusId && statuses.length > 0) {
+      const def = statuses.find(s => s.is_default) ?? statuses[0]
+      if (def) setStatusId(def.id)
+    }
+  }, [statuses])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -77,12 +91,17 @@ const TaskForm: React.FC<Props> = ({
     if (!title.trim()) { setError('Título é obrigatório'); return }
     if (!selectedOrgId) { setError('Selecione uma organização'); return }
     setSaving(true); setError(null)
+    const selectedStatus = statuses.find(s => s.id === statusId)
+    const legacyStatus = selectedStatus?.is_done ? 'done' : 'open'
+
     const payload = {
       title:                title.trim(),
       description:          description.trim() || null,
       start_date:           startDate ? new Date(startDate).toISOString() : null,
       due_date:             due       ? new Date(due).toISOString()       : null,
       priority,
+      status_id:            statusId || null,
+      status:               legacyStatus,
       assignee_employee_id: assigneeId || null,
       project_id:           projectId  || null,
     }
@@ -209,6 +228,28 @@ const TaskForm: React.FC<Props> = ({
               ))}
             </div>
           </div>
+
+          {statuses.length > 0 && (
+            <div>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</label>
+              <div className="mt-1 flex gap-1.5 flex-wrap">
+                {statuses.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => setStatusId(s.id)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black border transition-all
+                      ${statusId === s.id
+                        ? 'ring-2 ring-offset-1 ring-slate-300 border-transparent'
+                        : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}
+                    style={statusId === s.id ? { backgroundColor: s.color + '20', color: s.color, borderColor: s.color } : {}}
+                  >
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && <div className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
         </div>

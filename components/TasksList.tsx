@@ -5,12 +5,14 @@ import {
   ArrowUp, ArrowDown, Search, X, SlidersHorizontal,
 } from 'lucide-react'
 import type { TaskRecord, EmployeeOption, ProjectOption } from './TaskForm'
+import type { TaskStatus } from '../services/taskService'
 
 interface Props {
   tasks: TaskRecord[]
   loading: boolean
   employees: EmployeeOption[]
   projects: ProjectOption[]
+  statuses?: TaskStatus[]
   onToggleDone: (task: TaskRecord) => void
   onEdit: (task: TaskRecord) => void
   onAddSubtask: (parent: TaskRecord) => void
@@ -62,7 +64,7 @@ function SortIcon({ col, active, dir }: { col: string; active: SortCol; dir: Sor
 }
 
 const TasksList: React.FC<Props> = ({
-  tasks, loading, employees, projects,
+  tasks, loading, employees, projects, statuses = [],
   onToggleDone, onEdit, onAddSubtask, onNavigate,
 }) => {
   const [search, setSearch]         = useState('')
@@ -75,8 +77,9 @@ const TasksList: React.FC<Props> = ({
   const [fAssignee, setFAssignee]   = useState('')
   const [fProject, setFProject]     = useState('')
 
-  const empMap  = useMemo(() => Object.fromEntries(employees.map(e => [e.id, e])), [employees])
-  const projMap = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects])
+  const empMap     = useMemo(() => Object.fromEntries(employees.map(e => [e.id, e])), [employees])
+  const projMap    = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects])
+  const statusMap  = useMemo(() => Object.fromEntries(statuses.map(s => [s.id, s])), [statuses])
 
   const toggleSort = (col: SortCol) => {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -107,7 +110,13 @@ const TasksList: React.FC<Props> = ({
     let rows = parents.filter(t => {
       if (q && !t.title.toLowerCase().includes(q) && !(t.description ?? '').toLowerCase().includes(q)) return false
       if (fPriority && String(t.priority) !== fPriority) return false
-      if (fStatus   && t.status !== fStatus) return false
+      if (fStatus) {
+        if (statuses.length > 0) {
+          if (t.status_id !== fStatus) return false
+        } else {
+          if (t.status !== fStatus) return false
+        }
+      }
       if (fAssignee && t.assignee_employee_id !== fAssignee) return false
       if (fProject  && t.project_id !== fProject) return false
       return true
@@ -140,10 +149,11 @@ const TasksList: React.FC<Props> = ({
 
   const sel = 'text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:border-blue-400 text-slate-700'
 
-  function TaskRow({ t, isChild = false }: { t: TaskRecord; isChild?: boolean }) {
+  function TaskRow({ t, depth = 0 }: { t: TaskRecord; depth?: number }) {
     const children = childMap[t.id] ?? []
     const isExpanded = expanded.has(t.id)
-    const isDone  = t.status === 'done'
+    const taskStatus = t.status_id ? statusMap[t.status_id] : null
+    const isDone  = taskStatus ? taskStatus.is_done : t.status === 'done'
     const prio    = PRIORITY_META[t.priority] ?? PRIORITY_META[3]
     const mod     = MODULE_LABEL[t.source_module] ?? MODULE_LABEL.manual
     const assignee = t.assignee_employee_id ? empMap[t.assignee_employee_id] : null
@@ -152,10 +162,11 @@ const TasksList: React.FC<Props> = ({
     const { dot: dueDotCls, label: dueLabel } = dueDot(t.due_date)
     const startLabel = fmt(t.start_date)
     const route = t.source_ref?.route
+    const indent = depth * 18
 
     return (
       <>
-        <tr className={`group hover:bg-slate-50/70 transition-colors ${isDone ? 'opacity-50' : ''} ${isChild ? 'bg-slate-50/40' : ''}`}>
+        <tr className={`group hover:bg-slate-50/70 transition-colors ${isDone ? 'opacity-50' : ''} ${depth > 0 ? 'bg-slate-50/40' : ''}`}>
           {/* Checkbox */}
           <td className="px-3 py-2.5">
             <button onClick={() => onToggleDone(t)} className="text-slate-300 hover:text-emerald-600 transition-colors">
@@ -170,19 +181,21 @@ const TasksList: React.FC<Props> = ({
 
           {/* Título */}
           <td className={COL + ' max-w-[240px]'}>
-            <div className={`flex items-center gap-1 ${isChild ? 'pl-5' : ''}`}>
-              {!isChild && children.length > 0 && (
+            <div className="flex items-center gap-1" style={{ paddingLeft: indent }}>
+              {children.length > 0 ? (
                 <button onClick={() => toggleExpand(t.id)} className="flex-shrink-0 text-slate-400 hover:text-slate-700">
                   {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                 </button>
+              ) : (
+                <span className="w-3.5 flex-shrink-0">
+                  {depth > 0 && <span className="text-slate-300">↳</span>}
+                </span>
               )}
-              {!isChild && children.length === 0 && <span className="w-3.5 flex-shrink-0" />}
-              {isChild && <span className="text-slate-300 flex-shrink-0">↳</span>}
               <button onClick={() => onEdit(t)} className="text-left min-w-0">
                 <div className={`font-bold text-slate-900 truncate text-xs ${isDone ? 'line-through' : ''}`}>{t.title}</div>
                 {t.description && <div className="text-[11px] text-slate-400 truncate">{t.description}</div>}
               </button>
-              {!isChild && children.length > 0 && (
+              {children.length > 0 && (
                 <span className="ml-1 text-[10px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md flex-shrink-0">
                   {children.length}
                 </span>
@@ -232,15 +245,28 @@ const TasksList: React.FC<Props> = ({
             <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${mod.cls}`}>{mod.label}</span>
           </td>
 
+          {/* Status customizado */}
+          <td className={COL}>
+            {taskStatus ? (
+              <span
+                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full w-fit"
+                style={{ backgroundColor: taskStatus.color + '20', color: taskStatus.color }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: taskStatus.color }} />
+                {taskStatus.name}
+              </span>
+            ) : (
+              <span className="text-slate-300">—</span>
+            )}
+          </td>
+
           {/* Ações */}
           <td className="px-2 py-2.5">
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
-              {!isChild && (
-                <button onClick={() => onAddSubtask(t)} title="Adicionar subtarefa"
-                  className="p-1 rounded-lg text-slate-300 hover:text-blue-600 hover:bg-blue-50">
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <button onClick={() => onAddSubtask(t)} title="Adicionar subtarefa"
+                className="p-1 rounded-lg text-slate-300 hover:text-blue-600 hover:bg-blue-50">
+                <Plus className="w-3.5 h-3.5" />
+              </button>
               {route && (
                 <button onClick={() => onNavigate(route)} title="Abrir origem"
                   className="p-1 rounded-lg text-slate-300 hover:text-blue-600 hover:bg-blue-50">
@@ -251,9 +277,9 @@ const TasksList: React.FC<Props> = ({
           </td>
         </tr>
 
-        {/* Subtarefas expandidas */}
-        {!isChild && isExpanded && children.map(child => (
-          <TaskRow key={child.id} t={child} isChild />
+        {/* Subtarefas expandidas — recursivo em qualquer profundidade */}
+        {isExpanded && children.map(child => (
+          <TaskRow key={child.id} t={child} depth={depth + 1} />
         ))}
       </>
     )
@@ -312,9 +338,14 @@ const TasksList: React.FC<Props> = ({
           </select>
           <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className={sel}>
             <option value="">Todos os status</option>
-            <option value="open">Abertas</option>
-            <option value="done">Concluídas</option>
-            <option value="snoozed">Adiadas</option>
+            {statuses.length > 0
+              ? statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+              : <>
+                  <option value="open">Abertas</option>
+                  <option value="done">Concluídas</option>
+                  <option value="snoozed">Adiadas</option>
+                </>
+            }
           </select>
           <select value={fAssignee} onChange={(e) => setFAssignee(e.target.value)} className={sel}>
             <option value="">Todos os responsáveis</option>
@@ -349,6 +380,7 @@ const TasksList: React.FC<Props> = ({
                   <ThSort col="due_date">Término</ThSort>
                   <ThSort col="priority">Prioridade</ThSort>
                   <th className={HEAD}>Origem</th>
+                  <ThSort col="status">Status</ThSort>
                   <th className={HEAD} style={{ width: 64 }} />
                 </tr>
               </thead>

@@ -27,7 +27,7 @@ serve(async (req: Request) => {
     if (!authHeader) return json({ error: 'Unauthorized' }, 401);
 
     try {
-        const { email, name, organizationId, role = 'member' } = await req.json();
+        const { email, name, organizationId, role = 'member', resend = false } = await req.json();
 
         if (!email || !organizationId) {
             return json({ error: 'email e organizationId são obrigatórios' }, 400);
@@ -61,19 +61,47 @@ serve(async (req: Request) => {
         }
 
         const frontendUrl = Deno.env.get('FRONTEND_URL') ?? '';
-
-        const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+        const inviteOptions = {
             data: { full_name: name, invited_org_id: organizationId, invited_role: role },
             redirectTo: frontendUrl ? `${frontendUrl}/?org=${organizationId}` : undefined,
-        });
+        };
+
+        const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, inviteOptions);
 
         if (inviteError) {
             const msg = inviteError.message.toLowerCase();
-            // User already has an account — treat as success (membership was already added)
+
             if (msg.includes('already') || msg.includes('registered')) {
+                if (resend) {
+                    // Find the unconfirmed user and delete so we can re-send the invite email
+                    const { data: listData } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+                    const existing = listData?.users?.find(
+                        (u: { email?: string; email_confirmed_at?: string | null }) =>
+                            u.email?.toLowerCase() === email.toLowerCase()
+                    );
+
+                    if (existing && !existing.email_confirmed_at) {
+                        const { error: deleteError } = await adminClient.auth.admin.deleteUser(existing.id);
+                        if (deleteError) {
+                            return json({ error: 'Não foi possível reenviar: ' + deleteError.message }, 422);
+                        }
+
+                        const { error: reinviteError } = await adminClient.auth.admin.inviteUserByEmail(email, inviteOptions);
+                        if (reinviteError) {
+                            return json({ error: reinviteError.message }, 422);
+                        }
+
+                        return json({ success: true });
+                    }
+
+                    // User is already confirmed — they have an active account
+                    return json({ success: true, alreadyConfirmed: true });
+                }
+
+                // New invite for existing user — treat as success (membership was already added)
                 return json({ success: true, alreadyRegistered: true });
             }
-            // Return the actual Supabase error message instead of throwing
+
             return json({ error: inviteError.message }, 422);
         }
 

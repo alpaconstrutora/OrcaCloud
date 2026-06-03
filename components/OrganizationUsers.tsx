@@ -177,7 +177,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const handleResendInvite = async (member: OrganizationMember) => {
         if (!organizationId) return;
         const { data, error } = await supabase.functions.invoke('invite-member', {
-            body: { email: member.email, name: member.name, organizationId, role: member.role },
+            body: { email: member.email, name: member.name, organizationId, role: member.role, resend: true },
         });
         if (error) {
             // Try to read the actual error message from the JSON body
@@ -191,6 +191,8 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
             alert(`Não foi possível reenviar o convite: ${msg}`);
         } else if (data?.error) {
             alert(`Não foi possível reenviar o convite: ${data.error}`);
+        } else if (data?.alreadyConfirmed) {
+            alert(`${member.email} já possui conta ativa no sistema.`);
         } else {
             alert(`Convite reenviado para ${member.email}`);
         }

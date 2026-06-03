@@ -16,6 +16,7 @@ interface Props {
   onToggleDone: (task: TaskRecord) => void
   onEdit: (task: TaskRecord) => void
   onAddSubtask: (parent: TaskRecord) => void
+  onMakeSubtask: (taskId: string, newParentId: string) => void
   onNavigate: (route: string) => void
 }
 
@@ -65,7 +66,7 @@ function SortIcon({ col, active, dir }: { col: string; active: SortCol; dir: Sor
 
 const TasksList: React.FC<Props> = ({
   tasks, loading, employees, projects, statuses = [],
-  onToggleDone, onEdit, onAddSubtask, onNavigate,
+  onToggleDone, onEdit, onAddSubtask, onMakeSubtask, onNavigate,
 }) => {
   const [search, setSearch]         = useState('')
   const [sortCol, setSortCol]       = useState<SortCol>(null)
@@ -76,10 +77,25 @@ const TasksList: React.FC<Props> = ({
   const [fStatus, setFStatus]       = useState('')
   const [fAssignee, setFAssignee]   = useState('')
   const [fProject, setFProject]     = useState('')
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
 
   const empMap     = useMemo(() => Object.fromEntries(employees.map(e => [e.id, e])), [employees])
   const projMap    = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects])
   const statusMap  = useMemo(() => Object.fromEntries(statuses.map(s => [s.id, s])), [statuses])
+
+  // DnD helpers — evita ciclos ao transformar tarefa em subtarefa
+  function isDescendant(ancestorId: string, checkId: string): boolean {
+    const children = childMap[ancestorId] ?? []
+    return children.some(c => c.id === checkId || isDescendant(c.id, checkId))
+  }
+  function canDrop(draggedId: string, targetId: string): boolean {
+    if (draggedId === targetId) return false
+    if (isDescendant(draggedId, targetId)) return false // evita ciclo
+    const dragged = tasks.find(x => x.id === draggedId)
+    if (dragged?.parent_task_id === targetId) return false // já é filho
+    return true
+  }
 
   const toggleSort = (col: SortCol) => {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -163,10 +179,33 @@ const TasksList: React.FC<Props> = ({
     const startLabel = fmt(t.start_date)
     const route = t.source_ref?.route
     const indent = depth * 18
+    const isBeingDragged = draggingId === t.id
+    const isDropTarget   = dragOverId === t.id && draggingId !== null && canDrop(draggingId, t.id)
 
     return (
       <>
-        <tr className={`group hover:bg-slate-50/70 transition-colors ${isDone ? 'opacity-50' : ''} ${depth > 0 ? 'bg-slate-50/40' : ''}`}>
+        <tr
+          draggable
+          onDragStart={(e) => { setDraggingId(t.id); e.dataTransfer.effectAllowed = 'move' }}
+          onDragEnd={() => { setDraggingId(null); setDragOverId(null) }}
+          onDragOver={(e) => { e.preventDefault(); if (draggingId && draggingId !== t.id) setDragOverId(t.id) }}
+          onDragLeave={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDragOverId(null) }}
+          onDrop={(e) => {
+            e.preventDefault()
+            if (draggingId && canDrop(draggingId, t.id)) {
+              onMakeSubtask(draggingId, t.id)
+              setExpanded(prev => { const s = new Set(prev); s.add(t.id); return s })
+            }
+            setDraggingId(null); setDragOverId(null)
+          }}
+          className={[
+            'group transition-colors',
+            isDone ? 'opacity-50' : '',
+            depth > 0 ? 'bg-slate-50/40' : '',
+            isBeingDragged ? 'opacity-30 cursor-grabbing' : 'cursor-grab hover:bg-slate-50/70',
+            isDropTarget ? 'outline outline-2 outline-blue-400 bg-blue-50/60 outline-offset-[-2px]' : '',
+          ].join(' ')}
+        >
           {/* Checkbox */}
           <td className="px-3 py-2.5">
             <button onClick={() => onToggleDone(t)} className="text-slate-300 hover:text-emerald-600 transition-colors">

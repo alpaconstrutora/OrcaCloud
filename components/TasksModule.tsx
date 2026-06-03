@@ -175,6 +175,12 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     if (error) { console.error(error); load() }
   }
 
+  const makeSubtask = async (taskId: string, newParentId: string) => {
+    setTasks(prev => prev.map(x => x.id === taskId ? { ...x, parent_task_id: newParentId } : x))
+    const { error } = await supabase.from('tasks').update({ parent_task_id: newParentId }).eq('id', taskId)
+    if (error) { console.error(error); load() }
+  }
+
   const handleNavigate = (route: string) => {
     if (onChangeView && route.startsWith('/')) {
       onChangeView(route.replace(/^\//, '').split('/')[0])
@@ -262,6 +268,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         onToggleDone={toggleDone}
         onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
         onAddSubtask={(parent) => { loadEmployees(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
+        onMakeSubtask={makeSubtask}
         onNavigate={handleNavigate}
       />
 

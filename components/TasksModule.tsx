@@ -107,6 +107,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         if (!s) return false
         if (s.classification !== 'OBRA') return false
         if (s.isSystemProject) return false
+        if (p.name === 'Gestão Comercial') return false
         if (orgId && s.organizationId && s.organizationId !== orgId) return false
         return true
       })

@@ -18,6 +18,11 @@ CREATE INDEX IF NOT EXISTS idx_service_clients_org ON public.service_clients(org
 
 ALTER TABLE public.service_clients ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS service_clients_select ON public.service_clients;
+DROP POLICY IF EXISTS service_clients_insert ON public.service_clients;
+DROP POLICY IF EXISTS service_clients_update ON public.service_clients;
+DROP POLICY IF EXISTS service_clients_delete ON public.service_clients;
+
 CREATE POLICY service_clients_select ON public.service_clients FOR SELECT USING (public.is_org_member(organization_id));
 CREATE POLICY service_clients_insert ON public.service_clients FOR INSERT WITH CHECK (public.is_org_member(organization_id));
 CREATE POLICY service_clients_update ON public.service_clients FOR UPDATE USING (public.is_org_member(organization_id));

@@ -3,6 +3,7 @@ import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefc
 import HierarchicalSelect from './HierarchicalSelect';
 import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature } from '../types';
 import { supplierService } from '../services/supplierService';
+import { serviceClientService, ServiceClient } from '../services/serviceClientService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { storageService } from '../services/storageService';
@@ -80,9 +81,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     });
 
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
+    const [serviceClients, setServiceClients] = React.useState<ServiceClient[]>([]);
     const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
     const [chartOfAccounts, setChartOfAccounts] = React.useState<ChartOfAccount[]>([]);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
+    const [showClientCreate, setShowClientCreate] = React.useState(false);
+    const [newClientName, setNewClientName] = React.useState('');
+    const [newClientDoc, setNewClientDoc] = React.useState('');
+    const [savingClient, setSavingClient] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const [isFetchingNumber, setIsFetchingNumber] = React.useState(false);
     const [numberError, setNumberError] = React.useState<string | null>(null);
@@ -181,13 +187,15 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const loadDependencies = async () => {
         setIsSubmitting(true);
         try {
-            const [s, cc, ca, p] = await Promise.all([
+            const [s, cl, cc, ca, p] = await Promise.all([
                 supplierService.listSuppliers(organizationId),
+                serviceClientService.listServiceClients(organizationId),
                 financialRegistryService.listCostCenters(organizationId),
                 financialRegistryService.listChartOfAccounts(organizationId),
                 projectService.listProjects(undefined, organizationId, true)
             ]);
             setSuppliers(s);
+            setServiceClients(cl);
             setCostCenters(cc);
             setChartOfAccounts(ca);
             setProjects(p);
@@ -328,6 +336,27 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
     const isOutgoing = direction === 'OUTGOING' || (formData.direction ?? initialData?.direction) === 'OUTGOING';
 
+    const handleCreateClient = async () => {
+        if (!newClientName.trim() || !organizationId) return;
+        setSavingClient(true);
+        try {
+            const client = await serviceClientService.createServiceClient({
+                organization_id: organizationId,
+                name: newClientName.trim(),
+                document: newClientDoc.trim() || undefined,
+            });
+            setServiceClients(prev => [...prev, client].sort((a, b) => a.name.localeCompare(b.name)));
+            setFormData(prev => ({ ...prev, client_id: client.id }));
+            setShowClientCreate(false);
+            setNewClientName('');
+            setNewClientDoc('');
+        } catch (e) {
+            console.error('Erro ao criar cliente:', e);
+        } finally {
+            setSavingClient(false);
+        }
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -427,20 +456,58 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
                                 {isOutgoing ? (
                                     <div className="col-span-2 space-y-2">
-                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Cliente / Contratante</label>
-                                        <div className="relative group">
-                                            <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                                            <select
-                                                value={formData.client_id || ''}
-                                                onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
-                                                className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
-                                            >
-                                                <option value="">Selecione o cliente</option>
-                                                {suppliers.map(s => (
-                                                    <option key={s.id} value={s.id}>{s.name} ({s.document || 'Sem doc'})</option>
-                                                ))}
-                                            </select>
+                                        <div className="flex items-center justify-between ml-1">
+                                            <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Cliente / Contratante</label>
+                                            {!showClientCreate && (
+                                                <button type="button" onClick={() => setShowClientCreate(true)} className="text-[11px] font-medium text-blue-600 hover:text-blue-800 uppercase tracking-wider">
+                                                    + Novo Cliente
+                                                </button>
+                                            )}
                                         </div>
+                                        {showClientCreate ? (
+                                            <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider">Cadastrar novo cliente</p>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    placeholder="Nome / Razão Social *"
+                                                    value={newClientName}
+                                                    onChange={e => setNewClientName(e.target.value)}
+                                                    className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="CNPJ / CPF (opcional)"
+                                                    value={newClientDoc}
+                                                    onChange={e => setNewClientDoc(e.target.value)}
+                                                    className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <button type="button" onClick={handleCreateClient} disabled={!newClientName.trim() || savingClient}
+                                                        className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-[12px] font-semibold uppercase tracking-wider disabled:opacity-50 hover:bg-blue-700 transition-colors">
+                                                        {savingClient ? 'Salvando…' : 'Salvar Cliente'}
+                                                    </button>
+                                                    <button type="button" onClick={() => { setShowClientCreate(false); setNewClientName(''); setNewClientDoc(''); }}
+                                                        className="px-4 py-2.5 bg-white text-gray-500 border border-gray-200 rounded-xl text-[12px] font-medium hover:bg-gray-50 transition-colors">
+                                                        Cancelar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="relative group">
+                                                <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                                <select
+                                                    value={formData.client_id || ''}
+                                                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
+                                                    className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                                >
+                                                    <option value="">{serviceClients.length === 0 ? 'Nenhum cliente — clique em + Novo Cliente' : 'Selecione o cliente'}</option>
+                                                    {serviceClients.map(c => (
+                                                        <option key={c.id} value={c.id}>{c.name}{c.document ? ` (${c.document})` : ''}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="col-span-2 space-y-2">
@@ -729,6 +796,32 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         />
                                     </div>
                                 </div>
+                                {isOutgoing && (
+                                    <>
+                                        <div className="space-y-2">
+                                            <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Valor Mão de Obra (Opcional)</label>
+                                            <div className="relative group">
+                                                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
+                                                <input type="number" min="0" step="0.01" placeholder="0,00"
+                                                    value={formData.labor_value || ''}
+                                                    onChange={e => setFormData({ ...formData, labor_value: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                                                    className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Valor Materiais (Opcional)</label>
+                                            <div className="relative group">
+                                                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
+                                                <input type="number" min="0" step="0.01" placeholder="0,00"
+                                                    value={formData.materials_value || ''}
+                                                    onChange={e => setFormData({ ...formData, materials_value: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                                                    className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                                 <div className="space-y-2">
                                     <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Retenção de Garantia (%)</label>
                                     <div className="relative group">

@@ -138,9 +138,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             setUtilityBills(u);
 
             // 0. Load counterparty name (client for OUTGOING, supplier for INCOMING)
-            const counterpartyId = (c as any).direction === 'OUTGOING' ? (c as any).client_id : c?.supplier_id;
-            if (counterpartyId) {
-                supplierService.getById(counterpartyId).then(s => { if (s) setCounterpartyName(s.name); }).catch(() => {});
+            if ((c as any).direction === 'OUTGOING' && (c as any).client_id) {
+                import('../services/serviceClientService').then(({ serviceClientService }) => {
+                    serviceClientService.getById((c as any).client_id).then(cl => { if (cl) setCounterpartyName(cl.name); }).catch(() => {});
+                });
+            } else if (c?.supplier_id) {
+                supplierService.getById(c.supplier_id).then(s => { if (s) setCounterpartyName(s.name); }).catch(() => {});
             }
 
             // 1. Try to load project settings if obra is linked
@@ -542,9 +545,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             return;
         }
 
+        const party = (contract as any).direction === 'OUTGOING' ? 'cliente' : 'fornecedor';
         const confirmMessage = contract.status === 'Enviado'
-            ? "Este contrato já foi enviado. Deseja enviar novamente para o fornecedor via automação?"
-            : "Deseja enviar o contrato para o fornecedor via automação? Isso atualizará o status para 'Enviado'.";
+            ? `Este contrato já foi enviado. Deseja enviar novamente para o ${party} via automação?`
+            : `Deseja enviar o contrato para o ${party} via automação? Isso atualizará o status para 'Enviado'.`;
 
         askConfirm(confirmMessage, () => {
             setPendingConfirm(null);
@@ -794,7 +798,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     { id: 'overview', label: 'Visão Geral', icon: Layers },
                     { id: 'items', label: 'Itens do Contrato', icon: FileText },
                     { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
-                    { id: 'measurements', label: 'Medições (M/F)', icon: BarChart3 },
+                    { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
                 ]).map((tab) => (
                     <button
                         key={tab.id}
@@ -1012,6 +1016,18 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <span className="text-gray-400 font-medium uppercase tracking-wider">Valor Original</span>
                                         <span className="font-medium">R$ {contract.original_value.toLocaleString('pt-BR')}</span>
                                     </div>
+                                    {(contract as any).labor_value > 0 && (
+                                        <div className="flex justify-between items-center text-[12px]">
+                                            <span className="text-gray-400 font-medium uppercase tracking-wider">↳ Mão de Obra</span>
+                                            <span className="font-medium text-gray-300">R$ {(contract as any).labor_value.toLocaleString('pt-BR')}</span>
+                                        </div>
+                                    )}
+                                    {(contract as any).materials_value > 0 && (
+                                        <div className="flex justify-between items-center text-[12px]">
+                                            <span className="text-gray-400 font-medium uppercase tracking-wider">↳ Materiais</span>
+                                            <span className="font-medium text-gray-300">R$ {(contract as any).materials_value.toLocaleString('pt-BR')}</span>
+                                        </div>
+                                    )}
                                     <div className="flex justify-between items-center text-[12px]">
                                         <span className="text-gray-400 font-medium uppercase tracking-wider">Total Medido</span>
                                         <span className="font-medium text-blue-400">R$ {totalMeasurements.toLocaleString('pt-BR')}</span>

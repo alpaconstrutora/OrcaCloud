@@ -24,12 +24,14 @@ const daysUntil = (dateStr: string) => {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-    Rascunho: 'Rascunho', Enviado: 'Enviado', Ativo: 'Ativo',
-    Suspenso: 'Suspenso', Encerrado: 'Encerrado', Cancelado: 'Cancelado',
+    Rascunho: 'Rascunho', Revisão: 'Revisão', Enviado: 'Enviado',
+    Aprovado: 'Aprovado', Assinado: 'Assinado', Ativo: 'Ativo',
+    Concluído: 'Concluído', Suspenso: 'Suspenso', Encerrado: 'Encerrado', Cancelado: 'Cancelado',
 };
 const STATUS_DOT: Record<string, string> = {
-    Ativo: 'bg-emerald-500', Enviado: 'bg-blue-500', Rascunho: 'bg-gray-400',
-    Suspenso: 'bg-amber-500', Encerrado: 'bg-gray-300', Cancelado: 'bg-red-400',
+    Rascunho: 'bg-gray-400', Revisão: 'bg-purple-400', Enviado: 'bg-blue-500',
+    Aprovado: 'bg-teal-500', Assinado: 'bg-indigo-500', Ativo: 'bg-emerald-500',
+    Concluído: 'bg-emerald-300', Suspenso: 'bg-amber-500', Encerrado: 'bg-gray-300', Cancelado: 'bg-red-400',
 };
 
 export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewContract, direction }) => {
@@ -55,7 +57,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
         if (direction !== 'OUTGOING') { setClientNames({}); return; }
         const ids = [...new Set(contracts.filter(c => (c as any).client_id).map(c => (c as any).client_id as string))];
         if (!ids.length) return;
-        supabase.from('suppliers').select('id, name').in('id', ids).then(({ data }) => {
+        supabase.from('service_clients').select('id, name').in('id', ids).then(({ data }) => {
             const map: Record<string, string> = {};
             (data ?? []).forEach((s: { id: string; name: string }) => { map[s.id] = s.name; });
             setClientNames(map);

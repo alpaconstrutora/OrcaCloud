@@ -5,7 +5,7 @@
  *  1. Extensão deve estar no allowlist (bloqueia .exe, .sh, .php, etc.)
  *  2. MIME type declarado pelo browser deve corresponder à extensão
  *     (bloqueia renomeação: virus.exe → virus.pdf)
- *  3. Arquivo não pode estar vazio nem exceder 10 MB
+ *  3. Arquivo não pode estar vazio nem exceder 25 MB
  *
  * Nota: `file.type` é preenchido pelo browser via MIME sniffing — não é
  * confiável isoladamente, mas combinado com a extensão fornece proteção adequada
@@ -31,7 +31,7 @@ export const ACCEPTED_MIMES     = [...new Set(Object.values(ALLOWED_TYPES).flat(
 /** Accept string para uso em <input type="file"> */
 export const DOCUMENT_ACCEPT_ATTR = '.pdf,.jpg,.jpeg,.png';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 export function validateDocumentFile(file: File): MimeValidationResult {
     // ── 1. Arquivo não pode estar vazio ─────────────────────────────────────
@@ -41,7 +41,7 @@ export function validateDocumentFile(file: File): MimeValidationResult {
 
     // ── 2. Tamanho máximo ────────────────────────────────────────────────────
     if (file.size > MAX_FILE_SIZE) {
-        return { valid: false, error: 'O arquivo excede o limite de 10 MB.' };
+        return { valid: false, error: 'O arquivo excede o limite de 25 MB.' };
     }
 
     // ── 3. Extensão — bloqueia nomes sem ponto e extensões não permitidas ───

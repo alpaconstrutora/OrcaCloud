@@ -55,8 +55,8 @@ describe('validateDocumentFile — arquivos legítimos', () => {
         expect(validateDocumentFile(f).valid).toBe(true);
     });
 
-    it('aceita arquivo no limite máximo exato (10 MB)', () => {
-        const f = makeFile('grande.pdf', 'application/pdf', 10 * MB);
+    it('aceita arquivo no limite máximo exato (25 MB)', () => {
+        const f = makeFile('grande.pdf', 'application/pdf', 25 * MB);
         expect(validateDocumentFile(f).valid).toBe(true);
     });
 });
@@ -160,11 +160,11 @@ describe('validateDocumentFile — edge cases', () => {
         expect(result.error).toContain('vazio');
     });
 
-    it('rejeita arquivo acima de 10 MB', () => {
-        const f = makeFile('grande.pdf', 'application/pdf', 10 * MB + 1);
+    it('rejeita arquivo acima de 25 MB', () => {
+        const f = makeFile('grande.pdf', 'application/pdf', 25 * MB + 1);
         const result = validateDocumentFile(f);
         expect(result.valid).toBe(false);
-        expect(result.error).toContain('10 MB');
+        expect(result.error).toContain('25 MB');
     });
 
     it('rejeita octet-stream mesmo com extensão .pdf', () => {

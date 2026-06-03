@@ -3,11 +3,12 @@ import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefc
 import HierarchicalSelect from './HierarchicalSelect';
 import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature } from '../types';
 import { supplierService } from '../services/supplierService';
-import { serviceClientService, ServiceClient } from '../services/serviceClientService';
+import { clientService as crmClientService } from '../services/clientService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { storageService } from '../services/storageService';
 import { sanitizeFileName } from '../utils/storageUtils';
+import ContractScopeManager from './ContractScopeManager';
 import { Upload, Trash2, ExternalLink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -81,13 +82,16 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     });
 
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
-    const [serviceClients, setServiceClients] = React.useState<ServiceClient[]>([]);
+    const [crmClients, setCrmClients] = React.useState<{ id: string; name: string; document?: string }[]>([]);
     const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
     const [chartOfAccounts, setChartOfAccounts] = React.useState<ChartOfAccount[]>([]);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
+    const [scopePickerOpen, setScopePickerOpen] = React.useState(false);
+    const [scopeManagerOpen, setScopeManagerOpen] = React.useState(false);
     const [showClientCreate, setShowClientCreate] = React.useState(false);
     const [newClientName, setNewClientName] = React.useState('');
     const [newClientDoc, setNewClientDoc] = React.useState('');
+    const [newClientType, setNewClientType] = React.useState<'PJ' | 'PF'>('PJ');
     const [savingClient, setSavingClient] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const [isFetchingNumber, setIsFetchingNumber] = React.useState(false);
@@ -137,7 +141,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
     // Auto-fetch next sequential number for new contracts
     React.useEffect(() => {
-        if (!isOpen || initialData || !organizationId) return;
+        if (!isOpen || initialData?.id || !organizationId) return;
         let cancelled = false;
         (async () => {
             setIsFetchingNumber(true);
@@ -189,13 +193,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         try {
             const [s, cl, cc, ca, p] = await Promise.all([
                 supplierService.listSuppliers(organizationId),
-                serviceClientService.listServiceClients(organizationId),
+                crmClientService.listClients(organizationId),
                 financialRegistryService.listCostCenters(organizationId),
                 financialRegistryService.listChartOfAccounts(organizationId),
                 projectService.listProjects(undefined, organizationId, true)
             ]);
             setSuppliers(s);
-            setServiceClients(cl);
+            setCrmClients((cl as any[]).map(c => ({ id: c.id, name: c.name, document: c.document })));
             setCostCenters(cc);
             setChartOfAccounts(ca);
             setProjects(p);
@@ -340,12 +344,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         if (!newClientName.trim() || !organizationId) return;
         setSavingClient(true);
         try {
-            const client = await serviceClientService.createServiceClient({
+            const client = await crmClientService.saveClient({
                 organization_id: organizationId,
                 name: newClientName.trim(),
                 document: newClientDoc.trim() || undefined,
-            });
-            setServiceClients(prev => [...prev, client].sort((a, b) => a.name.localeCompare(b.name)));
+                type: newClientType,
+            } as any);
+            const simple = { id: client.id, name: client.name, document: (client as any).document };
+            setCrmClients(prev => [...prev, simple].sort((a, b) => a.name.localeCompare(b.name)));
             setFormData(prev => ({ ...prev, client_id: client.id }));
             setShowClientCreate(false);
             setNewClientName('');
@@ -360,6 +366,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     if (!isOpen) return null;
 
     return (
+        <>
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
             <div className="bg-gray-50 w-full max-w-5xl h-[90vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden border border-white/20">
                 {/* Header */}
@@ -467,6 +474,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         {showClientCreate ? (
                                             <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                                                 <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider">Cadastrar novo cliente</p>
+                                                <div className="flex bg-white rounded-xl border border-blue-200 p-1 gap-1">
+                                                    {(['PJ', 'PF'] as const).map(t => (
+                                                        <button key={t} type="button" onClick={() => setNewClientType(t)}
+                                                            className={`flex-1 py-2 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-all ${newClientType === t ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                                                            {t === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}
+                                                        </button>
+                                                    ))}
+                                                </div>
                                                 <input
                                                     type="text"
                                                     required
@@ -477,7 +492,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 />
                                                 <input
                                                     type="text"
-                                                    placeholder="CNPJ / CPF (opcional)"
+                                                    placeholder={newClientType === 'PJ' ? 'CNPJ (opcional)' : 'CPF (opcional)'}
                                                     value={newClientDoc}
                                                     onChange={e => setNewClientDoc(e.target.value)}
                                                     className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -501,8 +516,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
                                                     className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                                 >
-                                                    <option value="">{serviceClients.length === 0 ? 'Nenhum cliente — clique em + Novo Cliente' : 'Selecione o cliente'}</option>
-                                                    {serviceClients.map(c => (
+                                                    <option value="">{crmClients.length === 0 ? 'Nenhum cliente — clique em + Novo Cliente' : 'Selecione o cliente'}</option>
+                                                    {crmClients.map(c => (
                                                         <option key={c.id} value={c.id}>{c.name}{c.document ? ` (${c.document})` : ''}</option>
                                                     ))}
                                                 </select>
@@ -618,7 +633,20 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
                                 <div className="grid grid-cols-1 gap-6">
                                     <div className="space-y-2">
-                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Escopo / Objeto do Contrato</label>
+                                        <div className="flex items-center justify-between ml-1">
+                                            <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Escopo / Objeto do Contrato</label>
+                                            <div className="flex gap-2">
+                                                <button type="button" onClick={() => setScopePickerOpen(true)}
+                                                    className="text-[11px] font-medium text-blue-600 hover:text-blue-800 uppercase tracking-wider">
+                                                    Buscar Salvo
+                                                </button>
+                                                <span className="text-gray-200">|</span>
+                                                <button type="button" onClick={() => setScopeManagerOpen(true)}
+                                                    className="text-[11px] font-medium text-gray-400 hover:text-gray-700 uppercase tracking-wider">
+                                                    Gerenciar
+                                                </button>
+                                            </div>
+                                        </div>
                                         <textarea
                                             rows={3}
                                             placeholder="Descreva o objeto e escopo detalhado dos serviços contratados"
@@ -1172,5 +1200,25 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 </form>
             </div>
         </div>
+
+        {/* Scope picker */}
+        {scopePickerOpen && organizationId && (
+            <ContractScopeManager
+                organizationId={organizationId}
+                mode="pick"
+                onClose={() => setScopePickerOpen(false)}
+                onSelect={s => setFormData(prev => ({ ...prev, description: s.content }))}
+            />
+        )}
+
+        {/* Scope manager */}
+        {scopeManagerOpen && organizationId && (
+            <ContractScopeManager
+                organizationId={organizationId}
+                mode="manage"
+                onClose={() => setScopeManagerOpen(false)}
+            />
+        )}
+        </>
     );
 };

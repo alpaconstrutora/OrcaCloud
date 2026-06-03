@@ -50,6 +50,13 @@ export const useAuthSync = ({
 
   // ── 1. Auth state listener ────────────────────────────────────────────────
   useEffect(() => {
+    // Detecta convite/recovery no hash da URL ANTES do Supabase processar o token
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const urlType = hashParams.get('type');
+    if (urlType === 'invite' || urlType === 'recovery') {
+      setIsResettingPassword(true);
+    }
+
     supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
       setSession(initialSession);
       setLoadingSession(false);

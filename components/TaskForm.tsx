@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { X, Loader2, Save, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { TaskStatus } from '../services/taskService'
@@ -73,13 +73,19 @@ const TaskForm: React.FC<Props> = ({
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
 
+  // Filtra apenas os status da org selecionada
+  const orgStatuses = useMemo(
+    () => statuses.filter(s => s.org_id === selectedOrgId),
+    [statuses, selectedOrgId]
+  )
+
   // Update statusId default when statuses load
   useEffect(() => {
-    if (!statusId && statuses.length > 0) {
-      const def = statuses.find(s => s.is_default) ?? statuses[0]
+    if (!statusId && orgStatuses.length > 0) {
+      const def = orgStatuses.find(s => s.is_default) ?? orgStatuses[0]
       if (def) setStatusId(def.id)
     }
-  }, [statuses])
+  }, [orgStatuses])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -91,7 +97,7 @@ const TaskForm: React.FC<Props> = ({
     if (!title.trim()) { setError('Título é obrigatório'); return }
     if (!selectedOrgId) { setError('Selecione uma organização'); return }
     setSaving(true); setError(null)
-    const selectedStatus = statuses.find(s => s.id === statusId)
+    const selectedStatus = orgStatuses.find(s => s.id === statusId)
     const legacyStatus = selectedStatus?.is_done ? 'done' : 'open'
 
     const payload = {
@@ -229,11 +235,11 @@ const TaskForm: React.FC<Props> = ({
             </div>
           </div>
 
-          {statuses.length > 0 && (
+          {orgStatuses.length > 0 && (
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</label>
               <div className="mt-1 flex gap-1.5 flex-wrap">
-                {statuses.map(s => (
+                {orgStatuses.map(s => (
                   <button
                     key={s.id}
                     onClick={() => setStatusId(s.id)}

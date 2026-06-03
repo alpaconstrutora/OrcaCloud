@@ -292,28 +292,27 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         setError(null);
 
         const currentNumber = (numberInputRef.current || formData.number || '');
-        if (!currentNumber || !/^\d{3}$/.test(currentNumber)) {
-            setNumberError('Formato inválido. Use 3 dígitos (ex: 001, 042, 123).');
-            return;
-        }
 
-        // Verificação de unicidade obrigatória antes de salvar — por direction
-        if (organizationId) {
-            let dupQuery = supabase
-                .from('contracts')
-                .select('id')
-                .eq('organization_id', organizationId)
-                .eq('number', currentNumber);
-            if (contractDirection === 'OUTGOING') {
-                dupQuery = dupQuery.eq('direction', 'OUTGOING');
-            } else {
-                dupQuery = (dupQuery as any).or('direction.eq.INCOMING,direction.is.null');
-            }
-            if (initialData?.id) dupQuery = dupQuery.neq('id', initialData.id);
-            const { data: dup } = await dupQuery.maybeSingle();
-            if (dup) {
-                setNumberError(`Número ${currentNumber} já está em uso.`);
+        // Para contratos OUTGOING o número é gerado automaticamente — skip validação manual
+        if (!isOutgoing) {
+            if (!currentNumber || !/^\d{3}$/.test(currentNumber)) {
+                setNumberError('Formato inválido. Use 3 dígitos (ex: 001, 042, 123).');
                 return;
+            }
+            // Verificação de unicidade para INCOMING
+            if (organizationId) {
+                let dupQuery = supabase
+                    .from('contracts')
+                    .select('id')
+                    .eq('organization_id', organizationId)
+                    .eq('number', currentNumber);
+                dupQuery = (dupQuery as any).or('direction.eq.INCOMING,direction.is.null');
+                if (initialData?.id) dupQuery = dupQuery.neq('id', initialData.id);
+                const { data: dup } = await dupQuery.maybeSingle();
+                if (dup) {
+                    setNumberError(`Número ${currentNumber} já está em uso.`);
+                    return;
+                }
             }
         }
 
@@ -438,6 +437,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
+                                {!isOutgoing && (
                                 <div className="space-y-2">
                                     <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Número do Contrato</label>
                                     <div className="relative">
@@ -467,6 +467,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         </p>
                                     )}
                                 </div>
+                                )}
                                 <div className="space-y-2">
                                     <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Título / Objeto</label>
                                     <input

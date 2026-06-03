@@ -397,7 +397,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="organization" icon={Building2} label="Minha Organização" />
               <NavItem id="org-type-templates" icon={Layers} label="Templates de Obra" />
 
-              {(mod.obras || mod.rh || isDev) && <NavGroup label="Engenharia" />}
+              {(mod.obras || isDev) && <NavGroup label="Engenharia" />}
               {(mod.obras || isDev) && (
                 <>
                   <NavItem id="eng-obras" icon={Building2} label="Obras" />
@@ -407,8 +407,14 @@ const Layout: React.FC<LayoutProps> = ({
                   <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" />
                   <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" />
                   <NavItem id="explorer" icon={BookOpen} label="Composições" />
+                  <NavItem id="eng-planejamento" icon={Calendar} label="Planejamento" />
+                  <NavItem id="project-diary" icon={BookOpen} label="Diário de Obra" />
+                  <NavItem id="reports" icon={FileText} label="Relatórios" />
+                  <NavItem id="project-settings" icon={Calculator} label="Dados Técnicos" />
                 </>
               )}
+
+              {(mod.rh || isDev) && <NavGroup label="RH" />}
               {(mod.rh || isDev) && (
                 <NavDropdown
                   label="Gestão de Mão de Obra"
@@ -462,14 +468,6 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownGroupLabel label="Configurações" />
                   <DropdownItem id="labor-fiscal" label="Config. Fiscais" icon={Settings} />
                 </NavDropdown>
-              )}
-              {(mod.obras || isDev) && (
-                <>
-                  <NavItem id="eng-planejamento" icon={Calendar} label="Planejamento" />
-                  <NavItem id="project-diary" icon={BookOpen} label="Diário de Obra" />
-                  <NavItem id="reports" icon={FileText} label="Relatórios" />
-                  <NavItem id="project-settings" icon={Calculator} label="Dados Técnicos" />
-                </>
               )}
 
               {(mod.compras || isDev) && (

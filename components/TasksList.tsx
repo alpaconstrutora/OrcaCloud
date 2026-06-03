@@ -177,15 +177,14 @@ const TasksList: React.FC<Props> = ({
   const clearFilters = () => { setFPriority(''); setFStatus(''); setFAssignee(''); setFProject(''); setSearch('') }
 
   // ── Reordenar colunas ───────────────────────────────────────────────────────
-  const handleColDrop = (targetKey: ColKey) => {
-    if (!colDragging || colDragging === targetKey) return
+  const handleColDrop = (fromKey: ColKey, toKey: ColKey) => {
+    if (fromKey === toKey) return
     const next = [...colOrder]
-    const from = next.indexOf(colDragging)
-    const to   = next.indexOf(targetKey)
+    const from = next.indexOf(fromKey)
+    const to   = next.indexOf(toKey)
     next.splice(from, 1)
-    next.splice(to, 0, colDragging)
+    next.splice(to, 0, fromKey)
     setColOrder(next)
-    setColDragging(null); setColDragOver(null)
   }
 
   if (loading) return (
@@ -340,7 +339,12 @@ const TasksList: React.FC<Props> = ({
           <td className="pl-2 pr-0 py-2.5 w-6">
             <div
               draggable
-              onDragStart={(e) => { e.stopPropagation(); setDraggingId(t.id); e.dataTransfer.effectAllowed = 'move' }}
+              onDragStart={(e) => {
+                e.stopPropagation()
+                e.dataTransfer.setData('row', t.id)
+                e.dataTransfer.effectAllowed = 'move'
+                requestAnimationFrame(() => setDraggingId(t.id))
+              }}
               className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 flex items-center"
             >
               <GripVertical className="w-3.5 h-3.5" />
@@ -379,7 +383,12 @@ const TasksList: React.FC<Props> = ({
       <th
         onDragOver={(e)  => { e.preventDefault(); e.stopPropagation(); if (colDragging && colDragging !== colKey) setColDragOver(colKey) }}
         onDragLeave={(e) => { e.stopPropagation(); setColDragOver(null) }}
-        onDrop={(e)      => { e.preventDefault(); e.stopPropagation(); handleColDrop(colKey) }}
+        onDrop={(e) => {
+          e.preventDefault(); e.stopPropagation()
+          const from = e.dataTransfer.getData('col') as ColKey
+          if (from && from !== colKey) handleColDrop(from, colKey)
+          setColDragging(null); setColDragOver(null)
+        }}
         onClick={() => col.sortCol && toggleSort(col.sortCol as SortCol)}
         className={[
           'text-[10px] font-black uppercase tracking-widest text-slate-400 text-left select-none p-0',
@@ -393,8 +402,14 @@ const TasksList: React.FC<Props> = ({
         {/* div ocupa toda a área da célula — drag funciona em qualquer ponto */}
         <div
           draggable={colKey !== 'actions'}
-          onDragStart={(e) => { e.stopPropagation(); setColDragging(colKey); e.dataTransfer.effectAllowed = 'move' }}
-          onDragEnd={(e)   => { e.stopPropagation(); setColDragging(null); setColDragOver(null) }}
+          onDragStart={(e) => {
+            e.stopPropagation()
+            e.dataTransfer.setData('col', colKey)
+            e.dataTransfer.effectAllowed = 'move'
+            // requestAnimationFrame evita que o setState cancele o drag no Chrome
+            requestAnimationFrame(() => setColDragging(colKey))
+          }}
+          onDragEnd={(e) => { e.stopPropagation(); setColDragging(null); setColDragOver(null) }}
           className={[
             'flex items-center gap-1 px-3 py-2.5 w-full select-none',
             colKey !== 'actions' ? 'cursor-grab active:cursor-grabbing' : '',

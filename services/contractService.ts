@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { financialService } from './financialService';
+import { BudgetEntry } from '../types/budget';
 import {
     Contract,
     ContractApprovalStep,
@@ -987,6 +988,125 @@ export const contractService = {
             .eq('id', id);
 
         if (error) throw error;
+    },
+
+    // ─── Gerar Contrato a partir do Orçamento ────────────────────────────────
+
+    /**
+     * Cria um contrato OUTGOING (para cliente) a partir do orçamento aprovado do projeto.
+     * - Congela snapshot do budget
+     * - Importa itens do orçamento como contract_items
+     * - Herda valor total, escopo e cronograma do projeto
+     */
+    generateFromBudget: async (
+        projectId: string,
+        organizationId: string,
+        budgetEntries: BudgetEntry[],
+        overrides?: Partial<Contract>
+    ): Promise<Contract> => {
+        // Calcula valor total do orçamento (quantidade × preço × (1 + bdi/100))
+        const totalValue = budgetEntries.reduce((sum, e) => {
+            const bdi = e.bdi ?? 0;
+            return sum + e.quantity * e.sinapiItem.price * (1 + bdi / 100);
+        }, 0);
+
+        // Busca dados do projeto para herdar nome e configurações
+        const { data: project } = await supabase
+            .from('projects')
+            .select('name, settings, budget')
+            .eq('id', projectId)
+            .single();
+
+        // Gera número sequencial
+        const number = await contractService.getNextContractNumber(organizationId);
+
+        const contractPayload: Omit<Contract, 'id' | 'created_at' | 'current_value'> = {
+            organization_id: organizationId,
+            project_id: projectId,
+            number,
+            title: `Contrato — ${project?.name ?? 'Projeto'}`,
+            contract_type: 'Empreitada Global',
+            nature: 'Serviço',
+            direction: 'OUTGOING',
+            start_date: new Date().toISOString().split('T')[0],
+            end_date: new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0],
+            status: 'Rascunho',
+            original_value: Math.round(totalValue * 100) / 100,
+            retention_rate: 0,
+            budget_id: projectId, // referência ao projeto-orçamento
+            budget_snapshot: project?.budget ?? null,
+            ...overrides,
+        };
+
+        const contract = await contractService.createContract(contractPayload);
+
+        // Importa itens do orçamento como contract_items
+        if (budgetEntries.length > 0) {
+            const items = budgetEntries.map(e => {
+                const unitPrice = e.sinapiItem.price * (1 + (e.bdi ?? 0) / 100);
+                return {
+                    contract_id: contract.id,
+                    budget_item_id: e.id,
+                    description: `[${e.sinapiItem.code}] ${e.sinapiItem.description}`,
+                    unit: e.sinapiItem.unit,
+                    quantity: e.quantity,
+                    unit_price: Math.round(unitPrice * 100) / 100,
+                    total_price: Math.round(e.quantity * unitPrice * 100) / 100,
+                };
+            });
+            await supabase.from('contract_items').insert(items);
+        }
+
+        return contract;
+    },
+
+    /** Retorna próximo número de contrato formatado (usa a RPC existente) */
+    getNextContractNumber: async (organizationId: string): Promise<string> => {
+        const { data } = await supabase.rpc('get_next_contract_number', { p_org_id: organizationId });
+        return data ?? '001';
+    },
+
+    // ─── Gerar Obra a partir do Contrato ─────────────────────────────────────
+
+    /**
+     * Cria um projeto OBRA vinculado ao contrato assinado.
+     * Herda: nome, valor contratado, escopo (budget_snapshot), centro de custo.
+     */
+    generateObra: async (contractId: string): Promise<{ projectId: string }> => {
+        const { data: contract, error } = await supabase
+            .from('contracts')
+            .select('*')
+            .eq('id', contractId)
+            .single();
+        if (error || !contract) throw new Error('Contrato não encontrado.');
+        if (contract.project_id) throw new Error('Este contrato já possui uma obra vinculada.');
+
+        const { projectService } = await import('./projectService');
+        const { INITIAL_PROJECT_SETTINGS } = await import('../constants');
+
+        const settings = {
+            ...INITIAL_PROJECT_SETTINGS,
+            organizationId: contract.organization_id,
+            classification: 'OBRA' as const,
+            totalValue: contract.current_value,
+            contractId,
+            contractNumber: contract.number,
+            ...(contract.cost_center_id ? { costCenterId: contract.cost_center_id } : {}),
+        };
+
+        const savedProject = await projectService.saveProject({
+            name: contract.title,
+            settings,
+            budget: (contract.budget_snapshot as any) ?? [],
+        });
+
+        // Vincula obra ao contrato
+        await supabase
+            .from('contracts')
+            .update({ project_id: savedProject.id })
+            .eq('id', contractId);
+
+        return { projectId: savedProject.id };
     },
 
     // ─── Assinatura Eletrônica ────────────────────────────────────────────────

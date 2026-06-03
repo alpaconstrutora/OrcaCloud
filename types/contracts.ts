@@ -1,6 +1,6 @@
 export type ContractType = 'Empreitada Global' | 'Preço Unitário' | 'Administração' | 'Subempreitada' | 'Concessionária' | 'Assinatura/SaaS' | 'Manutenção Recorrente' | 'Outros';
 export type ContractNature = 'Fornecimento' | 'Serviço' | 'Mão de Obra' | 'Locação' | 'Consumo' | 'Outros';
-export type ContractStatus = 'Rascunho' | 'Enviado' | 'Ativo' | 'Suspenso' | 'Encerrado' | 'Cancelado';
+export type ContractStatus = 'Rascunho' | 'Enviado' | 'Assinado' | 'Ativo' | 'Suspenso' | 'Encerrado' | 'Cancelado';
 
 export interface Contract {
     id: string;
@@ -35,6 +35,8 @@ export interface Contract {
     payment_days?: number;
     payment_installments?: number;
     payment_schedule?: ContractInstallment[];
+    client_id?: string;
+    direction?: 'OUTGOING' | 'INCOMING';
     budget_snapshot?: unknown;
     signature_status?: 'PENDING' | 'SENT' | 'SIGNED' | 'EXPIRED' | 'CANCELLED';
     signature_token?: string;

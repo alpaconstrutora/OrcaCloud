@@ -15,6 +15,7 @@ import {
 } from '../types';
 import { contractService } from '../services/contractService';
 import { contractIndexService, IndexName } from '../services/contractIndexService';
+import { contractTemplateService, ContractTemplate as DBContractTemplate, renderTemplate, buildVariableMap } from '../services/contractTemplateService';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { projectService } from '../services/projectService';
 import BudgetPickerModal from './BudgetPickerModal';
@@ -74,6 +75,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [syncingFinance, setSyncingFinance] = React.useState(false);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
+    const [contractTemplates, setContractTemplates] = React.useState<DBContractTemplate[]>([]);
+    const [templatePdfModal, setTemplatePdfModal] = React.useState(false);
+    const [generatingTemplatePdf, setGeneratingTemplatePdf] = React.useState(false);
     const [reajusteModal, setReajusteModal] = React.useState(false);
     const [reajusteBase, setReajusteBase] = React.useState('');
     const [reajusteAtual, setReajusteAtual] = React.useState('');
@@ -160,6 +164,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     const orgs = await organizationService.listOrganizations();
                     const org = orgs.find((o) => o.id === c.organization_id);
                     if (org) setOrganization(org);
+                    // Carrega templates de contrato para geração de PDF
+                    contractTemplateService.list(c.organization_id).then(ts => setContractTemplates(ts)).catch(() => {});
                 } catch (err) {
                     console.error("Erro ao carregar organização:", err);
                 }
@@ -423,6 +429,52 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         }
     };
 
+    const handleGeneratePDFFromTemplate = async (template: DBContractTemplate) => {
+        if (!contract) return;
+        setGeneratingTemplatePdf(true);
+        try {
+            const varMap = buildVariableMap(
+                contract,
+                organization?.name ?? (contract.supplier_id ? 'Fornecedor' : undefined),
+                projectSettings?.name
+            );
+            const rendered = renderTemplate(template.body_html, varMap);
+
+            // Gera PDF usando jsPDF + html2canvas (via div oculto)
+            const { jsPDF } = await import('jspdf');
+            const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+            const container = window.document.createElement('div');
+            container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:40px;font-family:Arial;font-size:12px;line-height:1.6;color:#000';
+            container.innerHTML = rendered;
+            window.document.body.appendChild(container);
+            try {
+                const { default: html2canvas } = await import('html2canvas');
+                const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                const pageW = doc.internal.pageSize.getWidth();
+                const pageH = doc.internal.pageSize.getHeight();
+                const imgW = pageW - 20;
+                const imgH = (canvas.height * imgW) / canvas.width;
+                let y = 10;
+                let remaining = imgH;
+                while (remaining > 0) {
+                    doc.addImage(imgData, 'JPEG', 10, y, imgW, imgH);
+                    remaining -= (pageH - 20);
+                    if (remaining > 0) { doc.addPage(); y = 10 - (imgH - remaining); }
+                }
+            } finally {
+                window.document.body.removeChild(container);
+            }
+            doc.save(`Contrato_${contract.number}_${template.name}.pdf`);
+            setTemplatePdfModal(false);
+            notify('PDF gerado com sucesso!', 'success');
+        } catch (e) {
+            notify(`Erro ao gerar PDF: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
+        } finally {
+            setGeneratingTemplatePdf(false);
+        }
+    };
+
     const handleDownloadPDF = async () => {
         if (!contract || !projectSettings || !organization) {
             notify("Dados insuficientes para emitir o contrato.", "error");
@@ -662,6 +714,17 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </p>
                     </div>
 
+                    {contractTemplates.length > 0 && (
+                        <button
+                            onClick={() => setTemplatePdfModal(true)}
+                            className="flex items-center gap-2 px-6 py-4 bg-white border border-blue-200 text-blue-700 rounded-2xl hover:bg-blue-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
+                            title="Gerar PDF usando modelo de contrato"
+                        >
+                            <FileText className="w-4 h-4" />
+                            PDF via Modelo
+                        </button>
+                    )}
+
                     <button
                         onClick={handleDownloadPDF}
                         disabled={loading}
@@ -691,6 +754,26 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <Zap className="w-4 h-4" />
                         Enviar Automação
                     </button>
+
+                    {/* Gerar Obra — visível apenas para contratos OUTGOING assinados/ativos sem obra vinculada */}
+                    {(contract as any).direction === 'OUTGOING' && !contract.project_id && ['Assinado', 'Ativo'].includes(contract.status) && (
+                        <button
+                            onClick={async () => {
+                                if (!window.confirm('Gerar obra vinculada a este contrato?')) return;
+                                try {
+                                    const { projectId } = await contractService.generateObra(contract.id);
+                                    setContract({ ...contract, project_id: projectId });
+                                    notify('Obra gerada com sucesso! Acesse em Engenharia → Obras.', 'success');
+                                } catch (e) {
+                                    notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
+                                }
+                            }}
+                            className="flex items-center gap-2 px-6 py-4 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-200 font-medium text-[12px] uppercase tracking-widest"
+                        >
+                            <Layers className="w-4 h-4" />
+                            Gerar Obra
+                        </button>
+                    )}
 
                 </div>
             </div>
@@ -1817,6 +1900,44 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             )}
 
             {isTemplateModalOpen && renderTemplateModal()}
+
+            {/* Modal: PDF via Template */}
+            {templatePdfModal && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-[32px] shadow-2xl p-8 max-w-sm w-full space-y-5 border border-gray-100">
+                        <div>
+                            <h3 className="text-base font-semibold text-gray-900">Gerar PDF via Modelo</h3>
+                            <p className="text-[12px] text-gray-400 mt-1">As variáveis serão preenchidas automaticamente com os dados do contrato.</p>
+                        </div>
+                        <div className="space-y-2">
+                            {contractTemplates.map(t => (
+                                <button
+                                    key={t.id}
+                                    onClick={() => handleGeneratePDFFromTemplate(t)}
+                                    disabled={generatingTemplatePdf}
+                                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-blue-50 border border-gray-100 hover:border-blue-200 rounded-2xl text-left transition-colors disabled:opacity-50"
+                                >
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-900">{t.name}</p>
+                                        {t.description && <p className="text-[11px] text-gray-400 mt-0.5">{t.description}</p>}
+                                    </div>
+                                    <FileDown size={15} className="text-blue-600 shrink-0" />
+                                </button>
+                            ))}
+                        </div>
+                        {generatingTemplatePdf && (
+                            <p className="text-[12px] text-blue-600 text-center animate-pulse">Gerando PDF…</p>
+                        )}
+                        <button
+                            onClick={() => setTemplatePdfModal(false)}
+                            disabled={generatingTemplatePdf}
+                            className="w-full py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 disabled:opacity-50"
+                        >
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Modal de Reajuste */}
             {reajusteModal && contract && (

@@ -9,6 +9,7 @@ import { Contract } from '../types';
 interface Props {
     organizationId: string;
     onViewContract: (id: string) => void;
+    direction?: 'OUTGOING' | 'INCOMING';
 }
 
 const fmt = (n: number) =>
@@ -30,7 +31,7 @@ const STATUS_DOT: Record<string, string> = {
     Suspenso: 'bg-amber-500', Encerrado: 'bg-gray-300', Cancelado: 'bg-red-400',
 };
 
-export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewContract }) => {
+export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewContract, direction }) => {
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<'alerts' | 'active' | 'all'>('alerts');
@@ -39,11 +40,11 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
         setLoading(true);
         try {
             const data = await contractService.listContracts(undefined, organizationId);
-            setContracts(data);
+            setContracts(direction ? data.filter(c => (c as any).direction === direction) : data);
         } finally {
             setLoading(false);
         }
-    }, [organizationId]);
+    }, [organizationId, direction]);
 
     useEffect(() => { load(); }, [load]);
 

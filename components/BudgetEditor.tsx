@@ -17,6 +17,8 @@ interface BudgetEditorProps {
   onUpdateBudget: (newBudget: BudgetEntry[]) => void;
   onUpdateSettings: (newSettings: ProjectSettings) => void;
   onSaveProject?: (budget: BudgetEntry[], settings: ProjectSettings) => Promise<void>;
+  projectId?: string;
+  organizationId?: string;
 }
 
 interface AddingTarget {
@@ -64,7 +66,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   onSaveProject,
   favorites,
   onToggleFavorite,
+  projectId,
+  organizationId,
 }) => {
+  const [generatingContract, setGeneratingContract] = React.useState(false);
   const [wbsModal, setWbsModal] = React.useState<{
     isOpen: boolean;
     type: 'GROUP' | 'PHASE' | 'SUBPHASE';
@@ -1686,6 +1691,38 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               Exportar
             </button>
           </div>
+
+          <div className="h-8 w-px bg-gray-100 mx-1" />
+
+          {/* Gerar Contrato de Serviço — visível quando há project e org */}
+          {(projectId || (settings as any).id) && (organizationId || (settings as any).organizationId) && budget.length > 0 && (
+            <>
+              <div className="h-8 w-px bg-gray-100 mx-1" />
+              <button
+                disabled={generatingContract}
+                onClick={async () => {
+                  const pid = projectId || (settings as any).id;
+                  const oid = organizationId || (settings as any).organizationId;
+                  if (!pid || !oid) return;
+                  setGeneratingContract(true);
+                  try {
+                    const { contractService } = await import('../services/contractService');
+                    const contract = await contractService.generateFromBudget(pid, oid, budget);
+                    alert(`Contrato ${contract.number} gerado com sucesso! Acesse em Gestão de Vendas → Contratos de Serviço.`);
+                  } catch (e) {
+                    alert(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`);
+                  } finally {
+                    setGeneratingContract(false);
+                  }
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-xs font-bold transition-all disabled:opacity-50"
+                title="Gerar Contrato de Serviço a partir deste orçamento"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                {generatingContract ? 'Gerando...' : 'Gerar Contrato'}
+              </button>
+            </>
+          )}
 
           <div className="h-8 w-px bg-gray-100 mx-1" />
 

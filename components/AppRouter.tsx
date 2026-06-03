@@ -63,6 +63,7 @@ const OperacionalModule     = React.lazy(() => import('./OperacionalModule'));
 const StructuralModule      = React.lazy(() => import('./StructuralModule'));
 const TasksModule           = React.lazy(() => import('./TasksModule'));
 const ServicesCommercialModule = React.lazy(() => import('./ServicesCommercialModule'));
+const ServiceContractsModule   = React.lazy(() => import('./ServiceContractsModule'));
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
@@ -260,6 +261,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onSaveProject={handleSaveProject}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
+          projectId={settingsWithId.id}
+          organizationId={activeOrganizationId || undefined}
         />
       );
 
@@ -713,6 +716,15 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           obras={typedProjects
             .filter(p => p.settings?.classification === 'OBRA' && p.name !== 'Gestão Comercial')
             .map(p => ({ id: p.id, name: p.name }))}
+        />
+      );
+
+    case 'service-contracts':
+      return (
+        <ServiceContractsModule
+          organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          budget={budget}
+          onGoToProject={(id) => handleLoadProject(id, 'analytic')}
         />
       );
 

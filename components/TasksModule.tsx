@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2 } from 'lucide-react'
+import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { taskStatusService, type TaskStatus } from '../services/taskService'
 import TasksList from './TasksList'
 import TaskForm, { type TaskRecord, type EmployeeOption, type ProjectOption, type OrgOption } from './TaskForm'
+import TaskStatusManager from './TaskStatusManager'
 
 type FilterView = 'today' | 'all' | 'overdue'
 
@@ -43,8 +45,10 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   const [loading, setLoading]         = useState(true)
   const [editing, setEditing]         = useState<TaskRecord | null>(null)
   const [showForm, setShowForm]       = useState(false)
+  const [showStatusMgr, setShowStatusMgr] = useState(false)
   const [filterOrg, setFilterOrg]     = useState<string>(activeOrganizationId ?? '')
   const [employees, setEmployees]     = useState<EmployeeOption[]>([])
+  const [statuses, setStatuses]       = useState<TaskStatus[]>([])
   const [parentTask, setParentTask]   = useState<TaskRecord | null>(null)
 
   // Carrega tarefas
@@ -75,8 +79,24 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     setEmployees((data ?? []) as EmployeeOption[])
   }, [])
 
+  const loadStatuses = useCallback(async (orgId: string) => {
+    try {
+      // sem orgId = carrega de todas as orgs do usuário (RLS filtra por membro)
+      const data = orgId
+        ? await taskStatusService.list(orgId)
+        : await taskStatusService.listAll()
+      setStatuses(data)
+    } catch {
+      setStatuses([])
+    }
+  }, [])
+
   useEffect(() => { load() }, [load])
-  useEffect(() => { loadEmployees(filterOrg || activeOrganizationId || '') }, [filterOrg, activeOrganizationId, loadEmployees])
+  useEffect(() => {
+    const orgId = filterOrg || activeOrganizationId || ''
+    loadEmployees(orgId)
+    loadStatuses(orgId)
+  }, [filterOrg, activeOrganizationId, loadEmployees, loadStatuses])
 
   // Obras disponíveis filtradas pela org selecionada (apenas classification === 'OBRA')
   const obras: ProjectOption[] = useMemo(() => {
@@ -115,9 +135,14 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     })
 
     const visibleParents = view === 'today' ? today : view === 'overdue' ? overdue : parents
-    const parentIds = new Set(visibleParents.map(t => t.id))
-    const subtasks  = byOrg.filter(t => t.parent_task_id && parentIds.has(t.parent_task_id))
-    const visible   = [...visibleParents, ...subtasks]
+
+    // Collect all descendants at any depth
+    const getAllDescendants = (ids: Set<string>): TaskRecord[] => {
+      const children = byOrg.filter(t => t.parent_task_id && ids.has(t.parent_task_id))
+      if (children.length === 0) return []
+      return [...children, ...getAllDescendants(new Set(children.map(t => t.id)))]
+    }
+    const visible = [...visibleParents, ...getAllDescendants(new Set(visibleParents.map(t => t.id)))]
 
     return { today, overdue, visible }
   }, [tasks, filterOrg, view])
@@ -125,9 +150,28 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   const orgForNew = filterOrg || activeOrganizationId || ''
 
   const toggleDone = async (t: TaskRecord) => {
-    const next = t.status === 'done' ? 'open' : 'done'
-    setTasks(prev => prev.map(x => x.id === t.id ? { ...x, status: next } : x))
-    const { error } = await supabase.from('tasks').update({ status: next }).eq('id', t.id)
+    const currentStatusObj = statuses.find(s => s.id === t.status_id)
+    const isDone = currentStatusObj ? currentStatusObj.is_done : t.status === 'done'
+
+    let nextStatusId: string | null = t.status_id ?? null
+    let nextLegacy: 'open' | 'done' = isDone ? 'open' : 'done'
+
+    if (statuses.length > 0) {
+      if (isDone) {
+        const def = statuses.find(s => s.is_default) ?? statuses.find(s => !s.is_done) ?? statuses[0]
+        nextStatusId = def?.id ?? null
+        nextLegacy = 'open'
+      } else {
+        const doneStatus = statuses.find(s => s.is_done)
+        nextStatusId = doneStatus?.id ?? null
+        nextLegacy = 'done'
+      }
+    }
+
+    setTasks(prev => prev.map(x => x.id === t.id ? { ...x, status: nextLegacy, status_id: nextStatusId } : x))
+    const patch: Record<string, unknown> = { status: nextLegacy }
+    if (nextStatusId !== undefined) patch.status_id = nextStatusId
+    const { error } = await supabase.from('tasks').update(patch).eq('id', t.id)
     if (error) { console.error(error); load() }
   }
 
@@ -155,6 +199,16 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           <TabBtn active={view === 'today'}   icon={Calendar}      label="Hoje"      count={today.length}   onClick={() => setView('today')} />
           <TabBtn active={view === 'overdue'} icon={AlertTriangle} label="Atrasadas" count={overdue.length} onClick={() => setView('overdue')} />
           <TabBtn active={view === 'all'}     icon={ListChecks}    label="Todas"                            onClick={() => setView('all')} />
+          {orgsOptions.length > 0 && (
+            <button
+              onClick={() => setShowStatusMgr(true)}
+              title="Gerenciar status"
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+            >
+              <Settings2 className="w-4 h-4" />
+              Status
+            </button>
+          )}
           <button
             onClick={() => { setEditing(null); setShowForm(true) }}
             disabled={!orgForNew}
@@ -204,6 +258,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         loading={loading}
         employees={employees}
         projects={obras}
+        statuses={statuses}
         onToggleDone={toggleDone}
         onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
         onAddSubtask={(parent) => { loadEmployees(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
@@ -216,12 +271,21 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           orgs={orgsOptions}
           employees={employees}
           projects={obras}
+          statuses={statuses}
           task={editing}
           parentTaskId={parentTask?.id ?? null}
           parentTaskTitle={parentTask?.title ?? null}
           onClose={() => { setShowForm(false); setParentTask(null) }}
-          onOrgChange={(id) => loadEmployees(id)}
+          onOrgChange={(id) => { loadEmployees(id); loadStatuses(id) }}
           onSaved={() => { setShowForm(false); setParentTask(null); load() }}
+        />
+      )}
+
+      {showStatusMgr && (
+        <TaskStatusManager
+          orgId={filterOrg || activeOrganizationId || orgsOptions[0]?.id || ''}
+          onClose={() => setShowStatusMgr(false)}
+          onChanged={() => loadStatuses(filterOrg || activeOrganizationId || '')}
         />
       )}
     </div>

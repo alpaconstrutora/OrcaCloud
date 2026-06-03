@@ -9,6 +9,7 @@ export interface Task {
     due_date?: string | null;
     priority: 1 | 2 | 3 | 4;   // 1=urgente 2=alta 3=normal 4=baixa
     status: 'open' | 'done' | 'snoozed';
+    status_id?: string | null;
     snoozed_until?: string | null;
     source_module: string;
     source_ref?: { type: string; id: string; route?: string } | null;
@@ -16,6 +17,58 @@ export interface Task {
     completed_at?: string | null;
     parent_task_id?: string | null;
 }
+
+export interface TaskStatus {
+    id: string;
+    org_id: string;
+    name: string;
+    color: string;
+    position: number;
+    is_default: boolean;
+    is_done: boolean;
+}
+
+export const taskStatusService = {
+    async list(orgId: string): Promise<TaskStatus[]> {
+        const { data, error } = await supabase
+            .from('task_statuses')
+            .select('*')
+            .eq('org_id', orgId)
+            .order('position');
+        if (error) throw error;
+        return (data ?? []) as TaskStatus[];
+    },
+
+    async listAll(): Promise<TaskStatus[]> {
+        const { data, error } = await supabase
+            .from('task_statuses')
+            .select('*')
+            .order('org_id')
+            .order('position');
+        if (error) throw error;
+        return (data ?? []) as TaskStatus[];
+    },
+
+    async create(status: Omit<TaskStatus, 'id'>): Promise<TaskStatus> {
+        const { data, error } = await supabase
+            .from('task_statuses')
+            .insert(status)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as TaskStatus;
+    },
+
+    async update(id: string, patch: Partial<Omit<TaskStatus, 'id'>>): Promise<void> {
+        const { error } = await supabase.from('task_statuses').update(patch).eq('id', id);
+        if (error) throw error;
+    },
+
+    async remove(id: string): Promise<void> {
+        const { error } = await supabase.from('task_statuses').delete().eq('id', id);
+        if (error) throw error;
+    },
+};
 
 export type NewTask = Omit<Task, 'id' | 'created_at' | 'completed_at'>;
 

@@ -37,6 +37,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<'alerts' | 'active' | 'all'>('alerts');
     const [measuredTotal, setMeasuredTotal] = useState(0);
+    const [clientNames, setClientNames] = useState<Record<string, string>>({});
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -49,6 +50,17 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     }, [organizationId, direction]);
 
     useEffect(() => { load(); }, [load]);
+
+    useEffect(() => {
+        if (direction !== 'OUTGOING') { setClientNames({}); return; }
+        const ids = [...new Set(contracts.filter(c => (c as any).client_id).map(c => (c as any).client_id as string))];
+        if (!ids.length) return;
+        supabase.from('suppliers').select('id, name').in('id', ids).then(({ data }) => {
+            const map: Record<string, string> = {};
+            (data ?? []).forEach((s: { id: string; name: string }) => { map[s.id] = s.name; });
+            setClientNames(map);
+        });
+    }, [contracts, direction]);
 
     useEffect(() => {
         if (direction !== 'OUTGOING') { setMeasuredTotal(0); return; }
@@ -214,6 +226,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                                 <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
                                     <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Número</th>
                                     <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Título</th>
+                                    {direction === 'OUTGOING' && <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Contratante</th>}
                                     <th className="text-right px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Valor</th>
                                     <th className="text-center px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                                     <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Vencimento</th>
@@ -231,6 +244,11 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                                             className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer">
                                             <td className="px-4 py-3 font-mono text-xs font-semibold text-blue-700 dark:text-blue-400">{c.number}</td>
                                             <td className="px-4 py-3 text-gray-900 dark:text-white font-medium max-w-[200px] truncate">{c.title}</td>
+                                            {direction === 'OUTGOING' && (
+                                                <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px] truncate">
+                                                    {(c as any).client_id ? (clientNames[(c as any).client_id] ?? '…') : '—'}
+                                                </td>
+                                            )}
                                             <td className="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-200">
                                                 {fmt(c.current_value ?? 0)}
                                             </td>

@@ -6,7 +6,8 @@ import {
     ArrowRight, Save, Trash2, Edit3, PlusCircle, Clock,
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown, Zap,
-    Package, Pencil, Settings, Search, Lock as LockIcon
+    Package, Pencil, Settings, Search, Lock as LockIcon,
+    ClipboardList, MapPin, Users, XCircle as XCircleIcon
 } from 'lucide-react';
 import {
     Contract, ContractItem, ContractAddendum,
@@ -84,6 +85,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [reajusteNotes, setReajusteNotes] = React.useState('');
     const [applyingReajuste, setApplyingReajuste] = React.useState(false);
     const [reajusteSuggestion, setReajusteSuggestion] = React.useState<{ base: number; atual: number; baseMonth: string; atualMonth: string } | null>(null);
+    const [counterpartyName, setCounterpartyName] = React.useState<string | null>(null);
 
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
@@ -134,6 +136,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             setAddendums(a);
             setMeasurements(m);
             setUtilityBills(u);
+
+            // 0. Load counterparty name (client for OUTGOING, supplier for INCOMING)
+            const counterpartyId = (c as any).direction === 'OUTGOING' ? (c as any).client_id : c?.supplier_id;
+            if (counterpartyId) {
+                supplierService.getById(counterpartyId).then(s => { if (s) setCounterpartyName(s.name); }).catch(() => {});
+            }
 
             // 1. Try to load project settings if obra is linked
             const sourceProjectId = c?.budget_id || c?.project_id;
@@ -918,6 +926,43 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             )}
                         </div>
 
+                        {/* Escopo do Serviço (OUTGOING only) */}
+                        {(contract as any).direction === 'OUTGOING' && (
+                            (contract as any).description || (contract as any).services_included || (contract as any).services_excluded
+                        ) && (
+                            <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-6">
+                                <h3 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                    <ClipboardList className="w-4 h-4 text-blue-600" /> Escopo do Serviço
+                                </h3>
+                                {(contract as any).description && (
+                                    <div>
+                                        <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest mb-2">Objeto / Descrição</p>
+                                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{(contract as any).description}</p>
+                                    </div>
+                                )}
+                                {((contract as any).services_included || (contract as any).services_excluded) && (
+                                    <div className="grid grid-cols-2 gap-6 pt-4 border-t border-gray-50">
+                                        {(contract as any).services_included && (
+                                            <div>
+                                                <p className="text-[12px] font-medium text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1">
+                                                    <CheckCircle2 className="w-3 h-3" /> Serviços Inclusos
+                                                </p>
+                                                <p className="text-sm text-gray-700 whitespace-pre-line">{(contract as any).services_included}</p>
+                                            </div>
+                                        )}
+                                        {(contract as any).services_excluded && (
+                                            <div>
+                                                <p className="text-[12px] font-medium text-red-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                                                    <XCircleIcon className="w-3 h-3" /> Serviços Excluídos
+                                                </p>
+                                                <p className="text-sm text-gray-700 whitespace-pre-line">{(contract as any).services_excluded}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Recent Activity / Timeline Placeholder */}
                         <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-6">
                             <h3 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
@@ -1001,6 +1046,20 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </button>
                         </div>
 
+                        {/* Partes do Contrato */}
+                        <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+                            <h4 className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2 flex items-center gap-2">
+                                <Users className="w-3.5 h-3.5" />
+                                {(contract as any).direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor'}
+                            </h4>
+                            <div className="p-4 bg-gray-50 rounded-2xl">
+                                <p className="text-sm font-semibold text-gray-800">{counterpartyName ?? '—'}</p>
+                                <p className="text-[11px] text-gray-400 mt-0.5 uppercase tracking-wider">
+                                    {(contract as any).direction === 'OUTGOING' ? 'Contratante' : 'Contratado'}
+                                </p>
+                            </div>
+                        </div>
+
                         {/* Additional Info Cards */}
                         <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
                             <h4 className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2">Configurações</h4>
@@ -1069,6 +1128,52 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                             </div>
                         </div>
+
+                        {/* Dados do Serviço (OUTGOING only) */}
+                        {(contract as any).direction === 'OUTGOING' && (
+                            (contract as any).sla_days || (contract as any).warranty_months ||
+                            (contract as any).execution_address || (contract as any).internal_responsible ||
+                            (contract as any).client_responsible
+                        ) && (
+                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                                <h4 className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2 flex items-center gap-2">
+                                    <ClipboardList className="w-3.5 h-3.5" /> Dados do Serviço
+                                </h4>
+                                {(contract as any).internal_responsible && (
+                                    <div className="p-3 bg-gray-50 rounded-2xl flex items-center justify-between">
+                                        <span className="text-[12px] font-medium text-gray-500">Resp. Interno</span>
+                                        <span className="text-[12px] font-semibold text-gray-800">{(contract as any).internal_responsible}</span>
+                                    </div>
+                                )}
+                                {(contract as any).client_responsible && (
+                                    <div className="p-3 bg-gray-50 rounded-2xl flex items-center justify-between">
+                                        <span className="text-[12px] font-medium text-gray-500">Resp. Cliente</span>
+                                        <span className="text-[12px] font-semibold text-gray-800">{(contract as any).client_responsible}</span>
+                                    </div>
+                                )}
+                                {(contract as any).sla_days && (
+                                    <div className="p-3 bg-blue-50 rounded-2xl flex items-center justify-between">
+                                        <span className="text-[12px] font-medium text-gray-500">SLA de Atendimento</span>
+                                        <span className="text-[12px] font-bold text-blue-600">{(contract as any).sla_days} dias</span>
+                                    </div>
+                                )}
+                                {(contract as any).warranty_months && (
+                                    <div className="p-3 bg-blue-50 rounded-2xl flex items-center justify-between">
+                                        <span className="text-[12px] font-medium text-gray-500">Garantia</span>
+                                        <span className="text-[12px] font-bold text-blue-600">{(contract as any).warranty_months} meses</span>
+                                    </div>
+                                )}
+                                {(contract as any).execution_address && (
+                                    <div className="p-3 bg-gray-50 rounded-2xl">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                            <MapPin className="w-3 h-3 text-gray-400" />
+                                            <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Endereço</span>
+                                        </div>
+                                        <p className="text-[12px] font-medium text-gray-800">{(contract as any).execution_address}</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Payment Info Card */}
                         <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">

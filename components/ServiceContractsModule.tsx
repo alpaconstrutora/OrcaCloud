@@ -56,7 +56,14 @@ const ServiceContractsModule: React.FC<Props> = ({
                     <span className="font-semibold text-sm">Contratos de Serviço</span>
                 </div>
                 <button
-                    onClick={() => { setEditingContract(null); setIsModalOpen(true); }}
+                    onClick={() => {
+                setEditingContract({
+                    contract_type: 'Prestação de Serviços',
+                    nature: 'Serviço',
+                    direction: 'OUTGOING',
+                } as any);
+                setIsModalOpen(true);
+            }}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
                     <Plus size={15} /> Novo Contrato
@@ -80,6 +87,7 @@ const ServiceContractsModule: React.FC<Props> = ({
                 projectId={editingContract?.project_id ?? ''}
                 organizationId={organizationId}
                 initialData={editingContract ?? undefined}
+                direction="OUTGOING"
             />
         </div>
     );

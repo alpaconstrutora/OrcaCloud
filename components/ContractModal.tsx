@@ -16,7 +16,8 @@ interface ContractModalProps {
     onSubmit: (data: Partial<Contract>) => Promise<void>;
     projectId: string;
     organizationId?: string;
-    initialData?: Contract;
+    initialData?: Partial<Contract>;
+    direction?: 'OUTGOING' | 'INCOMING';
 }
 
 export const ContractModal: React.FC<ContractModalProps> = ({
@@ -25,7 +26,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     onSubmit,
     projectId,
     organizationId,
-    initialData
+    initialData,
+    direction,
 }) => {
     const [formData, setFormData] = React.useState<Partial<Contract>>({
         number: '',
@@ -324,7 +326,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         }
     };
 
-    const isOutgoing = (formData.direction ?? initialData?.direction) === 'OUTGOING';
+    const isOutgoing = direction === 'OUTGOING' || (formData.direction ?? initialData?.direction) === 'OUTGOING';
 
     if (!isOpen) return null;
 
@@ -340,7 +342,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 <FileText className="w-8 h-8 text-white" />
                             </div>
                             <div>
-                                <h2 className="text-2xl font-medium tracking-tight">{initialData ? 'Ajustar Contrato' : 'Novo Contrato'}</h2>
+                                <h2 className="text-2xl font-medium tracking-tight">{initialData?.id ? 'Ajustar Contrato' : isOutgoing ? 'Novo Contrato de Serviço' : 'Novo Contrato'}</h2>
                                 <p className="text-blue-400 text-[12px] font-medium uppercase tracking-[0.2em] mt-1">{isOutgoing ? 'Contratos de Serviço ao Cliente' : 'Gestão Estratégica de Suprimentos'}</p>
                             </div>
                         </div>

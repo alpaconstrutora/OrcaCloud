@@ -386,17 +386,15 @@ const TasksList: React.FC<Props> = ({
         onClick={() => col.sortCol && toggleSort(col.sortCol as SortCol)}
         className={[
           HEAD,
-          col.sortCol ? 'cursor-pointer group/th hover:text-slate-600' : colKey !== 'actions' ? 'cursor-grab' : '',
-          isOver ? 'bg-blue-100 text-blue-700 rounded' : '',
+          colKey !== 'actions' ? 'cursor-grab active:cursor-grabbing' : '',
+          col.sortCol ? 'group/th hover:text-slate-600' : '',
+          isOver ? 'bg-blue-100 text-blue-700' : '',
           colDragging === colKey ? 'opacity-40' : '',
           'transition-colors',
         ].join(' ')}
         style={{ width: colKey === 'actions' ? 120 : undefined }}
       >
         <div className="flex items-center gap-1">
-          {colKey !== 'actions' && colKey !== 'title' && (
-            <GripVertical className="w-2.5 h-2.5 opacity-0 group-hover/th:opacity-30 flex-shrink-0" />
-          )}
           {col.label}
           {col.sortCol && <SortIcon col={col.sortCol} active={sortCol} dir={sortDir} />}
         </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins } from 'lucide-react';
+import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
 import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature } from '../types';
 import { supplierService } from '../services/supplierService';
@@ -90,7 +90,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     React.useEffect(() => {
         if (isOpen) {
             loadDependencies();
-            if (!initialData) {
+            if (!initialData?.id) {
                 setNumberError(null);
                 numberInputRef.current = '';
                 setFormData({
@@ -111,6 +111,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                     is_recurring: false,
                     billing_cycle: 'Mensal',
                     due_day: 10,
+                    ...initialData,
                 });
                 setInstallmentSchedule([]);
             }
@@ -303,6 +304,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             if (!payload.cost_center_id) payload.cost_center_id = undefined;
             if (!payload.category_id) payload.category_id = undefined;
             if (!payload.supplier_id) payload.supplier_id = undefined;
+            if (!payload.client_id) payload.client_id = undefined;
             if (!payload.budget_id) payload.budget_id = undefined;
             if (!payload.project_id) payload.project_id = undefined;
             // Sanitize DATE fields: empty string would fail Postgres date cast
@@ -322,6 +324,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         }
     };
 
+    const isOutgoing = formData.direction === 'OUTGOING';
+
     if (!isOpen) return null;
 
     return (
@@ -337,7 +341,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </div>
                             <div>
                                 <h2 className="text-2xl font-medium tracking-tight">{initialData ? 'Ajustar Contrato' : 'Novo Contrato'}</h2>
-                                <p className="text-blue-400 text-[12px] font-medium uppercase tracking-[0.2em] mt-1">Gestão Estratégica de Suprimentos</p>
+                                <p className="text-blue-400 text-[12px] font-medium uppercase tracking-[0.2em] mt-1">{isOutgoing ? 'Contratos de Serviço ao Cliente' : 'Gestão Estratégica de Suprimentos'}</p>
                             </div>
                         </div>
                         <button
@@ -419,23 +423,42 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                     />
                                 </div>
-                                <div className="col-span-2 space-y-2">
-                                    <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Fornecedor / Contratado</label>
-                                    <div className="relative group">
-                                        <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                                        <select
-                                            required
-                                            value={formData.supplier_id || ''}
-                                            onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
-                                            className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
-                                        >
-                                            <option value="">Selecione um fornecedor</option>
-                                            {suppliers.map(s => (
-                                                <option key={s.id} value={s.id}>{s.name} ({s.document || 'Sem doc'})</option>
-                                            ))}
-                                        </select>
+                                {isOutgoing ? (
+                                    <div className="col-span-2 space-y-2">
+                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Cliente / Contratante</label>
+                                        <div className="relative group">
+                                            <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                            <select
+                                                value={formData.client_id || ''}
+                                                onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
+                                                className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                            >
+                                                <option value="">Selecione o cliente</option>
+                                                {suppliers.map(s => (
+                                                    <option key={s.id} value={s.id}>{s.name} ({s.document || 'Sem doc'})</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="col-span-2 space-y-2">
+                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Fornecedor / Contratado</label>
+                                        <div className="relative group">
+                                            <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                            <select
+                                                required
+                                                value={formData.supplier_id || ''}
+                                                onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
+                                                className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                            >
+                                                <option value="">Selecione um fornecedor</option>
+                                                {suppliers.map(s => (
+                                                    <option key={s.id} value={s.id}>{s.name} ({s.document || 'Sem doc'})</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="col-span-2 space-y-2">
                                     <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Status do Contrato</label>
                                     <div className="relative group">
@@ -446,7 +469,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                         >
                                             <option value="Rascunho">Rascunho</option>
+                                            <option value="Revisão">Revisão</option>
+                                            <option value="Enviado">Enviado</option>
+                                            <option value="Aprovado">Aprovado</option>
+                                            <option value="Assinado">Assinado</option>
                                             <option value="Ativo">Ativo</option>
+                                            <option value="Concluído">Concluído</option>
                                             <option value="Suspenso">Suspenso</option>
                                             <option value="Encerrado">Encerrado</option>
                                             <option value="Cancelado">Cancelado</option>
@@ -512,6 +540,123 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </div>
                         </div>
 
+                        {/* Section: Escopo (OUTGOING only) */}
+                        {isOutgoing && (
+                            <div className="space-y-6">
+                                <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
+                                    <ClipboardList className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Escopo do Serviço</h3>
+                                </div>
+                                <div className="grid grid-cols-1 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Escopo / Objeto do Contrato</label>
+                                        <textarea
+                                            rows={3}
+                                            placeholder="Descreva o objeto e escopo detalhado dos serviços contratados"
+                                            value={formData.description || ''}
+                                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                            className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all resize-none"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Serviços Inclusos</label>
+                                            <textarea
+                                                rows={3}
+                                                placeholder="Liste os serviços incluídos no contrato"
+                                                value={formData.services_included || ''}
+                                                onChange={(e) => setFormData({ ...formData, services_included: e.target.value })}
+                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all resize-none"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Serviços Excluídos</label>
+                                            <textarea
+                                                rows={3}
+                                                placeholder="Liste os serviços NÃO incluídos no contrato"
+                                                value={formData.services_excluded || ''}
+                                                onChange={(e) => setFormData({ ...formData, services_excluded: e.target.value })}
+                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all resize-none"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Section: Partes e Execução (OUTGOING only) */}
+                        {isOutgoing && (
+                            <div className="space-y-6">
+                                <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
+                                    <Users className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Partes e Execução</h3>
+                                </div>
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Responsável Interno</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Nome do responsável pela empresa"
+                                            value={formData.internal_responsible || ''}
+                                            onChange={(e) => setFormData({ ...formData, internal_responsible: e.target.value })}
+                                            className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Responsável do Cliente</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Nome do responsável no cliente"
+                                            value={formData.client_responsible || ''}
+                                            onChange={(e) => setFormData({ ...formData, client_responsible: e.target.value })}
+                                            className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                        />
+                                    </div>
+                                    <div className="col-span-2 space-y-2">
+                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Endereço de Execução</label>
+                                        <div className="relative group">
+                                            <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                            <input
+                                                type="text"
+                                                placeholder="Endereço onde os serviços serão prestados"
+                                                value={formData.execution_address || ''}
+                                                onChange={(e) => setFormData({ ...formData, execution_address: e.target.value })}
+                                                className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">SLA (Dias de Resposta)</label>
+                                        <div className="relative group">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                placeholder="Ex: 2"
+                                                value={formData.sla_days ?? ''}
+                                                onChange={(e) => setFormData({ ...formData, sla_days: parseInt(e.target.value) || undefined })}
+                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            />
+                                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[12px] font-medium text-gray-400 uppercase">Dias</span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Garantia Contratual</label>
+                                        <div className="relative group">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                placeholder="Ex: 12"
+                                                value={formData.warranty_months ?? ''}
+                                                onChange={(e) => setFormData({ ...formData, warranty_months: parseInt(e.target.value) || undefined })}
+                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            />
+                                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[12px] font-medium text-gray-400 uppercase">Meses</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Section: Classificação e Valores */}
                         <div className="space-y-6">
                             <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
@@ -527,10 +672,22 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         onChange={(e) => setFormData({ ...formData, contract_type: e.target.value as ContractType })}
                                         className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                     >
-                                        <option value="Empreitada Global">Empreitada Global</option>
-                                        <option value="Preço Unitário">Preço Unitário</option>
-                                        <option value="Administração">Administração</option>
-                                        <option value="Subempreitada">Subempreitada</option>
+                                        <optgroup label="Serviços ao Cliente">
+                                            <option value="Prestação de Serviços">Prestação de Serviços</option>
+                                            <option value="Empreitada Global">Empreitada Global</option>
+                                            <option value="Empreitada Parcial">Empreitada Parcial</option>
+                                            <option value="Preço Fechado">Preço Fechado</option>
+                                            <option value="Preço Unitário">Preço Unitário</option>
+                                            <option value="Contrato por Medição">Contrato por Medição</option>
+                                            <option value="Contrato Recorrente">Contrato Recorrente</option>
+                                            <option value="Manutenção">Manutenção</option>
+                                            <option value="Instalação">Instalação</option>
+                                            <option value="Reforma">Reforma</option>
+                                        </optgroup>
+                                        <optgroup label="Suprimentos">
+                                            <option value="Administração">Administração</option>
+                                            <option value="Subempreitada">Subempreitada</option>
+                                        </optgroup>
                                         <option value="Outros">Outros</option>
                                     </select>
                                 </div>

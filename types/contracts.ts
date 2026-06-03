@@ -1,6 +1,11 @@
-export type ContractType = 'Empreitada Global' | 'Preço Unitário' | 'Administração' | 'Subempreitada' | 'Concessionária' | 'Assinatura/SaaS' | 'Manutenção Recorrente' | 'Outros';
+export type ContractType =
+    | 'Empreitada Global' | 'Empreitada Parcial' | 'Preço Fechado' | 'Preço Unitário'
+    | 'Contrato por Medição' | 'Contrato Recorrente' | 'Manutenção' | 'Prestação de Serviços'
+    | 'Instalação' | 'Reforma' | 'Administração' | 'Subempreitada' | 'Outros';
 export type ContractNature = 'Fornecimento' | 'Serviço' | 'Mão de Obra' | 'Locação' | 'Consumo' | 'Outros';
-export type ContractStatus = 'Rascunho' | 'Enviado' | 'Assinado' | 'Ativo' | 'Suspenso' | 'Encerrado' | 'Cancelado';
+export type ContractStatus =
+    | 'Rascunho' | 'Revisão' | 'Enviado' | 'Aprovado' | 'Assinado'
+    | 'Ativo' | 'Concluído' | 'Suspenso' | 'Encerrado' | 'Cancelado';
 
 export interface Contract {
     id: string;
@@ -37,6 +42,15 @@ export interface Contract {
     payment_schedule?: ContractInstallment[];
     client_id?: string;
     direction?: 'OUTGOING' | 'INCOMING';
+    execution_address?: string;
+    client_responsible?: string;
+    internal_responsible?: string;
+    sla_days?: number;
+    warranty_months?: number;
+    labor_value?: number;
+    materials_value?: number;
+    services_included?: string;
+    services_excluded?: string;
     budget_snapshot?: unknown;
     signature_status?: 'PENDING' | 'SENT' | 'SIGNED' | 'EXPIRED' | 'CANCELLED';
     signature_token?: string;

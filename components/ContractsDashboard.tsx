@@ -4,6 +4,7 @@ import {
     CheckCircle2, XCircle, RotateCcw, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import { contractService } from '../services/contractService';
+import { supabase } from '../lib/supabase';
 import { Contract } from '../types';
 
 interface Props {
@@ -35,6 +36,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<'alerts' | 'active' | 'all'>('alerts');
+    const [measuredTotal, setMeasuredTotal] = useState(0);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -47,6 +49,19 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     }, [organizationId, direction]);
 
     useEffect(() => { load(); }, [load]);
+
+    useEffect(() => {
+        if (direction !== 'OUTGOING') { setMeasuredTotal(0); return; }
+        const ids = contracts.filter(c => ['Ativo', 'Concluído', 'Assinado'].includes(c.status)).map(c => c.id);
+        if (!ids.length) { setMeasuredTotal(0); return; }
+        supabase
+            .from('contract_measurements')
+            .select('net_value')
+            .in('contract_id', ids)
+            .then(({ data }) => {
+                setMeasuredTotal((data ?? []).reduce((s, m) => s + ((m as { net_value: number }).net_value || 0), 0));
+            });
+    }, [contracts, direction]);
 
     // ── KPIs ────────────────────────────────────────────────────────────────
     const active = contracts.filter(c => c.status === 'Ativo');
@@ -83,7 +98,30 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
         ...vencendo90.map(c => ({ id: c.id, level: 'info' as const, label: `Vence em ${daysUntil(c.end_date!)} dia(s)`, contract: c })),
     ];
 
-    const kpis = [
+    const saldoContratual = totalReceita - measuredTotal;
+
+    const kpis = direction === 'OUTGOING' ? [
+        {
+            label: 'Contratos Ativos', value: active.length.toString(),
+            sub: `${rascunho.length} em elaboração`,
+            icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',
+        },
+        {
+            label: 'Receita Contratada', value: fmt(totalReceita),
+            sub: `${active.filter(c => c.is_recurring).length} recorrentes`,
+            icon: DollarSign, color: 'text-blue-600', bg: 'bg-blue-50',
+        },
+        {
+            label: 'Total Medido', value: fmt(measuredTotal),
+            sub: `${((totalReceita > 0 ? measuredTotal / totalReceita : 0) * 100).toFixed(0)}% do contratado`,
+            icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50',
+        },
+        {
+            label: 'Saldo Contratual', value: fmt(saldoContratual),
+            sub: `${vencidos.length > 0 ? `${vencidos.length} contrato(s) vencido(s)` : 'Sem vencimentos'}`,
+            icon: Clock, color: saldoContratual < 0 ? 'text-red-600' : 'text-gray-500', bg: saldoContratual < 0 ? 'bg-red-50' : 'bg-gray-50',
+        },
+    ] : [
         {
             label: 'Contratos Ativos', value: active.length.toString(),
             sub: `${rascunho.length} em rascunho/enviado`,

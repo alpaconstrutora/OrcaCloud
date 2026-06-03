@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import {
-  CheckCircle2, Circle, AlertCircle, ExternalLink, Inbox,
+  CheckCircle2, Circle, ExternalLink, Inbox,
   User, Building2, ChevronDown, ChevronRight, Plus,
   ArrowUp, ArrowDown, Search, X, SlidersHorizontal,
+  GripVertical, CornerLeftUp,
 } from 'lucide-react'
 import type { TaskRecord, EmployeeOption, ProjectOption } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
@@ -16,7 +17,7 @@ interface Props {
   onToggleDone: (task: TaskRecord) => void
   onEdit: (task: TaskRecord) => void
   onAddSubtask: (parent: TaskRecord) => void
-  onMakeSubtask: (taskId: string, newParentId: string) => void
+  onMakeSubtask: (taskId: string, newParentId: string | null) => void
   onNavigate: (route: string) => void
 }
 
@@ -77,8 +78,9 @@ const TasksList: React.FC<Props> = ({
   const [fStatus, setFStatus]       = useState('')
   const [fAssignee, setFAssignee]   = useState('')
   const [fProject, setFProject]     = useState('')
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [draggingId, setDraggingId]       = useState<string | null>(null)
+  const [dragOverId, setDragOverId]       = useState<string | null>(null)
+  const [dragOverDetach, setDragOverDetach] = useState(false)
 
   const empMap     = useMemo(() => Object.fromEntries(employees.map(e => [e.id, e])), [employees])
   const projMap    = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects])
@@ -185,9 +187,7 @@ const TasksList: React.FC<Props> = ({
     return (
       <>
         <tr
-          draggable
-          onDragStart={(e) => { setDraggingId(t.id); e.dataTransfer.effectAllowed = 'move' }}
-          onDragEnd={() => { setDraggingId(null); setDragOverId(null) }}
+          onDragEnd={() => { setDraggingId(null); setDragOverId(null); setDragOverDetach(false) }}
           onDragOver={(e) => { e.preventDefault(); if (draggingId && draggingId !== t.id) setDragOverId(t.id) }}
           onDragLeave={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDragOverId(null) }}
           onDrop={(e) => {
@@ -199,15 +199,28 @@ const TasksList: React.FC<Props> = ({
             setDraggingId(null); setDragOverId(null)
           }}
           className={[
-            'group transition-colors',
+            'group transition-all duration-100',
             isDone ? 'opacity-50' : '',
             depth > 0 ? 'bg-slate-50/40' : '',
-            isBeingDragged ? 'opacity-30 cursor-grabbing' : 'cursor-grab hover:bg-slate-50/70',
-            isDropTarget ? 'outline outline-2 outline-blue-400 bg-blue-50/60 outline-offset-[-2px]' : '',
+            isBeingDragged ? 'opacity-25 scale-[0.99]' : 'hover:bg-slate-50/70',
+            isDropTarget
+              ? 'bg-blue-50 shadow-[inset_0_0_0_2px_#3b82f6]'
+              : '',
           ].join(' ')}
         >
+          {/* Grip handle */}
+          <td className="pl-2 pr-0 py-2.5 w-6">
+            <div
+              draggable
+              onDragStart={(e) => { e.stopPropagation(); setDraggingId(t.id); e.dataTransfer.effectAllowed = 'move' }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 flex items-center"
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+            </div>
+          </td>
+
           {/* Checkbox */}
-          <td className="px-3 py-2.5">
+          <td className="px-2 py-2.5">
             <button onClick={() => onToggleDone(t)} className="text-slate-300 hover:text-emerald-600 transition-colors">
               {isDone ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Circle className="w-4 h-4" />}
             </button>
@@ -401,6 +414,28 @@ const TasksList: React.FC<Props> = ({
         </div>
       )}
 
+      {/* Zona de soltar para virar tarefa raiz — aparece só quando arrasta uma subtarefa */}
+      {draggingId && tasks.find(t => t.id === draggingId)?.parent_task_id && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOverDetach(true) }}
+          onDragLeave={() => setDragOverDetach(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            onMakeSubtask(draggingId, null)
+            setDraggingId(null); setDragOverDetach(false)
+          }}
+          className={[
+            'flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed text-xs font-bold transition-all duration-150',
+            dragOverDetach
+              ? 'bg-violet-50 border-violet-400 text-violet-700 scale-[1.01]'
+              : 'border-slate-300 text-slate-400 bg-slate-50',
+          ].join(' ')}
+        >
+          <CornerLeftUp className="w-4 h-4 flex-shrink-0" />
+          Soltar aqui para transformar em tarefa principal
+        </div>
+      )}
+
       {/* Tabela */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-slate-300">
@@ -414,6 +449,7 @@ const TasksList: React.FC<Props> = ({
             <table className="w-full min-w-[960px]">
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
+                  <th className={HEAD} style={{ width: 24 }} />
                   <th className={HEAD} style={{ width: 36 }} />
                   <th className={HEAD} style={{ width: 8 }} />
                   <ThSort col="title">Tarefa</ThSort>

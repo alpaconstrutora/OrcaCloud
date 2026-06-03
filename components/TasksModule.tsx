@@ -175,7 +175,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     if (error) { console.error(error); load() }
   }
 
-  const makeSubtask = async (taskId: string, newParentId: string) => {
+  const makeSubtask = async (taskId: string, newParentId: string | null) => {
     setTasks(prev => prev.map(x => x.id === taskId ? { ...x, parent_task_id: newParentId } : x))
     const { error } = await supabase.from('tasks').update({ parent_task_id: newParentId }).eq('id', taskId)
     if (error) { console.error(error); load() }

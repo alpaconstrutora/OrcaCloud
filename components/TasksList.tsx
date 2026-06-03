@@ -372,29 +372,35 @@ const TasksList: React.FC<Props> = ({
 
   // ── Cabeçalho de coluna arrastável ─────────────────────────────────────────
   function ColHeader({ colKey }: { colKey: ColKey }) {
-    const col   = COL_DEF_MAP[colKey]
+    const col    = COL_DEF_MAP[colKey]
     const isOver = colDragOver === colKey && colDragging !== colKey
 
     return (
       <th
-        draggable={colKey !== 'actions'}
-        onDragStart={(e) => { e.stopPropagation(); setColDragging(colKey); e.dataTransfer.effectAllowed = 'move' }}
-        onDragEnd={(e)   => { e.stopPropagation(); setColDragging(null); setColDragOver(null) }}
         onDragOver={(e)  => { e.preventDefault(); e.stopPropagation(); if (colDragging && colDragging !== colKey) setColDragOver(colKey) }}
         onDragLeave={(e) => { e.stopPropagation(); setColDragOver(null) }}
         onDrop={(e)      => { e.preventDefault(); e.stopPropagation(); handleColDrop(colKey) }}
         onClick={() => col.sortCol && toggleSort(col.sortCol as SortCol)}
         className={[
-          HEAD,
-          colKey !== 'actions' ? 'cursor-grab active:cursor-grabbing' : '',
-          col.sortCol ? 'group/th hover:text-slate-600' : '',
+          'text-[10px] font-black uppercase tracking-widest text-slate-400 text-left select-none p-0',
+          col.sortCol ? 'group/th' : '',
           isOver ? 'bg-blue-100 text-blue-700' : '',
           colDragging === colKey ? 'opacity-40' : '',
           'transition-colors',
         ].join(' ')}
         style={{ width: colKey === 'actions' ? 120 : undefined }}
       >
-        <div className="flex items-center gap-1">
+        {/* div ocupa toda a área da célula — drag funciona em qualquer ponto */}
+        <div
+          draggable={colKey !== 'actions'}
+          onDragStart={(e) => { e.stopPropagation(); setColDragging(colKey); e.dataTransfer.effectAllowed = 'move' }}
+          onDragEnd={(e)   => { e.stopPropagation(); setColDragging(null); setColDragOver(null) }}
+          className={[
+            'flex items-center gap-1 px-3 py-2.5 w-full select-none',
+            colKey !== 'actions' ? 'cursor-grab active:cursor-grabbing' : '',
+            col.sortCol ? 'hover:text-slate-600' : '',
+          ].join(' ')}
+        >
           {col.label}
           {col.sortCol && <SortIcon col={col.sortCol} active={sortCol} dir={sortDir} />}
         </div>

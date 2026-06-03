@@ -396,7 +396,7 @@ export const contractService = {
         // payment_schedule (array JSONB) omitido na listagem — carregado em getContractById
         let query = supabase
             .from('contracts')
-            .select('id, organization_id, project_id, supplier_id, budget_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, signature_status, signature_url, approval_status, approval_required_levels, template_id, created_at')
+            .select('id, organization_id, project_id, supplier_id, client_id, budget_id, number, title, description, contract_type, nature, direction, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, signature_status, signature_url, approval_status, approval_required_levels, template_id, created_at')
             .order('created_at', { ascending: false });
 
         if (projectId) {

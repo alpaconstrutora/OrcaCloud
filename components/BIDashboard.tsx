@@ -126,13 +126,19 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
     const [dateTo,   setDateTo]   = React.useState(`${now.getFullYear()}-12-31`);
     const [summary, setSummary]     = React.useState<BIExecutiveSummary | null>(null);
     const [loading, setLoading]     = React.useState(false);
+    const [error, setError]         = React.useState<string | null>(null);
     const [activeTab, setActiveTab] = React.useState<'visao_geral' | 'tendencia' | 'metas' | 'ia_relatorios'>('visao_geral');
     const [orgName, setOrgName]     = React.useState('');
     const [narrative, setNarrative] = React.useState<string | null>(null);
 
     const load = React.useCallback(async () => {
-        if (!organizationId) return;
+        if (!organizationId) {
+            setSummary(null);
+            setError('Nenhuma organização ativa selecionada. Selecione uma empresa para carregar o painel.');
+            return;
+        }
         setLoading(true);
+        setError(null);
         try {
             const [s, orgRes] = await Promise.all([
                 biService.getSummary(organizationId, dateFrom, dateTo),
@@ -145,7 +151,11 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
             setSummary(s);
             if (orgRes) setOrgName(orgRes);
         } catch (e: unknown) {
-            showToast('Erro ao carregar BI executivo', 'error');
+            const msg = e instanceof Error ? e.message
+                : (e as { message?: string })?.message ?? String(e);
+            setSummary(null);
+            setError(msg);
+            showToast(`Erro ao carregar BI executivo: ${msg}`, 'error');
             console.error('[BIDashboard]', e);
         } finally {
             setLoading(false);
@@ -189,7 +199,23 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
                 <div className="flex items-center justify-center h-48 text-sm text-gray-400">
                     Carregando painel executivo...
                 </div>
-            ) : !kpis ? null : (
+            ) : error ? (
+                <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-8 flex flex-col items-center text-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-red-50 text-red-500 flex items-center justify-center">
+                        <AlertTriangle className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm font-bold text-gray-800">Não foi possível carregar o painel executivo</p>
+                    <p className="text-xs text-gray-500 max-w-md break-words">{error}</p>
+                    <button onClick={load}
+                        className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 flex items-center gap-2">
+                        <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+                    </button>
+                </div>
+            ) : !kpis ? (
+                <div className="flex items-center justify-center h-48 text-sm text-gray-400">
+                    Sem dados para o período selecionado.
+                </div>
+            ) : (
                 <>
                     {/* ── Headline KPIs ── */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

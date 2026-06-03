@@ -155,11 +155,25 @@ export const biService = {
         dateTo: string,
         trendMonths = 12,
     ): Promise<BIExecutiveSummary> {
-        const [kpis, trend, target] = await Promise.all([
+        // KPIs são o núcleo do painel: se falharem, propaga o erro real para a UI.
+        // Tendência e metas são complementares — uma falha nelas não pode derrubar
+        // o dashboard inteiro, então isolamos com allSettled e usamos fallback vazio.
+        const [kpis, secondary] = await Promise.all([
             biService.getExecutiveKPIs(organizationId, dateFrom, dateTo),
-            biService.getTrend(organizationId, trendMonths),
-            biService.getCompanyTarget(organizationId),
+            Promise.allSettled([
+                biService.getTrend(organizationId, trendMonths),
+                biService.getCompanyTarget(organizationId),
+            ]),
         ]);
+
+        const [trendRes, targetRes] = secondary;
+        if (trendRes.status === 'rejected')
+            console.warn('[biService] getTrend falhou:', trendRes.reason);
+        if (targetRes.status === 'rejected')
+            console.warn('[biService] getCompanyTarget falhou:', targetRes.reason);
+
+        const trend  = trendRes.status === 'fulfilled' ? trendRes.value : [];
+        const target = targetRes.status === 'fulfilled' ? targetRes.value : null;
 
         return {
             kpis,

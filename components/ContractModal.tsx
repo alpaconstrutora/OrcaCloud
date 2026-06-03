@@ -324,7 +324,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         }
     };
 
-    const isOutgoing = formData.direction === 'OUTGOING';
+    const isOutgoing = (formData.direction ?? initialData?.direction) === 'OUTGOING';
 
     if (!isOpen) return null;
 

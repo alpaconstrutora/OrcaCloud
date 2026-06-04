@@ -3,7 +3,8 @@ import {
     GitBranch, Plus, Edit2, Trash2, Save, X,
     AlertCircle, Loader2, Package,
 } from 'lucide-react';
-import { CompanyBranch, CompanyBranchInsert, UF_LIST } from '../types';
+import { CompanyBranch, CompanyBranchInsert } from '../types';
+import CityStateSelect from './CityStateSelect';
 import { companyService } from '../services/companyService';
 
 interface Props {
@@ -182,11 +183,19 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
 
                     <div>
                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Endereço</p>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <Field label="CEP">
-                                <input className={cls} placeholder="00000-000" value={form.cep}
-                                    onChange={e => set('cep', e.target.value)} />
-                            </Field>
+                        <CityStateSelect
+                            cep={form.cep}
+                            stateCode={form.uf}
+                            cityName={form.cidade}
+                            onChange={({ cep, stateCode, cityName }) => setForm(prev => ({
+                                ...prev,
+                                cep: cep ?? '',
+                                uf: stateCode ?? '',
+                                cidade: cityName ?? '',
+                            }))}
+                            inputCls={cls}
+                        />
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
                             <div className="col-span-2">
                                 <Field label="Logradouro">
                                     <input className={cls} value={form.logradouro}
@@ -200,17 +209,6 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
                             <Field label="Bairro">
                                 <input className={cls} value={form.bairro}
                                     onChange={e => set('bairro', e.target.value)} />
-                            </Field>
-                            <Field label="Cidade">
-                                <input className={cls} value={form.cidade}
-                                    onChange={e => set('cidade', e.target.value)} />
-                            </Field>
-                            <Field label="UF">
-                                <select className={cls} value={form.uf}
-                                    onChange={e => set('uf', e.target.value)}>
-                                    <option value="">-</option>
-                                    {UF_LIST.map(uf => <option key={uf} value={uf}>{uf}</option>)}
-                                </select>
                             </Field>
                         </div>
                     </div>

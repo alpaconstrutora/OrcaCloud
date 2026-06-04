@@ -5,6 +5,7 @@ import { supplierCategoryService } from '../services/supplierCategoryService';
 import { organizationService } from '../services/organizationService';
 import { useStore } from '../store/useStore';
 import SupplierBankAccountsTab from './SupplierBankAccountsTab';
+import CityStateSelect from './CityStateSelect';
 
 interface SupplierModalProps {
     isOpen: boolean;
@@ -20,23 +21,6 @@ const DEFAULT_CATEGORIES = [
     'Consultoria / Projetos',
     'Transporte / Logística',
     'Outros'
-];
-
-const ESTADOS_BR = [
-    { sigla: 'AC', nome: 'Acre' }, { sigla: 'AL', nome: 'Alagoas' },
-    { sigla: 'AP', nome: 'Amapá' }, { sigla: 'AM', nome: 'Amazonas' },
-    { sigla: 'BA', nome: 'Bahia' }, { sigla: 'CE', nome: 'Ceará' },
-    { sigla: 'DF', nome: 'Distrito Federal' }, { sigla: 'ES', nome: 'Espírito Santo' },
-    { sigla: 'GO', nome: 'Goiás' }, { sigla: 'MA', nome: 'Maranhão' },
-    { sigla: 'MT', nome: 'Mato Grosso' }, { sigla: 'MS', nome: 'Mato Grosso do Sul' },
-    { sigla: 'MG', nome: 'Minas Gerais' }, { sigla: 'PA', nome: 'Pará' },
-    { sigla: 'PB', nome: 'Paraíba' }, { sigla: 'PR', nome: 'Paraná' },
-    { sigla: 'PE', nome: 'Pernambuco' }, { sigla: 'PI', nome: 'Piauí' },
-    { sigla: 'RJ', nome: 'Rio de Janeiro' }, { sigla: 'RN', nome: 'Rio Grande do Norte' },
-    { sigla: 'RS', nome: 'Rio Grande do Sul' }, { sigla: 'RO', nome: 'Rondônia' },
-    { sigla: 'RR', nome: 'Roraima' }, { sigla: 'SC', nome: 'Santa Catarina' },
-    { sigla: 'SP', nome: 'São Paulo' }, { sigla: 'SE', nome: 'Sergipe' },
-    { sigla: 'TO', nome: 'Tocantins' },
 ];
 
 function maskCNPJ(value: string): string {
@@ -362,32 +346,17 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                         </div>
                     </div>
 
-                    {/* Cidade + UF */}
-                    <div className="grid grid-cols-5 gap-3">
-                        <div className="col-span-3">
-                            <label className={labelCls}>Cidade</label>
-                            <input
-                                type="text"
-                                placeholder="São Paulo"
-                                className={inputCls}
-                                value={formData.city}
-                                onChange={e => set({ city: e.target.value })}
-                            />
-                        </div>
-                        <div className="col-span-2">
-                            <label className={labelCls}>Estado (UF)</label>
-                            <select
-                                className={inputCls + ' cursor-pointer'}
-                                value={formData.state}
-                                onChange={e => set({ state: e.target.value })}
-                            >
-                                <option value="">UF</option>
-                                {ESTADOS_BR.map(e => (
-                                    <option key={e.sigla} value={e.sigla}>{e.sigla} — {e.nome}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+                    <CityStateSelect
+                        stateCode={formData.state}
+                        cityName={formData.city}
+                        onChange={({ stateCode, cityName }) => set({
+                            state: stateCode ?? '',
+                            city: cityName ?? '',
+                        })}
+                        showCep={false}
+                        labelCls={labelCls}
+                        inputCls={inputCls}
+                    />
                 </form>
                 )}
 

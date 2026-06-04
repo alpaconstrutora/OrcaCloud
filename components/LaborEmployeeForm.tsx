@@ -3,6 +3,7 @@ import { X, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Bu
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import { payrollService, PayrollRubric } from '../services/payrollService';
 import { validateCPF } from '../lib/validators';
+import CityStateSelect from './CityStateSelect';
 
 interface OrganizationOption {
     id: string;
@@ -22,12 +23,6 @@ const ROLES = [
     'Mestre de Obras', 'Pedreiro', 'Servente', 'Carpinteiro', 'Encanador',
     'Eletricista', 'Pintor', 'Armador', 'Topógrafo', 'Soldador',
     'Operador de Máquina', 'Técnico em Edificações', 'Engenheiro', 'Arquiteto', 'Outros'
-];
-
-const BR_STATES = [
-    'AC','AL','AP','AM','BA','CE','DF','ES','GO',
-    'MA','MT','MS','MG','PA','PB','PR','PE','PI',
-    'RJ','RN','RS','RO','RR','SC','SP','SE','TO'
 ];
 
 const ADMISSION_CHECKLIST_ITEMS = [
@@ -154,24 +149,6 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         if (raw.length <= 6) return `${raw.slice(0, 3)}.${raw.slice(3)}`;
         if (raw.length <= 9) return `${raw.slice(0, 3)}.${raw.slice(3, 6)}.${raw.slice(6)}`;
         return `${raw.slice(0, 3)}.${raw.slice(3, 6)}.${raw.slice(6, 9)}-${raw.slice(9)}`;
-    };
-
-    const handleCEPBlur = async (cep: string) => {
-        const raw = cep.replace(/\D/g, '');
-        if (raw.length !== 8) return;
-        try {
-            const res = await fetch(`https://viacep.com.br/ws/${raw}/json/`);
-            const data = await res.json();
-            if (!data.erro) {
-                setForm(prev => ({
-                    ...prev,
-                    address_street: data.logradouro || prev.address_street,
-                    address_neighborhood: data.bairro || prev.address_neighborhood,
-                    address_city: data.localidade || prev.address_city,
-                    address_uf: data.uf || prev.address_uf,
-                }));
-            }
-        } catch { /* sem acesso à ViaCEP — ignora */ }
     };
 
     const formatPhone = (value: string) => {
@@ -618,22 +595,24 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                 <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                                     <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Endereço Residencial e Contato
                                 </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-                                    <div className="md:col-span-2">
-                                        <InputGroup label="CEP">
-                                            <input
-                                                value={form.address_zip_code}
-                                                onChange={e => {
-                                                    const v = e.target.value.replace(/\D/g, '').slice(0, 8);
-                                                    const masked = v.length > 5 ? `${v.slice(0, 5)}-${v.slice(5)}` : v;
-                                                    setField('address_zip_code', masked);
-                                                }}
-                                                onBlur={e => handleCEPBlur(e.target.value)}
-                                                className={inputCls}
-                                                placeholder="00000-000"
-                                            />
-                                        </InputGroup>
-                                    </div>
+                                <CityStateSelect
+                                    cep={form.address_zip_code}
+                                    stateCode={form.address_uf}
+                                    cityName={form.address_city}
+                                    onChange={({ cep, stateCode, cityName }) => setForm(prev => ({
+                                        ...prev,
+                                        address_zip_code: cep ?? '',
+                                        address_uf: stateCode ?? '',
+                                        address_city: cityName ?? '',
+                                    }))}
+                                    onCepLookup={data => setForm(prev => ({
+                                        ...prev,
+                                        address_street: data.logradouro || prev.address_street,
+                                        address_neighborhood: data.bairro || prev.address_neighborhood,
+                                    }))}
+                                    inputCls={inputCls}
+                                />
+                                <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mt-4">
                                     <div className="md:col-span-4">
                                         <InputGroup label="Rua / Logradouro">
                                             <input value={form.address_street} onChange={e => setField('address_street', e.target.value)} className={inputCls} />
@@ -652,19 +631,6 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                     <div className="md:col-span-3">
                                         <InputGroup label="Bairro">
                                             <input value={form.address_neighborhood} onChange={e => setField('address_neighborhood', e.target.value)} className={inputCls} />
-                                        </InputGroup>
-                                    </div>
-                                    <div className="md:col-span-4">
-                                        <InputGroup label="Cidade">
-                                            <input value={form.address_city} onChange={e => setField('address_city', e.target.value)} className={inputCls} />
-                                        </InputGroup>
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <InputGroup label="UF">
-                                            <select value={form.address_uf} onChange={e => setField('address_uf', e.target.value)} className={inputCls}>
-                                                <option value="">Selecione...</option>
-                                                {BR_STATES.map(uf => <option key={uf} value={uf}>{uf}</option>)}
-                                            </select>
                                         </InputGroup>
                                     </div>
                                     <div className="md:col-span-3">

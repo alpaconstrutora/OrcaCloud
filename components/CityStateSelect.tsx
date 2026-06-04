@@ -23,8 +23,17 @@ export interface CityStateValue {
   cityName?: string;    // 'São Paulo'
 }
 
+export interface ViaCepData {
+  logradouro?: string;
+  bairro?: string;
+  uf?: string;
+  localidade?: string;
+}
+
 interface Props extends CityStateValue {
   onChange: (next: CityStateValue) => void;
+  /** Callback opcional para receber dados crus da ViaCEP (rua, bairro) e preencher campos extras. */
+  onCepLookup?: (data: ViaCepData) => void;
   required?: boolean;
   showCep?: boolean;
   className?: string;
@@ -37,7 +46,7 @@ const DEFAULT_LABEL = 'block text-xs font-bold uppercase tracking-wider text-sla
 
 const CityStateSelect: React.FC<Props> = ({
   cep, stateCode, cityName,
-  onChange, required, showCep = true,
+  onChange, onCepLookup, required, showCep = true,
   className = '', labelCls = DEFAULT_LABEL, inputCls = DEFAULT_INPUT,
 }) => {
   const [states, setStates] = useState<MasterState[]>([]);
@@ -79,6 +88,7 @@ const CityStateSelect: React.FC<Props> = ({
             stateCode: data.uf,
             cityName: data.localidade,
           });
+          onCepLookup?.(data);
         }
       } catch {
         // Ignora — usuário ainda pode preencher manualmente

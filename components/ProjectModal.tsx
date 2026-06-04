@@ -9,6 +9,7 @@ import { laborService, Employee } from '../services/laborService';
 import { Client, Investor } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
+import CityStateSelect from './CityStateSelect';
 
 interface NewProjectData {
   id?: string;
@@ -931,36 +932,20 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
                       />
                     </div>
-                    <div className="col-span-6">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
-                      <input
-                        type="text"
-                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={formData.city}
-                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      />
-                    </div>
-                    <div className="col-span-3">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Estado (UF)</label>
-                      <select
-                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
-                        value={formData.location}
-                        onChange={(e) => setFormData({ ...formData, location: e.target.value, state: e.target.value })}
-                      >
-                        <option value="">UF</option>
-                        {Object.keys(BASE_CUB_RATES).sort().map(uf => (
-                          <option key={uf} value={uf}>{uf}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-span-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
-                      <input
-                        type="text"
-                        placeholder="00000-000"
-                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={formData.zipCode}
-                        onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
+                    <div className="col-span-12">
+                      <CityStateSelect
+                        cep={formData.zipCode}
+                        stateCode={formData.state || formData.location}
+                        cityName={formData.city}
+                        onChange={({ cep, stateCode, cityName }) => setFormData({
+                          ...formData,
+                          zipCode: cep ?? '',
+                          state: stateCode ?? '',
+                          location: stateCode ?? '',
+                          city: cityName ?? '',
+                        })}
+                        labelCls="block text-sm font-medium text-gray-700 mb-1"
+                        inputCls="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                       />
                     </div>
                   </div>

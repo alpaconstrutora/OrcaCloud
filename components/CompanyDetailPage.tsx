@@ -11,6 +11,7 @@ import {
     DEFAULT_MODULOS, MODULOS_POR_TIPO, UF_LIST,
 } from '../types';
 import { companyService } from '../services/companyService';
+import CityStateSelect from './CityStateSelect';
 import CompanyPartnersTab from './CompanyPartnersTab';
 import CompanyBankAccountsTab from './CompanyBankAccountsTab';
 import CertificateExpiryWarning from './CertificateExpiryWarning';
@@ -506,38 +507,39 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                     </Section>
 
                     <Section title="Endereço Fiscal">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <Field label="CEP">
-                                <input className={inputCls} placeholder="00000-000" value={form.cep_fiscal}
-                                    onChange={e => set('cep_fiscal', e.target.value)} />
-                            </Field>
-                            <div className="col-span-2">
-                                <Field label="Logradouro">
-                                    <input className={inputCls} value={form.logradouro_fiscal}
-                                        onChange={e => set('logradouro_fiscal', e.target.value)} />
+                        <div className="space-y-4">
+                            <CityStateSelect
+                                cep={form.cep_fiscal}
+                                stateCode={form.uf_fiscal}
+                                cityName={form.cidade_fiscal}
+                                onChange={({ cep, stateCode, cityName }) => setForm(prev => ({
+                                    ...prev,
+                                    cep_fiscal: cep ?? '',
+                                    uf_fiscal: stateCode ?? '',
+                                    cidade_fiscal: cityName ?? '',
+                                }))}
+                                inputCls={inputCls}
+                            />
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="col-span-2">
+                                    <Field label="Logradouro">
+                                        <input className={inputCls} value={form.logradouro_fiscal}
+                                            onChange={e => set('logradouro_fiscal', e.target.value)} />
+                                    </Field>
+                                </div>
+                                <Field label="Número">
+                                    <input className={inputCls} value={form.numero_fiscal}
+                                        onChange={e => set('numero_fiscal', e.target.value)} />
+                                </Field>
+                                <Field label="Complemento">
+                                    <input className={inputCls} value={form.complemento_fiscal}
+                                        onChange={e => set('complemento_fiscal', e.target.value)} />
+                                </Field>
+                                <Field label="Bairro">
+                                    <input className={inputCls} value={form.bairro_fiscal}
+                                        onChange={e => set('bairro_fiscal', e.target.value)} />
                                 </Field>
                             </div>
-                            <Field label="Número">
-                                <input className={inputCls} value={form.numero_fiscal}
-                                    onChange={e => set('numero_fiscal', e.target.value)} />
-                            </Field>
-                            <Field label="Complemento">
-                                <input className={inputCls} value={form.complemento_fiscal}
-                                    onChange={e => set('complemento_fiscal', e.target.value)} />
-                            </Field>
-                            <Field label="Bairro">
-                                <input className={inputCls} value={form.bairro_fiscal}
-                                    onChange={e => set('bairro_fiscal', e.target.value)} />
-                            </Field>
-                            <Field label="Cidade">
-                                <input className={inputCls} value={form.cidade_fiscal}
-                                    onChange={e => set('cidade_fiscal', e.target.value)} />
-                            </Field>
-                            <Field label="UF">
-                                <input className={inputCls} maxLength={2} placeholder="SP"
-                                    value={form.uf_fiscal}
-                                    onChange={e => set('uf_fiscal', e.target.value.toUpperCase())} />
-                            </Field>
                         </div>
                     </Section>
 

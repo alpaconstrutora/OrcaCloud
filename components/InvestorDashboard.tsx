@@ -1,11 +1,13 @@
 import React from 'react';
-import { TrendingUp, PieChart as PieChartIcon, Building2, Wallet, Calculator, FileText, Bell } from 'lucide-react';
+import { TrendingUp, PieChart as PieChartIcon, Building2, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw } from 'lucide-react';
 import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
 import { Investor, investorService } from '../services/investorService';
 import { ProjectData } from '../services/projectService';
 import { investorPortalService, InvestorReport, InvestorOpportunity, ReportCategory } from '../services/investorPortalService';
 import { announcementsService } from '../services/announcementsService';
 import CommunicationCenter from './investor/CommunicationCenter';
+import SpeManager from './investor/SpeManager';
+import MonthlyReportTrigger from './investor/MonthlyReportTrigger';
 import { investorContributionsService, InvestorFinancialSummary } from '../services/investorContributionsService';
 import { marketDataService } from '../services/marketDataService';
 import { aiService, AIInsight } from '../services/aiService';
@@ -29,16 +31,18 @@ interface InvestorDashboardProps {
     onUpdateSettings?: (settings: ProjectSettings) => void;
 }
 
-type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'comunicados';
+type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'comunicados' | 'spe' | 'relatorios';
 
 const TABS = [
     { id: 'dashboard', label: 'Evolução', icon: <TrendingUp className="w-4 h-4" /> },
     { id: 'simulator', label: 'Simulador', icon: <Calculator className="w-4 h-4" /> },
-    { id: 'holdings', label: 'Minhas Cotas', icon: <PieChartIcon className="w-4 h-4" /> },
+    { id: 'holdings', label: 'Cotas', icon: <PieChartIcon className="w-4 h-4" /> },
     { id: 'financeiro', label: 'Financeiro', icon: <Wallet className="w-4 h-4" /> },
     { id: 'opportunities', label: 'Oportunidades', icon: <Building2 className="w-4 h-4" /> },
     { id: 'reports', label: 'Documentos', icon: <FileText className="w-4 h-4" /> },
     { id: 'comunicados', label: 'Comunicados', icon: <Bell className="w-4 h-4" /> },
+    { id: 'spe', label: 'SPE', icon: <LayoutGrid className="w-4 h-4" /> },
+    { id: 'relatorios', label: 'Relatórios', icon: <RefreshCw className="w-4 h-4" /> },
 ] as const;
 
 const TAB_TITLES: Record<TabId, string> = {
@@ -49,6 +53,8 @@ const TAB_TITLES: Record<TabId, string> = {
     reports: 'Documentos',
     simulator: 'Inteligência de Investimento',
     comunicados: 'Comunicados',
+    spe: 'Gestão de SPEs',
+    relatorios: 'Relatórios Mensais',
 };
 
 const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
@@ -410,6 +416,17 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         organizationId={settings?.organizationId ?? ''}
                         investorId={investorProfile?.id}
                         isAdmin={isAdmin}
+                    />
+                )}
+                {activeTab === 'spe' && (
+                    <SpeManager
+                        organizationId={settings?.organizationId ?? ''}
+                        isAdmin={isAdmin}
+                    />
+                )}
+                {activeTab === 'relatorios' && isAdmin && (
+                    <MonthlyReportTrigger
+                        organizationId={settings?.organizationId ?? ''}
                     />
                 )}
             </main>

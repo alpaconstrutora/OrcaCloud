@@ -153,6 +153,26 @@ export const masterDataService = {
     return category ? cache.units.filter(u => u.category === category) : cache.units;
   },
 
+  // Admin adiciona uma cidade manualmente (RPC SECURITY DEFINER valida permissão)
+  async addCity(input: {
+    state_id: string;
+    name: string;
+    ibge_code?: number | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  }): Promise<MasterCity> {
+    const { data, error } = await supabase.rpc('master_city_add', {
+      p_state_id: input.state_id,
+      p_name: input.name,
+      p_ibge_code: input.ibge_code ?? null,
+      p_latitude: input.latitude ?? null,
+      p_longitude: input.longitude ?? null,
+    });
+    if (error) throw error;
+    cache.citiesByState.delete(input.state_id);
+    return data as MasterCity;
+  },
+
   // Para forçar recarga (útil após import em massa, futuro)
   invalidateCache() {
     cache.countries = null;

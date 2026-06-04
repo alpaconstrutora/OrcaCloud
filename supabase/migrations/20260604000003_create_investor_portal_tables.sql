@@ -84,6 +84,7 @@ WHERE p.settings->'investorData'->'reports' IS NOT NULL
   AND p.settings->>'organizationId' IS NOT NULL
   AND (p.settings->>'organizationId') ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
   AND (r->>'name') IS NOT NULL
+  AND (p.settings->>'organizationId')::uuid IN (SELECT id FROM public.organizations)
 ON CONFLICT DO NOTHING;
 
 -- Opportunities
@@ -102,4 +103,5 @@ WHERE p.settings->'investorData'->'opportunities' IS NOT NULL
   AND p.settings->>'organizationId' IS NOT NULL
   AND (p.settings->>'organizationId') ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
   AND (o->>'title') IS NOT NULL
+  AND (p.settings->>'organizationId')::uuid IN (SELECT id FROM public.organizations)
 ON CONFLICT DO NOTHING;

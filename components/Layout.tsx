@@ -605,6 +605,7 @@ const Layout: React.FC<LayoutProps> = ({
 
           <NavGroup label="Sistema" />
           <NavItem id="notifications-center" icon={Bell} label="Notificações" badge={unreadCount > 0 ? unreadCount : undefined} />
+          <NavItem id="master-data" icon={Database} label="Dados Mestres" />
           <NavItem id="settings" icon={Settings} label="Configurações" />
         </nav>
 

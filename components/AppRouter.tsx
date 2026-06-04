@@ -70,6 +70,7 @@ const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const DREReport             = React.lazy(() => import('./DREReport'));
 const CashFlowDashboard     = React.lazy(() => import('./CashFlowDashboard'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
+const MasterDataBrowser     = React.lazy(() => import('./MasterDataBrowser'));
 
 // Suspense fallback
 const Spinner = () => (
@@ -527,6 +528,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'financial-categories':
       return <FinancialCategoriesManager />;
 
+    case 'master-data':
+      return <MasterDataBrowser />;
+
     case 'bank-reconciliation':
       return (
         <BankReconciliation
@@ -892,6 +896,7 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
                     <ContractsDashboard
                         organizationId={organizationId}
                         onViewContract={(id) => setSelectedContractId(id)}
+                        direction="INCOMING"
                     />
                 )}
                 {tab === 'obra' && (

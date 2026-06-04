@@ -40,30 +40,6 @@ export interface SupplierBankAccount {
   updated_at?: string;
 }
 
-// Lista dos principais bancos brasileiros (FEBRABAN)
-export const BANCOS_BR: { code: string; name: string }[] = [
-  { code: '001', name: 'Banco do Brasil' },
-  { code: '033', name: 'Santander' },
-  { code: '104', name: 'Caixa Econômica Federal' },
-  { code: '237', name: 'Bradesco' },
-  { code: '341', name: 'Itaú Unibanco' },
-  { code: '077', name: 'Inter' },
-  { code: '260', name: 'Nubank' },
-  { code: '336', name: 'C6 Bank' },
-  { code: '756', name: 'Sicoob' },
-  { code: '748', name: 'Sicredi' },
-  { code: '422', name: 'Safra' },
-  { code: '655', name: 'Votorantim / BV' },
-  { code: '070', name: 'BRB' },
-  { code: '085', name: 'Ailos' },
-  { code: '041', name: 'Banrisul' },
-  { code: '025', name: 'Alfa' },
-  { code: '021', name: 'Banestes' },
-  { code: '047', name: 'Banese' },
-  { code: '707', name: 'Daycoval' },
-  { code: '739', name: 'Cetelem / BNP Paribas' },
-];
-
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   corrente:  'Conta Corrente',
   poupanca:  'Conta Poupança',

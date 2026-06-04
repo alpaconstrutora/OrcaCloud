@@ -5,9 +5,10 @@ import {
 } from 'lucide-react';
 import {
     SupplierBankAccount, AccountType, PixKeyType,
-    BANCOS_BR, ACCOUNT_TYPE_LABELS, PIX_KEY_TYPE_LABELS
+    ACCOUNT_TYPE_LABELS, PIX_KEY_TYPE_LABELS
 } from '../types';
 import { supplierBankAccountService } from '../services/supplierBankAccountService';
+import { masterDataService, MasterBank } from '../services/masterDataService';
 import { useStore } from '../store/useStore';
 
 // ─── Estilos reutilizáveis (consistentes com SupplierModal) ───────────────────
@@ -73,6 +74,9 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
     const [showInactive, setShowInactive] = React.useState(false);
 
     const [form, setForm] = React.useState(emptyAccount(supplierId, organizationId ?? null));
+    const [banks, setBanks] = React.useState<MasterBank[]>([]);
+
+    React.useEffect(() => { masterDataService.listBanks().then(setBanks); }, []);
     const set = (patch: Partial<typeof form>) => setForm(f => ({ ...f, ...patch }));
 
     // ─── Carregar contas ───────────────────────────────────────────────────────
@@ -140,7 +144,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
             set({ bank_code: '', bank_name: '' });
             return;
         }
-        const bank = BANCOS_BR.find(b => b.code === code);
+        const bank = banks.find(b => b.code === code);
         if (bank) set({ bank_code: bank.code, bank_name: bank.name });
     };
 
@@ -300,18 +304,18 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                 <label className={labelCls}>Banco</label>
                 <select
                     className={inputCls + ' cursor-pointer'}
-                    value={BANCOS_BR.some(b => b.code === form.bank_code) ? form.bank_code : '__outro__'}
+                    value={banks.some(b => b.code === form.bank_code) ? form.bank_code : '__outro__'}
                     onChange={e => handleBankSelect(e.target.value)}
                 >
                     <option value="__outro__">— Outro banco —</option>
-                    {BANCOS_BR.map(b => (
+                    {banks.map(b => (
                         <option key={b.code} value={b.code}>{b.code} – {b.name}</option>
                     ))}
                 </select>
             </div>
 
             {/* Código livre (se "Outro") */}
-            {!BANCOS_BR.some(b => b.code === form.bank_code) && (
+            {!banks.some(b => b.code === form.bank_code) && (
                 <div className="grid grid-cols-2 gap-3">
                     <div>
                         <label className={labelCls}>Código do Banco</label>

@@ -381,26 +381,6 @@ export const UF_LIST = [
   'RS','RO','RR','SC','SP','SE','TO',
 ];
 
-export const BANCOS_BRASIL = [
-  { codigo: '001', nome: 'Banco do Brasil' },
-  { codigo: '033', nome: 'Santander' },
-  { codigo: '041', nome: 'Banrisul' },
-  { codigo: '070', nome: 'BRB' },
-  { codigo: '077', nome: 'Banco Inter' },
-  { codigo: '085', nome: 'AILOS' },
-  { codigo: '104', nome: 'Caixa Econômica Federal' },
-  { codigo: '212', nome: 'Banco Original' },
-  { codigo: '237', nome: 'Bradesco' },
-  { codigo: '260', nome: 'Nubank' },
-  { codigo: '290', nome: 'PagBank' },
-  { codigo: '336', nome: 'Banco C6' },
-  { codigo: '341', nome: 'Itaú' },
-  { codigo: '389', nome: 'Banco Mercantil' },
-  { codigo: '422', nome: 'Safra' },
-  { codigo: '748', nome: 'Sicredi' },
-  { codigo: '756', nome: 'Sicoob' },
-];
-
 export const COMPANY_TIPO_LABELS: Record<CompanyTipo, string> = {
   construtora:              'Construtora',
   incorporadora:            'Incorporadora',

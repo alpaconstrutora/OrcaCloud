@@ -45,7 +45,13 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
         setLoading(true);
         try {
             const data = await contractService.listContracts(undefined, organizationId);
-            setContracts(direction ? data.filter(c => (c as any).direction === direction) : data);
+            setContracts(
+                direction === 'OUTGOING'
+                    ? data.filter(c => (c as any).direction === 'OUTGOING')
+                    : direction === 'INCOMING'
+                    ? data.filter(c => (c as any).direction !== 'OUTGOING')
+                    : data
+            );
         } finally {
             setLoading(false);
         }

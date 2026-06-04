@@ -6,9 +6,10 @@ import {
 import {
     CompanyBankAccount, CompanyBankAccountInsert,
     TipoConta, TipoPix,
-    TIPO_CONTA_LABELS, TIPO_PIX_LABELS, BANCOS_BRASIL,
+    TIPO_CONTA_LABELS, TIPO_PIX_LABELS,
 } from '../types';
 import { companyService } from '../services/companyService';
+import { masterDataService, MasterBank } from '../services/masterDataService';
 
 interface Props {
     companyId: string;
@@ -53,6 +54,9 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState<FormData>(EMPTY);
+    const [banks, setBanks] = useState<MasterBank[]>([]);
+
+    useEffect(() => { masterDataService.listBanks().then(setBanks); }, []);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -94,11 +98,11 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
         setForm(prev => ({ ...prev, [field]: value }));
 
     const handleBancoChange = (codigo: string) => {
-        const banco = BANCOS_BRASIL.find(b => b.codigo === codigo);
+        const banco = banks.find(b => b.code === codigo);
         setForm(prev => ({
             ...prev,
             banco_codigo: codigo,
-            banco_nome: banco ? banco.nome : prev.banco_nome,
+            banco_nome: banco ? banco.name : prev.banco_nome,
         }));
     };
 
@@ -194,8 +198,8 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
                                     onChange={e => handleBancoChange(e.target.value)}
                                     placeholder="ex: 341" />
                                 <datalist id="bancos-list">
-                                    {BANCOS_BRASIL.map(b => (
-                                        <option key={b.codigo} value={b.codigo}>{b.nome}</option>
+                                    {banks.map(b => (
+                                        <option key={b.code} value={b.code}>{b.name}</option>
                                     ))}
                                 </datalist>
                             </Field>

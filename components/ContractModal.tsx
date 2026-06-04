@@ -307,7 +307,25 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                     ? String((err as { message: unknown }).message)
                     : String(err);
             console.error("Erro ao processar contrato:", err);
-            setError(msg || "Erro desconhecido ao salvar contrato.");
+            // Constraint de número duplicado — incrementa automaticamente e tenta de novo
+            if (msg.includes('contracts_outgoing_num_unique') || msg.includes('contracts_incoming_num_unique')) {
+                try {
+                    const dir = contractDirection;
+                    let q = supabase.from('contracts').select('number').eq('organization_id', organizationId ?? '');
+                    if (dir === 'OUTGOING') q = q.eq('direction', 'OUTGOING');
+                    else q = (q as any).or('direction.eq.INCOMING,direction.is.null');
+                    const { data: rows } = await q;
+                    const used = new Set((rows ?? []).map((r: any) => parseInt(r.number ?? '', 10)).filter((n: number) => !isNaN(n)));
+                    let next = 1;
+                    while (used.has(next)) next++;
+                    const nextNum = String(next).padStart(3, '0');
+                    numberInputRef.current = nextNum;
+                    setFormData(prev => ({ ...prev, number: nextNum }));
+                    setNumberError(`Número em uso. Sugerido: ${nextNum}`);
+                } catch { /* ignore */ }
+            } else {
+                setError(msg || "Erro desconhecido ao salvar contrato.");
+            }
         } finally {
             setIsSubmitting(false);
         }

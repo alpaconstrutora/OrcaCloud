@@ -296,6 +296,22 @@ export interface DREProjectSummary {
 }
 
 // ────────────────────────────────────────────────────────────
+// Balancete Gerencial
+// ────────────────────────────────────────────────────────────
+
+export interface BalanceteLine {
+    category_id:   string | null;
+    category_name: string;
+    dre_group:     DREGroup;
+    nature:        FinancialNature;
+    sort_order:    number;
+    creditos:      number;
+    debitos:       number;
+    saldo_liquido: number;
+    n_transacoes:  number;
+}
+
+// ────────────────────────────────────────────────────────────
 // Fluxo de Caixa
 // ────────────────────────────────────────────────────────────
 

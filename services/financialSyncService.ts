@@ -59,11 +59,24 @@ export const financialSyncService = {
         if (internalTxs.length === 0) return;
 
         try {
-            // Upsert para evitar duplicidade baseado no reference_id (ID da parcela/tx manual)
-            // Nota: O reference_id deve ser único no contexto de PROJECT
+            // Enriquecer category_id a partir do nome da categoria
+            const categoryNames = [...new Set(internalTxs.map(tx => tx.category as string).filter(Boolean))];
+            let catMap: Record<string, string> = {};
+            if (categoryNames.length > 0) {
+                const { data: cats } = await supabase
+                    .from('financial_categories')
+                    .select('id, name')
+                    .in('name', categoryNames);
+                if (cats) catMap = Object.fromEntries(cats.map(c => [c.name, c.id]));
+            }
+            const enrichedTxs = internalTxs.map(tx => ({
+                ...tx,
+                category_id: catMap[tx.category as string] ?? null,
+            }));
+
             const { error } = await supabase
                 .from('internal_transactions')
-                .upsert(internalTxs, { onConflict: 'organization_id,reference_id' });
+                .upsert(enrichedTxs, { onConflict: 'organization_id,reference_id' });
 
             if (error) {
                 console.error('[FINANCIAL-SYNC] Error during upsert:', error);

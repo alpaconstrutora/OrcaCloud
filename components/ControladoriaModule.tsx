@@ -1,5 +1,5 @@
 import React, { Suspense, useState } from 'react'
-import { BarChart3, TrendingUp, TrendingDown, Receipt, Layers, FileText } from 'lucide-react'
+import { BarChart3, TrendingUp, TrendingDown, Receipt, Layers, FileText, BookOpen } from 'lucide-react'
 import type { Organization } from '../types'
 
 const DREReport                  = React.lazy(() => import('./DREReport'))
@@ -8,12 +8,14 @@ const BoletoManager              = React.lazy(() => import('./BoletoManager'))
 const ContasPagarManager         = React.lazy(() => import('./ContasPagarManager'))
 const BankReconciliation         = React.lazy(() => import('./BankReconciliation'))
 const FinancialCategoriesManager = React.lazy(() => import('./FinancialCategoriesManager'))
+const BalanceteReport            = React.lazy(() => import('./BalanceteReport'))
 
 export type ControladoriaTab =
-  | 'dre' | 'fluxo' | 'boletos' | 'contas_pagar' | 'conciliacao' | 'categorias'
+  | 'dre' | 'balancete' | 'fluxo' | 'boletos' | 'contas_pagar' | 'conciliacao' | 'categorias'
 
 export const VIEW_TO_CONTROLADORIA_TAB: Record<string, ControladoriaTab> = {
   'financial-dre':        'dre',
+  'financial-balancete':  'balancete',
   'financial-cashflow':   'fluxo',
   'financial-boletos':    'boletos',
   'contas-a-pagar':       'contas_pagar',
@@ -32,6 +34,7 @@ interface Props {
 
 const TABS: Array<{ id: ControladoriaTab; label: string; icon: React.ElementType }> = [
   { id: 'dre',          label: 'DRE',                 icon: BarChart3    },
+  { id: 'balancete',    label: 'Balancete',            icon: BookOpen     },
   { id: 'fluxo',        label: 'Fluxo de Caixa',      icon: TrendingUp   },
   { id: 'boletos',      label: 'Boletos',              icon: FileText     },
   { id: 'contas_pagar', label: 'Contas a Pagar',       icon: TrendingDown },
@@ -79,6 +82,9 @@ const ControladoriaModule: React.FC<Props> = ({
         <Suspense fallback={<Spinner />}>
           {activeTab === 'dre' && (
             <DREReport organizationId={orgId} />
+          )}
+          {activeTab === 'balancete' && (
+            <BalanceteReport organizationId={orgId} />
           )}
           {activeTab === 'fluxo' && (
             <CashFlowDashboard organizationId={orgId} />

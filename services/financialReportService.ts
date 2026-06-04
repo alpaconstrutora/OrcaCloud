@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type {
     DRELine, DRESummary, DRESummaryLine, CashFlowPoint, CashFlowSummary, CashFlowGranularity,
-    FinancialCategory, DREProjectSummary,
+    FinancialCategory, DREProjectSummary, BalanceteLine,
 } from '../types/financial';
 
 export const financialReportService = {
@@ -127,6 +127,23 @@ export const financialReportService = {
             ...r,
             margem_pct: r.receita ? (r.margem / r.receita * 100) : null,
         }));
+    },
+
+    // ── Balancete Gerencial ───────────────────────────────────
+    async getBalancete(
+        organizationId: string,
+        dateFrom: string,
+        dateTo: string,
+        projectId?: string,
+    ): Promise<BalanceteLine[]> {
+        const { data, error } = await supabase.rpc('fn_balancete', {
+            p_organization_id: organizationId,
+            p_date_from:       dateFrom,
+            p_date_to:         dateTo,
+            p_project_id:      projectId ?? null,
+        });
+        if (error) throw error;
+        return (data || []) as BalanceteLine[];
     },
 
     // ── Fluxo de Caixa ────────────────────────────────────────

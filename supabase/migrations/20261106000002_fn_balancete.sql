@@ -51,7 +51,7 @@ AS $$
     COALESCE(fc.sort_order, 99)
   ORDER BY
     COALESCE(fc.sort_order, 99),
-    COALESCE(fc.name, it.category)
+    COALESCE(fc.name, it.category, '(Sem Categoria)')
 $$;
 
 GRANT EXECUTE ON FUNCTION public.fn_balancete(UUID, DATE, DATE, UUID) TO authenticated;

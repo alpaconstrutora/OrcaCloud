@@ -14,27 +14,44 @@ const MonthlyReportTrigger: React.FC<Props> = ({ organizationId }) => {
     const [lastResult, setLastResult] = React.useState<string | null>(null);
 
     const loadRecent = React.useCallback(() => {
-        investorPortalService.listReports(organizationId, undefined, 'relatorio')
-            .then(r => setRecent(r.slice(0, 5)))
-            .catch(err => console.error('Error loading reports', err))
-            .finally(() => setLoading(false));
+        // Não filtra por category — compatível com migration 000006 ainda não aplicada
+        (async () => {
+            try {
+                const { data } = await supabase
+                    .from('investor_reports')
+                    .select('id, name, report_date, url, created_at')
+                    .eq('organization_id', organizationId)
+                    .ilike('name', 'Relatório Mensal%')
+                    .order('created_at', { ascending: false })
+                    .limit(5);
+                setRecent((data ?? []) as InvestorReport[]);
+            } catch { /* silently fail */ } finally {
+                setLoading(false);
+            }
+        })();
     }, [organizationId]);
 
     React.useEffect(() => { loadRecent(); }, [loadRecent]);
 
-    const generateDirectly = async () => {
+    const generateDirectly = async (): Promise<InvestorReport | null> => {
         const now = new Date();
         const ref = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const monthLabel = ref.toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
         const reportName = `Relatório Mensal — ${monthLabel}`;
 
-        const { error: rErr } = await supabase.from('investor_reports').insert({
+        // Insere sem category para ser compatível com migração ainda não aplicada
+        const insertPayload: Record<string, unknown> = {
             organization_id: organizationId,
             name: reportName,
             type: 'PDF',
-            category: 'relatorio',
             report_date: now.toLocaleDateString('pt-BR'),
-        });
+        };
+
+        const { data, error: rErr } = await supabase
+            .from('investor_reports')
+            .insert(insertPayload)
+            .select('id, name, report_date, url, created_at')
+            .single();
         if (rErr) throw rErr;
 
         await supabase.from('investor_announcements').insert({
@@ -45,6 +62,8 @@ const MonthlyReportTrigger: React.FC<Props> = ({ organizationId }) => {
             published_at: now.toISOString(),
             requires_acknowledgment: false,
         });
+
+        return data as InvestorReport | null;
     };
 
     const handleTrigger = async () => {
@@ -53,12 +72,18 @@ const MonthlyReportTrigger: React.FC<Props> = ({ organizationId }) => {
         try {
             const { error } = await supabase.rpc('trigger_monthly_investor_report');
             if (error) {
-                // Fallback: a função SQL ainda não foi criada no banco (migration pendente)
+                // Fallback: RPC ainda não criado (migration pendente)
                 console.warn('RPC não encontrado, usando fallback client-side:', error.message);
-                await generateDirectly();
+                const inserted = await generateDirectly();
+                if (inserted) {
+                    // Empurra direto no estado — não depende de filtro por category
+                    setRecent(prev => [inserted, ...prev].slice(0, 5));
+                }
+            } else {
+                // RPC funcionou — recarrega normalmente
+                loadRecent();
             }
             setLastResult(`Relatório gerado em ${new Date().toLocaleString('pt-BR')}`);
-            loadRecent();
         } catch (err: any) {
             setLastResult(`Erro: ${err?.message || 'Falha na geração'}`);
             console.error('Error triggering report', err);

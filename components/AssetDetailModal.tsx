@@ -28,12 +28,12 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose })
 
     // --- Derived Data from Project ---
     const purchaseDate = project.purchaseDate || null;
-    const purchasePrice = project.invested || 100000;
-    const currentValue = project.currentValue || project.equity || 120000;
+    const purchasePrice = project.invested ?? 0;
+    const currentValue = project.currentValue ?? project.equity ?? 0;
     const totalAppreciation = currentValue - purchasePrice;
     const appreciationPercent = purchasePrice > 0 ? (totalAppreciation / purchasePrice) * 100 : 0;
     const status = project.status || 'Em Execução';
-    const progress = (project.progress || 0) * 100;
+    const progress = project.progress || 0; // já em escala 0-100
     const yoc = project.yoc ? (project.yoc * 100).toFixed(1) + '%' : '—';
 
     const milestones: { name: string; date: string; status: string }[] = project.milestones || [];

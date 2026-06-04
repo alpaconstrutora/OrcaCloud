@@ -3,6 +3,7 @@ import { X, User, Mail, Phone, FileText, Building2 } from 'lucide-react';
 import { Investor } from '../services/investorService';
 import { projectService } from '../services/projectService';
 import { investorContributionsService } from '../services/investorContributionsService';
+import ContributionsManager from './investor/ContributionsManager';
 
 interface InvestorModalProps {
     isOpen: boolean;
@@ -26,6 +27,8 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
     const [isLoadingProjects, setIsLoadingProjects] = React.useState(false);
     // Participação por projeto: projectId -> { ownership_pct, committed_amount }
     const [participations, setParticipations] = React.useState<Record<string, { ownership_pct: number; committed_amount: number }>>({});
+    // Projeto cujos aportes estão sendo geridos no modal de contribuições
+    const [managingProject, setManagingProject] = React.useState<{ id: string; name: string; orgId: string } | null>(null);
 
     React.useEffect(() => {
         if (isOpen) {
@@ -302,6 +305,15 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                                                 placeholder="0,00"
                                                             />
                                                         </label>
+                                                        {initialData?.id && project.settings?.organizationId && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setManagingProject({ id: project.id, name: project.name, orgId: project.settings.organizationId })}
+                                                                className="self-end px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-purple-100 transition-colors"
+                                                            >
+                                                                Gerir Aportes
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -331,6 +343,16 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                     </button>
                 </div>
             </div>
+
+            {managingProject && initialData?.id && (
+                <ContributionsManager
+                    organizationId={managingProject.orgId}
+                    projectId={managingProject.id}
+                    projectName={managingProject.name}
+                    investorId={initialData.id}
+                    onClose={() => setManagingProject(null)}
+                />
+            )}
         </div>
     );
 };

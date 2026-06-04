@@ -4,6 +4,7 @@ import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types'
 import { Investor, investorService } from '../services/investorService';
 import { ProjectData } from '../services/projectService';
 import { investorPortalService, InvestorReport, InvestorOpportunity } from '../services/investorPortalService';
+import { investorContributionsService, InvestorFinancialSummary } from '../services/investorContributionsService';
 import { marketDataService } from '../services/marketDataService';
 import { aiService, AIInsight } from '../services/aiService';
 import { storageService } from '../services/storageService';
@@ -57,6 +58,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const [benchmarkSeries, setBenchmarkSeries] = React.useState<any[]>([]);
     const [reports, setReports] = React.useState<InvestorReport[]>([]);
     const [opportunities, setOpportunities] = React.useState<InvestorOpportunity[]>([]);
+    const [summaries, setSummaries] = React.useState<Record<string, InvestorFinancialSummary>>({});
     const [selectedAsset, setSelectedAsset] = React.useState<HoldingItem | null>(null);
     const [aiInsight, setAiInsight] = React.useState<AIInsight | null>(null);
     const [loadingAI, setLoadingAI] = React.useState(false);
@@ -96,15 +98,26 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         const holdings: HoldingItem[] = activeProjects.map(p => {
             const financialValue = p.settings?.financialInfo?.totalValue;
             const calculatedValue = (p.settings?.area || 0) * (p.settings?.cubRate || 0);
-            const equityVal = financialValue || calculatedValue || 0;
-            totalEquity += equityVal;
+            const projectValue = financialValue || calculatedValue || 0;
+
+            const summary = p.id ? summaries[p.id] : undefined;
+            const ownershipPct = summary?.ownershipPct ?? 0;
+            // Patrimônio = participação do investidor no valor do empreendimento (ou valor total se sem participação registrada)
+            const investorValue = ownershipPct > 0 ? projectValue * (ownershipPct / 100) : projectValue;
+            const invested = summary?.totalContributed ?? 0;
+            const roi = summary ? summary.roiRealized(investorValue) : undefined;
+
+            totalEquity += investorValue;
             return {
                 id: p.id,
                 name: p.name,
                 location: p.settings?.location || 'Localização não informada',
-                cota: '1x',
-                equity: equityVal,
-                currentValue: equityVal,
+                cota: ownershipPct > 0 ? `${ownershipPct.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%` : '1x',
+                equity: investorValue,
+                currentValue: investorValue,
+                invested: invested || undefined,
+                yoc: roi !== undefined ? roi / 100 : undefined,
+                yield: roi !== undefined ? `${roi.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : undefined,
                 status: p.settings?.obraStatus || 'Em Andamento',
                 progress: p.settings?.obraProgress || 0,
             };
@@ -114,7 +127,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             activeWorks: activeProjects.length,
             holdings,
         };
-    }, [activeProjects]);
+    }, [activeProjects, summaries]);
 
     const historicalData = React.useMemo((): HistoricalPoint[] => {
         if (!activeProjects.length) return [];
@@ -188,6 +201,26 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         }
         loadData();
     }, []);
+
+    // Carrega resumos financeiros (aporte/participação/ROI) por projeto do investidor
+    React.useEffect(() => {
+        const investorId = investorProfile?.id;
+        if (!investorId || !activeProjects.length) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const entries = await Promise.all(
+                    activeProjects
+                        .filter(p => p.id)
+                        .map(async p => [p.id!, await investorContributionsService.getInvestorSummary(p.id!, investorId)] as const)
+                );
+                if (!cancelled) setSummaries(Object.fromEntries(entries));
+            } catch (err) {
+                console.error('Error loading investor summaries', err);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [activeProjects, investorProfile]);
 
     React.useEffect(() => {
         if (activeTab === 'dashboard' && !aiInsight) {
@@ -329,7 +362,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
                                 <h3 className="text-xl font-black text-gray-900 tracking-tight">Fluxo de Caixa e Aportes</h3>
                             </div>
-                            <PaymentsPanel />
+                            <PaymentsPanel organizationId={settings?.organizationId} investorId={investorProfile?.id} />
                         </section>
                         <section>
                             <div className="flex items-center gap-3 mb-8">

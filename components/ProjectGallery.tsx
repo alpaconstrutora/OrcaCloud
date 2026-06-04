@@ -7,13 +7,16 @@ interface ProjectGalleryProps {
     liveCamUrl?: string;
     isAdmin?: boolean;
     onPhotosUpdate?: (newPhotos: string[]) => Promise<boolean | void> | void;
+    /** Quando false, não usa imagens-fallback (Unsplash) com a galeria vazia. Default true. */
+    allowFallback?: boolean;
 }
 
 const ProjectGallery: React.FC<ProjectGalleryProps> = ({
     images = [],
     liveCamUrl,
     isAdmin = false,
-    onPhotosUpdate
+    onPhotosUpdate,
+    allowFallback = true
 }) => {
     const [activeTab, setActiveTab] = React.useState<'photos' | 'live'>('photos');
     const [selectedImage, setSelectedImage] = React.useState(0);
@@ -27,7 +30,7 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
         'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&q=80'
     ];
 
-    const actualImages = images.length > 0 ? images : (isAdmin ? [] : displayImages);
+    const actualImages = images.length > 0 ? images : (isAdmin || !allowFallback ? [] : displayImages);
 
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

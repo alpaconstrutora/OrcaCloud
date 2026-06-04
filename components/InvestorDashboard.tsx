@@ -450,9 +450,21 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 </div>
             )}
 
-            {selectedAsset && (
-                <AssetDetailModal project={selectedAsset} onClose={() => setSelectedAsset(null)} />
-            )}
+            {selectedAsset && (() => {
+                const proj = activeProjects.find(p => p.id === selectedAsset.id);
+                const diaryImages = (proj?.settings?.diaryEntries || [])
+                    .flatMap((e: any) => e.images || []);
+                return (
+                    <AssetDetailModal
+                        project={selectedAsset}
+                        projectId={selectedAsset.id}
+                        organizationId={settings?.organizationId}
+                        isAdmin={isAdmin}
+                        diaryImages={diaryImages}
+                        onClose={() => setSelectedAsset(null)}
+                    />
+                );
+            })()}
         </div>
     );
 };

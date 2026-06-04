@@ -10,20 +10,24 @@ import {
     PieChart,
     FileText,
     CheckCircle2,
-    Clock,
     Camera
 } from 'lucide-react';
 import { formatCurrency, formatPercent } from '../utils/financialMath';
 import { aiService } from '../services/aiService';
 import { Sparkles, BrainCircuit, Wallet, ShieldCheck, ExternalLink } from 'lucide-react';
 import ProjectGallery from './ProjectGallery';
+import ObraTimeline from './investor/ObraTimeline';
 
 interface AssetDetailModalProps {
     project: any;
     onClose: () => void;
+    projectId?: string;
+    organizationId?: string;
+    isAdmin?: boolean;
+    diaryImages?: string[];
 }
 
-const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose }) => {
+const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, projectId, organizationId, isAdmin, diaryImages }) => {
     if (!project) return null;
 
     // --- Derived Data from Project ---
@@ -36,7 +40,6 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose })
     const progress = project.progress || 0; // já em escala 0-100
     const yoc = project.yoc ? (project.yoc * 100).toFixed(1) + '%' : '—';
 
-    const milestones: { name: string; date: string; status: string }[] = project.milestones || [];
     const [aiOpinion, setAiOpinion] = React.useState<string | null>(null);
     const [loadingAI, setLoadingAI] = React.useState(false);
 
@@ -119,11 +122,6 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose })
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             {/* Timeline & Progress */}
                             <div className="lg:col-span-2 space-y-6">
-                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                    <Clock className="w-5 h-5 text-gray-400" />
-                                    Linha do Tempo e Evolução
-                                </h3>
-
                                 <div className="bg-white border border-gray-100 rounded-2xl p-6">
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-sm font-bold text-gray-500">Progresso Físico</span>
@@ -137,23 +135,11 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose })
                                     </div>
                                 </div>
 
-                                <div className="relative border-l-2 border-gray-100 ml-4 space-y-8 py-2">
-                                    {milestones.map((milestone, idx) => (
-                                        <div key={idx} className="relative pl-8">
-                                            <div className={`absolute -left-[9px] top-1 w-4 h-4 rounded-full border-2 ${milestone.status === 'completed' ? 'bg-emerald-500 border-emerald-500' :
-                                                milestone.status === 'in_progress' ? 'bg-white border-blue-500 animate-pulse' :
-                                                    'bg-white border-gray-300'
-                                                }`}></div>
-                                            <div>
-                                                <h4 className={`text-sm font-bold ${milestone.status === 'completed' ? 'text-gray-900' :
-                                                    milestone.status === 'in_progress' ? 'text-blue-600' :
-                                                        'text-gray-400'
-                                                    }`}>{milestone.name}</h4>
-                                                <p className="text-xs text-gray-400">{milestone.date}</p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                <ObraTimeline
+                                    projectId={projectId}
+                                    organizationId={organizationId}
+                                    isAdmin={isAdmin}
+                                />
                             </div>
 
                             {/* AI Perspective Section */}
@@ -203,7 +189,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose })
                                     <Camera className="w-5 h-5 text-gray-400" />
                                     Evolução Visual (Mural & Live)
                                 </h3>
-                                <ProjectGallery />
+                                <ProjectGallery images={diaryImages || []} allowFallback={false} />
                             </div>
                         </div>
 

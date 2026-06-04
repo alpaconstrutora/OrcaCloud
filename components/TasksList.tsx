@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react'
 import {
-  CheckCircle2, Circle, ExternalLink, Inbox,
-  User, Building2, ChevronDown, ChevronRight, Plus,
+  CheckCircle2, ExternalLink, Inbox,
+  Building2, ChevronDown, ChevronRight, Plus,
   ArrowUp, ArrowDown, Search, X, SlidersHorizontal,
-  GripVertical, CornerLeftUp,
+  GripVertical, CornerLeftUp, Flag,
 } from 'lucide-react'
 import type { TaskRecord, EmployeeOption, ProjectOption } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
+import type { GroupByField } from './TasksModule'
+
+interface TaskGroup { key: string; label: string; color?: string; tasks: TaskRecord[] }
 
 interface Props {
   tasks: TaskRecord[]
@@ -14,18 +17,21 @@ interface Props {
   employees: EmployeeOption[]
   projects: ProjectOption[]
   statuses?: TaskStatus[]
+  groupBy?: GroupByField
   onToggleDone: (task: TaskRecord) => void
   onEdit: (task: TaskRecord) => void
   onAddSubtask: (parent: TaskRecord) => void
   onMakeSubtask: (taskId: string, newParentId: string | null) => void
+  onAddTask?: () => void
   onNavigate: (route: string) => void
 }
 
-const PRIORITY_META: Record<number, { label: string; cls: string; bar: string }> = {
-  1: { label: 'Urgente', cls: 'text-red-700 bg-red-50',      bar: 'bg-red-500'    },
-  2: { label: 'Alta',    cls: 'text-orange-700 bg-orange-50', bar: 'bg-orange-400' },
-  3: { label: 'Normal',  cls: 'text-slate-600 bg-slate-100',  bar: 'bg-slate-300'  },
-  4: { label: 'Baixa',   cls: 'text-blue-700 bg-blue-50',     bar: 'bg-blue-300'   },
+// ── Prioridade ────────────────────────────────────────────────────────────────
+const PRIORITY_META: Record<number, { label: string; flag: string }> = {
+  1: { label: 'Urgente', flag: 'text-red-500'    },
+  2: { label: 'Alta',    flag: 'text-orange-400' },
+  3: { label: 'Normal',  flag: 'text-blue-400'   },
+  4: { label: 'Baixa',   flag: 'text-slate-300'  },
 }
 
 const MODULE_LABEL: Record<string, { label: string; cls: string }> = {
@@ -38,11 +44,11 @@ const MODULE_LABEL: Record<string, { label: string; cls: string }> = {
 
 // ── Colunas reordenáveis ──────────────────────────────────────────────────────
 const COLUMN_DEFS = [
-  { key: 'title',      label: 'Tarefa',        sortCol: 'title'      as const },
+  { key: 'title',      label: 'Nome',          sortCol: 'title'      as const },
   { key: 'assignee',   label: 'Responsável',   sortCol: 'assignee'   as const },
-  { key: 'project',    label: 'Obra / Projeto', sortCol: 'project'   as const },
-  { key: 'start_date', label: 'Início',        sortCol: 'start_date' as const },
-  { key: 'due_date',   label: 'Término',       sortCol: 'due_date'   as const },
+  { key: 'project',    label: 'Obra',          sortCol: 'project'    as const },
+  { key: 'start_date', label: 'Data Inicial',  sortCol: 'start_date' as const },
+  { key: 'due_date',   label: 'Vencimento',    sortCol: 'due_date'   as const },
   { key: 'priority',   label: 'Prioridade',    sortCol: 'priority'   as const },
   { key: 'source',     label: 'Origem',        sortCol: null },
   { key: 'status',     label: 'Status',        sortCol: 'status'     as const },
@@ -58,38 +64,44 @@ const COL_DEF_MAP = Object.fromEntries(COLUMN_DEFS.map(c => [c.key, c])) as Reco
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(iso: string | null) {
-  if (!iso) return '—'
+  if (!iso) return null
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
-function dueDot(iso: string | null): { dot: string; label: string } {
-  if (!iso) return { dot: 'bg-slate-200', label: '—' }
-  const d   = new Date(iso)
-  const now = new Date()
-  const today    = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const tomorrow = new Date(today.getTime() + 86_400_000)
-  if (d < today)    return { dot: 'bg-red-500',    label: fmt(iso) }
-  if (d < tomorrow) return { dot: 'bg-orange-400', label: fmt(iso) }
-  return               { dot: 'bg-emerald-400',  label: fmt(iso) }
+function isOverdue(iso: string | null) {
+  if (!iso) return false
+  return new Date(iso) < new Date(new Date().toDateString())
 }
 
-const COL  = 'px-3 py-2.5 text-sm text-slate-700 whitespace-nowrap'
-const HEAD = 'px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 text-left select-none'
+// Avatar com iniciais e cor baseada no nome
+const AVATAR_COLORS = [
+  'bg-blue-500', 'bg-violet-500', 'bg-emerald-500',
+  'bg-orange-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500',
+]
+function avatarBg(name: string) {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
+}
+function initials(name: string) {
+  return name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join('').toUpperCase()
+}
 
 function SortIcon({ col, active, dir }: { col: string; active: SortCol | null; dir: SortDir }) {
-  if (active !== col) return <span className="inline-block w-3 h-3 opacity-0 group-hover/th:opacity-30"><ArrowUp className="w-3 h-3" /></span>
+  if (active !== col) return <span className="inline-block w-3 h-3 opacity-0 group-hover/th:opacity-40"><ArrowUp className="w-3 h-3" /></span>
   return dir === 'asc'
-    ? <ArrowUp   className="inline-block w-3 h-3 text-blue-600 ml-1" />
-    : <ArrowDown className="inline-block w-3 h-3 text-blue-600 ml-1" />
+    ? <ArrowUp   className="inline-block w-3 h-3 text-blue-500 ml-0.5" />
+    : <ArrowDown className="inline-block w-3 h-3 text-blue-500 ml-0.5" />
 }
+
+const COL = 'px-3 py-0 text-sm text-slate-700 whitespace-nowrap'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TasksList: React.FC<Props> = ({
-  tasks, loading, employees, projects, statuses = [],
-  onToggleDone, onEdit, onAddSubtask, onMakeSubtask, onNavigate,
+  tasks, loading, employees, projects, statuses = [], groupBy = 'none',
+  onToggleDone, onEdit, onAddSubtask, onMakeSubtask, onAddTask, onNavigate,
 }) => {
-  // Filtros e ordenação
   const [search, setSearch]           = useState('')
   const [sortCol, setSortCol]         = useState<SortCol | null>(null)
   const [sortDir, setSortDir]         = useState<SortDir>('asc')
@@ -100,40 +112,17 @@ const TasksList: React.FC<Props> = ({
   const [fAssignee, setFAssignee]     = useState('')
   const [fProject, setFProject]       = useState('')
 
-  // DnD — linhas
   const [draggingId, setDraggingId]         = useState<string | null>(null)
   const [dragOverId, setDragOverId]         = useState<string | null>(null)
   const [dragOverDetach, setDragOverDetach] = useState(false)
 
-  // DnD — colunas
-  const [colOrder, setColOrder]     = useState<ColKey[]>(DEFAULT_COL_ORDER)
+  const [colOrder, setColOrder]       = useState<ColKey[]>(DEFAULT_COL_ORDER)
   const [colDragging, setColDragging] = useState<ColKey | null>(null)
   const [colDragOver, setColDragOver] = useState<ColKey | null>(null)
 
   const empMap    = useMemo(() => Object.fromEntries(employees.map(e => [e.id, e])), [employees])
   const projMap   = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects])
   const statusMap = useMemo(() => Object.fromEntries(statuses.map(s => [s.id, s])), [statuses])
-
-  // DnD row helpers
-  function isDescendant(ancestorId: string, checkId: string): boolean {
-    return (childMap[ancestorId] ?? []).some(c => c.id === checkId || isDescendant(c.id, checkId))
-  }
-  function canDrop(draggedId: string, targetId: string): boolean {
-    if (draggedId === targetId) return false
-    if (isDescendant(draggedId, targetId)) return false
-    if (tasks.find(x => x.id === draggedId)?.parent_task_id === targetId) return false
-    return true
-  }
-
-  const toggleSort = (col: SortCol) => {
-    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortCol(col); setSortDir('asc') }
-  }
-  const toggleExpand = (id: string) =>
-    setExpanded(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
-
-  const q = search.toLowerCase()
-  const activeFilters = !!(fPriority || fStatus || fAssignee || fProject)
 
   const parents  = useMemo(() => tasks.filter(t => !t.parent_task_id), [tasks])
   const childMap = useMemo(() => {
@@ -147,13 +136,27 @@ const TasksList: React.FC<Props> = ({
     return m
   }, [tasks])
 
+  function isDescendant(ancestorId: string, checkId: string): boolean {
+    return (childMap[ancestorId] ?? []).some(c => c.id === checkId || isDescendant(c.id, checkId))
+  }
+  function canDrop(draggedId: string, targetId: string): boolean {
+    if (draggedId === targetId) return false
+    if (isDescendant(draggedId, targetId)) return false
+    if (tasks.find(x => x.id === draggedId)?.parent_task_id === targetId) return false
+    return true
+  }
+
+  const toggleSort   = (col: SortCol) => { if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortCol(col); setSortDir('asc') } }
+  const toggleExpand = (id: string)   => setExpanded(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+
+  const q = search.toLowerCase()
+  const activeFilters = !!(fPriority || fStatus || fAssignee || fProject)
+
   const filtered = useMemo(() => {
     let rows = parents.filter(t => {
       if (q && !t.title.toLowerCase().includes(q) && !(t.description ?? '').toLowerCase().includes(q)) return false
       if (fPriority && String(t.priority) !== fPriority) return false
-      if (fStatus) {
-        if (statuses.length > 0 ? t.status_id !== fStatus : t.status !== fStatus) return false
-      }
+      if (fStatus && (statuses.length > 0 ? t.status_id !== fStatus : t.status !== fStatus)) return false
       if (fAssignee && t.assignee_employee_id !== fAssignee) return false
       if (fProject  && t.project_id !== fProject) return false
       return true
@@ -176,7 +179,61 @@ const TasksList: React.FC<Props> = ({
 
   const clearFilters = () => { setFPriority(''); setFStatus(''); setFAssignee(''); setFProject(''); setSearch('') }
 
-  // ── Reordenar colunas ───────────────────────────────────────────────────────
+  // ── Agrupamento ─────────────────────────────────────────────────────────────
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const toggleGroup = (key: string) =>
+    setCollapsedGroups(prev => { const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s })
+
+  const groups: TaskGroup[] = useMemo(() => {
+    if (groupBy === 'none') return [{ key: '__all__', label: '', tasks: filtered }]
+
+    const map = new Map<string, TaskGroup>()
+    const PRIORITY_COLORS: Record<number, string> = { 1: '#ef4444', 2: '#f97316', 3: '#3b82f6', 4: '#94a3b8' }
+
+    for (const t of filtered) {
+      let key: string, label: string, color: string | undefined
+
+      switch (groupBy) {
+        case 'status': {
+          const s = statusMap[t.status_id ?? '']
+          key = t.status_id ?? '__none__'; label = s?.name ?? 'Sem status'; color = s?.color; break
+        }
+        case 'assignee': {
+          const emp = empMap[t.assignee_employee_id ?? '']
+          key = t.assignee_employee_id ?? '__none__'; label = emp?.name ?? 'Não atribuído'; break
+        }
+        case 'priority': {
+          key = String(t.priority); label = PRIORITY_META[t.priority]?.label ?? 'Normal'
+          color = PRIORITY_COLORS[t.priority]; break
+        }
+        case 'project': {
+          const proj = projMap[t.project_id ?? '']
+          key = t.project_id ?? '__none__'; label = proj?.name ?? 'Sem obra'; break
+        }
+        case 'source': {
+          key = t.source_module; label = MODULE_LABEL[t.source_module]?.label ?? t.source_module; break
+        }
+        default: key = '__all__'; label = ''
+      }
+
+      if (!map.has(key)) map.set(key, { key, label, color, tasks: [] })
+      map.get(key)!.tasks.push(t)
+    }
+
+    // Ordem estável para status (position) e prioridade (1→4)
+    if (groupBy === 'status') {
+      return [...map.values()].sort((a, b) => {
+        const pa = statuses.find(s => s.id === a.key)?.position ?? 99
+        const pb = statuses.find(s => s.id === b.key)?.position ?? 99
+        return pa - pb
+      })
+    }
+    if (groupBy === 'priority') {
+      return [...map.values()].sort((a, b) => Number(a.key) - Number(b.key))
+    }
+    return [...map.values()]
+  }, [filtered, groupBy, statusMap, empMap, projMap, statuses])
+
   const handleColDrop = (fromKey: ColKey, toKey: ColKey) => {
     if (fromKey === toKey) return
     const next = [...colOrder]
@@ -197,114 +254,164 @@ const TasksList: React.FC<Props> = ({
 
   // ── Linha de tarefa ─────────────────────────────────────────────────────────
   function TaskRow({ t, depth = 0 }: { t: TaskRecord; depth?: number }) {
-    const children    = childMap[t.id] ?? []
-    const isExpanded  = expanded.has(t.id)
-    const taskStatus  = t.status_id ? statusMap[t.status_id] : null
-    const isDone      = taskStatus ? taskStatus.is_done : t.status === 'done'
-    const prio        = PRIORITY_META[t.priority] ?? PRIORITY_META[3]
-    const mod         = MODULE_LABEL[t.source_module] ?? MODULE_LABEL.manual
-    const assignee    = t.assignee_employee_id ? empMap[t.assignee_employee_id] : null
-    const proj        = t.project_id ? projMap[t.project_id] : null
-    const { dot: startDot }           = dueDot(t.start_date)
-    const { dot: dueDotCls, label: dueLabel } = dueDot(t.due_date)
-    const startLabel  = fmt(t.start_date)
-    const route       = t.source_ref?.route
-    const indent      = depth * 18
+    const children   = childMap[t.id] ?? []
+    const isExpanded = expanded.has(t.id)
+    const taskStatus = t.status_id ? statusMap[t.status_id] : null
+    const isDone     = taskStatus ? taskStatus.is_done : t.status === 'done'
+    const prio       = PRIORITY_META[t.priority] ?? PRIORITY_META[3]
+    const mod        = MODULE_LABEL[t.source_module] ?? MODULE_LABEL.manual
+    const assignee   = t.assignee_employee_id ? empMap[t.assignee_employee_id] : null
+    const proj       = t.project_id ? projMap[t.project_id] : null
+    const route      = t.source_ref?.route
+    const indent     = depth * 20
+
     const isBeingDragged = draggingId === t.id
     const isDropTarget   = dragOverId === t.id && draggingId !== null && canDrop(draggingId, t.id)
 
-    // Células reordenáveis
+    // Cor do checkbox baseada no status customizado
+    const checkColor = taskStatus?.color ?? (isDone ? '#10b981' : '#94a3b8')
+
     const cells: Record<ColKey, React.ReactNode> = {
+      // ── Nome ──────────────────────────────────────────────────────────────
       title: (
-        <td key="title" className={COL + ' max-w-[240px]'}>
-          <div className="flex items-center gap-1" style={{ paddingLeft: indent }}>
+        <td key="title" className="px-3 py-0 text-sm text-slate-700 w-[320px] max-w-[400px]">
+          <div className="flex items-center gap-1.5" style={{ paddingLeft: indent }}>
             {children.length > 0 ? (
-              <button onClick={() => toggleExpand(t.id)} className="flex-shrink-0 text-slate-400 hover:text-slate-700">
+              <button onClick={() => toggleExpand(t.id)} className="flex-shrink-0 text-slate-400 hover:text-slate-700 transition-colors">
                 {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
             ) : (
-              <span className="w-3.5 flex-shrink-0">{depth > 0 && <span className="text-slate-300">↳</span>}</span>
+              <span className="w-3.5 flex-shrink-0 text-center">
+                {depth > 0 && <span className="text-slate-300 text-xs">↳</span>}
+              </span>
             )}
-            <button onClick={() => onEdit(t)} className="text-left min-w-0">
-              <div className={`font-bold text-slate-900 truncate text-sm ${isDone ? 'line-through' : ''}`}>{t.title}</div>
-              {t.description && <div className="text-xs text-slate-400 truncate">{t.description}</div>}
+            <button onClick={() => onEdit(t)} className="text-left min-w-0 flex-1 py-2.5">
+              <div className={`font-medium text-slate-900 truncate leading-snug ${isDone ? 'line-through text-slate-400' : ''}`}>
+                {t.title}
+              </div>
+              {t.description && (
+                <div className="text-xs text-slate-400 truncate mt-0.5">{t.description}</div>
+              )}
             </button>
             {children.length > 0 && (
-              <span className="ml-1 text-[10px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md flex-shrink-0">
+              <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
                 {children.length}
               </span>
             )}
           </div>
         </td>
       ),
+
+      // ── Responsável — avatar ───────────────────────────────────────────────
       assignee: (
         <td key="assignee" className={COL}>
-          {assignee
-            ? <div className="flex items-center gap-1.5"><User className="w-3 h-3 text-slate-400 flex-shrink-0" /><span className="truncate max-w-[100px]">{assignee.name}</span></div>
-            : <span className="text-slate-300">—</span>}
+          {assignee ? (
+            <div className="flex items-center gap-2">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black text-white flex-shrink-0 ${avatarBg(assignee.name)}`}>
+                {initials(assignee.name)}
+              </div>
+              <span className="truncate max-w-[110px] text-slate-700">{assignee.name}</span>
+            </div>
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
         </td>
       ),
+
+      // ── Obra ──────────────────────────────────────────────────────────────
       project: (
         <td key="project" className={COL}>
-          {proj
-            ? <div className="flex items-center gap-1.5"><Building2 className="w-3 h-3 text-slate-400 flex-shrink-0" /><span className="truncate max-w-[100px]">{proj.name}</span></div>
-            : <span className="text-slate-300">—</span>}
+          {proj ? (
+            <div className="flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <span className="truncate max-w-[120px]">{proj.name}</span>
+            </div>
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
         </td>
       ),
+
+      // ── Data Inicial ───────────────────────────────────────────────────────
       start_date: (
         <td key="start_date" className={COL}>
-          <div className="flex items-center gap-1.5">
-            {t.start_date && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${startDot}`} />}
-            <span className="text-slate-500">{startLabel}</span>
-          </div>
+          {t.start_date ? (
+            <span className={isOverdue(t.start_date) ? 'text-red-500 font-semibold' : 'text-slate-600'}>
+              {fmt(t.start_date)}
+            </span>
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
         </td>
       ),
+
+      // ── Vencimento ────────────────────────────────────────────────────────
       due_date: (
         <td key="due_date" className={COL}>
+          {t.due_date ? (
+            <span className={isOverdue(t.due_date) ? 'text-red-500 font-semibold' : 'text-slate-600'}>
+              {fmt(t.due_date)}
+            </span>
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </td>
+      ),
+
+      // ── Prioridade — flag ─────────────────────────────────────────────────
+      priority: (
+        <td key="priority" className={COL}>
           <div className="flex items-center gap-1.5">
-            {t.due_date && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dueDotCls}`} />}
-            {t.due_date
-              ? <span className={dueDotCls === 'bg-red-500' ? 'text-red-600 font-bold' : dueDotCls === 'bg-orange-400' ? 'text-orange-600 font-bold' : 'text-slate-500'}>{dueLabel}</span>
-              : <span className="text-slate-300">—</span>}
+            <Flag className={`w-3.5 h-3.5 flex-shrink-0 fill-current ${prio.flag}`} />
+            <span className="text-slate-700">{prio.label}</span>
           </div>
         </td>
       ),
-      priority: (
-        <td key="priority" className={COL}>
-          <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${prio.cls}`}>{prio.label}</span>
-        </td>
-      ),
+
+      // ── Origem ────────────────────────────────────────────────────────────
       source: (
         <td key="source" className={COL}>
-          <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${mod.cls}`}>{mod.label}</span>
+          <span className={`text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-full ${mod.cls}`}>
+            {mod.label}
+          </span>
         </td>
       ),
+
+      // ── Status — badge ClickUp ─────────────────────────────────────────────
       status: (
         <td key="status" className={COL}>
           {taskStatus ? (
             <span
-              className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full w-fit"
-              style={{ backgroundColor: taskStatus.color + '20', color: taskStatus.color }}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-wide"
+              style={{ backgroundColor: taskStatus.color, color: '#fff' }}
             >
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: taskStatus.color }} />
+              {/* círculo dashed estilo ClickUp */}
+              <span
+                className="w-3 h-3 rounded-full border-2 flex-shrink-0"
+                style={{ borderColor: 'rgba(255,255,255,0.5)', borderStyle: taskStatus.is_done ? 'solid' : 'dashed' }}
+              />
               {taskStatus.name}
             </span>
-          ) : <span className="text-slate-300">—</span>}
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
         </td>
       ),
+
+      // ── Ações ─────────────────────────────────────────────────────────────
       actions: (
-        <td key="actions" className="px-2 py-2.5">
+        <td key="actions" className="px-2 py-0">
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
             <button
               onClick={() => onAddSubtask(t)}
               title="Adicionar subtarefa"
-              className="flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 bg-white text-slate-400 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors text-[11px] font-bold"
+              className="flex items-center gap-1 px-2 py-1 rounded border border-slate-200 bg-white text-slate-400 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors text-[11px] font-bold"
             >
               <Plus className="w-3 h-3" />subtarefa
             </button>
             {route && (
               <button onClick={() => onNavigate(route)} title="Abrir origem"
-                className="p-1 rounded-md text-slate-300 hover:text-blue-600 hover:bg-blue-50">
+                className="p-1 rounded text-slate-300 hover:text-blue-600 hover:bg-blue-50">
                 <ExternalLink className="w-3.5 h-3.5" />
               </button>
             )}
@@ -328,15 +435,15 @@ const TasksList: React.FC<Props> = ({
             setDraggingId(null); setDragOverId(null)
           }}
           className={[
-            'group transition-all duration-100',
+            'group border-b border-slate-100 transition-all duration-100',
             isDone ? 'opacity-50' : '',
-            depth > 0 ? 'bg-slate-50/40' : '',
-            isBeingDragged ? 'opacity-25' : 'hover:bg-slate-50/70',
+            depth > 0 ? 'bg-slate-50/50' : 'bg-white',
+            isBeingDragged ? 'opacity-20' : 'hover:bg-[#f8f9ff]',
             isDropTarget ? 'bg-blue-50 shadow-[inset_0_0_0_2px_#3b82f6]' : '',
           ].join(' ')}
         >
-          {/* Grip handle — fixed, não reordenável */}
-          <td className="pl-2 pr-0 py-2.5 w-6">
+          {/* Grip */}
+          <td className="pl-2 pr-0 py-0 w-6">
             <div
               draggable
               onDragStart={(e) => {
@@ -345,22 +452,28 @@ const TasksList: React.FC<Props> = ({
                 e.dataTransfer.effectAllowed = 'move'
                 requestAnimationFrame(() => setDraggingId(t.id))
               }}
-              className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 flex items-center"
+              className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 flex items-center py-2.5"
             >
               <GripVertical className="w-3.5 h-3.5" />
             </div>
           </td>
 
-          {/* Checkbox — fixed */}
-          <td className="px-2 py-2.5 w-8">
-            <button onClick={() => onToggleDone(t)} className="text-slate-300 hover:text-emerald-600 transition-colors">
-              {isDone ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Circle className="w-4 h-4" />}
+          {/* Checkbox circular dashed — estilo ClickUp */}
+          <td className="px-2 py-0 w-8">
+            <button
+              onClick={() => onToggleDone(t)}
+              className="flex items-center justify-center w-5 h-5 rounded-full transition-all hover:scale-110"
+              title={isDone ? 'Reabrir tarefa' : 'Concluir tarefa'}
+            >
+              {isDone ? (
+                <CheckCircle2 className="w-5 h-5" style={{ color: checkColor }} />
+              ) : (
+                <div
+                  className="w-4 h-4 rounded-full border-2 border-dashed hover:border-solid transition-all"
+                  style={{ borderColor: checkColor }}
+                />
+              )}
             </button>
-          </td>
-
-          {/* Barra prioridade — fixed */}
-          <td className="py-2.5 pl-0 pr-1.5 w-2">
-            <div className={`w-1 h-7 rounded-full ${prio.bar}`} />
           </td>
 
           {/* Colunas reordenáveis */}
@@ -374,7 +487,51 @@ const TasksList: React.FC<Props> = ({
     )
   }
 
-  // ── Cabeçalho de coluna arrastável ─────────────────────────────────────────
+  // ── Cabeçalho de grupo (ClickUp style) ────────────────────────────────────
+  function GroupHeader({ group }: { group: TaskGroup }) {
+    const isCollapsed = collapsedGroups.has(group.key)
+    const totalCols = 2 + colOrder.length
+
+    return (
+      <tr className="group/gh">
+        <td colSpan={totalCols} className="p-0">
+          <div
+            onClick={() => toggleGroup(group.key)}
+            className="flex items-center gap-2.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none border-b border-slate-200 transition-colors"
+          >
+            <span className="text-slate-400 flex-shrink-0 transition-transform">
+              {isCollapsed
+                ? <ChevronRight className="w-3.5 h-3.5" />
+                : <ChevronDown  className="w-3.5 h-3.5" />}
+            </span>
+
+            {group.color && (
+              <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: group.color }} />
+            )}
+
+            <span className="font-bold text-sm text-slate-800">{group.label}</span>
+
+            <span className="text-[11px] font-bold text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+              {group.tasks.length}
+            </span>
+
+            <div className="flex-1 h-px bg-slate-200" />
+
+            {onAddTask && (
+              <button
+                onClick={e => { e.stopPropagation(); onAddTask() }}
+                className="opacity-0 group-hover/gh:opacity-100 flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-blue-600 transition-all px-2 py-1 rounded hover:bg-blue-50 flex-shrink-0"
+              >
+                <Plus className="w-3 h-3" /> Tarefa
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+    )
+  }
+
+  // ── Cabeçalho arrastável ────────────────────────────────────────────────────
   function ColHeader({ colKey }: { colKey: ColKey }) {
     const col    = COL_DEF_MAP[colKey]
     const isOver = colDragOver === colKey && colDragging !== colKey
@@ -391,29 +548,26 @@ const TasksList: React.FC<Props> = ({
         }}
         onClick={() => col.sortCol && toggleSort(col.sortCol as SortCol)}
         className={[
-          'text-[10px] font-black uppercase tracking-widest text-slate-400 text-left select-none p-0',
+          'text-[11px] font-semibold text-slate-500 text-left select-none p-0',
           col.sortCol ? 'group/th' : '',
-          isOver ? 'bg-blue-100 text-blue-700' : '',
+          isOver ? 'bg-blue-50 text-blue-600' : '',
           colDragging === colKey ? 'opacity-40' : '',
           'transition-colors',
         ].join(' ')}
-        style={{ width: colKey === 'actions' ? 120 : undefined }}
+        style={{ width: colKey === 'actions' ? 130 : undefined }}
       >
-        {/* div ocupa toda a área da célula — drag funciona em qualquer ponto */}
         <div
           draggable={colKey !== 'actions'}
           onDragStart={(e) => {
             e.stopPropagation()
             e.dataTransfer.setData('col', colKey)
             e.dataTransfer.effectAllowed = 'move'
-            // requestAnimationFrame evita que o setState cancele o drag no Chrome
             requestAnimationFrame(() => setColDragging(colKey))
           }}
           onDragEnd={(e) => { e.stopPropagation(); setColDragging(null); setColDragOver(null) }}
           className={[
             'flex items-center gap-1 px-3 py-2.5 w-full select-none',
-            colKey !== 'actions' ? 'cursor-grab active:cursor-grabbing' : '',
-            col.sortCol ? 'hover:text-slate-600' : '',
+            colKey !== 'actions' ? 'cursor-grab active:cursor-grabbing hover:text-slate-700' : '',
           ].join(' ')}
         >
           {col.label}
@@ -425,7 +579,7 @@ const TasksList: React.FC<Props> = ({
 
   return (
     <div className="space-y-3">
-      {/* Barra de busca + filtros */}
+      {/* Barra busca + filtros */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px] max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -451,7 +605,7 @@ const TasksList: React.FC<Props> = ({
           {activeFilters && <span className="bg-white/20 text-white text-[10px] font-black px-1.5 rounded-md">●</span>}
         </button>
         {(activeFilters || search) && (
-          <button onClick={clearFilters} className="text-xs font-bold text-slate-400 hover:text-red-600 flex items-center gap-1">
+          <button onClick={clearFilters} className="text-xs font-bold text-slate-400 hover:text-red-500 flex items-center gap-1">
             <X className="w-3 h-3" /> Limpar
           </button>
         )}
@@ -485,7 +639,7 @@ const TasksList: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Zona de soltar para virar tarefa raiz */}
+      {/* Zona de soltar — virar tarefa raiz */}
       {draggingId && tasks.find(t => t.id === draggingId)?.parent_task_id && (
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOverDetach(true) }}
@@ -508,28 +662,66 @@ const TasksList: React.FC<Props> = ({
       )}
 
       {/* Tabela */}
-      {filtered.length === 0 ? (
+      {filtered.length === 0 && !onAddTask ? (
         <div className="flex flex-col items-center justify-center py-20 text-slate-300">
           <Inbox className="w-12 h-12 mb-3" />
           <p className="font-black text-slate-400">Nenhuma tarefa encontrada</p>
           {(q || activeFilters) && <p className="text-xs mt-1 text-slate-300 font-medium">Tente ajustar a busca ou os filtros</p>}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px]">
-              <thead className="bg-slate-50 border-b border-slate-100">
+            <table className="w-full min-w-[900px]">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  {/* Colunas fixas */}
-                  <th className={HEAD} style={{ width: 24 }} />
-                  <th className={HEAD} style={{ width: 32 }} />
-                  <th className={HEAD} style={{ width: 8  }} />
-                  {/* Colunas reordenáveis */}
+                  <th className="w-6 p-0" />
+                  <th className="w-8 p-0" />
                   {colOrder.map(key => <ColHeader key={key} colKey={key} />)}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filtered.map(t => <TaskRow key={t.id} t={t} />)}
+              <tbody>
+                {groups.map(group => (
+                  <React.Fragment key={group.key}>
+                    {/* Cabeçalho do grupo — só quando agrupamento ativo */}
+                    {groupBy !== 'none' && <GroupHeader group={group} />}
+
+                    {/* Tarefas do grupo */}
+                    {!collapsedGroups.has(group.key) && group.tasks.map(t => (
+                      <TaskRow key={t.id} t={t} />
+                    ))}
+
+                    {/* + Adicionar Tarefa no rodapé de cada grupo */}
+                    {!collapsedGroups.has(group.key) && onAddTask && groupBy !== 'none' && (
+                      <tr>
+                        <td colSpan={2 + colOrder.length} className="px-4 py-1.5 border-b border-slate-100">
+                          <button
+                            onClick={onAddTask}
+                            className="flex items-center gap-2 text-sm text-slate-400 hover:text-blue-600 transition-colors font-medium group/add"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Adicionar Tarefa
+                          </button>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+
+                {/* + Adicionar Tarefa global (sem agrupamento) */}
+                {groupBy === 'none' && onAddTask && (
+                  <tr className="border-t border-slate-100">
+                    <td colSpan={2 + colOrder.length} className="px-4 py-2">
+                      <button
+                        onClick={onAddTask}
+                        className="flex items-center gap-2 text-sm text-slate-400 hover:text-blue-600 transition-colors font-medium group/add"
+                      >
+                        <span className="w-5 h-5 rounded flex items-center justify-center text-slate-300 group-hover/add:text-blue-500 group-hover/add:bg-blue-50 transition-colors">
+                          <Plus className="w-3.5 h-3.5" />
+                        </span>
+                        Adicionar Tarefa
+                      </button>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

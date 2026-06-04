@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2 } from 'lucide-react'
+import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2, Layers } from 'lucide-react'
+
+export type GroupByField = 'none' | 'status' | 'assignee' | 'priority' | 'project' | 'source'
 import { supabase } from '../lib/supabase'
 import { taskStatusService, type TaskStatus } from '../services/taskService'
 import TasksList from './TasksList'
@@ -46,6 +48,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   const [editing, setEditing]         = useState<TaskRecord | null>(null)
   const [showForm, setShowForm]       = useState(false)
   const [showStatusMgr, setShowStatusMgr] = useState(false)
+  const [groupBy, setGroupBy]             = useState<GroupByField>('none')
   const [filterOrg, setFilterOrg]     = useState<string>(activeOrganizationId ?? '')
   const [employees, setEmployees]     = useState<EmployeeOption[]>([])
   const [statuses, setStatuses]       = useState<TaskStatus[]>([])
@@ -206,6 +209,26 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           <TabBtn active={view === 'today'}   icon={Calendar}      label="Hoje"      count={today.length}   onClick={() => setView('today')} />
           <TabBtn active={view === 'overdue'} icon={AlertTriangle} label="Atrasadas" count={overdue.length} onClick={() => setView('overdue')} />
           <TabBtn active={view === 'all'}     icon={ListChecks}    label="Todas"                            onClick={() => setView('all')} />
+          {/* Seletor Group By */}
+          <div className="relative">
+            <Layers className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <select
+              value={groupBy}
+              onChange={e => setGroupBy(e.target.value as GroupByField)}
+              className={`pl-8 pr-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border appearance-none cursor-pointer transition-all
+                ${groupBy !== 'none'
+                  ? 'bg-blue-600 text-white border-blue-600 [&>option]:bg-white [&>option]:text-slate-900'
+                  : 'border-slate-200 text-slate-500 bg-white hover:bg-slate-50'}`}
+            >
+              <option value="none">Agrupar</option>
+              <option value="status">Status</option>
+              <option value="assignee">Responsável</option>
+              <option value="priority">Prioridade</option>
+              <option value="project">Obra</option>
+              <option value="source">Origem</option>
+            </select>
+          </div>
+
           {orgsOptions.length > 0 && (
             <button
               onClick={() => setShowStatusMgr(true)}
@@ -266,10 +289,12 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         employees={employees}
         projects={obras}
         statuses={statuses}
+        groupBy={groupBy}
         onToggleDone={toggleDone}
         onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
         onAddSubtask={(parent) => { loadEmployees(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
         onMakeSubtask={makeSubtask}
+        onAddTask={orgForNew ? () => { setEditing(null); setShowForm(true) } : undefined}
         onNavigate={handleNavigate}
       />
 

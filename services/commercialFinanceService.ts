@@ -20,9 +20,13 @@ export const commercialFinanceService = {
      * @param targetOrganizationId ID da organização onde os dados devem ser salvos
      * @param currentSettings Configurações atuais do projeto (para acumulação sequencial)
      */
-    async syncDealToFinance(deal: PropertyDeal, targetOrganizationId?: string, currentSettings?: ProjectSettings, isGlobalSync: boolean = false) {
-        const orgToUse = targetOrganizationId || deal.organization_id;
-        if (!orgToUse) throw new Error('[COMMERCIAL-FINANCE] organizationId obrigatório — acesso cross-tenant não permitido');
+    async syncDealToFinance(deal: PropertyDeal, targetOrganizationId: string, currentSettings?: ProjectSettings, isGlobalSync: boolean = false) {
+        if (!targetOrganizationId) throw new Error('[COMMERCIAL-FINANCE] organizationId obrigatório — acesso cross-tenant não permitido');
+        // Garante que o deal pertence à org solicitada
+        if (deal.organization_id && deal.organization_id !== targetOrganizationId) {
+            throw new Error(`[COMMERCIAL-FINANCE] Cross-tenant bloqueado: deal ${deal.id} pertence à org ${deal.organization_id}, não ${targetOrganizationId}`);
+        }
+        const orgToUse = targetOrganizationId;
         console.log(`[COMMERCIAL-FINANCE] Processing Deal #${deal.id} for Org: ${orgToUse}`);
 
         const allowedStatuses = ['COMPLETED', 'PENDING', 'WAITING_PAYMENT', 'APPROVED'];
@@ -405,7 +409,7 @@ export const commercialFinanceService = {
         let successCount = 0;
         for (const deal of deals) {
             try {
-                await this.syncDealToFinance(deal);
+                await this.syncDealToFinance(deal, organizationId);
                 successCount++;
             } catch (err) {
                 console.error(`[COMMERCIAL-FINANCE] Failed to sync deal ${deal.id}:`, err);
@@ -640,15 +644,17 @@ export const commercialFinanceService = {
      * Se todas as parcelas estiverem PAID, o status do Deal será COMPLETED.
      * Se houver qualquer parcela PENDING/OVERDUE, o status volta para PENDING.
      */
-    async reconcileDealStatusWithFinance(dealId: string, organizationId: string | undefined) {
+    async reconcileDealStatusWithFinance(dealId: string, organizationId: string) {
         if (!dealId) return;
         if (!organizationId) throw new Error('[COMMERCIAL-RECONCILE] organizationId obrigatório — acesso cross-tenant não permitido');
 
         console.log(`[COMMERCIAL-RECONCILE] Checking financial health for Deal ${dealId} (Org: ${organizationId})...`);
 
+        // Limita à tabela de projetos comerciais da organização — evita varredura de projetos de obra
         const { data: allProjects, error: fetchProjError } = await supabase
             .from('projects')
             .select('id, name, settings')
+            .eq('name', 'Gestão Comercial')
             .filter('settings->>organizationId', 'eq', organizationId);
         if (fetchProjError || !allProjects) {
             console.error('[COMMERCIAL-RECONCILE] Error fetching ALL projects:', fetchProjError);

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Circle, XCircle, ChevronRight } from 'lucide-react';
-import { WORKFLOW_STEPS, DealWorkflowStatus, getStepIndex, canTransition, validateTransition } from '../lib/dealWorkflow';
+import { WORKFLOW_STEPS, DealWorkflowStatus, getStepIndex, canTransition, validateTransition, normalizeStatus } from '../lib/dealWorkflow';
 import { PropertyDeal } from '../types';
 import DealCancelModal from './DealCancelModal';
 
@@ -13,7 +13,9 @@ interface DealWorkflowBarProps {
 }
 
 const DealWorkflowBar: React.FC<DealWorkflowBarProps> = ({ currentStatus, deal, organizationId, onTransition, disabled }) => {
-    const currentIdx = getStepIndex(currentStatus);
+    // Normaliza deals legados em WAITING_PAYMENT para a posição RESERVA no fluxo visual
+    const effectiveStatus = normalizeStatus(currentStatus);
+    const currentIdx = getStepIndex(effectiveStatus);
     const isCancelled = currentStatus === 'CANCELLED';
     const [showCancelModal, setShowCancelModal] = useState(false);
 
@@ -24,6 +26,9 @@ const DealWorkflowBar: React.FC<DealWorkflowBarProps> = ({ currentStatus, deal, 
         if (error) { alert(error); return; }
         onTransition(next);
     };
+
+    // Rótulo do próximo passo — leva em conta deals legados em WAITING_PAYMENT
+    const nextStepFromCurrent = WORKFLOW_STEPS[currentIdx + 1];
 
     const handleCancel = () => {
         if (!canTransition(currentStatus, 'CANCELLED')) return;
@@ -70,7 +75,7 @@ const DealWorkflowBar: React.FC<DealWorkflowBarProps> = ({ currentStatus, deal, 
         );
     }
 
-    const nextStep = WORKFLOW_STEPS[currentIdx + 1];
+    const nextStep = nextStepFromCurrent;
     const canAdvance = nextStep && !disabled;
 
     return (

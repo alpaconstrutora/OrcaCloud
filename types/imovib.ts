@@ -121,7 +121,7 @@ export interface PropertyDeal {
     linked_project_id?: string;
     type: 'SALE' | 'RENTAL' | 'SERVICE';
     value: number;
-    status: 'IN_NEGOTIATION' | 'PENDING' | 'WAITING_PAYMENT' | 'COMPLETED' | 'CANCELLED';
+    status: 'IN_NEGOTIATION' | 'PENDING' | 'WAITING_PAYMENT' | 'RESERVA' | 'CONTRATO' | 'ASSINATURA' | 'COMPLETED' | 'CANCELLED';
     date: string;
     contract_number?: string;
     notes?: string;

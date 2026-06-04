@@ -170,9 +170,9 @@ export const commercialService = {
         }
 
         if (deal.id) {
-            // 1.1 — Ao avançar para WAITING_PAYMENT via update, verifica se a unidade
+            // 1.1 — Ao avançar para RESERVA (ou WAITING_PAYMENT legacy), verifica se a unidade
             // ainda está disponível (outro deal pode ter reservado no intervalo)
-            if (dbPayload.status === 'WAITING_PAYMENT' && dbPayload.property_id) {
+            if ((dbPayload.status === 'RESERVA' || dbPayload.status === 'WAITING_PAYMENT') && dbPayload.property_id) {
                 const { data: prop } = await supabase
                     .from('commercial_properties')
                     .select('status')
@@ -232,13 +232,16 @@ export const commercialService = {
             result = data as PropertyDeal;
         }
 
-        // Trigger financial sync if completed OR waiting payment
-        if (result.status === 'COMPLETED' || result.status === 'WAITING_PAYMENT') {
+        // Estágios que reservam a unidade (impede venda duplicada)
+        const RESERVA_STATUSES = ['WAITING_PAYMENT', 'RESERVA', 'CONTRATO', 'ASSINATURA'];
+
+        // Trigger financial sync if completed OR any reservation stage
+        if (result.status === 'COMPLETED' || RESERVA_STATUSES.includes(result.status)) {
             try {
                 // Atualizar status do imóvel se estiver configurado o vinculamento no negócio
                 if (result.property_id && result.client_id && result.type !== 'SERVICE') {
                     const propertyUpdates: Partial<Property> = {
-                        status: result.status === 'COMPLETED' 
+                        status: result.status === 'COMPLETED'
                             ? (result.type === 'SALE' ? PropertyStatus.SOLD : PropertyStatus.RENTED)
                             : PropertyStatus.RESERVED,
                         client_id: result.client_id

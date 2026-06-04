@@ -1,11 +1,14 @@
 import { PropertyDeal } from '../types';
 
 export type DealWorkflowStatus =
-    | 'IN_NEGOTIATION'
-    | 'PENDING'
-    | 'WAITING_PAYMENT'
-    | 'COMPLETED'
-    | 'CANCELLED';
+    | 'IN_NEGOTIATION'  // Proposta
+    | 'PENDING'         // Aprovação
+    | 'WAITING_PAYMENT' // Legacy — mapeado para RESERVA na UI
+    | 'RESERVA'         // Reserva formal (trava unidade)
+    | 'CONTRATO'        // Contrato gerado
+    | 'ASSINATURA'      // Aguardando assinatura
+    | 'COMPLETED'       // Concluído
+    | 'CANCELLED';      // Cancelado / Distrato
 
 export interface WorkflowStep {
     status: DealWorkflowStatus;
@@ -16,6 +19,7 @@ export interface WorkflowStep {
     borderColor: string;
 }
 
+// Etapas lineares — WAITING_PAYMENT não aparece (é legacy, normalizado para RESERVA)
 export const WORKFLOW_STEPS: WorkflowStep[] = [
     {
         status: 'IN_NEGOTIATION',
@@ -28,18 +32,34 @@ export const WORKFLOW_STEPS: WorkflowStep[] = [
     {
         status: 'PENDING',
         label: 'Aprovação',
-        description: 'Proposta aprovada, aguardando reserva formal.',
+        description: 'Proposta aprovada internamente. Aguardando reserva formal.',
         color: 'text-amber-600',
         bgColor: 'bg-amber-50',
         borderColor: 'border-amber-200',
     },
     {
-        status: 'WAITING_PAYMENT',
-        label: 'Reserva / Contrato',
-        description: 'Unidade reservada. Contrato em assinatura.',
+        status: 'RESERVA',
+        label: 'Reserva',
+        description: 'Unidade reservada. Contrato em elaboração.',
         color: 'text-purple-600',
         bgColor: 'bg-purple-50',
         borderColor: 'border-purple-200',
+    },
+    {
+        status: 'CONTRATO',
+        label: 'Contrato',
+        description: 'Contrato gerado e em revisão pelo cliente.',
+        color: 'text-indigo-600',
+        bgColor: 'bg-indigo-50',
+        borderColor: 'border-indigo-200',
+    },
+    {
+        status: 'ASSINATURA',
+        label: 'Assinatura',
+        description: 'Contrato enviado para assinatura eletrônica.',
+        color: 'text-pink-600',
+        bgColor: 'bg-pink-50',
+        borderColor: 'border-pink-200',
     },
     {
         status: 'COMPLETED',
@@ -51,14 +71,22 @@ export const WORKFLOW_STEPS: WorkflowStep[] = [
     },
 ];
 
-// Transições permitidas: de → [lista de para]
+// Transições permitidas: de → [para]
 const ALLOWED_TRANSITIONS: Record<DealWorkflowStatus, DealWorkflowStatus[]> = {
-    IN_NEGOTIATION: ['PENDING', 'CANCELLED'],
-    PENDING:        ['WAITING_PAYMENT', 'IN_NEGOTIATION', 'CANCELLED'],
-    WAITING_PAYMENT:['COMPLETED', 'PENDING', 'CANCELLED'],
-    COMPLETED:      ['CANCELLED'],
-    CANCELLED:      ['IN_NEGOTIATION'],
+    IN_NEGOTIATION:  ['PENDING', 'CANCELLED'],
+    PENDING:         ['RESERVA', 'IN_NEGOTIATION', 'CANCELLED'],
+    WAITING_PAYMENT: ['RESERVA', 'COMPLETED', 'CANCELLED'],    // compat: deals legados podem avançar
+    RESERVA:         ['CONTRATO', 'PENDING', 'CANCELLED'],
+    CONTRATO:        ['ASSINATURA', 'RESERVA', 'CANCELLED'],
+    ASSINATURA:      ['COMPLETED', 'CONTRATO', 'CANCELLED'],
+    COMPLETED:       ['CANCELLED'],
+    CANCELLED:       ['IN_NEGOTIATION'],
 };
+
+// Deals legados em WAITING_PAYMENT são tratados como RESERVA para fins de posição visual
+export function normalizeStatus(status: DealWorkflowStatus): DealWorkflowStatus {
+    return status === 'WAITING_PAYMENT' ? 'RESERVA' : status;
+}
 
 export function canTransition(from: DealWorkflowStatus, to: DealWorkflowStatus): boolean {
     return (ALLOWED_TRANSITIONS[from] || []).includes(to);
@@ -69,11 +97,13 @@ export function getAvailableTransitions(current: DealWorkflowStatus): DealWorkfl
 }
 
 export function getStepIndex(status: DealWorkflowStatus): number {
-    return WORKFLOW_STEPS.findIndex(s => s.status === status);
+    const normalized = normalizeStatus(status);
+    return WORKFLOW_STEPS.findIndex(s => s.status === normalized);
 }
 
 export function getStepByStatus(status: DealWorkflowStatus): WorkflowStep | undefined {
-    return WORKFLOW_STEPS.find(s => s.status === status);
+    const normalized = normalizeStatus(status);
+    return WORKFLOW_STEPS.find(s => s.status === normalized);
 }
 
 // Pré-requisitos de negócio antes de avançar
@@ -88,14 +118,29 @@ export function validateTransition(
     if (to === 'PENDING' && !deal.client_id) {
         return 'Selecione um cliente antes de aprovar a proposta.';
     }
-    if (to === 'WAITING_PAYMENT' && !deal.property_id) {
+    if ((to === 'RESERVA' || to === 'WAITING_PAYMENT') && !deal.property_id) {
         return 'Selecione uma unidade antes de reservar.';
     }
-    if (to === 'WAITING_PAYMENT' && (!deal.value || deal.value <= 0)) {
+    if ((to === 'RESERVA' || to === 'WAITING_PAYMENT') && (!deal.value || deal.value <= 0)) {
         return 'Informe o valor da negociação antes de reservar.';
+    }
+    if (to === 'CONTRATO' && (!deal.value || deal.value <= 0)) {
+        return 'O deal precisa ter um valor definido para gerar o contrato.';
     }
     if (to === 'COMPLETED' && (!deal.installments || deal.installments <= 0) && (!deal.custom_installments || deal.custom_installments.length === 0)) {
         return 'Defina o plano de pagamento antes de concluir a venda.';
     }
     return null;
 }
+
+// Label amigável para status (usado em badges, histórico etc.)
+export const STATUS_LABELS: Record<DealWorkflowStatus, string> = {
+    IN_NEGOTIATION:  'Proposta',
+    PENDING:         'Aprovação',
+    WAITING_PAYMENT: 'Reserva',   // legacy label
+    RESERVA:         'Reserva',
+    CONTRATO:        'Contrato',
+    ASSINATURA:      'Assinatura',
+    COMPLETED:       'Concluído',
+    CANCELLED:       'Cancelado',
+};

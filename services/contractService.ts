@@ -392,7 +392,12 @@ async function syncAVistaToFinance(contract: Contract) {
 
 export const contractService = {
     // Contracts
-    listContracts: async (projectId?: string, organizationId?: string, empresaId?: string): Promise<Contract[]> => {
+    listContracts: async (
+        projectId?: string,
+        organizationId?: string,
+        empresaId?: string,
+        direction?: 'OUTGOING' | 'INCOMING',
+    ): Promise<Contract[]> => {
         // payment_schedule (array JSONB) omitido na listagem — carregado em getContractById
         let query = supabase
             .from('contracts')
@@ -405,6 +410,15 @@ export const contractService = {
             query = query.eq('empresa_id', empresaId);
         } else if (organizationId) {
             query = query.eq('organization_id', organizationId);
+        }
+
+        // Separação de módulos por direction:
+        //  - OUTGOING  → Comercial / Contratos de Serviço
+        //  - INCOMING  → Suprimentos (inclui contratos legados com direction NULL)
+        if (direction === 'OUTGOING') {
+            query = query.eq('direction', 'OUTGOING');
+        } else if (direction === 'INCOMING') {
+            query = query.or('direction.eq.INCOMING,direction.is.null');
         }
 
         const { data, error } = await query;
@@ -1017,8 +1031,8 @@ export const contractService = {
             .eq('id', projectId)
             .single();
 
-        // Gera número sequencial
-        const number = await contractService.getNextContractNumber(organizationId);
+        // Gera número sequencial isolado para OUTGOING (Serviços)
+        const number = await contractService.getNextContractNumber(organizationId, 'OUTGOING');
 
         const contractPayload: Omit<Contract, 'id' | 'created_at' | 'current_value'> = {
             organization_id: organizationId,
@@ -1060,9 +1074,11 @@ export const contractService = {
         return contract;
     },
 
-    /** Retorna próximo número de contrato formatado (usa a RPC existente) */
-    getNextContractNumber: async (organizationId: string): Promise<string> => {
-        const { data } = await supabase.rpc('get_next_contract_number', { p_org_id: organizationId });
+    /** Retorna próximo número de contrato formatado, isolado por direction quando informado */
+    getNextContractNumber: async (organizationId: string, direction?: 'OUTGOING' | 'INCOMING'): Promise<string> => {
+        const { data } = direction
+            ? await supabase.rpc('get_next_contract_number', { p_org_id: organizationId, p_direction: direction })
+            : await supabase.rpc('get_next_contract_number', { p_org_id: organizationId });
         return data ?? '001';
     },
 

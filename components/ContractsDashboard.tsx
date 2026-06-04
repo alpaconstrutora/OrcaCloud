@@ -44,14 +44,8 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await contractService.listContracts(undefined, organizationId);
-            setContracts(
-                direction === 'OUTGOING'
-                    ? data.filter(c => (c as any).direction === 'OUTGOING')
-                    : direction === 'INCOMING'
-                    ? data.filter(c => (c as any).direction !== 'OUTGOING')
-                    : data
-            );
+            const data = await contractService.listContracts(undefined, organizationId, undefined, direction);
+            setContracts(data);
         } finally {
             setLoading(false);
         }

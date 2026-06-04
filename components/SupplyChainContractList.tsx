@@ -56,7 +56,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
             setLoading(true);
             const targetProjectId = localShowAll ? undefined : (projectId || undefined);
             const [data, suppliers, projects] = await Promise.all([
-                contractService.listContracts(targetProjectId, organizationId),
+                contractService.listContracts(targetProjectId, organizationId, undefined, 'INCOMING'),
                 supplierService.listSuppliers(organizationId).catch(() => []),
                 projectService.listProjects(undefined, organizationId).catch(() => []),
             ]);

@@ -57,9 +57,11 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
-          // Cache static assets only — JS bundles excluded from precache to avoid stale-hash white screen
-          // (new deploy changes JS hashes; cached HTML with old hashes → 404 → white screen)
-          globPatterns: ['**/*.{css,ico,png,svg,woff2}'],
+          // Cache static assets + index.html (necessário para navigateFallback funcionar offline).
+          // JS bundles excluídos do precache para evitar stale-hash white screen
+          // (novo deploy muda hashes do JS; HTML precacheado é atualizado a cada build,
+          // mantendo as referências aos hashes corretos).
+          globPatterns: ['**/*.{css,html,ico,png,svg,woff2}'],
           maximumFileSizeToCacheInBytes: 8 * 1024 * 1024, // 8 MB limit
           // Skip Supabase API calls — too dynamic for precache
           navigateFallback: 'index.html',

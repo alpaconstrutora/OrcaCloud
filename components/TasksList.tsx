@@ -4,6 +4,7 @@ import {
   Building2, ChevronDown, ChevronRight, Plus,
   ArrowUp, ArrowDown, Search, X, SlidersHorizontal,
   GripVertical, CornerLeftUp, Flag, Calendar, AlertTriangle,
+  ChevronsDownUp, ChevronsUpDown,
 } from 'lucide-react'
 import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
@@ -233,6 +234,24 @@ const TasksList: React.FC<Props> = ({
     }
     return [...map.values()]
   }, [filtered, groupBy, statusMap, empMap, projMap, statuses])
+
+  // ── Expandir / recolher tudo ──────────────────────────────────────────────
+  // IDs de tarefas que possuem subtarefas (únicos que têm o que expandir)
+  const expandableIds = useMemo(() => Object.keys(childMap), [childMap])
+  const allExpanded =
+    expandableIds.every(id => expanded.has(id)) &&
+    (groupBy === 'none' || collapsedGroups.size === 0)
+
+  const toggleExpandAll = () => {
+    if (allExpanded) {
+      setExpanded(new Set())
+      // sem agrupamento não há cabeçalho de grupo para reabrir — não recolhe grupos
+      if (groupBy !== 'none') setCollapsedGroups(new Set(groups.map(g => g.key)))
+    } else {
+      setExpanded(new Set(expandableIds))
+      setCollapsedGroups(new Set())
+    }
+  }
 
   const handleColDrop = (fromKey: ColKey, toKey: ColKey) => {
     if (fromKey === toKey) return
@@ -721,6 +740,16 @@ const TasksList: React.FC<Props> = ({
           Filtros
           {activeFilters && <span className="bg-white/20 text-white text-[10px] font-black px-1.5 rounded-md">●</span>}
         </button>
+        {(expandableIds.length > 0 || groupBy !== 'none') && (
+          <button
+            onClick={toggleExpandAll}
+            title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:border-slate-300 bg-white transition-all"
+          >
+            {allExpanded ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
+            {allExpanded ? 'Recolher' : 'Expandir'}
+          </button>
+        )}
         {(activeFilters || search) && (
           <button onClick={clearFilters} className="text-xs font-bold text-slate-400 hover:text-red-500 flex items-center gap-1">
             <X className="w-3 h-3" /> Limpar

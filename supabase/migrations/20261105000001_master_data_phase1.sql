@@ -16,6 +16,9 @@
 -- customizações por empresa ficam para Fase 2 (overrides em master_items).
 -- =============================================================================
 
+-- Extensão necessária para busca textual em cidades
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- -----------------------------------------------------------------------------
 -- 1. PAÍSES
 -- -----------------------------------------------------------------------------
@@ -72,8 +75,6 @@ CREATE TABLE IF NOT EXISTS public.master_cities (
 
 CREATE INDEX IF NOT EXISTS idx_master_cities_state ON public.master_cities(state_id);
 CREATE INDEX IF NOT EXISTS idx_master_cities_name_trgm ON public.master_cities USING GIN (name gin_trgm_ops);
--- pgtrgm precisa estar habilitado:
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- -----------------------------------------------------------------------------
 -- 4. BANCOS (lista BACEN)
@@ -228,7 +229,7 @@ INSERT INTO public.master_banks (code, ispb, name, short_name, source_version) V
   ('104','00360305','Caixa Econômica Federal','CEF','BACEN-2024'),
   ('208','58160789','Banco BTG Pactual S.A.','BTG','BACEN-2024'),
   ('212','92894922','Banco Original S.A.','Original','BACEN-2024'),
-  ('218','03323840','Banco BS2 S.A.','BS2','BACEN-2024'),
+  ('218','71027866','Banco BS2 S.A.','BS2','BACEN-2024'),
   ('237','60746948','Banco Bradesco S.A.','Bradesco','BACEN-2024'),
   ('246','28195667','Banco ABC Brasil S.A.','ABC','BACEN-2024'),
   ('260','18236120','Nu Pagamentos S.A.','Nubank','BACEN-2024'),
@@ -240,9 +241,9 @@ INSERT INTO public.master_banks (code, ispb, name, short_name, source_version) V
   ('380','22896431','PicPay Servicos S.A.','PicPay','BACEN-2024'),
   ('389','61024352','Banco Mercantil do Brasil S.A.','Mercantil','BACEN-2024'),
   ('399','33172537','HSBC Bank Brasil','HSBC','BACEN-2024'),
-  ('422','58497702','Banco Safra S.A.','Safra','BACEN-2024'),
+  ('422','58616418','Banco Safra S.A.','Safra','BACEN-2024'),
   ('453','73622748','Banco Rural S.A.','Rural','BACEN-2024'),
-  ('633','58497702','Banco Rendimento S.A.','Rendimento','BACEN-2024'),
+  ('633','68900810','Banco Rendimento S.A.','Rendimento','BACEN-2024'),
   ('652','60872504','Itaú Unibanco Holding','Itaú Holding','BACEN-2024'),
   ('655','59588111','Banco Votorantim S.A.','BV','BACEN-2024'),
   ('745','33042151','Banco Citibank S.A.','Citibank','BACEN-2024'),

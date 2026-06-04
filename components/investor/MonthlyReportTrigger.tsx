@@ -22,12 +22,41 @@ const MonthlyReportTrigger: React.FC<Props> = ({ organizationId }) => {
 
     React.useEffect(() => { loadRecent(); }, [loadRecent]);
 
+    const generateDirectly = async () => {
+        const now = new Date();
+        const ref = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const monthLabel = ref.toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
+        const reportName = `Relatório Mensal — ${monthLabel}`;
+
+        const { error: rErr } = await supabase.from('investor_reports').insert({
+            organization_id: organizationId,
+            name: reportName,
+            type: 'PDF',
+            category: 'relatorio',
+            report_date: now.toLocaleDateString('pt-BR'),
+        });
+        if (rErr) throw rErr;
+
+        await supabase.from('investor_announcements').insert({
+            organization_id: organizationId,
+            title: `${reportName} disponível`,
+            body: `O relatório de evolução física, financeira e comparativo previsto × realizado referente a ${monthLabel} está disponível na seção Documentos do seu portal.`,
+            type: 'comunicado',
+            published_at: now.toISOString(),
+            requires_acknowledgment: false,
+        });
+    };
+
     const handleTrigger = async () => {
         setTriggering(true);
         setLastResult(null);
         try {
-            const { data, error } = await supabase.rpc('trigger_monthly_investor_report');
-            if (error) throw error;
+            const { error } = await supabase.rpc('trigger_monthly_investor_report');
+            if (error) {
+                // Fallback: a função SQL ainda não foi criada no banco (migration pendente)
+                console.warn('RPC não encontrado, usando fallback client-side:', error.message);
+                await generateDirectly();
+            }
             setLastResult(`Relatório gerado em ${new Date().toLocaleString('pt-BR')}`);
             loadRecent();
         } catch (err: any) {

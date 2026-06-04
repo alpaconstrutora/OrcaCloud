@@ -684,6 +684,7 @@ const Layout: React.FC<LayoutProps> = ({
             </div>
             <nav className="flex-1 py-6 px-4 overflow-y-auto">
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" forceFull />
+              <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' ? (
                 <div className="space-y-1 mb-4">
                   <div className="px-4 py-2 text-[10px] font-black text-gray-500 uppercase tracking-widest">Portais</div>

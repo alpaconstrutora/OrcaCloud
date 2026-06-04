@@ -3,7 +3,7 @@ import {
     ArrowLeft, Save, Loader2, AlertCircle, CheckCircle2,
     Building2, Users, Landmark, UserCheck, TrendingUp, Receipt,
     Upload, Download, FileKey, HardHat, GitBranch, Landmark as LandmarkIcon,
-    FolderOpen, Target,
+    FolderOpen, Target, Layers,
 } from 'lucide-react';
 import {
     Company, CompanyUpdate, CompanyTipo, CompanyStatus, RegimeTributario,
@@ -18,6 +18,7 @@ import CompanyIncorporacaoTab from './CompanyIncorporacaoTab';
 import CompanyBranchesTab from './CompanyBranchesTab';
 import CompanyDocumentsTab from './CompanyDocumentsTab';
 import CompanyTargetsTab from './CompanyTargetsTab';
+import CompanyDepartmentsTab from './CompanyDepartmentsTab';
 
 interface Props {
     company: Company;
@@ -26,7 +27,7 @@ interface Props {
     onSaved: (updated: Company) => void;
 }
 
-type Tab = 'identificacao' | 'socios' | 'bancos' | 'financeiro' | 'tributario' | 'obras' | 'incorporacao' | 'filiais' | 'documentos' | 'metas' | 'responsaveis';
+type Tab = 'identificacao' | 'socios' | 'bancos' | 'financeiro' | 'tributario' | 'obras' | 'incorporacao' | 'filiais' | 'documentos' | 'metas' | 'departamentos' | 'responsaveis';
 
 // ─── Form ─────────────────────────────────────────────────────
 
@@ -280,8 +281,9 @@ function buildTabs(company: Company): { id: Tab; label: string; icon: React.Reac
         { id: 'obras',         label: 'Obras',            icon: <HardHat className="w-4 h-4" /> },
         { id: 'filiais',       label: 'Filiais',          icon: <GitBranch className="w-4 h-4" /> },
         { id: 'documentos',    label: 'Documentos',       icon: <FolderOpen className="w-4 h-4" /> },
-        { id: 'metas',         label: 'Metas',            icon: <Target className="w-4 h-4" /> },
-        { id: 'responsaveis',  label: 'Responsáveis',     icon: <UserCheck className="w-4 h-4" /> },
+        { id: 'metas',          label: 'Metas',            icon: <Target className="w-4 h-4" /> },
+        { id: 'departamentos',  label: 'Departamentos',    icon: <Layers className="w-4 h-4" /> },
+        { id: 'responsaveis',   label: 'Responsáveis',     icon: <UserCheck className="w-4 h-4" /> },
     ];
     if (SPE_TIPOS.includes(company.tipo)) {
         tabs.splice(6, 0, { id: 'incorporacao', label: 'Incorporação', icon: <LandmarkIcon className="w-4 h-4" /> });
@@ -978,6 +980,13 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
             {tab === 'metas' && (
                 <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
                     <CompanyTargetsTab companyId={company.id} />
+                </div>
+            )}
+
+            {/* ── Tab: Departamentos ───────────────────────────────── */}
+            {tab === 'departamentos' && (
+                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                    <CompanyDepartmentsTab companyId={company.id} />
                 </div>
             )}
 

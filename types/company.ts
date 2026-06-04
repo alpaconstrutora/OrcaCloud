@@ -194,6 +194,35 @@ export const REGIME_CONTABIL_LABELS: Record<'caixa' | 'competencia', string> = {
   competencia: 'Regime de Competência',
 };
 
+// ─── Departamentos ───────────────────────────────────────────
+
+export interface CompanyDepartment {
+  id: string;
+  company_id: string;
+  parent_id?: string;
+  nome: string;
+  descricao?: string;
+  responsavel_nome?: string;
+  cor: string;
+  ordem: number;
+  ativo: boolean;
+  created_at: string;
+}
+
+export type CompanyDepartmentInsert = Omit<CompanyDepartment, 'id' | 'created_at'>;
+export type CompanyDepartmentUpdate = Partial<CompanyDepartmentInsert>;
+
+export const DEPT_COLORS = [
+  { label: 'Azul',      value: '#1D4ED8' },
+  { label: 'Verde',     value: '#065F46' },
+  { label: 'Roxo',      value: '#6D28D9' },
+  { label: 'Laranja',   value: '#C2410C' },
+  { label: 'Ciano',     value: '#0E7490' },
+  { label: 'Vermelho',  value: '#9F1239' },
+  { label: 'Âmbar',     value: '#92400E' },
+  { label: 'Cinza',     value: '#374151' },
+];
+
 // ─── Metas Anuais ────────────────────────────────────────────
 
 export interface CompanyTarget {

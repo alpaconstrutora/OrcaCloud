@@ -288,7 +288,13 @@ export const commercialService = {
                 console.error('[COMMERCIAL SERVICE] Sync or Property update failed:', err);
             }
         } else if (result.status === 'CANCELLED') {
-            // 1.3 — Distrato: reverte unidade + estorna parcelas pendentes do vault financeiro
+            // 1.3 — Distrato: reverte unidade + estorna parcelas do vault financeiro
+            // Garante data de cancelamento mesmo que o cliente não a tenha enviado
+            if (!result.cancellation_date) {
+                await supabase.from('commercial_deals')
+                    .update({ cancellation_date: new Date().toISOString() })
+                    .eq('id', result.id);
+            }
             const cancelOrgId = result.organization_id || dbPayload.organization_id;
             await Promise.allSettled([
                 // (a) Libera a unidade no espelho

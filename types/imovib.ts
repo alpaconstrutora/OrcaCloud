@@ -138,6 +138,16 @@ export interface PropertyDeal {
     broker_payment_method?: string;
     custom_installments?: PaymentInstallment[];
     created_at?: string;
+    // Assinatura eletrônica (ZapSign)
+    signature_token?: string;
+    signature_status?: 'NONE' | 'PENDING' | 'SIGNED' | 'REFUSED';
+    signature_url?: string;
+    signature_completed_at?: string;
+    signed_contract_url?: string;
+    // Distrato / Cancelamento
+    cancellation_reason?: string;
+    cancellation_date?: string;
+    cancellation_refund_amount?: number;
 }
 
 export interface ImovibCapexItem {

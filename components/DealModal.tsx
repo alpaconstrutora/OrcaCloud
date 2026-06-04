@@ -757,7 +757,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             organizationId={formData.organization_id || organizationId}
                                             onTransition={(to, meta) => {
                                                 const updates: Partial<typeof formData> = { status: to };
-                                                if (meta?.reason) {
+                                                if (to === 'CANCELLED' && meta?.reason) {
+                                                    // Salvar distrato em campos estruturados E no notes (para auditoria legível)
+                                                    updates.cancellation_reason       = meta.reason;
+                                                    updates.cancellation_date         = new Date().toISOString();
+                                                    updates.cancellation_refund_amount = meta.refundAmount || 0;
                                                     const distratNotes = `[DISTRATO ${new Date().toLocaleDateString('pt-BR')}] Motivo: ${meta.reason}${meta.refundAmount ? ` | Devolução: R$ ${meta.refundAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}`;
                                                     updates.notes = formData.notes ? `${formData.notes}\n${distratNotes}` : distratNotes;
                                                 }
@@ -801,15 +805,22 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     </div>
                 </form>
 
-                {/* Painel de Assinatura — visível quando em Reserva/Contrato */}
-                {formData.id && formData.status === 'WAITING_PAYMENT' && (
+                {/* Painel de Assinatura — visível a partir do estágio CONTRATO */}
+                {formData.id && ['WAITING_PAYMENT', 'CONTRATO', 'ASSINATURA'].includes(formData.status || '') && (
                     <div className="px-8 pb-4">
                         <DealSignaturePanel
                             deal={formData}
                             client={selectedClient}
                             organizationId={formData.organization_id || organizationId || ''}
                             onStatusChange={(sigStatus: 'PENDING' | 'SIGNED') => {
-                                setFormData(prev => ({ ...prev, signature_status: sigStatus } as any));
+                                setFormData(prev => ({ ...prev, signature_status: sigStatus }));
+                                // Quando assinado, sugere avançar para Concluído se estiver em ASSINATURA
+                                if (sigStatus === 'SIGNED' && formData.status === 'ASSINATURA') {
+                                    // eslint-disable-next-line no-alert
+                                    if (window.confirm('Contrato assinado! Deseja avançar a negociação para Concluído?')) {
+                                        setFormData(prev => ({ ...prev, signature_status: 'SIGNED', status: 'COMPLETED' }));
+                                    }
+                                }
                             }}
                         />
                     </div>

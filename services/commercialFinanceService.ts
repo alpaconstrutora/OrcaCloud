@@ -470,71 +470,68 @@ export const commercialFinanceService = {
     },
 
     /**
-     * Remove todas as parcelas vinculadas a um negócio.
-     * Bloqueia a remoção se houver parcelas já pagas (PAID).
+     * Distrato: remove parcelas PENDENTES e marca PAGAS como ESTORNADO.
+     * Não bloqueia mais — parcelas pagas ficam auditáveis com status CANCELLED.
      */
     async deleteDealInstallments(dealId: string, organizationId: string | undefined) {
         if (!organizationId) throw new Error('[COMMERCIAL-FINANCE] organizationId obrigatório — acesso cross-tenant não permitido');
-        console.log(`[COMMERCIAL-FINANCE] Cleanup for Deal ${dealId} (Org: ${organizationId})`);
+        console.log(`[COMMERCIAL-FINANCE] Distrato cleanup for Deal ${dealId} (Org: ${organizationId})`);
 
         const { data: allProjects, error } = await supabase
             .from('projects')
             .select('id, name, settings')
+            .eq('name', 'Gestão Comercial')
             .filter('settings->>organizationId', 'eq', organizationId);
         if (error || !allProjects) {
-            console.error(`[COMMERCIAL-FINANCE] Failed to load ALL projects for global cleanup:`, error);
+            console.error(`[COMMERCIAL-FINANCE] Failed to load projects for distrato cleanup:`, error);
             return;
         }
 
-        const projectsToUpdate: CommercialProjectRow[] = [];
-        let totalPaidFound = 0;
+        let paidCount = 0;
+        let pendingCount = 0;
 
-        // 2. Primeira Passagem: AUDITORIA GLOBAL PARA BLOQUEIO
-        // Verifica TODOS os cofres antes de deletar qualquer coisa
         for (const proj of allProjects) {
             const info = (proj.settings as ProjectSettings)?.financialInfo;
-            if (!info || !info.installments) continue;
+            if (!info?.installments) continue;
 
             const dealInstallments = info.installments.filter((i: PaymentInstallment) => i.dealId === dealId);
-            if (dealInstallments.length > 0) {
-                const hasPaid = dealInstallments.some((i: PaymentInstallment) => i.status === 'PAID');
-                if (hasPaid) totalPaidFound++;
-                
-                // Se encontrarmos o deal neste projeto, agendamos o projeto para edição na passagem 2
-                projectsToUpdate.push(proj as CommercialProjectRow);
-            }
-        }
+            if (dealInstallments.length === 0) continue;
 
-        if (totalPaidFound > 0) {
-            console.error(`[COMMERCIAL-FINANCE] Blocked deletion of Deal ${dealId} due to ${totalPaidFound} paid installments across ${projectsToUpdate.length} projects.`);
-            throw new Error(`Não é possível excluir esta negociação. Existem ${totalPaidFound} parcelas com status "PAGO" associadas a ela (algumas podem estar ocultas em outras obras/satélites). Cancele as baixas no financeiro primeiro.`);
-        }
+            const cancelledAt = new Date().toISOString();
 
-        // 3. Segunda Passagem: DEDETIZAÇÃO E SALVAMENTO SEGURO
-        // Se chegamos aqui, todas as parcelas estão PENDENTES em todos os cofres do sistema
-        console.log(`[COMMERCIAL-FINANCE] No paid installments found. Proceeding to securely purge Deal ${dealId} from ${projectsToUpdate.length} Vaults...`);
-        
-        for (const proj of projectsToUpdate) {
-            const info = proj.settings.financialInfo;
-            if (!info) continue;
+            // Parcelas PAGAS → marcadas como CANCELLED (estornadas, auditáveis)
+            // Parcelas PENDENTES → removidas completamente
+            const updatedInstallments = info.installments
+                .map((i: PaymentInstallment) => {
+                    if (i.dealId !== dealId) return i;
+                    if (i.status === 'PAID') {
+                        paidCount++;
+                        return { ...i, status: 'CANCELLED', cancelledAt, cancellationNote: 'Distrato' };
+                    }
+                    pendingCount++;
+                    return null; // será removida
+                })
+                .filter(Boolean) as PaymentInstallment[];
 
-            // Filtramos as parcelas e transações
-            const cleanInstallments = (info.installments || []).filter((i: PaymentInstallment) => i.dealId !== dealId);
-            const cleanTransactions = (info.transactions || []).filter((t: FinancialTransaction & { dealId?: string }) => t.dealId !== dealId);
+            const updatedTransactions = (info.transactions || []).filter(
+                (t: FinancialTransaction & { dealId?: string }) => t.dealId !== dealId
+            );
 
-            proj.settings.financialInfo = {
+            (proj.settings as ProjectSettings).financialInfo = {
                 ...info,
-                installments: cleanInstallments,
-                transactions: cleanTransactions
+                installments: updatedInstallments,
+                transactions: updatedTransactions,
             };
 
             await projectService.saveProject(proj as unknown as Parameters<typeof projectService.saveProject>[0]);
-            console.log(`[COMMERCIAL-FINANCE] Purged ghost installments from Project [${proj.name}]`);
+            console.log(`[COMMERCIAL-FINANCE] Distrato [${proj.name}]: ${pendingCount} removidas, ${paidCount} estornadas (CANCELLED)`);
         }
-        
-        console.log(`[COMMERCIAL-FINANCE] Cleanup of Deal ${dealId} installments globally completed.`);
 
-        // 4. Remover do Portal do Corretor
+        if (paidCount > 0) {
+            console.warn(`[COMMERCIAL-FINANCE] Distrato de Deal ${dealId}: ${paidCount} parcela(s) PAGA(s) marcadas como ESTORNADO para auditoria.`);
+        }
+
+        // Remover comissão do Portal do Corretor
         await this.deleteBrokerCommissionFromPortal(dealId);
     },
 

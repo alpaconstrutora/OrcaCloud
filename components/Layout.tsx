@@ -493,12 +493,7 @@ const Layout: React.FC<LayoutProps> = ({
                       onChangeView('project-financial');
                     }}
                   />
-                  <NavItem id="financial-dre"        icon={BarChart3}    label="DRE" />
-                  <NavItem id="financial-cashflow"   icon={TrendingUp}   label="Fluxo de Caixa" />
-                  <NavItem id="financial-boletos"    icon={FileText}     label="Boletos" />
-                  <NavItem id="contas-a-pagar"       icon={TrendingDown} label="Contas a Pagar" />
-                  <NavItem id="bank-reconciliation"  icon={Receipt}      label="Conciliação Bancária" />
-                  <NavItem id="financial-categories" icon={Layers}       label="Categorias" />
+                  <NavItem id="controladoria"        icon={BarChart3}    label="Controladoria" />
                 </>
               )}
               {(mod.fiscal || isDev) && (

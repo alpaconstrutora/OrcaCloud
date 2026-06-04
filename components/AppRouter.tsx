@@ -54,10 +54,6 @@ const SalesModule           = React.lazy(() => import('./SalesModule'));
 const RentalsModule         = React.lazy(() => import('./RentalsModule'));
 const DatabaseExplorer      = React.lazy(() => import('./DatabaseExplorer'));
 const QualityModule         = React.lazy(() => import('./QualityModule'));
-const BoletoManager         = React.lazy(() => import('./BoletoManager'));
-const ContasPagarManager    = React.lazy(() => import('./ContasPagarManager'));
-const FinancialCategoriesManager = React.lazy(() => import('./FinancialCategoriesManager'));
-const BankReconciliation    = React.lazy(() => import('./BankReconciliation'));
 const FiscalModuleL         = React.lazy(() => import('./fiscal/FiscalModule').then(m => ({ default: m.FiscalModule })));
 const OperacionalModule     = React.lazy(() => import('./OperacionalModule'));
 const StructuralModule      = React.lazy(() => import('./StructuralModule'));
@@ -66,12 +62,12 @@ const ServicesCommercialModule = React.lazy(() => import('./ServicesCommercialMo
 const ServiceContractsModule   = React.lazy(() => import('./ServiceContractsModule'));
 const SalesManagementModule    = React.lazy(() => import('./SalesManagementModule'));
 import { VIEW_TO_SALES_TAB } from './SalesManagementModule';
+import { VIEW_TO_CONTROLADORIA_TAB } from './ControladoriaModule';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
-const DREReport             = React.lazy(() => import('./DREReport'));
-const CashFlowDashboard     = React.lazy(() => import('./CashFlowDashboard'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
+const ControladoriaModule   = React.lazy(() => import('./ControladoriaModule'));
 const MasterDataBrowser     = React.lazy(() => import('./MasterDataBrowser'));
 
 // Suspense fallback
@@ -527,34 +523,21 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'supplies-receipts':
       return <SupplyChainReceiptManager onViewOrder={(id) => { setSelectedOrderId(id); setActiveView('supplies-orders'); }} />;
 
-    case 'financial-categories':
-      return <FinancialCategoriesManager />;
-
     case 'master-data':
       return <MasterDataBrowser />;
 
+    // ── Controladoria (unificado) ──────────────────────────────────────────────
+    case 'controladoria':
+    case 'financial-categories':
     case 'bank-reconciliation':
-      return (
-        <BankReconciliation
-          organizationId={activeOrganizationId || organizations[0]?.id || ''}
-        />
-      );
-
     case 'financial-boletos':
-      return (
-        <BoletoManager
-          organizationId={activeOrganizationId || organizations[0]?.id || ''}
-          userEmail={session?.user?.email}
-          organizations={organizations}
-          onOrgChange={(id) => setActiveOrganizationId(id)}
-        />
-      );
-
     case 'contas-a-pagar':
       return (
-        <ContasPagarManager
-          organizationId={activeOrganizationId || undefined}
+        <ControladoriaModule
+          organizationId={activeOrganizationId || organizations[0]?.id || ''}
           organizations={organizations}
+          userEmail={session?.user?.email}
+          defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'}
           onOrgChange={(id) => setActiveOrganizationId(id)}
         />
       );
@@ -803,18 +786,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         />
       );
 
-    // ── Financeiro — DRE & Fluxo de Caixa ─────────────────────────────────────
+    // ── Financeiro — DRE & Fluxo de Caixa (redirecionam para Controladoria) ────
     case 'financial-dre':
-      return (
-        <DREReport
-          organizationId={activeOrganizationId || organizations[0]?.id || ''}
-        />
-      );
-
     case 'financial-cashflow':
       return (
-        <CashFlowDashboard
+        <ControladoriaModule
           organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          organizations={organizations}
+          userEmail={session?.user?.email}
+          defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'}
+          onOrgChange={(id) => setActiveOrganizationId(id)}
         />
       );
 

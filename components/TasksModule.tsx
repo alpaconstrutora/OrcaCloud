@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2, Layers } from 'lucide-react'
+import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2, Layers, List, Kanban } from 'lucide-react'
 
 export type GroupByField = 'none' | 'status' | 'assignee' | 'priority' | 'project' | 'source'
 import { supabase } from '../lib/supabase'
 import { taskStatusService, type TaskStatus } from '../services/taskService'
 import TasksList from './TasksList'
-import TaskForm, { type TaskRecord, type EmployeeOption, type ProjectOption, type OrgOption } from './TaskForm'
+import TaskForm, { type TaskRecord, type EmployeeOption, type ProjectOption, type OrgOption, type TaskDefaults } from './TaskForm'
 import TaskStatusManager from './TaskStatusManager'
+import TasksBoard from './TasksBoard'
+
+type ViewMode = 'list' | 'board'
 
 type FilterView = 'today' | 'all' | 'overdue'
 
@@ -49,6 +52,8 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   const [showForm, setShowForm]       = useState(false)
   const [showStatusMgr, setShowStatusMgr] = useState(false)
   const [groupBy, setGroupBy]             = useState<GroupByField>('none')
+  const [viewMode, setViewMode]           = useState<ViewMode>('list')
+  const [taskDefaults, setTaskDefaults]   = useState<TaskDefaults>({})
   const [filterOrg, setFilterOrg]     = useState<string>(activeOrganizationId ?? '')
   const [employees, setEmployees]     = useState<EmployeeOption[]>([])
   const [statuses, setStatuses]       = useState<TaskStatus[]>([])
@@ -179,6 +184,25 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     if (error) { console.error(error); load() }
   }
 
+  // Movimentação de card no Board View — atualiza o campo agrupado
+  const moveCard = async (taskId: string, newGroupKey: string) => {
+    let patch: Partial<TaskRecord> = {}
+    if (groupBy === 'status') {
+      const s = statuses.find(x => x.id === newGroupKey)
+      patch = { status_id: newGroupKey === '__none__' ? null : newGroupKey, status: s?.is_done ? 'done' : 'open' }
+    } else if (groupBy === 'assignee') {
+      patch = { assignee_employee_id: newGroupKey === '__none__' ? null : newGroupKey }
+    } else if (groupBy === 'priority') {
+      patch = { priority: Number(newGroupKey) as 1 | 2 | 3 | 4 }
+    } else if (groupBy === 'project') {
+      patch = { project_id: newGroupKey === '__none__' ? null : newGroupKey }
+    }
+    if (!Object.keys(patch).length) return
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...patch } : t))
+    const { error } = await supabase.from('tasks').update(patch).eq('id', taskId)
+    if (error) { console.error(error); load() }
+  }
+
   const makeSubtask = async (taskId: string, newParentId: string | null) => {
     setTasks(prev => prev.map(x => x.id === taskId ? { ...x, parent_task_id: newParentId } : x))
     const { error } = await supabase.from('tasks').update({ parent_task_id: newParentId }).eq('id', taskId)
@@ -209,6 +233,29 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           <TabBtn active={view === 'today'}   icon={Calendar}      label="Hoje"      count={today.length}   onClick={() => setView('today')} />
           <TabBtn active={view === 'overdue'} icon={AlertTriangle} label="Atrasadas" count={overdue.length} onClick={() => setView('overdue')} />
           <TabBtn active={view === 'all'}     icon={ListChecks}    label="Todas"                            onClick={() => setView('all')} />
+          {/* Toggle List / Board */}
+          <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white">
+            <button
+              onClick={() => setViewMode('list')}
+              title="Visualização em lista"
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-black uppercase tracking-widest transition-all
+                ${viewMode === 'list' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => {
+                setViewMode('board')
+                if (groupBy === 'none') setGroupBy('status')
+              }}
+              title="Visualização Kanban"
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-black uppercase tracking-widest transition-all
+                ${viewMode === 'board' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}
+            >
+              <Kanban className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           {/* Seletor Group By */}
           <div className="relative">
             <Layers className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
@@ -283,20 +330,34 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         </div>
       )}
 
-      <TasksList
-        tasks={visible}
-        loading={loading}
-        employees={employees}
-        projects={obras}
-        statuses={statuses}
-        groupBy={groupBy}
-        onToggleDone={toggleDone}
-        onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
-        onAddSubtask={(parent) => { loadEmployees(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
-        onMakeSubtask={makeSubtask}
-        onAddTask={orgForNew ? () => { setEditing(null); setShowForm(true) } : undefined}
-        onNavigate={handleNavigate}
-      />
+      {viewMode === 'list' ? (
+        <TasksList
+          tasks={visible}
+          loading={loading}
+          employees={employees}
+          projects={obras}
+          statuses={statuses}
+          groupBy={groupBy}
+          onToggleDone={toggleDone}
+          onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
+          onAddSubtask={(parent) => { loadEmployees(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
+          onMakeSubtask={makeSubtask}
+          onAddTask={orgForNew ? (defaults) => { setTaskDefaults(defaults ?? {}); setEditing(null); setShowForm(true) } : undefined}
+          onNavigate={handleNavigate}
+        />
+      ) : (
+        <TasksBoard
+          tasks={visible}
+          employees={employees}
+          projects={obras}
+          statuses={statuses}
+          groupBy={groupBy === 'none' ? 'status' : groupBy}
+          onToggleDone={toggleDone}
+          onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
+          onAddTask={orgForNew ? (defaults) => { setTaskDefaults(defaults ?? {}); setEditing(null); setShowForm(true) } : undefined}
+          onMoveCard={moveCard}
+        />
+      )}
 
       {showForm && (
         <TaskForm
@@ -306,6 +367,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           projects={obras}
           statuses={statuses}
           task={editing}
+          initialDefaults={editing ? undefined : taskDefaults}
           parentTaskId={parentTask?.id ?? null}
           parentTaskTitle={parentTask?.title ?? null}
           onClose={() => { setShowForm(false); setParentTask(null) }}

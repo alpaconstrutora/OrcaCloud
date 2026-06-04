@@ -5,7 +5,7 @@ import {
   ArrowUp, ArrowDown, Search, X, SlidersHorizontal,
   GripVertical, CornerLeftUp, Flag,
 } from 'lucide-react'
-import type { TaskRecord, EmployeeOption, ProjectOption } from './TaskForm'
+import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
 import type { GroupByField } from './TasksModule'
 
@@ -22,7 +22,7 @@ interface Props {
   onEdit: (task: TaskRecord) => void
   onAddSubtask: (parent: TaskRecord) => void
   onMakeSubtask: (taskId: string, newParentId: string | null) => void
-  onAddTask?: () => void
+  onAddTask?: (defaults?: TaskDefaults) => void
   onNavigate: (route: string) => void
 }
 
@@ -487,6 +487,18 @@ const TasksList: React.FC<Props> = ({
     )
   }
 
+  // Constrói os defaults para criação contextual dentro de um grupo
+  function buildDefaults(groupKey: string): TaskDefaults {
+    if (groupKey === '__none__') return {}
+    switch (groupBy) {
+      case 'status':   return { status_id: groupKey }
+      case 'assignee': return { assignee_employee_id: groupKey }
+      case 'priority': return { priority: Number(groupKey) }
+      case 'project':  return { project_id: groupKey }
+      default:         return {}
+    }
+  }
+
   // ── Cabeçalho de grupo (ClickUp style) ────────────────────────────────────
   function GroupHeader({ group }: { group: TaskGroup }) {
     const isCollapsed = collapsedGroups.has(group.key)
@@ -519,7 +531,7 @@ const TasksList: React.FC<Props> = ({
 
             {onAddTask && (
               <button
-                onClick={e => { e.stopPropagation(); onAddTask() }}
+                onClick={e => { e.stopPropagation(); onAddTask(buildDefaults(group.key)) }}
                 className="opacity-0 group-hover/gh:opacity-100 flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-blue-600 transition-all px-2 py-1 rounded hover:bg-blue-50 flex-shrink-0"
               >
                 <Plus className="w-3 h-3" /> Tarefa
@@ -695,7 +707,7 @@ const TasksList: React.FC<Props> = ({
                       <tr>
                         <td colSpan={2 + colOrder.length} className="px-4 py-1.5 border-b border-slate-100">
                           <button
-                            onClick={onAddTask}
+                            onClick={() => onAddTask(buildDefaults(group.key))}
                             className="flex items-center gap-2 text-sm text-slate-400 hover:text-blue-600 transition-colors font-medium group/add"
                           >
                             <Plus className="w-3.5 h-3.5" /> Adicionar Tarefa

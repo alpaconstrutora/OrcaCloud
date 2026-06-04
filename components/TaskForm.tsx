@@ -27,6 +27,13 @@ export type EmployeeOption = { id: string; name: string; role: string }
 export type ProjectOption  = { id: string; name: string }
 export type OrgOption      = { id: string; name: string }
 
+export interface TaskDefaults {
+  status_id?: string | null
+  assignee_employee_id?: string | null
+  priority?: number
+  project_id?: string | null
+}
+
 interface Props {
   orgId: string
   orgs: OrgOption[]
@@ -34,6 +41,7 @@ interface Props {
   projects: ProjectOption[]
   statuses?: TaskStatus[]
   task?: TaskRecord | null
+  initialDefaults?: TaskDefaults
   parentTaskId?: string | null
   parentTaskTitle?: string | null
   onClose: () => void
@@ -55,7 +63,7 @@ function toLocalInput(iso: string | null): string {
 }
 
 const TaskForm: React.FC<Props> = ({
-  orgId, orgs, employees, projects, statuses = [], task,
+  orgId, orgs, employees, projects, statuses = [], task, initialDefaults = {},
   parentTaskId = null, parentTaskTitle = null,
   onClose, onSaved, onOrgChange,
 }) => {
@@ -64,12 +72,18 @@ const TaskForm: React.FC<Props> = ({
   const [description, setDescription] = useState(task?.description ?? '')
   const [startDate, setStartDate]     = useState(toLocalInput(task?.start_date ?? null))
   const [due, setDue]                 = useState(toLocalInput(task?.due_date ?? null))
-  const [priority, setPriority]       = useState<number>(task?.priority ?? 3)
-  const [statusId, setStatusId]       = useState<string>(
-    task?.status_id ?? statuses.find(s => s.is_default)?.id ?? ''
+  const [priority, setPriority]       = useState<number>(
+    task?.priority ?? initialDefaults.priority ?? 3
   )
-  const [assigneeId, setAssigneeId]   = useState<string>(task?.assignee_employee_id ?? '')
-  const [projectId, setProjectId]     = useState<string>(task?.project_id ?? '')
+  const [statusId, setStatusId]       = useState<string>(
+    task?.status_id ?? initialDefaults.status_id ?? statuses.find(s => s.is_default)?.id ?? ''
+  )
+  const [assigneeId, setAssigneeId]   = useState<string>(
+    task?.assignee_employee_id ?? initialDefaults.assignee_employee_id ?? ''
+  )
+  const [projectId, setProjectId]     = useState<string>(
+    task?.project_id ?? initialDefaults.project_id ?? ''
+  )
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
 

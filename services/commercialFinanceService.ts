@@ -212,16 +212,14 @@ export const commercialFinanceService = {
         };
     },
 
-    async getOrCreateCommercialProject(organizationId?: string) {
-        // 1. Tenta localizar projetos vinculados
-        let query = supabase
+    async getOrCreateCommercialProject(organizationId: string) {
+        if (!organizationId) throw new Error('[COMMERCIAL-FINANCE] organizationId obrigatório — acesso cross-tenant não permitido');
+        // 1. Tenta localizar projetos vinculados a esta org
+        const query = supabase
             .from('projects')
             .select('*')
-            .eq('name', 'Gestão Comercial');
-
-        if (organizationId) {
-            query = query.filter('settings->>organizationId', 'eq', organizationId);
-        }
+            .eq('name', 'Gestão Comercial')
+            .filter('settings->>organizationId', 'eq', organizationId);
 
         const { data: projects, error } = await query.order('created_at', { ascending: false });
 
@@ -229,87 +227,9 @@ export const commercialFinanceService = {
             console.error('[COMMERCIAL-FINANCE] Error searching for isolated project:', error);
         }
 
-        // Se estiver em modo GLOBAL (ID nulo) e houver múltiplos projetos, vamos retornar um "projeto virtual" consolidado
-        if (!organizationId && projects && projects.length > 1) {
-            console.log(`[COMMERCIAL-FINANCE] Consolidating ${projects.length} commercial projects for global view.`);
-
-            const consolidatedInstallments: (PaymentInstallment & { sourceProjectId?: string })[] = [];
-            const consolidatedTransactions: (Record<string, unknown> & { sourceProjectId?: string })[] = [];
-
-            // 1b. Limpar e consolidar individualmente cada projeto
-            for (const p of projects) {
-                // EXECUTAR LIMPEZA NO FILHO: Remove lixos do banco de dados desse projeto individual
-                const cleanedP = await this.cleanupOrphanedInstallments(p as CommercialProjectRow);
-
-                const info = cleanedP.settings?.financialInfo;
-                if (info) {
-                    if (info.installments) {
-                        info.installments.forEach((i: PaymentInstallment) => {
-                            // DEDUPLICAÇÃO POR BIOMETRIA DE LANÇAMENTO: Nome + Parcela + Valor
-                            // Resolve casos onde existem dois contratos (IDs diferentes) para a mesma venda.
-                            // Corrigimos i.title para i.description; 'title' vinha nulo e aglomerava parcelas do mesmo valor!
-                            const descr = i.description || 'sem-titulo';
-
-                            // NORMALIZAÇÃO DE DESCRIÇÃO: Remove prefixos como 'Receita: Venda - ' para agrupar versões diferentes
-                            const normalizedDescr = descr
-                                .replace(/^Receita: (Venda|Aluguel) - /, '')
-                                .replace(/ - Deal #.{8}$/, '') // Remove sufixo de Deal ID se houver
-                                .trim();
-
-                            const compositeKey = `${i.dealId || 'manual'}-${normalizedDescr}-${i.value}`;
-
-                            const existingIndex = consolidatedInstallments.findIndex(existing => {
-                                const existDescr = (existing.description || 'sem-titulo')
-                                    .replace(/^Receita: (Venda|Aluguel) - /, '')
-                                    .replace(/ - Deal #.{8}$/, '')
-                                    .trim();
-
-                                const existingKey = `${existing.dealId || 'manual'}-${existDescr}-${existing.value}`;
-                                return existingKey === compositeKey;
-                            });
-
-                            if (existingIndex === -1) {
-                                consolidatedInstallments.push({ ...i, sourceProjectId: cleanedP.id });
-                            } else {
-                                // Preferência para o que já está PAGO em caso de duplicidade
-                                if (i.status === 'PAID' && consolidatedInstallments[existingIndex].status !== 'PAID') {
-                                    consolidatedInstallments[existingIndex] = { ...i, sourceProjectId: cleanedP.id };
-                                }
-                            }
-                        });
-                    }
-                    if (info.transactions) {
-                        info.transactions.forEach((t: Record<string, unknown>) => {
-                            const compositeKey = `${t['dealId'] || 'manual'}-${t['title']}-${t['value']}-${t['date']}`;
-                            if (!consolidatedTransactions.some(existing => {
-                                const existingKey = `${existing['dealId'] || 'manual'}-${existing['title']}-${existing['value']}-${existing['date']}`;
-                                return existingKey === compositeKey;
-                            })) {
-                                consolidatedTransactions.push({
-                                    ...t,
-                                    sourceProjectId: cleanedP.id
-                                });
-                            }
-                        });
-                    }
-                }
-            }
-
-            // Retorna o primeiro como base, mas com dados agregados
-            return {
-                ...projects[0],
-                isVirtual: true, // Flag indicando que não deve ser salvo como um registro individual
-                settings: {
-                    ...projects[0].settings,
-                    organizationId: undefined, // Identifica como global
-                    financialInfo: {
-                        ...projects[0].settings.financialInfo,
-                        installments: consolidatedInstallments,
-                        transactions: consolidatedTransactions
-                    }
-                }
-            };
-        }
+        // Nota: o branch antigo "global view" foi removido (Fase 0.1 Gestão de Vendas)
+        // — consolidava parcelas de TODOS os tenants quando organizationId era omitido,
+        // o que vazava dados cross-tenant. Agora organizationId é obrigatório.
 
         if (projects && projects.length > 0) {
             const candidate = projects[0];

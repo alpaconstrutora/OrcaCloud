@@ -2,6 +2,7 @@ import React from 'react';
 import { X, User, Mail, Phone, FileText, Building2 } from 'lucide-react';
 import { Investor } from '../services/investorService';
 import { projectService } from '../services/projectService';
+import { investorContributionsService } from '../services/investorContributionsService';
 
 interface InvestorModalProps {
     isOpen: boolean;
@@ -23,6 +24,8 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
     const [projects, setProjects] = React.useState<any[]>([]);
     const [selectedProjectIds, setSelectedProjectIds] = React.useState<Set<string>>(new Set());
     const [isLoadingProjects, setIsLoadingProjects] = React.useState(false);
+    // Participação por projeto: projectId -> { ownership_pct, committed_amount }
+    const [participations, setParticipations] = React.useState<Record<string, { ownership_pct: number; committed_amount: number }>>({});
 
     React.useEffect(() => {
         if (isOpen) {
@@ -40,12 +43,22 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
 
             // If editing, check which projects are linked to this investor
             if (initialData?.id) {
-                const linked = obras
-                    .filter((p: any) => (p.investor_id ?? p.settings?.investorId) === initialData.id)
-                    .map((p: any) => p.id);
-                setSelectedProjectIds(new Set(linked));
+                const linkedProjects = obras
+                    .filter((p: any) => (p.investor_id ?? p.settings?.investorId) === initialData.id);
+                setSelectedProjectIds(new Set(linkedProjects.map((p: any) => p.id)));
+
+                // Carrega participações existentes desses projetos
+                const parts: Record<string, { ownership_pct: number; committed_amount: number }> = {};
+                await Promise.all(linkedProjects.map(async (p: any) => {
+                    try {
+                        const part = await investorContributionsService.getParticipation(p.id, initialData.id!);
+                        if (part) parts[p.id] = { ownership_pct: part.ownership_pct, committed_amount: part.committed_amount };
+                    } catch { /* tabela pode não existir ainda */ }
+                }));
+                setParticipations(parts);
             } else {
                 setSelectedProjectIds(new Set());
+                setParticipations({});
             }
         } catch (error) {
             console.error("Erro ao carregar obras:", error);
@@ -112,13 +125,39 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
             const currentInvestorId = p.investor_id ?? p.settings?.investorId;
 
             if (isSelected && currentInvestorId !== investorId) {
-                return projectService.linkInvestor(p.id!, investorId);
+                await projectService.linkInvestor(p.id!, investorId);
             } else if (!isSelected && currentInvestorId === investorId) {
-                return projectService.linkInvestor(p.id!, null);
+                await projectService.linkInvestor(p.id!, null);
             }
-            return Promise.resolve();
+
+            // Upsert participação para projetos selecionados que tenham dados preenchidos
+            const part = participations[p.id];
+            const orgId = p.settings?.organizationId;
+            if (isSelected && orgId && part && (part.ownership_pct > 0 || part.committed_amount > 0)) {
+                try {
+                    const existing = await investorContributionsService.getParticipation(p.id, investorId);
+                    await investorContributionsService.saveParticipation({
+                        id: existing?.id,
+                        organization_id: orgId,
+                        project_id: p.id,
+                        investor_id: investorId,
+                        ownership_pct: part.ownership_pct,
+                        committed_amount: part.committed_amount,
+                        quota_count: existing?.quota_count ?? 1,
+                    });
+                } catch (err) {
+                    console.error('Erro ao salvar participação', err);
+                }
+            }
         });
         await Promise.all(promises);
+    };
+
+    const setParticipationField = (projectId: string, field: 'ownership_pct' | 'committed_amount', value: number) => {
+        setParticipations(prev => ({
+            ...prev,
+            [projectId]: { ...{ ownership_pct: 0, committed_amount: 0 }, ...prev[projectId], [field]: value },
+        }));
     };
 
     const toggleProject = (id: string) => {
@@ -241,6 +280,30 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                                         </span>
                                                     )}
                                                 </div>
+                                                {selectedProjectIds.has(project.id) && (
+                                                    <div className="flex gap-3 mt-2" onClick={(e) => e.preventDefault()}>
+                                                        <label className="flex flex-col gap-1">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Participação (%)</span>
+                                                            <input
+                                                                type="number" min="0" max="100" step="0.01"
+                                                                value={participations[project.id]?.ownership_pct ?? ''}
+                                                                onChange={(e) => setParticipationField(project.id, 'ownership_pct', parseFloat(e.target.value) || 0)}
+                                                                className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                                                placeholder="0"
+                                                            />
+                                                        </label>
+                                                        <label className="flex flex-col gap-1">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Capital Comprometido (R$)</span>
+                                                            <input
+                                                                type="number" min="0" step="0.01"
+                                                                value={participations[project.id]?.committed_amount ?? ''}
+                                                                onChange={(e) => setParticipationField(project.id, 'committed_amount', parseFloat(e.target.value) || 0)}
+                                                                className="w-40 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                                                placeholder="0,00"
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                )}
                                             </div>
                                         </label>
                                     ))}

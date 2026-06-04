@@ -268,6 +268,15 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     }
                 }
 
+                // Fase 0.1 (Gestão de Vendas): bloqueia "Global Mode" que vazava
+                // dados cross-tenant. Sem org definida → não carrega Vault.
+                if (!currentOrgId) {
+                    console.log('[FINANCIAL] Sem organização selecionada — Vault não carregado (anti-leak)');
+                    setCommercialProject(null);
+                    setCommercialDeals([]);
+                    return;
+                }
+
                 // Sempre carrega o projeto de Gestão Comercial, negociações e clientes
                 const [proj, deals, clientsData] = await Promise.all([
                     commercialFinanceService.getOrCreateCommercialProject(currentOrgId),

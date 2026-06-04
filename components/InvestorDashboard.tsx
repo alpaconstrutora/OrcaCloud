@@ -1,9 +1,11 @@
 import React from 'react';
-import { TrendingUp, PieChart as PieChartIcon, Building2, Wallet, Calculator, FileText } from 'lucide-react';
+import { TrendingUp, PieChart as PieChartIcon, Building2, Wallet, Calculator, FileText, Bell } from 'lucide-react';
 import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
 import { Investor, investorService } from '../services/investorService';
 import { ProjectData } from '../services/projectService';
-import { investorPortalService, InvestorReport, InvestorOpportunity } from '../services/investorPortalService';
+import { investorPortalService, InvestorReport, InvestorOpportunity, ReportCategory } from '../services/investorPortalService';
+import { announcementsService } from '../services/announcementsService';
+import CommunicationCenter from './investor/CommunicationCenter';
 import { investorContributionsService, InvestorFinancialSummary } from '../services/investorContributionsService';
 import { marketDataService } from '../services/marketDataService';
 import { aiService, AIInsight } from '../services/aiService';
@@ -27,7 +29,7 @@ interface InvestorDashboardProps {
     onUpdateSettings?: (settings: ProjectSettings) => void;
 }
 
-type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro';
+type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'comunicados';
 
 const TABS = [
     { id: 'dashboard', label: 'Evolução', icon: <TrendingUp className="w-4 h-4" /> },
@@ -35,7 +37,8 @@ const TABS = [
     { id: 'holdings', label: 'Minhas Cotas', icon: <PieChartIcon className="w-4 h-4" /> },
     { id: 'financeiro', label: 'Financeiro', icon: <Wallet className="w-4 h-4" /> },
     { id: 'opportunities', label: 'Oportunidades', icon: <Building2 className="w-4 h-4" /> },
-    { id: 'reports', label: 'Relatórios', icon: <FileText className="w-4 h-4" /> },
+    { id: 'reports', label: 'Documentos', icon: <FileText className="w-4 h-4" /> },
+    { id: 'comunicados', label: 'Comunicados', icon: <Bell className="w-4 h-4" /> },
 ] as const;
 
 const TAB_TITLES: Record<TabId, string> = {
@@ -43,8 +46,9 @@ const TAB_TITLES: Record<TabId, string> = {
     holdings: 'Minhas Cotas',
     financeiro: 'Gestão Financeira',
     opportunities: 'Oportunidades',
-    reports: 'Meus Documentos',
+    reports: 'Documentos',
     simulator: 'Inteligência de Investimento',
+    comunicados: 'Comunicados',
 };
 
 const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
@@ -58,6 +62,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const [benchmarkSeries, setBenchmarkSeries] = React.useState<any[]>([]);
     const [reports, setReports] = React.useState<InvestorReport[]>([]);
     const [opportunities, setOpportunities] = React.useState<InvestorOpportunity[]>([]);
+    const [uploadCategory, setUploadCategory] = React.useState<ReportCategory>('relatorio');
     const [summaries, setSummaries] = React.useState<Record<string, InvestorFinancialSummary>>({});
     const [selectedAsset, setSelectedAsset] = React.useState<HoldingItem | null>(null);
     const [aiInsight, setAiInsight] = React.useState<AIInsight | null>(null);
@@ -245,8 +250,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             const saved = await investorPortalService.addReport({
                 organization_id: orgId,
                 investor_id: investorProfile?.id ?? null,
-                name: file.name.replace(/\.pdf$/i, ''),
+                name: file.name.replace(/\.(pdf|docx|xlsx)$/i, ''),
                 type: 'PDF',
+                category: uploadCategory,
                 url,
                 report_date: new Date().toLocaleDateString('pt-BR'),
             });
@@ -391,10 +397,19 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         reports={reports}
                         isAdmin={isAdmin}
                         viewMode={viewMode}
+                        uploadCategory={uploadCategory}
                         onViewModeChange={setViewMode}
+                        onUploadCategoryChange={setUploadCategory}
                         onUpload={handleUploadReport}
                         onDelete={handleDeleteReport}
                         openConfirm={openConfirm}
+                    />
+                )}
+                {activeTab === 'comunicados' && (
+                    <CommunicationCenter
+                        organizationId={settings?.organizationId ?? ''}
+                        investorId={investorProfile?.id}
+                        isAdmin={isAdmin}
                     />
                 )}
             </main>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, User, Mail, Phone, FileText, MapPin } from 'lucide-react';
 import { Client } from '../types';
-import { BASE_CUB_RATES } from '../constants';
+import CityStateSelect from './CityStateSelect';
 
 interface ClientModalProps {
     isOpen: boolean;
@@ -171,42 +171,30 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
-                            <input
-                                type="text"
-                                placeholder="Nome do bairro"
-                                className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                                value={formData.neighborhood}
-                                onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
-                            <input
-                                type="text"
-                                placeholder="Ex: São Paulo"
-                                className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                                value={formData.city}
-                                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                            />
-                        </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
+                        <input
+                            type="text"
+                            placeholder="Nome do bairro"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={formData.neighborhood}
+                            onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
+                        />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Estado (UF)</label>
-                        <select
-                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
-                            value={formData.state}
-                            onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                        >
-                            <option value="">Selecione o Estado</option>
-                            {Object.keys(BASE_CUB_RATES).sort().map(uf => (
-                                <option key={uf} value={uf}>{uf}</option>
-                            ))}
-                        </select>
-                    </div>
+                    <CityStateSelect
+                        cep={(formData as any).zipCode}
+                        stateCode={formData.state}
+                        cityName={formData.city}
+                        onChange={({ cep, stateCode, cityName }) => setFormData({
+                            ...formData,
+                            zipCode: cep,
+                            state: stateCode || '',
+                            city: cityName || '',
+                        } as Partial<Client>)}
+                        labelCls="block text-sm font-medium text-gray-700 mb-1"
+                        inputCls="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    />
 
                     <div className="pt-4 flex gap-3 border-t border-gray-100">
                         <button

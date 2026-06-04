@@ -171,30 +171,17 @@ export interface ProjectSettings {
         date?: string;
         }[];
     investorData?: {
-        holdings?: {
-          name: string;
-          cota: string;
-          equity: string;
-          status: string;
-          yield: string;
-          progress: number;
-        }[];
-        opportunities?: {
-          title: string;
-          subtitle: string;
-          yield: string;
-          link: string;
-          openDate?: string;
-        }[];
-        performance?: { month: string; yield: number; percent: number }[];
         summary?: {
           equity?: string;
           monthlyYield?: string;
           activeWorks?: number;
           totalCotas?: number;
         };
-        reports?: { name: string; date: string; type: string }[];
-        };
+        performance?: Array<{ month: string; yield: number; percent: number }>;
+        holdings?: Array<{ name: string; cota: string; equity: string; status: string; yield: string; progress: number }>;
+        opportunities?: Array<{ title: string; subtitle: string; yield: string; link: string }>;
+        reports?: Array<{ name: string; date: string; type: string }>;
+    };
 }
 
 export interface ProjectDocument {

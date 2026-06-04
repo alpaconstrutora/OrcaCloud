@@ -42,13 +42,7 @@ import { marketDataService, MarketIndexSeries } from '../services/marketDataServ
 import CUBMarketPanel from './CUBMarketPanel';
 import { Line } from 'recharts';
 import { ProjectData } from '../services/projectService';
-
-interface InvestorReport {
-    name: string;
-    date: string;
-    type: string;
-    url?: string;
-}
+import { investorPortalService, InvestorReport, InvestorOpportunity } from '../services/investorPortalService';
 
 interface HoldingItem {
     id?: string;
@@ -126,6 +120,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
     const [showSelic, setShowSelic] = React.useState(false);
     const [showIpca, setShowIpca] = React.useState(false);
     const [showIgpm, setShowIgpm] = React.useState(false);
+    const [reports, setReports] = React.useState<InvestorReport[]>([]);
+    const [opportunities, setOpportunities] = React.useState<InvestorOpportunity[]>([]);
     const [confirmModal, setConfirmModal] = React.useState<{ msg: string; onConfirm: () => void } | null>(null);
     const [inputModal, setInputModal] = React.useState<{ label: string; onConfirm: (val: string) => void } | null>(null);
     const [inputValue, setInputValue] = React.useState('');
@@ -236,21 +232,19 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
     }, [activeProjects, benchmarkSeries]);
 
     const investorData = {
-        ...settings.investorData,
         summary: {
             ...settings.investorData?.summary,
             equity: stats.equity,
             activeWorks: stats.activeWorks
         },
-        holdings: stats.holdings.length > 0 ? stats.holdings : (settings.investorData?.holdings || []),
-        performance: historicalData.length > 0 ? historicalData : (settings.investorData?.performance || []),
+        holdings: stats.holdings,
+        performance: historicalData.length > 0 ? historicalData : [],
     };
 
     const filteredHoldings = React.useMemo(() => {
-        const all = investorData.holdings || [];
-        if (filterStatus === 'Todos') return all;
-        return all.filter(h => h.status === filterStatus);
-    }, [investorData.holdings, filterStatus]);
+        if (filterStatus === 'Todos') return stats.holdings;
+        return stats.holdings.filter(h => h.status === filterStatus);
+    }, [stats.holdings, filterStatus]);
 
     React.useEffect(() => {
         if (initialTab) setActiveTab(initialTab);
@@ -258,19 +252,26 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
 
     React.useEffect(() => {
         async function loadData() {
+            const orgId = settings?.organizationId;
             try {
-                // Parallel fetch CUB, Projects and Benchmarks
                 const [cub, projectsList] = await Promise.all([
                     investorService.calculateCUB(),
                     import('../services/projectService').then(m => m.projectService.listProjects())
                 ]);
 
-                // Benchmarks can be fetched after or in parallel, but let's fix the call
                 const benchmarks = marketDataService.getBenchmarkSeries(12);
-
                 setCubValue(cub);
-                setRealProjects((projectsList || []) as any);
+                setRealProjects((projectsList || []) as unknown as ProjectData[]);
                 setBenchmarkSeries(benchmarks);
+
+                if (orgId) {
+                    const [loadedReports, loadedOpps] = await Promise.all([
+                        investorPortalService.listReports(orgId, investorProfile?.id ?? undefined),
+                        investorPortalService.listOpportunities(orgId),
+                    ]);
+                    setReports(loadedReports);
+                    setOpportunities(loadedOpps);
+                }
             } catch (err) {
                 console.error("Error loading dashboard data", err);
             } finally {
@@ -299,49 +300,40 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
 
     const handleUploadReport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length) return;
+        const orgId = settings?.organizationId;
+        if (!orgId) return;
         const file = e.target.files[0];
         const fileName = `${Date.now()}_${file.name}`;
 
         try {
-            // Check global admin/dev permission
-            if (!isAdmin) {
-                alert('Apenas administradores podem enviar relatórios.');
-                return;
-            }
-
             const path = `reports/${fileName}`;
             await storageService.uploadFile('documents', path, file);
             const publicUrl = storageService.getPublicUrl('documents', path);
 
-            // Add to report list
-            const newReport = {
-                name: file.name.replace('.pdf', ''),
-                date: new Date().toLocaleDateString('pt-BR'),
+            const saved = await investorPortalService.addReport({
+                organization_id: orgId,
+                investor_id: investorProfile?.id ?? null,
+                name: file.name.replace(/\.pdf$/i, ''),
                 type: 'PDF',
-                url: publicUrl
-            };
-
-            const currentReports = investorData.reports || [];
-            handleUpdate('reports', [...currentReports, newReport]);
-
-            alert('Relatório enviado com sucesso!');
+                url: publicUrl,
+                report_date: new Date().toLocaleDateString('pt-BR'),
+            });
+            setReports(prev => [saved, ...prev]);
         } catch (err) {
             console.error("Error uploading report:", err);
             alert("Erro ao enviar relatório.");
         }
     };
 
-    const handleUpdate = (path: string, val: any) => {
+    const handleUpdate = (key: 'monthlyYield' | 'totalCotas', val: string | number) => {
         if (!onUpdateSettings) return;
-        const newData = { ...investorData };
-        const keys = path.split('.');
-        let current = newData as any;
-        for (let i = 0; i < keys.length - 1; i++) {
-            if (!current[keys[i]]) current[keys[i]] = {};
-            current = current[keys[i]];
-        }
-        current[keys[keys.length - 1]] = val;
-        onUpdateSettings({ ...settings, investorData: newData as any });
+        onUpdateSettings({
+            ...settings,
+            investorData: {
+                ...settings.investorData,
+                summary: { ...settings.investorData?.summary, [key]: val },
+            },
+        });
     };
 
     const renderDashboard = () => (
@@ -378,10 +370,10 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                             <div className={`p-2 bg-${stat.color}-50 text-${stat.color}-600 rounded-lg`}>
                                 {stat.icon}
                             </div>
-                            {isAdmin && stat.key !== 'cub' && (
+                            {isAdmin && (stat.key === 'monthlyYield' || stat.key === 'totalCotas') && (
                                 <button
                                     onClick={() => openInput(stat.label, String(stat.val), (res) => {
-                                        if (res) handleUpdate(`summary.${stat.key}`, stat.key === 'activeWorks' || stat.key === 'totalCotas' ? parseInt(res) : res);
+                                        if (res) handleUpdate(stat.key as 'monthlyYield' | 'totalCotas', stat.key === 'totalCotas' ? parseInt(res) : res);
                                     })}
                                     className="p-1 bg-gray-50 text-gray-400 rounded-lg hover:text-indigo-600 opacity-0 group-hover/stat:opacity-100 transition-opacity"
                                 >
@@ -428,7 +420,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                     </div>
                     <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={investorData.performance || []}>
+                            <AreaChart data={historicalData}>
                                 <defs>
                                     <linearGradient id="colorYield" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
@@ -454,7 +446,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                 <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
                     <h3 className="text-lg font-bold text-gray-900 mb-6 font-black uppercase tracking-wider text-[10px] text-gray-400">Minhas Participações</h3>
                     <div className="space-y-6">
-                        {(investorData.holdings || []).slice(0, 3).map((proj, i) => (
+                        {stats.holdings.slice(0, 3).map((proj, i) => (
                             <div key={i} className="flex flex-col gap-2 p-4 border border-gray-50 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer group">
                                 <div className="flex justify-between items-center">
                                     <span className="font-bold text-gray-900">{proj.name}</span>
@@ -511,20 +503,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                         <Table2 className="w-4 h-4" />
                     </button>
                 </div>
-                {isAdmin && (
-                    <button
-                        onClick={() => openInput('Nome do Imóvel', '', (name) => {
-                            if (name) {
-                                const newHoldings = [...(investorData.holdings || []), { name, cota: '1x', equity: 0, status: 'Lançamento', progress: 0 }];
-                                handleUpdate('holdings', newHoldings);
-                            }
-                        })}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Novo Empreendimento
-                    </button>
-                )}
             </div>
 
             {/* Status Filters */}
@@ -588,21 +566,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                                     <td className="px-6 py-4 text-right font-black text-gray-900">
                                         {typeof proj.equity === 'number' ? proj.equity.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : proj.equity}
                                     </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {isAdmin && (
-                                                <button
-                                                    onClick={() => openConfirm('Remover este empreendimento?', () => {
-                                                        const newHoldings = (investorData.holdings || []).filter((_, index) => index !== i);
-                                                        handleUpdate('holdings', newHoldings);
-                                                    })}
-                                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
+                                    <td className="px-6 py-4 text-right"></td>
                                 </tr>
                             ))}
                         </tbody>
@@ -616,17 +580,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                             className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl transition-all cursor-pointer group relative"
                             onClick={() => setSelectedAsset(proj)}
                         >
-                            {isAdmin && (
-                                <button
-                                    onClick={() => openConfirm('Remover este empreendimento?', () => {
-                                        const newHoldings = (investorData.holdings || []).filter((_, index) => index !== i);
-                                        handleUpdate('holdings', newHoldings);
-                                    })}
-                                    className="absolute top-2 right-2 p-1 bg-red-50 text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-20"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            )}
                             <div className="h-40 bg-slate-100 relative">
                                 <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black text-blue-600 uppercase tracking-widest">{proj.status}</div>
                             </div>
@@ -699,9 +652,13 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                 {isAdmin && (
                     <button
                         onClick={() => openInput('Título da Oportunidade', '', (title) => {
-                            if (title) {
-                                const newOps = [...(investorData.opportunities || []), { title, subtitle: 'Novo empreendimento', link: '#' }];
-                                handleUpdate('opportunities', newOps);
+                            if (title && settings?.organizationId) {
+                                investorPortalService.addOpportunity({
+                                    organization_id: settings.organizationId,
+                                    title,
+                                    subtitle: 'Novo empreendimento',
+                                }).then(saved => setOpportunities(prev => [saved, ...prev]))
+                                  .catch(err => console.error('Error adding opportunity', err));
                             }
                         })}
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md"
@@ -713,13 +670,14 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
             </div>
             {viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 gap-6">
-                    {(investorData.opportunities || []).map((op, i) => (
-                        <div key={i} className="bg-[#0B1727] p-12 rounded-[2rem] text-white relative overflow-hidden flex flex-col justify-center min-h-[300px] group">
+                    {opportunities.map((op) => (
+                        <div key={op.id} className="bg-[#0B1727] p-12 rounded-[2rem] text-white relative overflow-hidden flex flex-col justify-center min-h-[300px] group">
                             {isAdmin && (
                                 <button
                                     onClick={() => openConfirm('Remover esta oportunidade?', () => {
-                                        const newOps = (investorData.opportunities || []).filter((_, index) => index !== i);
-                                        handleUpdate('opportunities', newOps);
+                                        investorPortalService.deleteOpportunity(op.id!)
+                                            .then(() => setOpportunities(prev => prev.filter(o => o.id !== op.id)))
+                                            .catch(err => console.error('Error deleting opportunity', err));
                                     })}
                                     className="absolute top-6 right-6 p-2 bg-red-500/20 text-red-300 rounded-xl opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all"
                                 >
@@ -730,10 +688,10 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                             <div className="relative z-10 max-w-2xl">
                                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600/30 rounded-full text-xs font-black text-blue-200 uppercase tracking-widest mb-8">
                                     <Calendar className="w-4 h-4" />
-                                    Reservas Abertas {op.openDate ? `• ${op.openDate}` : ''}
+                                    Reservas Abertas {op.open_date ? `• ${op.open_date}` : ''}
                                 </div>
                                 <h2 className="text-5xl font-black mb-6 leading-tight">{op.title}</h2>
-                                <p className="text-xl text-blue-100/70 mb-10 leading-relaxed font-medium">{op.subtitle}. Retorno projetado de {op.yield} a.a.</p>
+                                <p className="text-xl text-blue-100/70 mb-10 leading-relaxed font-medium">{op.subtitle}. Retorno projetado de {op.projected_yield ?? '—'} a.a.</p>
                                 <div className="flex flex-wrap gap-4">
                                     <button className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-900/40">Garantir Cota</button>
                                     <button className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl transition-all border border-white/10 backdrop-blur">Ver Memorial Descritivo</button>
@@ -754,24 +712,25 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {(investorData.opportunities || []).map((op, i) => (
-                                <tr key={i} className="hover:bg-blue-50/30 transition-colors group">
+                            {opportunities.map((op) => (
+                                <tr key={op.id} className="hover:bg-blue-50/30 transition-colors group">
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col">
                                             <span className="font-bold text-gray-900">{op.title}</span>
                                             <span className="text-xs text-gray-500">{op.subtitle}</span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 font-bold text-emerald-600">{op.yield} a.a.</td>
-                                    <td className="px-6 py-4 text-gray-500 text-sm">{op.openDate || 'Em breve'}</td>
+                                    <td className="px-6 py-4 font-bold text-emerald-600">{op.projected_yield ?? '—'} a.a.</td>
+                                    <td className="px-6 py-4 text-gray-500 text-sm">{op.open_date || 'Em breve'}</td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex justify-end gap-2">
                                             <button className="text-xs font-bold text-blue-600 hover:text-blue-700">Ver Detalhes</button>
                                             {isAdmin && (
                                                 <button
                                                     onClick={() => openConfirm('Remover esta oportunidade?', () => {
-                                                        const newOps = (investorData.opportunities || []).filter((_, index) => index !== i);
-                                                        handleUpdate('opportunities', newOps);
+                                                        investorPortalService.deleteOpportunity(op.id!)
+                                                            .then(() => setOpportunities(prev => prev.filter(o => o.id !== op.id)))
+                                                            .catch(err => console.error('Error deleting opportunity', err));
                                                     })}
                                                     className="p-1 text-red-400 hover:text-red-600"
                                                 >
@@ -835,15 +794,15 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
             </div>
             {viewMode === 'list' ? (
                 <div className="divide-y divide-gray-50">
-                    {(investorData.reports || []).map((doc, i) => (
-                        <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition-colors group cursor-pointer relative">
+                    {reports.map((doc) => (
+                        <div key={doc.id} className="p-6 flex items-center justify-between hover:bg-gray-50 transition-colors group cursor-pointer relative">
                             <div className="flex items-center gap-4">
                                 <div className="p-3 bg-gray-50 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-xl transition-colors">
                                     <FileText className="w-6 h-6" />
                                 </div>
                                 <div>
                                     <span className="font-bold text-gray-700 group-hover:text-gray-900 block">{doc.name}</span>
-                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{doc.date}</span>
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{doc.report_date}</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -852,8 +811,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             openConfirm('Remover este relatório?', () => {
-                                                const newReports = (investorData.reports || []).filter((_, index) => index !== i);
-                                                handleUpdate('reports', newReports);
+                                                investorPortalService.deleteReport(doc.id!)
+                                                    .then(() => setReports(prev => prev.filter(r => r.id !== doc.id)))
+                                                    .catch(err => console.error('Error deleting report', err));
                                             });
                                         }}
                                         className="p-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -865,11 +825,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                                     className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        if ((doc as any).url) {
-                                            window.open((doc as any).url, '_blank');
-                                        } else {
-                                            alert('URL não disponível para este relatório');
-                                        }
+                                        if (doc.url) window.open(doc.url, '_blank');
                                     }}
                                 >
                                     <ArrowUpRight className="w-5 h-5" />
@@ -880,15 +836,16 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                 </div>
             ) : (
                 <div className="p-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {(investorData.reports || []).map((doc, i) => (
-                        <div key={i} className="group flex flex-col items-center p-6 rounded-3xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-xl hover:border-blue-100 transition-all cursor-pointer relative">
+                    {reports.map((doc) => (
+                        <div key={doc.id} className="group flex flex-col items-center p-6 rounded-3xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-xl hover:border-blue-100 transition-all cursor-pointer relative">
                             {isAdmin && (
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         openConfirm('Remover este relatório?', () => {
-                                            const newReports = (investorData.reports || []).filter((_, index) => index !== i);
-                                            handleUpdate('reports', newReports);
+                                            investorPortalService.deleteReport(doc.id!)
+                                                .then(() => setReports(prev => prev.filter(r => r.id !== doc.id)))
+                                                .catch(err => console.error('Error deleting report', err));
                                         });
                                     }}
                                     className="absolute top-2 right-2 p-1.5 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -901,17 +858,14 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({ activeTab: initia
                             </div>
                             <div className="text-center">
                                 <span className="font-bold text-gray-900 block mb-1 uppercase tracking-tight text-sm">{doc.name}</span>
-                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{doc.date}</span>
+                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{doc.report_date}</span>
                             </div>
                             <div className="mt-4 flex gap-2">
                                 <button
                                     className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"
-                                    onClick={() => (doc as any).url ? window.open((doc as any).url, '_blank') : alert('URL não disponível')}
+                                    onClick={() => doc.url && window.open(doc.url, '_blank')}
                                 >
                                     <Download className="w-4 h-4" />
-                                </button>
-                                <button className="p-2 bg-gray-100 text-gray-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all">
-                                    <ArrowUpRight className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>

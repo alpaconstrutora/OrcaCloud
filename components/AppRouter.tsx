@@ -64,6 +64,8 @@ const StructuralModule      = React.lazy(() => import('./StructuralModule'));
 const TasksModule           = React.lazy(() => import('./TasksModule'));
 const ServicesCommercialModule = React.lazy(() => import('./ServicesCommercialModule'));
 const ServiceContractsModule   = React.lazy(() => import('./ServiceContractsModule'));
+const SalesManagementModule    = React.lazy(() => import('./SalesManagementModule'));
+import { VIEW_TO_SALES_TAB } from './SalesManagementModule';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
@@ -563,26 +565,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'automation':
       return <AutomationManager settings={settingsWithId} onUpdateSettings={handleUpdateSettings} organizationId={activeOrganizationId || undefined} />;
 
-    // ── Imovib ─────────────────────────────────────────────────────────────────
+    // ── Imovib — agora gerenciado dentro do SalesManagementModule ──────────────
     case 'imovib':
-      if (isCreatingImovibStudy) {
-        return (
-          <ImovibForm
-            organizationId={activeOrganizationId || undefined}
-            studyId={editingImovibStudyId || undefined}
-            onBack={() => { setIsCreatingImovibStudy(false); setEditingImovibStudyId(null); }}
-            onSaved={() => { setIsCreatingImovibStudy(false); setEditingImovibStudyId(null); }}
-          />
-        );
-      }
-      if (viewingImovibStudyId) {
-        return <ImovibDetailView studyId={viewingImovibStudyId} onBack={() => setViewingImovibStudyId(null)} />;
-      }
       return (
-        <ImovibDashboard
+        <SalesManagementModule
           organizationId={activeOrganizationId || undefined}
-          onNewStudy={() => { setEditingImovibStudyId(null); setIsCreatingImovibStudy(true); }}
-          onViewStudy={(id: string) => setViewingImovibStudyId(id)}
+          profile={currentProfile}
+          budget={budget}
+          defaultTab="viabilidade"
+          sourceView={activeView}
+          onGoToProject={(id, section) => handleLoadProject(id, section ?? null)}
         />
       );
 
@@ -627,6 +619,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return <SupplierDashboard profile={currentProfile} supplierProfile={supplierProfile} onNavigate={handleNavigate} activeTab={adminSupplierTab as 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents' | 'profile'} />;
     }
 
+    case 'gestao-vendas':
+    case 'sales':
+    case 'rentals':
     case 'broker-area':
     case 'broker-proposals':
     case 'broker-leads':
@@ -639,13 +634,17 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'broker-analytics':
     case 'broker-health':
     case 'broker-integrations': {
-      const brokerTabMap: Record<string, string> = {
-        'broker-proposals': 'propostas', 'broker-leads': 'leads', 'broker-commissions': 'comissoes',
-        'broker-materials': 'materiais', 'broker-ranking': 'ranking', 'broker-training': 'treinamento',
-        'broker-events': 'agenda', 'broker-chat': 'chat', 'broker-analytics': 'analytics',
-        'broker-health': 'saude', 'broker-integrations': 'integracoes'
-      };
-      return <BrokerPortal profile={currentProfile} activeTab={(brokerTabMap[activeView] || 'estoque') as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'} organizationId={activeOrganizationId || undefined} />;
+      const salesTab = VIEW_TO_SALES_TAB[activeView] ?? 'espelho';
+      return (
+        <SalesManagementModule
+          organizationId={activeOrganizationId || undefined}
+          profile={currentProfile}
+          budget={budget}
+          defaultTab={salesTab}
+          sourceView={activeView}
+          onGoToProject={(id, section) => handleLoadProject(id, section ?? null)}
+        />
+      );
     }
 
     // ── Engenharia ─────────────────────────────────────────────────────────────
@@ -724,27 +723,19 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       );
 
     case 'service-contracts':
+    case 'services-commercial': {
+      const salesTab = VIEW_TO_SALES_TAB[activeView] ?? 'contratos';
       return (
-        <ServiceContractsModule
-          organizationId={activeOrganizationId || organizations[0]?.id || ''}
+        <SalesManagementModule
+          organizationId={activeOrganizationId || undefined}
+          profile={currentProfile}
           budget={budget}
-          onGoToProject={(id) => handleLoadProject(id, 'analytic')}
+          defaultTab={salesTab}
+          sourceView={activeView}
+          onGoToProject={(id, section) => handleLoadProject(id, section ?? null)}
         />
       );
-
-    case 'services-commercial':
-      return (
-        <ServicesCommercialModule
-          organizationId={activeOrganizationId || organizations[0]?.id || ''}
-          onGoToProject={(projectId) => handleLoadProject(projectId, 'analytic')}
-        />
-      );
-
-    case 'sales':
-      return <SalesModule organizationId={activeOrganizationId || undefined} />;
-
-    case 'rentals':
-      return <RentalsModule organizationId={activeOrganizationId || undefined} />;
+    }
 
     case 'explorer':
       return (

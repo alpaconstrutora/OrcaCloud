@@ -516,7 +516,7 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={TrendingUp}
                     isOpen={isVendasOpen}
                     onToggle={() => setIsVendasOpen(!isVendasOpen)}
-                    hasActiveChild={['sales','rentals','services-commercial','service-contracts','broker-area','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib'].includes(activeView)}
+                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-area','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib'].includes(activeView)}
                   >
                     {(mod.crm || isDev) && (
                       <>

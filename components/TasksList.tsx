@@ -723,7 +723,7 @@ const TasksList: React.FC<Props> = ({
                   <tr className="border-t border-slate-100">
                     <td colSpan={2 + colOrder.length} className="px-4 py-2">
                       <button
-                        onClick={onAddTask}
+                        onClick={() => onAddTask()}
                         className="flex items-center gap-2 text-sm text-slate-400 hover:text-blue-600 transition-colors font-medium group/add"
                       >
                         <span className="w-5 h-5 rounded flex items-center justify-center text-slate-300 group-hover/add:text-blue-500 group-hover/add:bg-blue-50 transition-colors">

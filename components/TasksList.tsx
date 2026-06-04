@@ -3,7 +3,7 @@ import {
   CheckCircle2, ExternalLink, Inbox,
   Building2, ChevronDown, ChevronRight, Plus,
   ArrowUp, ArrowDown, Search, X, SlidersHorizontal,
-  GripVertical, CornerLeftUp, Flag,
+  GripVertical, CornerLeftUp, Flag, Calendar, AlertTriangle,
 } from 'lucide-react'
 import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
@@ -487,6 +487,111 @@ const TasksList: React.FC<Props> = ({
     )
   }
 
+  // ── Cartão de tarefa (mobile) ───────────────────────────────────────────────
+  function TaskCard({ t, depth = 0 }: { t: TaskRecord; depth?: number }) {
+    const children   = childMap[t.id] ?? []
+    const isExpanded = expanded.has(t.id)
+    const taskStatus = t.status_id ? statusMap[t.status_id] : null
+    const isDone     = taskStatus ? taskStatus.is_done : t.status === 'done'
+    const prio       = PRIORITY_META[t.priority] ?? PRIORITY_META[3]
+    const assignee   = t.assignee_employee_id ? empMap[t.assignee_employee_id] : null
+    const proj       = t.project_id ? projMap[t.project_id] : null
+    const route      = t.source_ref?.route
+    const checkColor = taskStatus?.color ?? (isDone ? '#10b981' : '#94a3b8')
+
+    return (
+      <div>
+        <div
+          className={`rounded-2xl border p-3.5 transition-all ${isDone ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 shadow-sm'}`}
+          style={{ marginLeft: depth * 14 }}
+        >
+          <div className="flex items-start gap-3">
+            {/* checkbox circular dashed — estilo ClickUp */}
+            <button
+              onClick={() => onToggleDone(t)}
+              className="mt-0.5 flex-shrink-0 active:scale-90 transition-transform"
+              title={isDone ? 'Reabrir tarefa' : 'Concluir tarefa'}
+            >
+              {isDone
+                ? <CheckCircle2 className="w-6 h-6" style={{ color: checkColor }} />
+                : <div className="w-5 h-5 rounded-full border-2 border-dashed" style={{ borderColor: checkColor }} />}
+            </button>
+
+            {/* conteúdo — toque para editar */}
+            <button onClick={() => onEdit(t)} className="flex-1 min-w-0 text-left">
+              <div className={`font-bold text-[15px] leading-snug text-slate-900 ${isDone ? 'line-through text-slate-400' : ''}`}>
+                {t.title}
+              </div>
+              {t.description && <div className="text-xs text-slate-400 mt-0.5 truncate">{t.description}</div>}
+
+              {/* chips de metadados */}
+              <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                {t.due_date && (
+                  <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg ${isOverdue(t.due_date) ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+                    {isOverdue(t.due_date) ? <AlertTriangle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
+                    {fmt(t.due_date)}
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-600">
+                  <Flag className={`w-3 h-3 fill-current ${prio.flag}`} /> {prio.label}
+                </span>
+                {taskStatus && (
+                  <span
+                    className="inline-flex items-center text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-lg"
+                    style={{ backgroundColor: taskStatus.color, color: '#fff' }}
+                  >
+                    {taskStatus.name}
+                  </span>
+                )}
+                {proj && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-500">
+                    <Building2 className="w-3 h-3 flex-shrink-0" /> <span className="truncate max-w-[110px]">{proj.name}</span>
+                  </span>
+                )}
+                {assignee && (
+                  <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-black text-white flex-shrink-0 ${avatarBg(assignee.name)}`}>
+                    {initials(assignee.name)}
+                  </span>
+                )}
+              </div>
+            </button>
+
+            {/* abrir origem */}
+            {route && (
+              <button
+                onClick={() => onNavigate(route)}
+                title="Abrir origem"
+                className="flex-shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-blue-600 hover:bg-blue-50"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* rodapé — subtarefas */}
+          <div className="flex items-center gap-4 mt-2.5 pl-9">
+            {children.length > 0 && (
+              <button onClick={() => toggleExpand(t.id)} className="flex items-center gap-1 text-[11px] font-bold text-slate-400">
+                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                {children.length} subtarefa{children.length > 1 ? 's' : ''}
+              </button>
+            )}
+            <button onClick={() => onAddSubtask(t)} className="flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-blue-600">
+              <Plus className="w-3.5 h-3.5" /> Subtarefa
+            </button>
+          </div>
+        </div>
+
+        {/* filhos */}
+        {isExpanded && children.length > 0 && (
+          <div className="mt-2 space-y-2">
+            {children.map(child => <TaskCard key={child.id} t={child} depth={depth + 1} />)}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // Constrói os defaults para criação contextual dentro de um grupo
   function buildDefaults(groupKey: string): TaskDefaults {
     if (groupKey === '__none__') return {}
@@ -681,7 +786,9 @@ const TasksList: React.FC<Props> = ({
           {(q || activeFilters) && <p className="text-xs mt-1 text-slate-300 font-medium">Tente ajustar a busca ou os filtros</p>}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <>
+        {/* ── Desktop: tabela ─────────────────────────────────────────────── */}
+        <div className="hidden md:block bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px]">
               <thead className="bg-slate-50 border-b border-slate-200">
@@ -738,6 +845,46 @@ const TasksList: React.FC<Props> = ({
             </table>
           </div>
         </div>
+
+        {/* ── Mobile: cartões ─────────────────────────────────────────────── */}
+        <div className="md:hidden space-y-5">
+          {groups.map(group => {
+            const collapsed = collapsedGroups.has(group.key)
+            return (
+              <div key={group.key} className="space-y-2.5">
+                {/* Cabeçalho do grupo — só quando agrupamento ativo */}
+                {groupBy !== 'none' && (
+                  <button
+                    onClick={() => toggleGroup(group.key)}
+                    className="w-full flex items-center gap-2 px-1 select-none"
+                  >
+                    <span className="text-slate-400 flex-shrink-0">
+                      {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </span>
+                    {group.color && <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: group.color }} />}
+                    <span className="font-black text-sm text-slate-800">{group.label}</span>
+                    <span className="text-[11px] font-bold text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                      {group.tasks.length}
+                    </span>
+                  </button>
+                )}
+
+                {!collapsed && group.tasks.map(t => <TaskCard key={t.id} t={t} />)}
+
+                {/* + Adicionar tarefa */}
+                {!collapsed && onAddTask && (
+                  <button
+                    onClick={() => onAddTask(buildDefaults(group.key))}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-slate-200 text-sm font-bold text-slate-400 hover:text-blue-600 hover:border-blue-300 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" /> Adicionar tarefa
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        </>
       )}
     </div>
   )

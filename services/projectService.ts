@@ -7,6 +7,7 @@ export interface ProjectData {
     settings: ProjectSettings;
     budget: BudgetEntry[];
     empresa_id?: string;
+    investor_id?: string;
     updated_at?: string;
 }
 
@@ -49,6 +50,7 @@ export const projectService = {
         const tipoObra = rest.settings?.tipoObra ?? null;
         const regimeObra = rest.settings?.regimeObra ?? null;
         const empresaId = rest.empresa_id ?? rest.settings?.empresaId ?? null;
+        const investorId = rest.investor_id ?? rest.settings?.investorId ?? null;
 
         // Se tivermos um ID, tentamos atualizar
         if (id) {
@@ -63,6 +65,7 @@ export const projectService = {
                     ...(tipoObra !== null ? { tipo_obra: tipoObra } : {}),
                     ...(regimeObra !== null ? { regime_obra: regimeObra } : {}),
                     ...(empresaId ? { empresa_id: empresaId } : {}),
+                    investor_id: investorId || null,
                 })
                 .eq('id', id)
                 .select()
@@ -107,6 +110,7 @@ export const projectService = {
                     ...(tipoObra ? { tipo_obra: tipoObra } : {}),
                     ...(regimeObra ? { regime_obra: regimeObra } : {}),
                     ...(empresaId ? { empresa_id: empresaId } : {}),
+                    ...(investorId ? { investor_id: investorId } : {}),
                 })
                 .select()
                 .single();
@@ -135,7 +139,7 @@ export const projectService = {
     ) {
         let query = supabase
             .from('projects')
-            .select('id, name, updated_at, created_at, settings, code, empresa_id')
+            .select('id, name, updated_at, created_at, settings, code, empresa_id, investor_id')
             .order('updated_at', { ascending: false });
 
         if (clientId) {
@@ -156,6 +160,14 @@ export const projectService = {
         const { data, error } = await query;
         if (error) throw error;
         return data;
+    },
+
+    async linkInvestor(projectId: string, investorId: string | null) {
+        const { error } = await supabase
+            .from('projects')
+            .update({ investor_id: investorId })
+            .eq('id', projectId);
+        if (error) throw error;
     },
 
     async deleteProject(id: string) {

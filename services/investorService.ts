@@ -1,5 +1,34 @@
 import { supabase } from '../lib/supabase';
 
+// Mapeamento NBR 12721 (padrão R8N, Tabela 5) → códigos SINAPI
+// Atualizar conforme novas versões da tabela NBR ou revisões SINAPI.
+const NBR_TO_SINAPI: Record<string, string> = {
+    "Chapa compensado": "1358",
+    "Aço CA-50": "10917",
+    "Concreto": "94964",
+    "Cimento": "1379",
+    "Areia": "367",
+    "Brita": "4721",
+    "Bloco cerâmico": "7258",
+    "Porta interna": "91306",
+    "Esquadria de correr": "40659",
+    "Fechadura": "91306",
+    "Placa de gesso": "96186",
+    "Vidro liso": "72116",
+    "Tinta látex": "88489",
+    "Emulsão": "98546",
+    "Fio de cobre": "938",
+    "Disjuntor": "93654",
+    "Bacia sanitária": "6023",
+    "Registro": "6029",
+    "Tubo de ferro": "92695",
+    "Tubo de PVC": "9868",
+    "Pedreiro": "88309",
+    "Servente": "88316",
+    "Engenheiro": "93208",
+    "Locação de betoneira": "88830",
+};
+
 export interface Investor {
     id: string;
     name: string;
@@ -14,24 +43,23 @@ export const investorService = {
     async listInvestors(organizationId?: string) {
         // We'll try to fetch, if it fails because table doesn't exist, we return empty
         try {
+            const INVESTOR_COLS = 'id, name, email, phone, document, organization_id, created_at';
+
             let query = supabase
                 .from('investors')
-                .select('*');
-            
+                .select(INVESTOR_COLS);
+
             if (organizationId) {
-                // Se organizationId for fornecido, tentamos filtrar. 
-                // Nota: Se a coluna não existir, o Supabase retornará erro aqui.
                 query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
             }
 
             let { data, error } = await query.order('name', { ascending: true });
 
-            // Se houver erro de coluna inexistente (42703) e estávamos filtrando, tentamos sem o filtro
             if (error && error.code === '42703' && organizationId) {
                 console.warn("[INVESTOR SERVICE] organization_id column missing, falling back to global list.");
                 const retry = await supabase
                     .from('investors')
-                    .select('*')
+                    .select(INVESTOR_COLS)
                     .order('name', { ascending: true });
                 data = retry.data;
                 error = retry.error;
@@ -46,12 +74,13 @@ export const investorService = {
     },
 
     async saveInvestor(investor: Partial<Investor>) {
+        const INVESTOR_COLS = 'id, name, email, phone, document, organization_id, created_at';
         if (investor.id) {
             const { data, error } = await supabase
                 .from('investors')
                 .update(investor)
                 .eq('id', investor.id)
-                .select()
+                .select(INVESTOR_COLS)
                 .single();
 
             if (error) throw error;
@@ -60,7 +89,7 @@ export const investorService = {
             const { data, error } = await supabase
                 .from('investors')
                 .insert(investor)
-                .select()
+                .select(INVESTOR_COLS)
                 .single();
 
             if (error) throw error;
@@ -81,7 +110,7 @@ export const investorService = {
         try {
             const { data, error } = await supabase
                 .from('investors')
-                .select('*')
+                .select('id, name, email, phone, document, organization_id, created_at')
                 .eq('email', email.toLowerCase())
                 .maybeSingle();
 
@@ -132,39 +161,6 @@ export const investorService = {
         const nbrData = await this.getNBRTable('TABELA 5');
         if (!nbrData) return 0;
 
-        // R-8N is Column 4 (Index 4) based on our debug
-        // Rows match standard NBR items
-        // We act on rows > 3
-
-        // Manual Map: Description Pattern -> SINAPI Code
-        // TODO: This should be moved to a configuration file or DB table
-        const NBR_TO_SINAPI: Record<string, string> = {
-            "Chapa compensado": "1358", // CHAPA DE MADEIRA COMPENSADA RESINADA 17MM
-            "Aço CA-50": "10917", // AÇO CA-50 10MM
-            "Concreto": "94964", // CONCRETO FCK=25MPA
-            "Cimento": "1379", // CIMENTO PORTLAND
-            "Areia": "367", // AREIA MEDIA
-            "Brita": "4721", // PEDRA BRITADA N. 2
-            "Bloco cerâmico": "7258", // BLOCO CERAMICO 9X19X19
-            "Porta interna": "91306", // KIT PORTA DE MADEIRA
-            "Esquadria de correr": "40659", // JANELA DE CORRER (Proxy)
-            "Fechadura": "91306", // (Reuse Kit Porta as proxy or ignore)
-            "Placa de gesso": "96186", // FORRO DE GESSO
-            "Vidro liso": "72116", // VIDRO LISO (if 0, acceptable small impact)
-            "Tinta látex": "88489", // PINTURA LATEX
-            "Emulsão": "98546", // IMPERMEABILIZAÇÃO
-            "Fio de cobre": "938", // FIO DE COBRE SOLIDO 2.5MM (Corrected from 101878)
-            "Disjuntor": "93654", // DISJUNTOR
-            "Bacia sanitária": "6023", // BACIA SANITARIA
-            "Registro": "6029", // REGISTRO
-            "Tubo de ferro": "92695", // TUBO ACO GALVANIZADO
-            "Tubo de PVC": "9868", // TUBO PVC
-            "Pedreiro": "88309", // PEDREIRO COM ENCARGOS
-            "Servente": "88316", // SERVENTE COM ENCARGOS
-            "Engenheiro": "93208", // ENGENHEIRO CIVIL
-            "Locação de betoneira": "88830" // BETONEIRA (aluguel)
-        };
-
         let totalCUB = 0;
         const codesToFetch = new Set<string>();
         const itemsToProcess: { qty: number, code: string }[] = [];
@@ -197,7 +193,7 @@ export const investorService = {
         try {
             const { data, error } = await supabase
                 .from('sinapi_items')
-                .select('*')
+                .select('id, code, description, price, unit')
                 .ilike('description', `%${query}%`)
                 .limit(20);
 

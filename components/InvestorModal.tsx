@@ -41,7 +41,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
             // If editing, check which projects are linked to this investor
             if (initialData?.id) {
                 const linked = obras
-                    .filter((p: any) => p.settings?.investorId === initialData.id)
+                    .filter((p: any) => (p.investor_id ?? p.settings?.investorId) === initialData.id)
                     .map((p: any) => p.id);
                 setSelectedProjectIds(new Set(linked));
             } else {
@@ -109,32 +109,16 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
     const updateProjectLinks = async (investorId: string) => {
         const promises = projects.map(async (p) => {
             const isSelected = selectedProjectIds.has(p.id);
-            const currentInvestorId = p.settings?.investorId;
+            const currentInvestorId = p.investor_id ?? p.settings?.investorId;
 
-            // If selected but not linked -> Link
             if (isSelected && currentInvestorId !== investorId) {
-                return projectService.saveProject({
-                    ...p,
-                    settings: { ...p.settings, investorId: investorId, investorName: formData.name }
-                });
-            }
-            // If NOT selected but WAS linked -> Unlink
-            else if (!isSelected && currentInvestorId === investorId) {
-                return projectService.saveProject({
-                    ...p,
-                    settings: { ...p.settings, investorId: undefined, investorName: undefined }
-                });
+                return projectService.linkInvestor(p.id!, investorId);
+            } else if (!isSelected && currentInvestorId === investorId) {
+                return projectService.linkInvestor(p.id!, null);
             }
             return Promise.resolve();
         });
-
         await Promise.all(promises);
-        // We might need to refresh the parent list to show new links? 
-        // The parent reloads on submit, so it should be fine IF we await this.
-        // But we are not awaiting `onSubmit`. Race condition?
-        // Yes.
-
-        // I'll leave this logic here but I really need to update the parent to wait for this.
     };
 
     const toggleProject = (id: string) => {
@@ -251,7 +235,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                                 <div className="text-sm font-medium text-gray-800">{project.name}</div>
                                                 <div className="text-xs text-gray-500 flex items-center gap-1">
                                                     <span className="truncate max-w-[200px]">{project.settings?.location || 'Local não informado'}</span>
-                                                    {project.settings?.investorId && project.settings?.investorId !== initialData?.id && (
+                                                    {(project.investor_id ?? project.settings?.investorId) && (project.investor_id ?? project.settings?.investorId) !== initialData?.id && (
                                                         <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded text-[10px] ml-1">
                                                             Já vinculado a outro
                                                         </span>

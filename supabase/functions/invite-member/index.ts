@@ -28,6 +28,7 @@ serve(async (req: Request) => {
 
     try {
         const { email, name, organizationId, role = 'member', resend = false } = await req.json();
+        console.log('[invite-member] START', { email, organizationId, resend });
 
         if (!email || !organizationId) {
             return json({ error: 'email e organizationId são obrigatórios' }, 400);
@@ -37,7 +38,6 @@ serve(async (req: Request) => {
         const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
         const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
-        // Verify requesting user via their JWT
         const userClient = createClient(supabaseUrl, anonKey, {
             global: { headers: { Authorization: authHeader } },
         });
@@ -48,7 +48,6 @@ serve(async (req: Request) => {
 
         const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-        // Verify caller has admin or owner role in this org
         const { data: callerMember } = await adminClient
             .from('organization_members')
             .select('role')
@@ -67,26 +66,36 @@ serve(async (req: Request) => {
         };
 
         const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, inviteOptions);
+        console.log('[invite-member] inviteUserByEmail result', { error: inviteError?.message ?? null });
 
         if (inviteError) {
             const msg = inviteError.message.toLowerCase();
 
             if (msg.includes('already') || msg.includes('registered')) {
                 if (resend) {
-                    // Find the unconfirmed user and delete so we can re-send the invite email
-                    const { data: listData } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-                    const existing = listData?.users?.find(
-                        (u: { email?: string; email_confirmed_at?: string | null }) =>
-                            u.email?.toLowerCase() === email.toLowerCase()
-                    );
+                    const { data: listData, error: listError } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+                    console.log('[invite-member] listUsers', {
+                        error: listError?.message ?? null,
+                        count: listData?.users?.length ?? 0,
+                    });
+
+                    // listUsers returns { data: { users: User[] } } in supabase-js v2
+                    const users = (listData as { users?: { id: string; email?: string; email_confirmed_at?: string | null }[] } | null)?.users ?? [];
+                    const existing = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+                    console.log('[invite-member] existing user', {
+                        found: !!existing,
+                        email_confirmed_at: existing?.email_confirmed_at ?? null,
+                    });
 
                     if (existing && !existing.email_confirmed_at) {
                         const { error: deleteError } = await adminClient.auth.admin.deleteUser(existing.id);
+                        console.log('[invite-member] deleteUser', { error: deleteError?.message ?? null });
                         if (deleteError) {
                             return json({ error: 'Não foi possível reenviar: ' + deleteError.message }, 422);
                         }
 
                         const { error: reinviteError } = await adminClient.auth.admin.inviteUserByEmail(email, inviteOptions);
+                        console.log('[invite-member] reinvite', { error: reinviteError?.message ?? null });
                         if (reinviteError) {
                             return json({ error: reinviteError.message }, 422);
                         }
@@ -94,11 +103,10 @@ serve(async (req: Request) => {
                         return json({ success: true });
                     }
 
-                    // User is already confirmed — they have an active account
+                    // User confirmed — active account
                     return json({ success: true, alreadyConfirmed: true });
                 }
 
-                // New invite for existing user — treat as success (membership was already added)
                 return json({ success: true, alreadyRegistered: true });
             }
 
@@ -108,7 +116,7 @@ serve(async (req: Request) => {
         return json({ success: true });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Erro interno';
-        console.error('[invite-member]', message);
+        console.error('[invite-member] EXCEPTION', message);
         return json({ error: message }, 500);
     }
 });

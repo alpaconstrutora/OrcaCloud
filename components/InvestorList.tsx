@@ -209,7 +209,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                         <td className="px-6 py-4">
                                             {(() => {
                                                 const investorProjects = projects.filter(p =>
-                                                    p.settings?.investorId === investor.id &&
+                                                    (p.investor_id ?? p.settings?.investorId) === investor.id &&
                                                     p.settings?.classification === 'OBRA'
                                                 );
 
@@ -291,7 +291,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                         {/* Linked Projects for Grid View */}
                                         {(() => {
                                             const investorProjects = projects.filter(p =>
-                                                p.settings?.investorId === investor.id &&
+                                                (p.investor_id ?? p.settings?.investorId) === investor.id &&
                                                 p.settings?.classification === 'OBRA'
                                             );
 

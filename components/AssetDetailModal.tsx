@@ -27,22 +27,16 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose })
     if (!project) return null;
 
     // --- Derived Data from Project ---
-    const purchaseDate = project.purchaseDate || '01/01/2024';
+    const purchaseDate = project.purchaseDate || null;
     const purchasePrice = project.invested || 100000;
     const currentValue = project.currentValue || project.equity || 120000;
     const totalAppreciation = currentValue - purchasePrice;
     const appreciationPercent = purchasePrice > 0 ? (totalAppreciation / purchasePrice) * 100 : 0;
     const status = project.status || 'Em Execução';
     const progress = (project.progress || 0) * 100;
-    const yoc = project.yoc ? (project.yoc * 100).toFixed(1) + '%' : '12.5%';
+    const yoc = project.yoc ? (project.yoc * 100).toFixed(1) + '%' : '—';
 
-    // Milestones (Mock for now, could be derived from Schedule)
-    const milestones = [
-        { name: 'Fundação', date: 'Jan 2024', status: 'completed' },
-        { name: 'Estrutura', date: 'Jun 2024', status: 'completed' },
-        { name: 'Alvenaria', date: 'Dez 2024', status: 'in_progress' },
-        { name: 'Acabamento', date: 'Jun 2025', status: 'pending' },
-    ];
+    const milestones: { name: string; date: string; status: string }[] = project.milestones || [];
     const [aiOpinion, setAiOpinion] = React.useState<string | null>(null);
     const [loadingAI, setLoadingAI] = React.useState(false);
 
@@ -64,7 +58,9 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose })
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {/* Header Image/Gradient */}
                     <div className="h-48 bg-gradient-to-r from-blue-900 to-indigo-900 relative overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80')] bg-cover bg-center opacity-20 mix-blend-overlay"></div>
+                        {project.coverUrl && (
+                            <div className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-overlay" style={{ backgroundImage: `url(${project.coverUrl})` }} />
+                        )}
                         <button
                             onClick={onClose}
                             className="absolute top-6 right-6 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors backdrop-blur-md"
@@ -92,9 +88,11 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose })
                             <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
                                 <p className="text-xs font-bold text-gray-400 mb-1">Investimento Inicial</p>
                                 <p className="text-xl font-black text-gray-900">{formatCurrency(purchasePrice)}</p>
-                                <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
-                                    <Calendar className="w-3 h-3" /> {purchaseDate}
-                                </p>
+                                {purchaseDate && (
+                                    <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                                        <Calendar className="w-3 h-3" /> {purchaseDate}
+                                    </p>
+                                )}
                             </div>
                             <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
                                 <p className="text-xs font-bold text-blue-400 mb-1">Valor Atual</p>
@@ -217,28 +215,25 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose })
                             </h3>
 
                             <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
-                                <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 hover:border-blue-200 transition-colors cursor-pointer group">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-red-50 text-red-500 rounded-lg group-hover:bg-red-100 transition-colors">
-                                            <FileText className="w-4 h-4" />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-bold text-gray-900">Contrato de Compra</span>
-                                            <span className="text-[10px] text-gray-400">PDF • 2.4 MB</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 hover:border-blue-200 transition-colors cursor-pointer group">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-blue-50 text-blue-500 rounded-lg group-hover:bg-blue-100 transition-colors">
-                                            <FileText className="w-4 h-4" />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-bold text-gray-900">Matrícula do Imóvel</span>
-                                            <span className="text-[10px] text-gray-400">PDF • 1.1 MB</span>
+                                {(project.documents || []).length === 0 ? (
+                                    <p className="text-sm text-gray-400 text-center py-4">Nenhum documento disponível.</p>
+                                ) : (project.documents as { name: string; url?: string; size?: string }[]).map((doc, i) => (
+                                    <div
+                                        key={i}
+                                        className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 hover:border-blue-200 transition-colors cursor-pointer group"
+                                        onClick={() => doc.url && window.open(doc.url, '_blank')}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-blue-50 text-blue-500 rounded-lg group-hover:bg-blue-100 transition-colors">
+                                                <FileText className="w-4 h-4" />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-bold text-gray-900">{doc.name}</span>
+                                                {doc.size && <span className="text-[10px] text-gray-400">{doc.size}</span>}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                ))}
                             </div>
 
                             {/* VIP Financial & Compliance Section */}
@@ -251,25 +246,33 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose })
                                     <div className="flex items-center justify-between p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
                                         <div>
                                             <p className="text-[10px] font-bold text-indigo-400 uppercase">Status de Pagamento</p>
-                                            <p className="text-sm font-bold text-indigo-900 italic font-serif">Em dia</p>
+                                            <p className="text-sm font-bold text-indigo-900 italic font-serif">
+                                                {project.paymentStatus || '—'}
+                                            </p>
                                         </div>
-                                        <button className="text-[10px] font-black text-indigo-600 uppercase hover:underline">Ver Boletos</button>
                                     </div>
 
-                                    <div className="flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100 animate-pulse group/sign transition-all hover:bg-amber-100">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-amber-100 text-amber-600 rounded-lg group-hover/sign:scale-110 transition-transform">
-                                                <ShieldCheck className="w-4 h-4" />
+                                    {project.pendingSignature && (
+                                        <div className="flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100 animate-pulse group/sign transition-all hover:bg-amber-100">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-amber-100 text-amber-600 rounded-lg group-hover/sign:scale-110 transition-transform">
+                                                    <ShieldCheck className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-bold text-amber-900">Assinatura Pendente</p>
+                                                    <p className="text-[10px] text-amber-700">{project.pendingSignature}</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="text-xs font-bold text-amber-900">Assinatura Pendente</p>
-                                                <p className="text-[10px] text-amber-700">Ata de Reunião Trimestral</p>
-                                            </div>
+                                            {project.signatureUrl && (
+                                                <button
+                                                    onClick={() => window.open(project.signatureUrl, '_blank')}
+                                                    className="p-2 bg-amber-600 text-white rounded-lg shadow-sm hover:bg-amber-700"
+                                                >
+                                                    <ExternalLink className="w-3 h-3" />
+                                                </button>
+                                            )}
                                         </div>
-                                        <button className="p-2 bg-amber-600 text-white rounded-lg shadow-sm hover:bg-amber-700">
-                                            <ExternalLink className="w-3 h-3" />
-                                        </button>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

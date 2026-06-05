@@ -7,8 +7,8 @@ import type {
   CreateEvidenceInput,
   CreateNonConformanceInput,
   TransitionValidationResult,
-  ALLOWED_TRANSITIONS,
 } from '../types/operational-control'
+import { ALLOWED_TRANSITIONS } from '../types/operational-control'
 
 // Re-export para uso nos componentes
 export { ALLOWED_TRANSITIONS } from '../types/operational-control'
@@ -195,7 +195,6 @@ export const workOrderService = {
     const wo = await workOrderService.getById(workOrderId)
 
     // 1. Verificar se a transição é permitida
-    const { ALLOWED_TRANSITIONS } = await import('../types/operational-control')
     const allowed = ALLOWED_TRANSITIONS[wo.status as WorkOrderStatus] ?? []
     if (!allowed.includes(newStatus)) {
       return {

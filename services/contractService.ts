@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { financialService } from './financialService';
+import { projectService } from './projectService';
+import { INITIAL_PROJECT_SETTINGS } from '../constants';
 import { BudgetEntry } from '../types/budget';
 import {
     Contract,
@@ -38,7 +40,6 @@ async function removeContractTransactions(contractId: string, orgId: string | un
     // Priority 1: project JSONB
     if (projectId) {
         try {
-            const { projectService } = await import('./projectService');
             const project = await projectService.loadProject(projectId);
             if (project) {
                 const info = (project.settings as any)?.financialInfo;
@@ -111,7 +112,6 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
 
         // ── 1. Project JSONB (aba Despesas) ────────────────────────────────────
         if (contract.project_id) {
-            const { projectService } = await import('./projectService');
             const project = await projectService.loadProject(contract.project_id);
             if (project) {
                 const info = (project.settings as any)?.financialInfo || { totalValue: 0, paymentMethod: 'Parcelamento Próprio', installments: [], transactions: [] };
@@ -341,7 +341,6 @@ async function syncAVistaToFinance(contract: Contract) {
         };
 
         if (contract.project_id) {
-            const { projectService } = await import('./projectService');
             const project = await projectService.loadProject(contract.project_id);
             if (project) {
                 const info = (project.settings as any)?.financialInfo || { totalValue: 0, paymentMethod: 'À Vista', installments: [], transactions: [] };
@@ -1097,8 +1096,6 @@ export const contractService = {
         if (error || !contract) throw new Error('Contrato não encontrado.');
         if (contract.project_id) throw new Error('Este contrato já possui uma obra vinculada.');
 
-        const { projectService } = await import('./projectService');
-        const { INITIAL_PROJECT_SETTINGS } = await import('../constants');
 
         const settings = {
             ...INITIAL_PROJECT_SETTINGS,

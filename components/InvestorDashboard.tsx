@@ -2,7 +2,7 @@
 import { TrendingUp, PieChart as PieChartIcon, Building2, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw } from 'lucide-react';
 import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
 import { Investor, investorService } from '../services/investorService';
-import { ProjectData } from '../services/projectService';
+import { projectService, ProjectData } from '../services/projectService';
 import { investorPortalService, InvestorReport, InvestorOpportunity, ReportCategory } from '../services/investorPortalService';
 import { announcementsService } from '../services/announcementsService';
 import CommunicationCenter from './investor/CommunicationCenter';
@@ -196,7 +196,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             try {
                 const [cub, projectsList] = await Promise.all([
                     investorService.calculateCUB(),
-                    import('../services/projectService').then(m => m.projectService.listProjects()),
+                    projectService.listProjects(),
                 ]);
                 setCubValue(cub);
                 setRealProjects((projectsList || []) as unknown as ProjectData[]);

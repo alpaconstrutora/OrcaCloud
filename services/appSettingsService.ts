@@ -1,4 +1,4 @@
-const LS_KEY = 'orçacloud_app_settings';
+﻿const LS_KEY = 'opura_app_settings';
 
 export interface AppSettings {
     // Order numbering

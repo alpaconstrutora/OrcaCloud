@@ -1,5 +1,5 @@
-// ============================================================
-// OrçaCloud — Edge Function: fiscal-nfe-processor
+﻿// ============================================================
+// Opura — Edge Function: fiscal-nfe-processor
 // Processa NF-e XML: parse → validate → extract → normalize
 //
 // Adaptações em relação ao módulo standalone:

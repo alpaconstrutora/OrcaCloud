@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import {
     User,
     Building2,
@@ -78,11 +78,8 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onSelectGroup }) => {
 
             <div className="w-full max-w-5xl relative z-10">
                 <div className="text-center mb-12">
-                    <div className="flex items-center justify-center gap-3 mb-4">
-                        <div className="p-3 bg-blue-600 rounded-2xl text-white shadow-xl shadow-blue-900/10">
-                            <Cloud className="w-8 h-8" />
-                        </div>
-                        <h1 className="text-4xl font-black text-slate-900 tracking-tight">OrçaCloud <span className="text-blue-600">SaaS</span></h1>
+                    <div className="flex items-center justify-center mb-4">
+                        <img src="/opura-logo.svg" alt="Opura" className="h-14 w-auto" />
                     </div>
                     <p className="text-slate-500 font-medium">Selecione o portal de acesso para continuar</p>
                 </div>

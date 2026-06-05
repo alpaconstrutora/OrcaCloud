@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import {
     LayoutDashboard,
     Calendar,
@@ -891,7 +891,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            exportService.generateReceiptPDF(inst, settings, { name: clientProfile?.name || 'ORÇACLOUD' });
+                                                            exportService.generateReceiptPDF(inst, settings, { name: clientProfile?.name || 'OPURA' });
                                                         }}
                                                         className="p-3 bg-white text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-md border border-emerald-100"
                                                         title="Gerar Recibo PDF"
@@ -991,7 +991,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        exportService.generateReceiptPDF(inst, settings, { name: clientProfile?.name || 'ORÇACLOUD' });
+                                                                        exportService.generateReceiptPDF(inst, settings, { name: clientProfile?.name || 'OPURA' });
                                                                     }}
                                                                     className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-all"
                                                                     title={isAdmin ? "Gerar Recibo PDF" : "Baixar Recibo PDF"}
@@ -1461,7 +1461,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                             {/* Modal Footer */}
                             <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-center">
-                                <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">Visualização do Cliente • OrçaCloud Platinum</p>
+                                <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">Visualização do Cliente • Opura Platinum</p>
                             </div>
                         </div>
                     </div>
@@ -1945,7 +1945,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
             {/* Decorative footer message */}
             <div className="text-center pt-10 pb-6 opacity-30 select-none pointer-events-none">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Poderoso e intuitivo • OrçaCloud Platinum © 2026</p>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Poderoso e intuitivo • Opura Platinum © 2026</p>
             </div>
         </div>
     );

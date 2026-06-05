@@ -1,4 +1,4 @@
-/**
+﻿/**
  * WhatsApp Cloud API — Meta Business Platform (oficial)
  * Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/messages
  */
@@ -10,10 +10,10 @@ const LS_KEY   = 'whatsapp_config';
 const API_BASE = 'https://graph.facebook.com/v20.0';
 
 // URL base do app em produção — usada no link público do pedido
-const APP_BASE_URL = import.meta.env.VITE_APP_URL || 'https://orca-cloud.vercel.app';
+const APP_BASE_URL = import.meta.env.VITE_APP_URL || 'https://opura.vercel.app';
 
 // Nome do template aprovado na Meta para pedido enviado
-export const WA_TEMPLATE_ORDER_SENT = import.meta.env.VITE_WA_TEMPLATE_ORDER_SENT || 'orcacloud_pedido_enviado';
+export const WA_TEMPLATE_ORDER_SENT = import.meta.env.VITE_WA_TEMPLATE_ORDER_SENT || 'opura_pedido_enviado';
 
 export interface WhatsAppConfig {
     phoneNumberId: string;

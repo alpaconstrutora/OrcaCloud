@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Package, Truck, Printer, Pencil, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Upload, Plus, Loader2, MessageCircle, Zap, Trash2, Copy, AlertCircle, AlertTriangle } from 'lucide-react';
 import { PurchaseOrder, Invoice, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
@@ -338,7 +338,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         }
 
         // Fallback: share nativo via wa.me (somente quando API não configurada)
-        let text = `*Pedido de Compra #${order.number}* - OrçaCloud\n`;
+        let text = `*Pedido de Compra #${order.number}* - Opura\n`;
         text += `Obra: ${projectName}\n`;
         text += `Status: ${order.status}\n\n`;
         const total = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(

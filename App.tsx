@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import Layout from './components/Layout';
 import AIChat from './components/AIChat';
 import ProjectModal from './components/ProjectModal';
@@ -303,7 +303,7 @@ const App: React.FC = () => {
       >
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Sincronizando OrçaCloud...</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Sincronizando Opura...</p>
         </div>
       </div>
 

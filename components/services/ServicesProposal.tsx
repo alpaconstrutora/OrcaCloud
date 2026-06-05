@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, FileText, Send, Download } from 'lucide-react';
 import {
   servicesCommercialService,
@@ -210,7 +210,7 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
     </div>
   </div>
 
-  <div class="footer">Documento gerado pelo ORÇACLOUD em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+  <div class="footer">Documento gerado pelo OPURA em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
 
   <script>setTimeout(() => { window.print(); }, 400);</script>
 </body>

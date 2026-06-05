@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import {
     Package,
     Truck,
@@ -1114,7 +1114,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
             </main>
 
             <div className="pt-12 text-center opacity-30 select-none pointer-events-none">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Supply Chain Intelligence • OrçaCloud Ecosystem</p>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Supply Chain Intelligence • Opura Ecosystem</p>
             </div>
         </div>
     );

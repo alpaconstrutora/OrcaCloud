@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import {
     X, Printer, Loader2, FileText, AlertCircle, Download
 } from 'lucide-react';
@@ -197,7 +197,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                         {/* Company Header */}
                         <div className="p-6 border-b border-slate-200 flex justify-between items-start bg-slate-50/50">
                             <div className="space-y-1">
-                                <h4 className="text-sm font-black text-slate-900 uppercase">OrçaCloud SaaS Pro</h4>
+                                <h4 className="text-sm font-black text-slate-900 uppercase">Opura Pro</h4>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase">CNPJ: 00.000.000/0001-00</p>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase">Endereço: Unidade Operacional - Obra Garden</p>
                             </div>

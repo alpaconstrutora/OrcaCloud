@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+﻿import React, { useMemo } from 'react';
 import { ProjectSettings, Organization } from '../types';
 import {
     Printer,
@@ -90,7 +90,7 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                             )}
                             <div>
                                 <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">
-                                    {selectedOrganization?.name || 'OrçaCloud'}
+                                    {selectedOrganization?.name || 'Opura'}
                                 </h2>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">
                                     Relatório Consolidado de Diário de Obras
@@ -298,7 +298,7 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
 
                     {/* Footer */}
                     <div className="mt-auto pt-10 text-[8px] font-bold text-gray-300 uppercase tracking-[0.3em] flex justify-between items-center border-t border-gray-50 print:pb-4">
-                        <span>Gerado via OrçaCloud • CRM & ERP para Engenharia</span>
+                        <span>Gerado via Opura • CRM & ERP para Engenharia</span>
                         <span>Emitido em {new Date().toLocaleDateString('pt-BR')}</span>
                     </div>
                 </div>

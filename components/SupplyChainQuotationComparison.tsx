@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import {
     ArrowLeft,
     Download,
@@ -181,7 +181,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
         const resp = responses.find(r => r.id === responseId);
         if (!resp) return;
 
-        let text = `*OrçaCloud: Solicitação de Cotação #${request.number}*\n`;
+        let text = `*Opura: Solicitação de Cotação #${request.number}*\n`;
         text += `Olá ${resp.supplierName}, tudo bem?\n\n`;
         text += `Gostaria de falar sobre os preços da cotação para a obra *${request.projectName}*.\n`;
         text += `Podemos alinhar os valores agora?\n\n`;

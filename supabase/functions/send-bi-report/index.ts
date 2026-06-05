@@ -1,4 +1,4 @@
-// @ts-ignore
+﻿// @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -54,7 +54,7 @@ serve(async (req: Request) => {
     if (!recipients?.length) return json({ error: 'Nenhum destinatário informado.' }, 400);
 
     // Envio via Resend API (fetch direto — sem SDK)
-    const from = Deno.env.get('REPORT_FROM_EMAIL') ?? 'relatorios@orcacloud.com.br';
+    const from = Deno.env.get('REPORT_FROM_EMAIL') ?? 'relatorios@opura.com.br';
 
     const sendRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',

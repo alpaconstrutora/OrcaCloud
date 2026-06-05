@@ -1,4 +1,4 @@
-import { jsPDF } from 'jspdf';
+﻿import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 // @ts-ignore
@@ -160,7 +160,7 @@ export const exportService = {
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
         doc.text('Nota: Este documento é uma estimativa preliminar baseada na NBR 12.721 e no CUB regional.', 15, footerY);
-        doc.text('OrçaCloud SaaS - Inteligência em Orçamentação de Obras', 15, footerY + 5);
+        doc.text('Opura - Inteligência em Orçamentação de Obras', 15, footerY + 5);
 
         doc.save(`Viabilidade_${settings.name.replace(/\s+/g, '_')}.pdf`);
     },
@@ -181,7 +181,7 @@ export const exportService = {
 
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.text(`${options.organization?.name || 'ORÇACLOUD'} | Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 15, 30);
+        doc.text(`${options.organization?.name || 'OPURA'} | Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 15, 30);
 
         // Project Info Section
         doc.setTextColor(0, 0, 0);
@@ -228,7 +228,7 @@ export const exportService = {
         const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
         doc.setFontSize(8);
         doc.setTextColor(100, 116, 139);
-        doc.text('Relatório gerado via OrçaCloud Financial Suite.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+        doc.text('Relatório gerado via Opura Financial Suite.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
 
         doc.save(`${options.fileName}.pdf`);
     },
@@ -309,14 +309,14 @@ export const exportService = {
         // Signature line
         doc.line(pageWidth / 2 - 40, y, pageWidth / 2 + 40, y);
         doc.setFontSize(10);
-        doc.text(organization?.name || 'ORÇACLOUD', pageWidth / 2, y + 5, { align: 'center' });
+        doc.text(organization?.name || 'OPURA', pageWidth / 2, y + 5, { align: 'center' });
         doc.setFontSize(8);
         doc.text(organization?.cnpj || '', pageWidth / 2, y + 10, { align: 'center' });
 
         // Footer
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
-        doc.text('Esse recibo é gerado eletronicamente via OrçaCloud Suite.', pageWidth / 2, doc.internal.pageSize.getHeight() - 15, { align: 'center' });
+        doc.text('Esse recibo é gerado eletronicamente via Opura Suite.', pageWidth / 2, doc.internal.pageSize.getHeight() - 15, { align: 'center' });
 
         doc.save(`Recibo_${(installment.id || '').substring(0, 8)}.pdf`);
     },
@@ -353,7 +353,7 @@ export const exportService = {
 
         // 1. Identification
         addSection('1. DAS PARTES',
-            `VENDEDOR/LOCADOR: ${organization?.name || 'ORÇACLOUD'}, inscrito no CNPJ sob nº ${organization?.cnpj || '...'}, com sede em ${organization?.address?.city || 'Brasil'}.\n` +
+            `VENDEDOR/LOCADOR: ${organization?.name || 'OPURA'}, inscrito no CNPJ sob nº ${organization?.cnpj || '...'}, com sede em ${organization?.address?.city || 'Brasil'}.\n` +
             `COMPRADOR/LOCATÁRIO: ${deal.client_name || 'CLIENTE'}, inscrito no CPF/CNPJ sob nº ..., residente e domiciliado em ...`
         );
 
@@ -428,7 +428,7 @@ export const exportService = {
         if (options.organization?.cnpj) {
             doc.text(`CNPJ: ${options.organization.cnpj}`, options.organization?.logoUrl ? 42 : 15, currentY + 8);
         }
-        doc.text(`Gerado via OrçaCloud em ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, options.organization?.logoUrl ? 42 : 15, currentY + 12);
+        doc.text(`Gerado via Opura em ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, options.organization?.logoUrl ? 42 : 15, currentY + 12);
 
         // Total Global box
         doc.setFillColor(243, 244, 246);
@@ -763,7 +763,7 @@ export const exportService = {
 
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.text(`${organization?.name || 'ORÇACLOUD'} | CNPJ: ${organization?.cnpj || '-'}`, 15, 28);
+        doc.text(`${organization?.name || 'OPURA'} | CNPJ: ${organization?.cnpj || '-'}`, 15, 28);
         doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 15, 33);
 
         // Project & Contract Basic Info
@@ -945,7 +945,7 @@ export const exportService = {
         const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 20;
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
-        doc.text('Este documento é um relatório gerencial emitido via plataforma OrçaCloud.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+        doc.text('Este documento é um relatório gerencial emitido via plataforma Opura.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
 
         doc.save(`Relatorio_Contrato_${contract.number}_${contract.title.replace(/\s+/g, '_')}.pdf`);
     },
@@ -990,7 +990,7 @@ export const exportService = {
         };
 
         // 1. Partes
-        const contractorInfo = `${organization?.name || 'ORÇACLOUD'}, inscrito no CNPJ sob nº ${organization?.cnpj || '-'}, com sede em ${organization?.address?.city || '-'}, aqui denominada CONTRATANTE.`;
+        const contractorInfo = `${organization?.name || 'OPURA'}, inscrito no CNPJ sob nº ${organization?.cnpj || '-'}, com sede em ${organization?.address?.city || '-'}, aqui denominada CONTRATANTE.`;
         const contractedInfo = `${contract.supplier?.name || contract.supplierName || 'CONTRATADO'}, aqui denominada CONTRATADA.`;
         addSection('1. DAS PARTES', contractorInfo + '\n' + contractedInfo);
 
@@ -1377,7 +1377,7 @@ export const exportService = {
         const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 20;
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
-        doc.text('Nota: Estimativa baseada em modelos paramétricos. OrçaCloud SaaS.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+        doc.text('Nota: Estimativa baseada em modelos paramétricos. Opura.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
 
         doc.save(`Relatorio_Completo_${settings.name.replace(/\s+/g, '_')}.pdf`);
     },
@@ -1411,7 +1411,7 @@ export const exportService = {
 
         doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, pageWidth / 2, 200, { align: 'center' });
         doc.setFontSize(10);
-        doc.text(organization?.name || 'ORÇACLOUD ENGENHARIA', pageWidth / 2, 210, { align: 'center' });
+        doc.text(organization?.name || 'OPURA ENGENHARIA', pageWidth / 2, 210, { align: 'center' });
 
         // 2. Main Proposal Page
         doc.addPage();

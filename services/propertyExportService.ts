@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf';
+﻿import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Property, PropertyDeal, Client, Organization } from '../types';
 
@@ -7,7 +7,7 @@ export const propertyExportService = {
         const doc = new jsPDF();
         const date = new Date().toLocaleDateString('pt-BR');
 
-        // Header OrçaCloud Design
+        // Header Opura Design
         if (organization?.logoUrl) {
             try {
                 doc.addImage(organization.logoUrl, 'JPEG', 14, 10, 30, 30);
@@ -103,7 +103,7 @@ export const propertyExportService = {
         // Footer
         doc.setFontSize(8);
         doc.setTextColor(150);
-        doc.text(`Documento gerado automaticamente pela plataforma OrçaCloud.`, 105, 285, { align: 'center' });
+        doc.text(`Documento gerado automaticamente pela plataforma Opura.`, 105, 285, { align: 'center' });
 
         doc.save(`Proposta_${property.name.replace(/\s+/g, '_')}_${deal.id.substring(0, 5)}.pdf`);
     }

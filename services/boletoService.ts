@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+﻿import { supabase } from '../lib/supabase';
 import { sanitizeFileName } from '../utils/storageUtils';
 import { sha256File, extractFromPdfFile, buildExtractionFromLinhaDigitavel } from '../utils/boletoParser';
 import { parseLinhaDigitavel, onlyDigits, nomeBanco } from '../utils/febrabanRules';
@@ -479,7 +479,7 @@ export const boletoService = {
     async exportarExcel(boletos: Boleto[], nomeArquivo = 'boletos'): Promise<void> {
         const ExcelJS = await import('exceljs');
         const wb = new ExcelJS.Workbook();
-        wb.creator = 'OrçaCloud';
+        wb.creator = 'Opura';
         const ws = wb.addWorksheet('Boletos');
 
         ws.columns = [
@@ -549,7 +549,7 @@ export const boletoService = {
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(13);
         doc.setFont('helvetica', 'bold');
-        doc.text('Relatório de Boletos — OrçaCloud', 14, 12);
+        doc.text('Relatório de Boletos — Opura', 14, 12);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')} · ${boletos.length} registro(s)`, pageWidth - 14, 12, { align: 'right' });

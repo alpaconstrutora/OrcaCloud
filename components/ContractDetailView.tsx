@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import {
     ArrowLeft, FileText, Calendar, Shield, DollarSign,
     Layers, Plus, History, CheckCircle2, AlertCircle,
@@ -40,7 +40,7 @@ const displayCurrencyDigits = (d: string) => {
     return (n / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 const DEFAULT_UNITS = ['kg', 'm', 'm²', 'm³', 'l', 'pç', 'un', 'bd', 'br', 'h', 'svç', 'vb'];
-const UNITS_KEY = 'orcacloud_units';
+const UNITS_KEY = 'opura_units';
 const loadUnits = (): string[] => { try { const s = localStorage.getItem(UNITS_KEY); return s ? JSON.parse(s) : [...DEFAULT_UNITS]; } catch { return [...DEFAULT_UNITS]; } };
 const persistUnits = (u: string[]) => localStorage.setItem(UNITS_KEY, JSON.stringify(u));
 // ───────────────────────────────────────────────────────────────────────────────

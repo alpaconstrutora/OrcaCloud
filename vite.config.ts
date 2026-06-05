@@ -1,4 +1,4 @@
-import path from 'path';
+﻿import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -18,8 +18,8 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icons/*.png', 'icons/*.svg'],
         manifest: {
-          name: 'OrçaCloud — Controle Operacional',
-          short_name: 'OrçaCloud',
+          name: 'Opura — Controle Operacional',
+          short_name: 'Opura',
           description: 'Gestão de obras e controle operacional de construção civil',
           theme_color: '#2563eb',
           background_color: '#ffffff',

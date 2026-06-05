@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import {
     MessageSquare, Plus, X, Send, Bell, Shield, BookOpen,
     AlertTriangle, Gift, Users, Building2, User, Check,
@@ -500,7 +500,7 @@ const WppConfigPanel: React.FC<WppConfigPanelProps> = ({ orgId }) => {
 
                 <div className="grid grid-cols-2 gap-4">
                     <Field label="Nome da instância">
-                        <input className={inputCls} placeholder="orçacloud-prod"
+                        <input className={inputCls} placeholder="opura-prod"
                             value={merged.instance_name || ''} onChange={e => set('instance_name', e.target.value)} />
                     </Field>
                     <Field label="Número remetente">

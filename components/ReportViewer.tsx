@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+﻿import React, { useEffect } from 'react';
 import { BudgetEntry, ProjectSettings, SinapiItem, Organization, CompositionComponent } from '../types';
 import { exportService } from '../services/exportService';
 import { sinapiService } from '../services/sinapiService';
@@ -895,7 +895,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                     < div className="border-t-2 border-gray-200 pt-4 mt-8 flex justify-between text-xs text-gray-400" >
                         <div>
                             <p>BDI Aplicado: {settings.bdi}% ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBDI)})</p>
-                            <p className="text-[10px] mt-1">Gerado via OrçaCloud SaaS em {new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                            <p className="text-[10px] mt-1">Gerado via Opura em {new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                         </div>
                         <div className="text-right">
                             Página 1 de 1

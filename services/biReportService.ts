@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+﻿import { supabase } from '../lib/supabase';
 import type { BIExecutiveSummary } from '../types/bi';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -172,7 +172,7 @@ ${trendRows ? `<h2>Tendência (últimos 6 meses)</h2>
 <table><thead><tr><th>Mês</th><th style="text-align:right">Receita</th><th style="text-align:right">EBITDA</th></tr></thead>
 <tbody>${trendRows}</tbody></table>` : ''}
 </div>
-<div class="footer">ORÇACLOUD &nbsp;·&nbsp; Relatório gerado automaticamente &nbsp;·&nbsp; Dados sigilosos — uso interno</div>
+<div class="footer">OPURA &nbsp;·&nbsp; Relatório gerado automaticamente &nbsp;·&nbsp; Dados sigilosos — uso interno</div>
 </body>
 </html>`;
     },

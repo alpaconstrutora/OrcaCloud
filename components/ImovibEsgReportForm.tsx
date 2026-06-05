@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { ImovibStudy } from '../types';
 import { useImovibMath } from '../hooks/useImovibMath';
 import { imovibService } from '../services/imovibService';
@@ -48,7 +48,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
 
     const [isSaving, setIsSaving] = useState(false);
 
-    // Calculate OrçaCloud Rating based on IRR vs basic hurdles 
+    // Calculate Opura Rating based on IRR vs basic hurdles 
     // Usually WACC/Hurdle is internal. Let's assume a baseline hurdle of 12% a.a real.
     const hurdleRate = 12;
     const projectIrr = isNaN(math.annualIrr) ? 0 : math.annualIrr;
@@ -170,7 +170,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                 {/* Dynamic Rating Card */}
                 <div className={`px-8 py-4 rounded-2xl border ${ratingBg} flex items-center gap-6 shadow-sm`}>
                     <div>
-                        <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Rating OrçaCloud</span>
+                        <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Rating Opura</span>
                         <span className={`block text-4xl font-black tracking-tighter ${ratingColor}`}>{rating}</span>
                     </div>
                 </div>

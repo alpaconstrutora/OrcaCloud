@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Trash2 } from 'lucide-react';
 import { Property, PropertyStatus, Client, TowerMatrixConfig, GridCellConfig } from '../types';
 import { clientService } from '../services/clientService';
@@ -1167,7 +1167,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     // Interface simplified: we need a propertyId to upload. 
                                     // If new property, we'll need to handle it. 
                                     // For now, let's assume direct to Supabase if we have local previews or a temporary ID.
-                                    // Realistically, for OrçaCloud pattern, we might want to upload only on submit or use a temp folder.
+                                    // Realistically, for Opura pattern, we might want to upload only on submit or use a temp folder.
                                     // Let's use URL.createObjectURL for instant preview and upload logic.
 
                                     for (let i = 0; i < files.length; i++) {

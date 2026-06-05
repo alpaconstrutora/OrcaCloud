@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+﻿import { supabase } from '../lib/supabase';
 import { projectService } from './projectService';
 import { validateAllocationTotal } from '../lib/validators';
 import type { ProjectSettings } from '../types';
@@ -1228,7 +1228,7 @@ export const payrollService = {
     async logAction(log: Omit<PayrollAuditLog, 'id' | 'created_at' | 'user_email'>) {
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            const userEmail = user?.email || 'sistema@orcacloud.com';
+            const userEmail = user?.email || 'sistema@opura.com';
             
             await supabase.from('payroll_audit_logs').insert([{
                 ...log,

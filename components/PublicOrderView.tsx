@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { supabase } from '../lib/supabase';
 import { Package, Building2, Calendar, FileText, Loader2, AlertTriangle, CheckCircle2, Clock, Truck } from 'lucide-react';
 
@@ -88,7 +88,7 @@ const PublicOrderView: React.FC<Props> = ({ token }) => {
                     <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
                         <Package className="w-4 h-4 text-white" />
                     </div>
-                    <span className="font-black text-gray-900 text-lg">OrçaCloud</span>
+                    <span className="font-black text-gray-900 text-lg">Opura</span>
                 </div>
                 <a
                     href="/"
@@ -204,7 +204,7 @@ const PublicOrderView: React.FC<Props> = ({ token }) => {
                         className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-black hover:bg-indigo-700 transition-all shrink-0"
                     >
                         <CheckCircle2 className="w-4 h-4" />
-                        Acessar OrçaCloud
+                        Acessar Opura
                     </a>
                 </div>
             </div>

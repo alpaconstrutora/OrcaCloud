@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Trash2, Pencil, Settings } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
 import { projectService, ProjectData } from '../services/projectService';
@@ -1060,7 +1060,7 @@ const EMPTY_FORM: AvulsoItem = { code: '', description: '', unit: '', quantity: 
 
 // ─── Unit management ─────────────────────────────────────────────────────────
 const DEFAULT_UNITS = ['kg', 'm', 'm²', 'm³', 'l', 'pç', 'un', 'bd', 'br'];
-const UNITS_KEY = 'orcacloud_units';
+const UNITS_KEY = 'opura_units';
 const loadUnits = (): string[] => { try { const s = localStorage.getItem(UNITS_KEY); return s ? JSON.parse(s) : [...DEFAULT_UNITS]; } catch { return [...DEFAULT_UNITS]; } };
 const persistUnits = (u: string[]) => localStorage.setItem(UNITS_KEY, JSON.stringify(u));
 

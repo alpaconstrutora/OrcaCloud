@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+﻿import React, { useState, useEffect } from 'react'
 import { Download, X, Wifi, WifiOff } from 'lucide-react'
 
 // ── Offline indicator ─────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ export const PWAInstallPrompt: React.FC = () => {
         <Download className="w-5 h-5 text-white" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-black text-slate-900">Instalar OrçaCloud</p>
+        <p className="text-sm font-black text-slate-900">Instalar Opura</p>
         <p className="text-xs text-slate-500 mt-0.5">Acesse diretamente da tela inicial, sem abrir o navegador.</p>
         <div className="flex gap-2 mt-3">
           <button

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed, Gift } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
@@ -304,11 +304,12 @@ const Layout: React.FC<LayoutProps> = ({
 
         {/* Header Logo */}
         <div className={`flex items-center h-16 relative overflow-hidden ${isCollapsed ? 'justify-center' : 'px-4 pt-4'}`}>
-          <div className={`bg-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20 relative z-10 ${isCollapsed ? 'w-9 h-9' : 'w-8 h-8 mr-2.5'}`}>
-            <Building2 className="w-5 h-5 text-white" strokeWidth={2.5} />
-          </div>
-          {!isCollapsed && (
-            <span className={`text-base font-semibold tracking-tight ${t.userName}`}>OrçaCloud</span>
+          {isCollapsed ? (
+            <div className="w-9 h-9 rounded-lg bg-[#0F172A] flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-lg" style={{ fontFamily: 'Inter, sans-serif' }}>O</span>
+            </div>
+          ) : (
+            <img src="/opura-logo.svg" alt="Opura" className="h-8 w-auto" />
           )}
         </div>
 
@@ -669,11 +670,8 @@ const Layout: React.FC<LayoutProps> = ({
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setIsMobileMenuOpen(false)}></div>
           <aside className={`relative flex flex-col w-72 h-full shadow-2xl animate-in slide-in-from-left duration-300 ${t.shell}`}>
             <div className={`flex items-center justify-between h-16 px-4 border-b ${t.footerBorder}`}>
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-                  <Building2 className="w-5 h-5 text-white" strokeWidth={2.5} />
-                </div>
-                <span className={`text-base font-semibold ${t.userName}`}>OrçaCloud</span>
+              <div className="flex items-center">
+                <img src="/opura-logo.svg" alt="Opura" className="h-8 w-auto" />
               </div>
               <button
                 onClick={() => setIsMobileMenuOpen(false)}

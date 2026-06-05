@@ -19,6 +19,8 @@ export type TaskRecord = {
   assignee_employee_id: string | null
   project_id: string | null
   parent_task_id: string | null
+  space_id: string | null
+  folder_id: string | null
   completed_at: string | null
   created_at: string
 }
@@ -32,6 +34,8 @@ export interface TaskDefaults {
   assignee_employee_id?: string | null
   priority?: number
   project_id?: string | null
+  space_id?: string | null
+  folder_id?: string | null
 }
 
 interface Props {

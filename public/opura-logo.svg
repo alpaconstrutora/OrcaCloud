@@ -1,18 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 72" width="240" height="72">
-  <!-- Purple diagonal accent mark (the accent above Ò) -->
-  <rect x="10" y="8" width="6" height="20" rx="3" fill="#8B7CF6" transform="rotate(-30 13 18)"/>
-
-  <!-- Main text: Òpura -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 72" width="260" height="72">
+  <!-- Text: Opura (plain O, accent drawn separately) -->
   <text
-    x="26"
+    x="28"
     y="54"
-    font-family="'Inter', 'Helvetica Neue', 'Arial', sans-serif"
+    font-family="'Inter', 'Helvetica Neue', Arial, sans-serif"
     font-weight="800"
     font-size="46"
     fill="#0F172A"
-    letter-spacing="-2"
-  >Òpura</text>
+    letter-spacing="-1.5"
+  >Opura</text>
 
-  <!-- Trailing dot in purple -->
-  <circle cx="224" cy="49" r="7" fill="#8B7CF6"/>
+  <!-- Purple accent stroke above the O (positioned over first char) -->
+  <line x1="34" y1="14" x2="44" y2="4" stroke="#8B7CF6" stroke-width="5.5" stroke-linecap="round"/>
+
+  <!-- Purple dot at the end -->
+  <circle cx="244" cy="49" r="6.5" fill="#8B7CF6"/>
 </svg>

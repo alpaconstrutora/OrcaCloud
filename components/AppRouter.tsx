@@ -213,6 +213,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     return (
       <InvestorDashboard
         settings={settingsWithId}
+        organizationId={activeOrganizationId || undefined}
         budget={budget}
         profile={currentProfile}
         investorProfile={investorProfile}
@@ -589,6 +590,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <InvestorDashboard
           settings={settingsWithId}
+          organizationId={activeOrganizationId || undefined}
           budget={budget}
           profile={currentProfile}
           investorProfile={investorProfile}

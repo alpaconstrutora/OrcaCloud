@@ -25,6 +25,7 @@ import { HoldingItem, HistoricalPoint } from './investor/types';
 interface InvestorDashboardProps {
     activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports';
     settings: ProjectSettings;
+    organizationId?: string;
     budget?: BudgetEntry[];
     profile?: { group: string; role: string };
     investorProfile?: Investor | null;
@@ -58,8 +59,11 @@ const TAB_TITLES: Record<TabId, string> = {
 };
 
 const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
-    activeTab: initialTab, settings, profile, investorProfile, onUpdateSettings,
+    activeTab: initialTab, settings, organizationId, profile, investorProfile, onUpdateSettings,
 }) => {
+    // Org canônica: prop activeOrganizationId tem precedência; settings.organizationId
+    // só existe quando um projeto está carregado, então sem ele o portal não salvava.
+    const orgId = organizationId ?? settings?.organizationId;
     const [activeTab, setActiveTab] = React.useState<TabId>(initialTab || 'dashboard');
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
     const [filterStatus, setFilterStatus] = React.useState('Todos');
@@ -188,7 +192,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     React.useEffect(() => { if (initialTab) setActiveTab(initialTab); }, [initialTab]);
 
     React.useEffect(() => {
-        const orgId = settings?.organizationId;
         async function loadData() {
             try {
                 const [cub, projectsList] = await Promise.all([
@@ -211,7 +214,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             }
         }
         loadData();
-    }, []);
+    }, [orgId, investorProfile?.id]);
 
     // Carrega resumos financeiros (aporte/participação/ROI) por projeto do investidor
     React.useEffect(() => {
@@ -246,7 +249,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     // ── Handlers ──────────────────────────────────────────────────────────────
 
     const handleUploadReport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const orgId = settings?.organizationId;
         if (!e.target.files?.length || !orgId) return;
         const file = e.target.files[0];
         try {
@@ -276,11 +278,10 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     };
 
     const handleAddOpportunity = (title: string) => {
-        const orgId = settings?.organizationId;
-        if (!orgId) return;
+        if (!orgId) { alert('Selecione uma organização antes de criar oportunidades.'); return; }
         investorPortalService.addOpportunity({ organization_id: orgId, title, subtitle: 'Novo empreendimento' })
             .then(saved => setOpportunities(prev => [saved, ...prev]))
-            .catch(err => console.error('Error adding opportunity', err));
+            .catch(err => { console.error('Error adding opportunity', err); alert('Erro ao salvar oportunidade.'); });
     };
 
     const handleDeleteOpportunity = (id: string) => {
@@ -374,7 +375,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
                                 <h3 className="text-xl font-black text-gray-900 tracking-tight">Fluxo de Caixa e Aportes</h3>
                             </div>
-                            <PaymentsPanel organizationId={settings?.organizationId} investorId={investorProfile?.id} />
+                            <PaymentsPanel organizationId={orgId} investorId={investorProfile?.id} />
                         </section>
                         <section>
                             <div className="flex items-center gap-3 mb-8">
@@ -390,7 +391,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         opportunities={opportunities}
                         isAdmin={isAdmin}
                         viewMode={viewMode}
-                        organizationId={settings?.organizationId}
+                        organizationId={orgId}
                         onViewModeChange={setViewMode}
                         onAdd={handleAddOpportunity}
                         onDelete={handleDeleteOpportunity}
@@ -413,20 +414,20 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 )}
                 {activeTab === 'comunicados' && (
                     <CommunicationCenter
-                        organizationId={settings?.organizationId ?? ''}
+                        organizationId={orgId ?? ''}
                         investorId={investorProfile?.id}
                         isAdmin={isAdmin}
                     />
                 )}
                 {activeTab === 'spe' && (
                     <SpeManager
-                        organizationId={settings?.organizationId ?? ''}
+                        organizationId={orgId ?? ''}
                         isAdmin={isAdmin}
                     />
                 )}
                 {activeTab === 'relatorios' && isAdmin && (
                     <MonthlyReportTrigger
-                        organizationId={settings?.organizationId ?? ''}
+                        organizationId={orgId ?? ''}
                     />
                 )}
             </main>
@@ -490,7 +491,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     <AssetDetailModal
                         project={selectedAsset}
                         projectId={selectedAsset.id}
-                        organizationId={settings?.organizationId}
+                        organizationId={orgId}
                         isAdmin={isAdmin}
                         diaryImages={diaryImages}
                         onClose={() => setSelectedAsset(null)}

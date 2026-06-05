@@ -6,6 +6,7 @@ import {
     AnnouncementType,
     ANNOUNCEMENT_TYPE_LABELS,
 } from '../../services/announcementsService';
+import MigrationBanner, { isTableMissing } from './MigrationBanner';
 
 interface Props {
     organizationId: string;
@@ -30,6 +31,7 @@ const emptyForm = (): Partial<InvestorAnnouncement> => ({
 const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAdmin }) => {
     const [items, setItems] = React.useState<InvestorAnnouncement[]>([]);
     const [loading, setLoading] = React.useState(true);
+    const [tableMissing, setTableMissing] = React.useState(false);
     const [expanded, setExpanded] = React.useState<string | null>(null);
     const [showForm, setShowForm] = React.useState(false);
     const [form, setForm] = React.useState<Partial<InvestorAnnouncement>>(emptyForm());
@@ -42,7 +44,10 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
             ? announcementsService.listAll(organizationId)
             : announcementsService.list(organizationId, investorId);
         fn.then(setItems)
-            .catch(err => console.error('Error loading announcements', err))
+            .catch(err => {
+                if (isTableMissing(err)) setTableMissing(true);
+                else console.error('Error loading announcements', err);
+            })
             .finally(() => setLoading(false));
     }, [organizationId, investorId, isAdmin]);
 
@@ -65,7 +70,8 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
             setShowForm(false);
         } catch (err) {
             console.error('Error saving announcement', err);
-            alert('Erro ao salvar comunicado.');
+            if (isTableMissing(err)) setTableMissing(true);
+            else alert('Erro ao salvar comunicado.');
         } finally {
             setSaving(false);
         }

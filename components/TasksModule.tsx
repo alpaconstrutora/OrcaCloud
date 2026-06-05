@@ -2,16 +2,18 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2, Layers, List, Kanban } from 'lucide-react'
 
 export type GroupByField = 'none' | 'status' | 'assignee' | 'priority' | 'project' | 'source'
+export type FilterView   = 'today' | 'all' | 'overdue'
+
 import { supabase } from '../lib/supabase'
 import { taskStatusService, type TaskStatus } from '../services/taskService'
+import { taskSpaceService, type TaskSpaceWithMeta } from '../services/taskSpaceService'
 import TasksList from './TasksList'
 import TaskForm, { type TaskRecord, type EmployeeOption, type ProjectOption, type OrgOption, type TaskDefaults } from './TaskForm'
 import TaskStatusManager from './TaskStatusManager'
 import TasksBoard from './TasksBoard'
+import TaskSpaceRail from './TaskSpaceRail'
 
 type ViewMode = 'list' | 'board'
-
-type FilterView = 'today' | 'all' | 'overdue'
 
 interface Props {
   activeOrganizationId?: string
@@ -59,17 +61,36 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   const [statuses, setStatuses]       = useState<TaskStatus[]>([])
   const [parentTask, setParentTask]   = useState<TaskRecord | null>(null)
 
+  // ── Espaços ──────────────────────────────────────────────────────────────
+  const [spaces, setSpaces]                   = useState<TaskSpaceWithMeta[]>([])
+  const [loadingSpaces, setLoadingSpaces]     = useState(false)
+  // null = inbox pessoal, '__none__' = sem espaço, uuid = espaço específico
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null)
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+
+  const loadSpaces = useCallback(async (orgId: string) => {
+    setLoadingSpaces(true)
+    try {
+      const data = await taskSpaceService.listSpaces(orgId)
+      setSpaces(data)
+    } catch (e) {
+      console.error('[spaces] load', e)
+      setSpaces([])
+    } finally {
+      setLoadingSpaces(false)
+    }
+  }, [])
+
   // Carrega tarefas
   const load = useCallback(async () => {
     setLoading(true)
-    const q = supabase
+    const { data, error } = await supabase
       .from('tasks')
       .select('*')
-      .order('status',    { ascending: true })
-      .order('due_date',  { ascending: true, nullsFirst: false })
-      .order('priority',  { ascending: true })
+      .order('status',   { ascending: true })
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .order('priority', { ascending: true })
 
-    const { data, error } = await q
     if (error) { console.error('[tasks] load', error); setTasks([]) }
     else        { setTasks((data ?? []) as TaskRecord[]) }
     setLoading(false)
@@ -89,7 +110,6 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
 
   const loadStatuses = useCallback(async (orgId: string) => {
     try {
-      // sem orgId = carrega de todas as orgs do usuário (RLS filtra por membro)
       const data = orgId
         ? await taskStatusService.list(orgId)
         : await taskStatusService.listAll()
@@ -104,9 +124,10 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     const orgId = filterOrg || activeOrganizationId || ''
     loadEmployees(orgId)
     loadStatuses(orgId)
-  }, [filterOrg, activeOrganizationId, loadEmployees, loadStatuses])
+    loadSpaces(orgId)
+  }, [filterOrg, activeOrganizationId, loadEmployees, loadStatuses, loadSpaces])
 
-  // Obras disponíveis filtradas pela org selecionada (apenas classification === 'OBRA')
+  // Obras disponíveis filtradas pela org selecionada
   const obras: ProjectOption[] = useMemo(() => {
     const orgId = filterOrg || activeOrganizationId
     return projects
@@ -122,8 +143,8 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       .map(p => ({ id: p.id, name: p.name }))
   }, [projects, filterOrg, activeOrganizationId])
 
-  // Filtros de tabs (Hoje/Atrasadas/Todas) — operam sobre pais, mantém subtarefas agrupadas
-  const { today, overdue, visible } = useMemo(() => {
+  // ── Filtros e contadores ──────────────────────────────────────────────────
+  const { today, overdue, visible, noSpaceCount } = useMemo(() => {
     const now          = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const endOfToday   = new Date(startOfToday.getTime() + 86_400_000)
@@ -131,6 +152,37 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     let byOrg = tasks
     if (filterOrg) byOrg = byOrg.filter(t => t.org_id === filterOrg)
 
+    // helper recursivo de descendentes
+    const getAllDescendants = (ids: Set<string>): TaskRecord[] => {
+      const children = byOrg.filter(t => t.parent_task_id && ids.has(t.parent_task_id))
+      if (children.length === 0) return []
+      return [...children, ...getAllDescendants(new Set(children.map(t => t.id)))]
+    }
+
+    // ── contador "sem espaço" (tarefas raiz abertas sem space_id) ────────
+    const noSpaceCount = byOrg.filter(t => !t.parent_task_id && !t.space_id && t.status !== 'done').length
+
+    // ── modo espaço: selecionar por space_id / folder_id ─────────────────
+    if (selectedSpaceId === '__none__') {
+      const parents = byOrg.filter(t => !t.parent_task_id && !t.space_id)
+      return {
+        today: [], overdue: [],
+        noSpaceCount,
+        visible: [...parents, ...getAllDescendants(new Set(parents.map(t => t.id)))],
+      }
+    }
+
+    if (selectedSpaceId) {
+      let parents = byOrg.filter(t => !t.parent_task_id && t.space_id === selectedSpaceId)
+      if (selectedFolderId) parents = parents.filter(t => t.folder_id === selectedFolderId)
+      return {
+        today: [], overdue: [],
+        noSpaceCount,
+        visible: [...parents, ...getAllDescendants(new Set(parents.map(t => t.id)))],
+      }
+    }
+
+    // ── modo inbox pessoal (apenas minhas tarefas) ────────────────────────
     const parents = byOrg.filter(t => !t.parent_task_id)
     const open    = parents.filter(t => t.status !== 'done')
     const today   = open.filter(t => {
@@ -144,19 +196,50 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     })
 
     const visibleParents = view === 'today' ? today : view === 'overdue' ? overdue : parents
-
-    // Collect all descendants at any depth
-    const getAllDescendants = (ids: Set<string>): TaskRecord[] => {
-      const children = byOrg.filter(t => t.parent_task_id && ids.has(t.parent_task_id))
-      if (children.length === 0) return []
-      return [...children, ...getAllDescendants(new Set(children.map(t => t.id)))]
+    return {
+      today, overdue, noSpaceCount,
+      visible: [...visibleParents, ...getAllDescendants(new Set(visibleParents.map(t => t.id)))],
     }
-    const visible = [...visibleParents, ...getAllDescendants(new Set(visibleParents.map(t => t.id)))]
-
-    return { today, overdue, visible }
-  }, [tasks, filterOrg, view])
+  }, [tasks, filterOrg, view, selectedSpaceId, selectedFolderId])
 
   const orgForNew = filterOrg || activeOrganizationId || ''
+
+  // ── Callbacks do rail ─────────────────────────────────────────────────────
+  const handleSelectInbox = (filter: FilterView) => {
+    setSelectedSpaceId(null)
+    setSelectedFolderId(null)
+    setView(filter)
+  }
+
+  const handleSelectSpace = (spaceId: string, folderId?: string | null) => {
+    setSelectedSpaceId(spaceId)
+    setSelectedFolderId(folderId ?? null)
+  }
+
+  const handleSelectNoSpace = () => {
+    setSelectedSpaceId('__none__')
+    setSelectedFolderId(null)
+  }
+
+  const handleCreateSpace = async (name: string) => {
+    const orgId = orgForNew
+    if (!orgId) return
+    try {
+      await taskSpaceService.createSpace(orgId, name)
+      await loadSpaces(orgId)
+    } catch (e) {
+      console.error('[spaces] create', e)
+    }
+  }
+
+  const handleCreateFolder = async (spaceId: string, name: string) => {
+    try {
+      await taskSpaceService.createFolder(spaceId, name)
+      await loadSpaces(filterOrg || activeOrganizationId || '')
+    } catch (e) {
+      console.error('[folders] create', e)
+    }
+  }
 
   const toggleDone = async (t: TaskRecord) => {
     const currentStatusObj = statuses.find(s => s.id === t.status_id)
@@ -184,7 +267,6 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     if (error) { console.error(error); load() }
   }
 
-  // Movimentação de card no Board View — atualiza o campo agrupado
   const moveCard = async (taskId: string, newGroupKey: string) => {
     let patch: Partial<TaskRecord> = {}
     if (groupBy === 'status') {
@@ -221,6 +303,23 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       ? [{ id: activeOrganizationId, name: 'Minha Organização' }]
       : []
 
+  // Título contextual da área de conteúdo
+  const contentTitle = useMemo(() => {
+    if (selectedSpaceId === '__none__') return 'Sem espaço'
+    if (selectedSpaceId) {
+      const space = spaces.find(s => s.id === selectedSpaceId)
+      if (!space) return ''
+      if (selectedFolderId) {
+        const folder = space.folders.find(f => f.id === selectedFolderId)
+        return folder ? `${space.name} / ${folder.name}` : space.name
+      }
+      return space.name
+    }
+    return null // no título — os tabs já mostram o contexto
+  }, [selectedSpaceId, selectedFolderId, spaces])
+
+  const isSpaceMode = selectedSpaceId !== null
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -230,9 +329,13 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           <p className="text-slate-400 text-sm mt-1 font-medium">Sua agenda pessoal de pendências</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <TabBtn active={view === 'today'}   icon={Calendar}      label="Hoje"      count={today.length}   onClick={() => setView('today')} />
-          <TabBtn active={view === 'overdue'} icon={AlertTriangle} label="Atrasadas" count={overdue.length} onClick={() => setView('overdue')} />
-          <TabBtn active={view === 'all'}     icon={ListChecks}    label="Todas"                            onClick={() => setView('all')} />
+          {/* Tabs — só no mobile (no desktop o rail substitui) */}
+          <div className="flex items-center gap-1 md:hidden">
+            <TabBtn active={!isSpaceMode && view === 'today'}   icon={Calendar}      label="Hoje"      count={today.length}   onClick={() => handleSelectInbox('today')} />
+            <TabBtn active={!isSpaceMode && view === 'overdue'} icon={AlertTriangle} label="Atrasadas" count={overdue.length} onClick={() => handleSelectInbox('overdue')} />
+            <TabBtn active={!isSpaceMode && view === 'all'}     icon={ListChecks}    label="Todas"                            onClick={() => handleSelectInbox('all')} />
+          </div>
+
           {/* Toggle List / Board */}
           <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white">
             <button
@@ -319,45 +422,99 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         </div>
       )}
 
-      {/* Banner atrasadas */}
-      {view === 'today' && overdue.length > 0 && (
+      {/* Banner atrasadas — só no modo inbox */}
+      {!isSpaceMode && view === 'today' && overdue.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-3 text-xs font-bold text-red-700">
           <AlertTriangle className="w-4 h-4" />
           Você tem <span className="font-black">{overdue.length}</span> tarefa(s) atrasada(s).
-          <button onClick={() => setView('overdue')} className="ml-auto font-black uppercase tracking-wider hover:underline">
+          <button onClick={() => handleSelectInbox('overdue')} className="ml-auto font-black uppercase tracking-wider hover:underline">
             Ver atrasadas
           </button>
         </div>
       )}
 
-      {viewMode === 'list' ? (
-        <TasksList
-          tasks={visible}
-          loading={loading}
-          employees={employees}
-          projects={obras}
-          statuses={statuses}
-          groupBy={groupBy}
-          onToggleDone={toggleDone}
-          onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
-          onAddSubtask={(parent) => { loadEmployees(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
-          onMakeSubtask={makeSubtask}
-          onAddTask={orgForNew ? (defaults) => { setTaskDefaults(defaults ?? {}); setEditing(null); setShowForm(true) } : undefined}
-          onNavigate={handleNavigate}
+      {/* ── Layout: rail (desktop) + conteúdo ── */}
+      <div className="flex gap-5 items-start">
+
+        {/* Rail de navegação — oculto no mobile */}
+        <TaskSpaceRail
+          spaces={spaces}
+          loadingSpaces={loadingSpaces}
+          selectedSpaceId={selectedSpaceId}
+          selectedFolderId={selectedFolderId}
+          activeFilter={view}
+          todayCount={today.length}
+          overdueCount={overdue.length}
+          noSpaceCount={noSpaceCount}
+          onSelectInbox={handleSelectInbox}
+          onSelectSpace={handleSelectSpace}
+          onSelectNoSpace={handleSelectNoSpace}
+          onCreateSpace={handleCreateSpace}
+          onCreateFolder={handleCreateFolder}
         />
-      ) : (
-        <TasksBoard
-          tasks={visible}
-          employees={employees}
-          projects={obras}
-          statuses={statuses}
-          groupBy={groupBy === 'none' ? 'status' : groupBy}
-          onToggleDone={toggleDone}
-          onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
-          onAddTask={orgForNew ? (defaults) => { setTaskDefaults(defaults ?? {}); setEditing(null); setShowForm(true) } : undefined}
-          onMoveCard={moveCard}
-        />
-      )}
+
+        {/* Área de conteúdo */}
+        <div className="flex-1 min-w-0 space-y-3">
+          {/* Título contextual quando em modo espaço */}
+          {contentTitle && (
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-black text-slate-800">{contentTitle}</h2>
+              <button
+                onClick={() => handleSelectInbox(view)}
+                className="text-xs text-slate-400 hover:text-slate-700 transition-colors"
+                title="Voltar para inbox"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {viewMode === 'list' ? (
+            <TasksList
+              tasks={visible}
+              loading={loading}
+              employees={employees}
+              projects={obras}
+              statuses={statuses}
+              groupBy={groupBy}
+              onToggleDone={toggleDone}
+              onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
+              onAddSubtask={(parent) => { loadEmployees(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
+              onMakeSubtask={makeSubtask}
+              onAddTask={orgForNew ? (defaults) => {
+                setTaskDefaults({
+                  ...(defaults ?? {}),
+                  space_id: selectedSpaceId && selectedSpaceId !== '__none__' ? selectedSpaceId : null,
+                  folder_id: selectedFolderId,
+                })
+                setEditing(null)
+                setShowForm(true)
+              } : undefined}
+              onNavigate={handleNavigate}
+            />
+          ) : (
+            <TasksBoard
+              tasks={visible}
+              employees={employees}
+              projects={obras}
+              statuses={statuses}
+              groupBy={groupBy === 'none' ? 'status' : groupBy}
+              onToggleDone={toggleDone}
+              onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
+              onAddTask={orgForNew ? (defaults) => {
+                setTaskDefaults({
+                  ...(defaults ?? {}),
+                  space_id: selectedSpaceId && selectedSpaceId !== '__none__' ? selectedSpaceId : null,
+                  folder_id: selectedFolderId,
+                })
+                setEditing(null)
+                setShowForm(true)
+              } : undefined}
+              onMoveCard={moveCard}
+            />
+          )}
+        </div>
+      </div>
 
       {showForm && (
         <TaskForm
@@ -372,7 +529,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           parentTaskTitle={parentTask?.title ?? null}
           onClose={() => { setShowForm(false); setParentTask(null) }}
           onOrgChange={(id) => { loadEmployees(id); loadStatuses(id) }}
-          onSaved={() => { setShowForm(false); setParentTask(null); load() }}
+          onSaved={() => { setShowForm(false); setParentTask(null); load(); loadSpaces(filterOrg || activeOrganizationId || '') }}
         />
       )}
 

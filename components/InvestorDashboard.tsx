@@ -277,13 +277,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             .catch(err => console.error('Error deleting report', err));
     };
 
-    const handleAddOpportunity = (title: string) => {
-        if (!orgId) { alert('Selecione uma organização antes de criar oportunidades.'); return; }
-        investorPortalService.addOpportunity({ organization_id: orgId, title, subtitle: 'Novo empreendimento' })
-            .then(saved => setOpportunities(prev => [saved, ...prev]))
-            .catch(err => { console.error('Error adding opportunity', err); alert('Erro ao salvar oportunidade.'); });
-    };
-
     const handleDeleteOpportunity = (id: string) => {
         investorPortalService.deleteOpportunity(id)
             .then(() => setOpportunities(prev => prev.filter(o => o.id !== id)))
@@ -393,10 +386,13 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         viewMode={viewMode}
                         organizationId={orgId}
                         onViewModeChange={setViewMode}
-                        onAdd={handleAddOpportunity}
                         onDelete={handleDeleteOpportunity}
+                        onUpdate={(updated) => setOpportunities(prev =>
+                            prev.some(o => o.id === updated.id)
+                                ? prev.map(o => o.id === updated.id ? updated : o)
+                                : [updated, ...prev]
+                        )}
                         openConfirm={openConfirm}
-                        openInput={openInput}
                     />
                 )}
                 {activeTab === 'reports' && (

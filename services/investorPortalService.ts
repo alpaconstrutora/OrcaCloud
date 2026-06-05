@@ -32,19 +32,116 @@ export interface InvestorReport {
     created_at?: string;
 }
 
+export type OpportunityStatus = 'estudo' | 'viabilidade' | 'lancamento' | 'captacao' | 'encerrada';
+export type OpportunityType = 'incorporacao' | 'loteamento' | 'obra_privada' | 'obra_publica';
+
+export const OPPORTUNITY_STATUS_LABELS: Record<OpportunityStatus, string> = {
+    estudo: 'Estudo',
+    viabilidade: 'Viabilidade',
+    lancamento: 'Lançamento',
+    captacao: 'Captação',
+    encerrada: 'Encerrada',
+};
+
+export const OPPORTUNITY_TYPE_LABELS: Record<OpportunityType, string> = {
+    incorporacao: 'Incorporação',
+    loteamento: 'Loteamento',
+    obra_privada: 'Obra Privada',
+    obra_publica: 'Obra Pública',
+};
+
+export const OPPORTUNITY_STATUS_COLORS: Record<OpportunityStatus, string> = {
+    estudo: 'bg-gray-100 text-gray-600',
+    viabilidade: 'bg-amber-100 text-amber-700',
+    lancamento: 'bg-blue-100 text-blue-700',
+    captacao: 'bg-emerald-100 text-emerald-700',
+    encerrada: 'bg-red-100 text-red-600',
+};
+
 export interface InvestorOpportunity {
     id?: string;
     organization_id: string;
     title: string;
     subtitle?: string;
+    // mantido como text para retrocompatibilidade; usar roi_pct/tir_pct para cálculos
     projected_yield?: string;
     open_date?: string;
     link?: string;
+    // campos MVP
+    status?: OpportunityStatus;
+    opportunity_type?: OpportunityType;
+    location_city?: string;
+    location_state?: string;
+    thumbnail_url?: string;
+    land_area_m2?: number | null;
+    built_area_m2?: number | null;
+    floors?: number | null;
+    vgv?: number | null;
+    roi_pct?: number | null;
+    tir_pct?: number | null;
+    cost_estimate?: number | null;
+    cost_per_m2?: number | null;
+    ticket_min?: number | null;
+    expected_start?: string | null;
+    project_id?: string | null;
+    is_published?: boolean;
+    created_at?: string;
+}
+
+export type InterestRole = 'investidor' | 'arquiteto' | 'engenheiro' | 'projetista' | 'consultor' | 'outro';
+export type InterestStage = 'lead' | 'interesse' | 'reuniao' | 'proposta' | 'negociacao' | 'fechado';
+
+export const INTEREST_ROLE_LABELS: Record<InterestRole, string> = {
+    investidor: 'Investidor',
+    arquiteto: 'Arquiteto',
+    engenheiro: 'Engenheiro',
+    projetista: 'Projetista',
+    consultor: 'Consultor',
+    outro: 'Outro',
+};
+
+export const INTEREST_STAGE_LABELS: Record<InterestStage, string> = {
+    lead: 'Lead',
+    interesse: 'Interesse',
+    reuniao: 'Reunião',
+    proposta: 'Proposta',
+    negociacao: 'Negociação',
+    fechado: 'Fechado',
+};
+
+export const INTEREST_STAGE_COLORS: Record<InterestStage, { bg: string; text: string; border: string }> = {
+    lead:       { bg: 'bg-gray-50',     text: 'text-gray-600',    border: 'border-gray-200' },
+    interesse:  { bg: 'bg-blue-50',     text: 'text-blue-700',    border: 'border-blue-200' },
+    reuniao:    { bg: 'bg-indigo-50',   text: 'text-indigo-700',  border: 'border-indigo-200' },
+    proposta:   { bg: 'bg-amber-50',    text: 'text-amber-700',   border: 'border-amber-200' },
+    negociacao: { bg: 'bg-purple-50',   text: 'text-purple-700',  border: 'border-purple-200' },
+    fechado:    { bg: 'bg-emerald-50',  text: 'text-emerald-700', border: 'border-emerald-200' },
+};
+
+export interface OpportunityInterest {
+    id?: string;
+    organization_id: string;
+    opportunity_id: string;
+    contact_name: string;
+    contact_email?: string;
+    contact_phone?: string;
+    role: InterestRole;
+    message?: string;
+    stage?: InterestStage;
     created_at?: string;
 }
 
 const REPORT_COLS = 'id, organization_id, investor_id, project_id, name, type, category, url, report_date, created_at';
-const OPP_COLS = 'id, organization_id, title, subtitle, projected_yield, open_date, link, created_at';
+
+const OPP_COLS = [
+    'id', 'organization_id', 'title', 'subtitle', 'projected_yield', 'open_date', 'link',
+    'status', 'opportunity_type', 'location_city', 'location_state', 'thumbnail_url',
+    'land_area_m2', 'built_area_m2', 'floors',
+    'vgv', 'roi_pct', 'tir_pct', 'cost_estimate', 'cost_per_m2', 'ticket_min',
+    'expected_start', 'project_id', 'is_published', 'created_at',
+].join(', ');
+
+const INTEREST_COLS = 'id, organization_id, opportunity_id, contact_name, contact_email, contact_phone, role, message, stage, created_at';
 
 export const investorPortalService = {
     // ─── Reports ─────────────────────────────────────────────────────────────
@@ -85,28 +182,77 @@ export const investorPortalService = {
 
     // ─── Opportunities ────────────────────────────────────────────────────────
 
-    async listOpportunities(organizationId: string): Promise<InvestorOpportunity[]> {
-        const { data, error } = await supabase
+    async listOpportunities(organizationId: string, onlyPublished = false): Promise<InvestorOpportunity[]> {
+        let query = supabase
             .from('investor_opportunities')
             .select(OPP_COLS)
             .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
+
+        if (onlyPublished) query = query.eq('is_published', true);
+
+        const { data, error } = await query;
         if (error) throw error;
-        return (data ?? []) as InvestorOpportunity[];
+        return (data ?? []) as unknown as InvestorOpportunity[];
     },
 
     async addOpportunity(opp: Omit<InvestorOpportunity, 'id' | 'created_at'>): Promise<InvestorOpportunity> {
         const { data, error } = await supabase
             .from('investor_opportunities')
-            .insert(opp)
+            .insert({ ...opp, status: opp.status ?? 'estudo', is_published: opp.is_published ?? false })
             .select(OPP_COLS)
             .single();
         if (error) throw error;
-        return data as InvestorOpportunity;
+        return data as unknown as InvestorOpportunity;
+    },
+
+    async updateOpportunity(id: string, patch: Partial<Omit<InvestorOpportunity, 'id' | 'organization_id' | 'created_at'>>): Promise<InvestorOpportunity> {
+        const { data, error } = await supabase
+            .from('investor_opportunities')
+            .update(patch)
+            .eq('id', id)
+            .select(OPP_COLS)
+            .single();
+        if (error) throw error;
+        return data as unknown as InvestorOpportunity;
     },
 
     async deleteOpportunity(id: string): Promise<void> {
         const { error } = await supabase.from('investor_opportunities').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    // ─── Interests ────────────────────────────────────────────────────────────
+
+    async addInterest(interest: Omit<OpportunityInterest, 'id' | 'created_at'>): Promise<OpportunityInterest> {
+        const { data, error } = await supabase
+            .from('opportunity_interests')
+            .insert({ ...interest, stage: interest.stage ?? 'lead' })
+            .select(INTEREST_COLS)
+            .single();
+        if (error) throw error;
+        return data as OpportunityInterest;
+    },
+
+    async listInterests(organizationId: string, opportunityId?: string): Promise<OpportunityInterest[]> {
+        let query = supabase
+            .from('opportunity_interests')
+            .select(INTEREST_COLS)
+            .eq('organization_id', organizationId)
+            .order('created_at', { ascending: false });
+
+        if (opportunityId) query = query.eq('opportunity_id', opportunityId);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data ?? []) as OpportunityInterest[];
+    },
+
+    async updateInterestStage(id: string, stage: InterestStage): Promise<void> {
+        const { error } = await supabase
+            .from('opportunity_interests')
+            .update({ stage })
+            .eq('id', id);
         if (error) throw error;
     },
 };

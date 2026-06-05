@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { ImovibStudy } from '../types';
 import { useImovibMath } from '../hooks/useImovibMath';
 import { imovibService } from '../services/imovibService';

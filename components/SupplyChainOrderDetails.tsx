@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Package, Truck, Printer, Pencil, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Upload, Plus, Loader2, MessageCircle, Zap, Trash2, Copy, AlertCircle, AlertTriangle } from 'lucide-react';
 import { PurchaseOrder, Invoice, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';

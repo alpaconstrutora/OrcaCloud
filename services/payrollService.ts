@@ -1,4 +1,4 @@
-﻿import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { projectService } from './projectService';
 import { validateAllocationTotal } from '../lib/validators';
 import type { ProjectSettings } from '../types';

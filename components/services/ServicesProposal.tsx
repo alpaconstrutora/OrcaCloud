@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, FileText, Send, Download } from 'lucide-react';
 import {
   servicesCommercialService,

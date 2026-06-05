@@ -1,4 +1,4 @@
-﻿/**
+/**
  * WhatsApp Cloud API — Meta Business Platform (oficial)
  * Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/messages
  */

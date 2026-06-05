@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { BudgetEntry, ProjectSettings, SinapiItem, Organization, CompositionComponent } from '../types';
 import { exportService } from '../services/exportService';
 import { sinapiService } from '../services/sinapiService';

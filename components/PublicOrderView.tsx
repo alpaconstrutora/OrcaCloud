@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { supabase } from '../lib/supabase';
 import { Package, Building2, Calendar, FileText, Loader2, AlertTriangle, CheckCircle2, Clock, Truck } from 'lucide-react';
 

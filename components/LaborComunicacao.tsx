@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     MessageSquare, Plus, X, Send, Bell, Shield, BookOpen,
     AlertTriangle, Gift, Users, Building2, User, Check,

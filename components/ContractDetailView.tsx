@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import {
     ArrowLeft, FileText, Calendar, Shield, DollarSign,
     Layers, Plus, History, CheckCircle2, AlertCircle,

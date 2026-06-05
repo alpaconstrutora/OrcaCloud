@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Trash2, Pencil, Settings } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
 import { projectService, ProjectData } from '../services/projectService';

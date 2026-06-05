@@ -1,4 +1,4 @@
-﻿// CSS do módulo Fiscal — light theme alinhado ao design system do Opura
+// CSS do módulo Fiscal — light theme alinhado ao design system do Opura
 export const FISCAL_CSS = `
   .fiscal-root *, .fiscal-root *::before, .fiscal-root *::after { box-sizing: border-box; }
 

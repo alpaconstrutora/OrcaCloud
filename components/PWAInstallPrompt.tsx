@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Download, X, Wifi, WifiOff } from 'lucide-react'
 
 // ── Offline indicator ─────────────────────────────────────────────────────────

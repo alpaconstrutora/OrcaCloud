@@ -23,14 +23,18 @@ export const organizationService = {
 
         // Fetch members and custom roles in parallel
         const [membersResult, rolesResult] = await Promise.all([
-            supabase.from('organization_members').select('*').in('organization_id', orgIds),
-            supabase.from('organization_custom_roles').select('*').in('organization_id', orgIds)
+            supabase.from('organization_members')
+                .select('id, organization_id, name, email, role, custom_role_id, joined_at, permissions')
+                .in('organization_id', orgIds),
+            supabase.from('organization_custom_roles')
+                .select('id, organization_id, name, permissions')
+                .in('organization_id', orgIds)
         ]);
 
         if (membersResult.error) throw membersResult.error;
 
         // Handle custom roles gracefully in case the table hasn't been created yet
-        let allRoles = [];
+        let allRoles: NonNullable<typeof rolesResult.data> = [];
         if (rolesResult.error) {
             console.error("Note: organization_custom_roles table might be missing. Run your migrations.", rolesResult.error);
             if (rolesResult.error.code !== '42P01') { // 42P01 is "undefined_table"
@@ -44,8 +48,12 @@ export const organizationService = {
 
         // ── NOVO: Unificação de Recursos da nova Gestão de Mão de Obra ──
         const [employeesResult, teamsResult] = await Promise.all([
-            supabase.from('employees').select('*').in('org_id', orgIds),
-            supabase.from('labor_teams').select('*').in('org_id', orgIds)
+            supabase.from('employees')
+                .select('id, name, role, hourly_cost, daily_cost, org_id')
+                .in('org_id', orgIds),
+            supabase.from('labor_teams')
+                .select('id, name, org_id')
+                .in('org_id', orgIds)
         ]);
         const allEmployees = employeesResult.data || [];
         const allLaborTeams = teamsResult.data || [];

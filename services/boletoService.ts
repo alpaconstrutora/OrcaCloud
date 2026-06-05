@@ -1,4 +1,4 @@
-﻿import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { sanitizeFileName } from '../utils/storageUtils';
 import { sha256File, extractFromPdfFile, buildExtractionFromLinhaDigitavel } from '../utils/boletoParser';
 import { parseLinhaDigitavel, onlyDigits, nomeBanco } from '../utils/febrabanRules';

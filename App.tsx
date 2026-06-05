@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import Layout from './components/Layout';
 import AIChat from './components/AIChat';
 import ProjectModal from './components/ProjectModal';

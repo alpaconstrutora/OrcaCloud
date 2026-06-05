@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Trash2 } from 'lucide-react';
 import { Property, PropertyStatus, Client, TowerMatrixConfig, GridCellConfig } from '../types';
 import { clientService } from '../services/clientService';

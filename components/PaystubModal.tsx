@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     X, Printer, Loader2, FileText, AlertCircle, Download
 } from 'lucide-react';

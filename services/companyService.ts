@@ -68,7 +68,7 @@ export const companyService = {
     async listPartners(companyId: string): Promise<CompanyPartner[]> {
         const { data, error } = await supabase
             .from('company_partners')
-            .select('*')
+            .select('id, company_id, tipo_pessoa, nome, documento, participacao_pct, is_administrador, is_assinante_legal, pj_company_id, data_entrada, data_saida, created_at')
             .eq('company_id', companyId)
             .order('participacao_pct', { ascending: false });
         if (error) throw error;
@@ -109,7 +109,7 @@ export const companyService = {
     async listBankAccounts(companyId: string): Promise<CompanyBankAccount[]> {
         const { data, error } = await supabase
             .from('company_bank_accounts')
-            .select('*')
+            .select('id, company_id, banco_codigo, banco_nome, agencia, conta, tipo_conta, pix_chave, pix_tipo, favorecido, limite_credito, is_principal, ativa, obra_id, created_at')
             .eq('company_id', companyId)
             .order('is_principal', { ascending: false })
             .order('created_at');
@@ -171,7 +171,7 @@ export const companyService = {
     async getIncorporacao(companyId: string): Promise<CompanyIncorporacao | null> {
         const { data, error } = await supabase
             .from('company_incorporacao')
-            .select('*')
+            .select('company_id, tipo_spe, registro_incorporacao, cartorio, matriculas, alvara_construcao, alvara_validade, habite_se, habite_se_data, rep_numero, conta_segregada_id, empreendimento_id, created_at, updated_at')
             .eq('company_id', companyId)
             .maybeSingle();
         if (error) throw error;
@@ -193,7 +193,7 @@ export const companyService = {
     async listBranches(companyId: string): Promise<CompanyBranch[]> {
         const { data, error } = await supabase
             .from('company_branches')
-            .select('*')
+            .select('id, company_id, codigo, nome, cnpj_proprio, endereco, estoque_proprio, obra_id, ativa, created_at')
             .eq('company_id', companyId)
             .order('codigo');
         if (error) throw error;
@@ -234,7 +234,7 @@ export const companyService = {
     async listDocuments(companyId: string): Promise<CompanyDocument[]> {
         const { data, error } = await supabase
             .from('company_documents')
-            .select('*')
+            .select('id, company_id, tipo, numero, emissor, data_emissao, data_validade, arquivo_url, observacoes, alerta_dias_antecedencia, created_at, updated_at')
             .eq('company_id', companyId)
             .order('data_validade', { ascending: true, nullsFirst: false });
         if (error) throw error;
@@ -295,7 +295,7 @@ export const companyService = {
     async listAuditLog(companyId: string, limit = 50): Promise<CompanyAuditLog[]> {
         const { data, error } = await supabase
             .from('company_audit_log')
-            .select('*')
+            .select('id, company_id, user_email, action, field_changed, old_value, new_value, created_at')
             .eq('company_id', companyId)
             .order('created_at', { ascending: false })
             .limit(limit);
@@ -315,7 +315,7 @@ export const companyService = {
     async listTargets(companyId: string): Promise<CompanyTarget[]> {
         const { data, error } = await supabase
             .from('company_targets')
-            .select('*')
+            .select('id, company_id, ano, margem_alvo_pct, limite_endividamento_pct, faturamento_meta, ebitda_alvo, ticket_medio_alvo, qtd_obras_meta, created_at, updated_at')
             .eq('company_id', companyId)
             .order('ano', { ascending: false });
         if (error) throw error;
@@ -345,7 +345,7 @@ export const companyService = {
     async getConsolidatedGroup(orgId: string): Promise<CompanyConsolidated[]> {
         const { data, error } = await supabase
             .from('vw_company_consolidated')
-            .select('*')
+            .select('org_id, consolidadora_id, company_id, razao_social, nome_fantasia, tipo, status, cor_sistema, regime_tributario, is_headquarters, holding_id, qtd_obras, qtd_contratos, receita_contratada, compras_aprovadas, qtd_socios, qtd_contas, docs_vencidos, docs_vencendo')
             .eq('org_id', orgId)
             .order('is_headquarters', { ascending: false })
             .order('razao_social');
@@ -358,7 +358,7 @@ export const companyService = {
     async listDepartments(companyId: string): Promise<CompanyDepartment[]> {
         const { data, error } = await supabase
             .from('company_departments')
-            .select('*')
+            .select('id, company_id, parent_id, nome, descricao, responsavel_nome, cor, ordem, ativo, created_at')
             .eq('company_id', companyId)
             .order('ordem');
         if (error) throw error;

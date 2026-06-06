@@ -440,7 +440,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         try {
             let query = supabase
                 .from('payment_accounts')
-                .select('*')
+                .select('id, organization_id, bank, account_number, account_type, balance, currency, name')
                 .not('bank', 'is', null)
                 .not('account_number', 'is', null);
             
@@ -470,7 +470,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
             const { data, error } = await supabase
                 .from('reconciliation_rules')
-                .select('*')
+                .select('id, name, priority, is_active, organization_id, conditions, actions, created_at')
                 .eq('organization_id', orgToUse)
                 .order('priority', { ascending: false });
             if (error) throw error;
@@ -598,7 +598,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         try {
             const { data, error } = await supabase
                 .from('reconciliation_audit_log')
-                .select('*')
+                .select('id, organization_id, action, created_at')
                 .eq('organization_id', effectiveOrgId)
                 .order('created_at', { ascending: false })
                 .limit(20);
@@ -1041,7 +1041,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             const orgToUse = effectiveOrgId || organizationId;
 
             // 1. Buscar todos os projetos relevantes
-            let query = supabase.from('projects').select('*');
+            let query = supabase.from('projects').select('id, name, settings');
             if (orgToUse) {
                 // Se houver uma organização selecionada, filtra por ela
                 query = query.filter('settings->>organizationId', 'eq', orgToUse);

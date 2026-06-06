@@ -11,15 +11,13 @@ interface CurrentProfile {
 }
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 
-// Views — carregamento estático (crítico para primeira renderização)
-import Dashboard from './Dashboard';
-import ProjectList from './ProjectList';
-import ProjectOverview from './ProjectOverview';
-import Settings from './Settings';
-import { ClientArea } from './ClientArea';
-import OrganizationList from './OrganizationList';
-
 // Views — lazy (carregadas apenas quando acessadas)
+const Dashboard             = React.lazy(() => import('./Dashboard'));
+const ProjectList           = React.lazy(() => import('./ProjectList'));
+const ProjectOverview       = React.lazy(() => import('./ProjectOverview'));
+const Settings              = React.lazy(() => import('./Settings'));
+const ClientArea            = React.lazy(() => import('./ClientArea').then(m => ({ default: m.ClientArea })));
+const OrganizationList      = React.lazy(() => import('./OrganizationList'));
 const BudgetEditor          = React.lazy(() => import('./BudgetEditor'));
 const ParametricEstimator   = React.lazy(() => import('./ParametricEstimator'));
 const FinancialScheduleL    = React.lazy(() => import('./FinancialSchedule').then(m => ({ default: m.FinancialSchedule })));
@@ -61,8 +59,8 @@ const TasksModule           = React.lazy(() => import('./TasksModule'));
 const ServicesCommercialModule = React.lazy(() => import('./ServicesCommercialModule'));
 const ServiceContractsModule   = React.lazy(() => import('./ServiceContractsModule'));
 const SalesManagementModule    = React.lazy(() => import('./SalesManagementModule'));
-import { VIEW_TO_SALES_TAB } from './SalesManagementModule';
-import { VIEW_TO_CONTROLADORIA_TAB } from './ControladoriaModule';
+import { VIEW_TO_SALES_TAB } from '../constants/salesTabs';
+import { VIEW_TO_CONTROLADORIA_TAB } from '../constants/controladoríaTabs';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));

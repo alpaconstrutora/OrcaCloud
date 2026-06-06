@@ -1,10 +1,11 @@
 import React from 'react';
 import Layout from './components/Layout';
-import AIChat from './components/AIChat';
-import ProjectModal from './components/ProjectModal';
 import Auth from './components/Auth';
 import ResetPassword from './components/ResetPassword';
 import LoginGateway from './components/LoginGateway';
+
+const AIChat      = React.lazy(() => import('./components/AIChat'));
+const ProjectModal = React.lazy(() => import('./components/ProjectModal'));
 import { supabase } from './lib/supabase';
 import { atsService } from './services/atsService';
 import { PortalView } from './components/LaborPortal';
@@ -385,20 +386,24 @@ const App: React.FC = () => {
       />
       </ErrorBoundary>
 
-      {/* Modais globais */}
-      <AIChat isOpen={isAIChatOpen} onClose={() => setIsAIChatOpen(false)} budget={budget} settings={settingsWithId} />
+      {/* Modais globais — lazy: só carregam quando necessários */}
+      <React.Suspense fallback={null}>
+        <AIChat isOpen={isAIChatOpen} onClose={() => setIsAIChatOpen(false)} budget={budget} settings={settingsWithId} />
+      </React.Suspense>
 
-      <ProjectModal
-        isOpen={isProjectModalOpen}
-        onClose={() => setIsProjectModalOpen(false)}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onSubmit={handleUpsertProject as (data: any) => void}
-        initialData={projectModalMode === 'edit' ? projectSettings as any : undefined}
-        mode={projectModalMode as any}
-        initialClassification={projectModalInitialClassification}
-        organizationId={organizations[0]?.id}
-        organizations={organizations.map(o => ({ id: o.id, name: o.name }))}
-      />
+      <React.Suspense fallback={null}>
+        <ProjectModal
+          isOpen={isProjectModalOpen}
+          onClose={() => setIsProjectModalOpen(false)}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onSubmit={handleUpsertProject as (data: any) => void}
+          initialData={projectModalMode === 'edit' ? projectSettings as any : undefined}
+          mode={projectModalMode as any}
+          initialClassification={projectModalInitialClassification}
+          organizationId={organizations[0]?.id}
+          organizations={organizations.map(o => ({ id: o.id, name: o.name }))}
+        />
+      </React.Suspense>
 
       {isCreatingQuotation && (
         <SupplyChainQuotationForm

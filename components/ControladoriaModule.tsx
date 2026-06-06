@@ -10,19 +10,9 @@ const BankReconciliation         = React.lazy(() => import('./BankReconciliation
 const FinancialCategoriesManager = React.lazy(() => import('./FinancialCategoriesManager'))
 const BalanceteReport            = React.lazy(() => import('./BalanceteReport'))
 
-export type ControladoriaTab =
-  | 'dre' | 'balancete' | 'fluxo' | 'boletos' | 'contas_pagar' | 'conciliacao' | 'categorias'
-
-export const VIEW_TO_CONTROLADORIA_TAB: Record<string, ControladoriaTab> = {
-  'financial-dre':        'dre',
-  'financial-balancete':  'balancete',
-  'financial-cashflow':   'fluxo',
-  'financial-boletos':    'boletos',
-  'contas-a-pagar':       'contas_pagar',
-  'bank-reconciliation':  'conciliacao',
-  'financial-categories': 'categorias',
-  'controladoria':        'dre',
-}
+export type { ControladoriaTab } from '../constants/controladoríaTabs'
+export { VIEW_TO_CONTROLADORIA_TAB } from '../constants/controladoríaTabs'
+import type { ControladoriaTab } from '../constants/controladoríaTabs'
 
 interface Props {
   organizationId?: string

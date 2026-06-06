@@ -26,7 +26,7 @@ async function resolveSupplierName(supplierId: string | undefined, fallback: str
 async function findVault(orgId: string) {
     const { data } = await supabase
         .from('projects')
-        .select('*')
+        .select('id, name, settings')
         .eq('name', 'Gestão Comercial')
         .filter('settings->>organizationId', 'eq', orgId)
         .order('created_at', { ascending: false })
@@ -428,7 +428,7 @@ export const contractService = {
     getContractById: async (id: string): Promise<Contract | null> => {
         const { data, error } = await supabase
             .from('contracts')
-            .select('*')
+            .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, created_at')
             .eq('id', id)
             .maybeSingle();
 
@@ -592,7 +592,7 @@ export const contractService = {
                 // Localiza o vault da organização
                 const { data: vaultProjects } = await supabase
                     .from('projects')
-                    .select('*')
+                    .select('id, name, settings')
                     .eq('name', 'Gestão Comercial')
                     .filter('settings->>organizationId', 'eq', orgId)
                     .order('created_at', { ascending: false })
@@ -650,7 +650,7 @@ export const contractService = {
         // 1. Fetch original contract
         const { data: original, error: fetchError } = await supabase
             .from('contracts')
-            .select('*')
+            .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, created_at')
             .eq('id', id)
             .single();
 
@@ -659,7 +659,7 @@ export const contractService = {
         // 2. Fetch original items
         const { data: items, error: itemsError } = await supabase
             .from('contract_items')
-            .select('*')
+            .select('id, contract_id, budget_item_id, description, unit, quantity, unit_price, total_price, created_at')
             .eq('contract_id', id);
 
         if (itemsError) throw itemsError;
@@ -703,7 +703,7 @@ export const contractService = {
     listContractItems: async (contractId: string): Promise<ContractItem[]> => {
         const { data, error } = await supabase
             .from('contract_items')
-            .select('*')
+            .select('id, contract_id, budget_item_id, description, unit, quantity, unit_price, total_price, created_at')
             .eq('contract_id', contractId)
             .order('created_at', { ascending: true });
 
@@ -747,7 +747,7 @@ export const contractService = {
     listAddendums: async (contractId: string): Promise<ContractAddendum[]> => {
         const { data, error } = await supabase
             .from('contract_addendums')
-            .select('*')
+            .select('id, contract_id, number, type, description, value_impact, new_end_date, status, requested_by, approved_by, approved_at, notes, created_at')
             .eq('contract_id', contractId)
             .order('created_at', { ascending: false });
 
@@ -775,7 +775,7 @@ export const contractService = {
         // Fetch addendum to get value impact and contract_id
         const { data: addendum, error: fetchError } = await supabase
             .from('contract_addendums')
-            .select('*')
+            .select('id, contract_id, number, type, description, value_impact, new_end_date, status, requested_by, approved_by, approved_at, notes, created_at')
             .eq('id', id)
             .single();
 
@@ -797,7 +797,7 @@ export const contractService = {
         if (addendum.value_impact !== 0 || addendum.new_end_date) {
             const { data: contract, error: contractErr } = await supabase
                 .from('contracts')
-                .select('*')
+                .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, created_at')
                 .eq('id', addendum.contract_id)
                 .single();
 
@@ -832,7 +832,7 @@ export const contractService = {
     listMeasurements: async (contractId: string): Promise<ContractMeasurement[]> => {
         const { data, error } = await supabase
             .from('contract_measurements')
-            .select('*')
+            .select('id, contract_id, number, period_start, period_end, measurement_date, status, total_value, retention_value, net_value, notes, invoice_url, created_at')
             .eq('contract_id', contractId)
             .order('number', { ascending: false });
 
@@ -952,7 +952,7 @@ export const contractService = {
     getMeasurementItems: async (measurementId: string): Promise<ContractMeasurementItem[]> => {
         const { data, error } = await supabase
             .from('contract_measurement_items')
-            .select('*')
+            .select('id, measurement_id, contract_item_id, quantity_executed, value_executed, attachment_urls, created_at')
             .eq('measurement_id', measurementId);
 
         if (error) throw error;
@@ -963,7 +963,7 @@ export const contractService = {
     listUtilityBills: async (contractId: string): Promise<ContractUtilityBill[]> => {
         const { data, error } = await supabase
             .from('contract_utility_bills')
-            .select('*')
+            .select('id, contract_id, reference_month, consumption_metric, total_value, status, due_date, notes, created_at')
             .eq('contract_id', contractId)
             .order('reference_month', { ascending: false });
 
@@ -1090,7 +1090,7 @@ export const contractService = {
     generateObra: async (contractId: string): Promise<{ projectId: string }> => {
         const { data: contract, error } = await supabase
             .from('contracts')
-            .select('*')
+            .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, budget_snapshot, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, created_at')
             .eq('id', contractId)
             .single();
         if (error || !contract) throw new Error('Contrato não encontrado.');
@@ -1256,7 +1256,7 @@ export const contractService = {
 
         const { data: contract, error: fetchErr } = await supabase
             .from('contracts')
-            .select('*')
+            .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, created_at')
             .eq('id', contractId)
             .single();
         if (fetchErr) throw fetchErr;

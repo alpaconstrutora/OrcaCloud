@@ -1196,7 +1196,7 @@ export const laborService = {
 
     async listQrCodes(orgId: string): Promise<QrCodeObra[]> {
         const { data, error } = await supabase
-            .from('qr_codes_obra').select('*').eq('org_id', orgId).order('created_at', { ascending: false });
+            .from('qr_codes_obra').select('id, org_id, project_id, token, label, is_active, expires_at, scan_count, created_at').eq('org_id', orgId).order('created_at', { ascending: false });
         if (error) throw error;
         return data || [];
     },
@@ -1327,7 +1327,7 @@ export const laborService = {
     },
 
     async listRiskAssessments(orgId: string, projectId?: string): Promise<RiskAssessment[]> {
-        let query = supabase.from('risk_assessments').select('*').eq('org_id', orgId).order('data_avaliacao', { ascending: false });
+        let query = supabase.from('risk_assessments').select('id, org_id, project_id, tipo, titulo, data_avaliacao, proxima_revisao, responsavel_tecnico, registro_profissional, riscos, status, documento_url, created_at, updated_at').eq('org_id', orgId).order('data_avaliacao', { ascending: false });
         if (projectId) query = query.eq('project_id', projectId);
         const { data, error } = await query;
         if (error) throw error;
@@ -1350,7 +1350,7 @@ export const laborService = {
     // ── CONTRACTORS (Sprint 9) ─────────────────────────────
 
     async listContractors(orgId: string): Promise<Contractor[]> {
-        const { data, error } = await supabase.from('contractors').select('*').eq('org_id', orgId).order('razao_social');
+        const { data, error } = await supabase.from('contractors').select('id, org_id, razao_social, nome_fantasia, cnpj, cpf, tipo, especialidade, contato_nome, contato_telefone, contato_email, endereco, banco_nome, banco_agencia, banco_conta, banco_pix, retencao_inss_pct, retencao_iss_pct, retencao_irrf_pct, contrato_inicio, contrato_fim, valor_contrato, status, notas, created_at').eq('org_id', orgId).order('razao_social');
         if (error) throw error;
         return data || [];
     },
@@ -1517,7 +1517,7 @@ export const laborService = {
     async getTerminationByEmployee(employeeId: string): Promise<TerminationRecord | null> {
         const { data, error } = await supabase
             .from('termination_records')
-            .select('*')
+            .select('id, org_id, employee_id, termination_date, tipo, motivo, aviso_previo_tipo, aviso_previo_inicio, aviso_previo_fim, checklist, entrevista_realizada, entrevista_motivo_real, entrevista_pontos, entrevista_recontrataria, payroll_run_id, epis_devolvidos, acessos_bloqueados, processed_by, status, created_at, updated_at')
             .eq('employee_id', employeeId)
             .maybeSingle();
         if (error) throw error;
@@ -1569,7 +1569,7 @@ export const laborService = {
     async listTrainingCourses(orgId: string): Promise<TrainingCourse[]> {
         const { data, error } = await supabase
             .from('training_courses')
-            .select('*')
+            .select('id, org_id, nome, descricao, nr_referencia, categoria, carga_horaria, validade_meses, instrutor, is_obrigatorio, roles_obrigatorios, status, created_at, updated_at')
             .eq('org_id', orgId)
             .order('nome');
         if (error) throw error;
@@ -1835,7 +1835,7 @@ export const laborService = {
         // Busca o registro criado
         const { data: record, error: fetchErr } = await supabase
             .from('vacation_balance')
-            .select('*')
+            .select('id, org_id, employee_id, periodo_inicio, periodo_fim, dias_direito, dias_gozados, dias_vendidos, dias_restantes, status, vencimento, created_at, updated_at')
             .eq('employee_id', employeeId)
             .eq('periodo_inicio', periodoInicio)
             .single();
@@ -1903,7 +1903,7 @@ export const laborService = {
     async listEpiCatalog(orgId: string): Promise<EpiCatalogItem[]> {
         const { data, error } = await supabase
             .from('epi_catalog')
-            .select('*')
+            .select('id, org_id, nome, descricao, ca, ca_validade, unidade, estoque_atual, estoque_minimo, custo_unitario, fornecedor, categoria, status, created_at, updated_at')
             .eq('org_id', orgId)
             .order('nome');
         if (error) throw error;
@@ -2002,7 +2002,7 @@ export const laborService = {
     async getEpiAlerts(orgId: string): Promise<{ lowStock: EpiCatalogItem[]; expiredCa: EpiCatalogItem[] }> {
         const { data, error } = await supabase
             .from('epi_catalog')
-            .select('*')
+            .select('id, org_id, nome, descricao, ca, ca_validade, unidade, estoque_atual, estoque_minimo, custo_unitario, fornecedor, categoria, status, created_at, updated_at')
             .eq('org_id', orgId)
             .eq('status', 'ATIVO');
         if (error) throw error;
@@ -2067,7 +2067,7 @@ export const laborService = {
         in60.setDate(in60.getDate() + 60);
         const { data, error } = await supabase
             .from('sst_regulatory_docs')
-            .select('*')
+            .select('id, org_id, project_id, tipo, titulo, responsavel, responsavel_doc, vigencia_inicio, vigencia_fim, data_revisao, status, observacoes, documento_url, created_at, updated_at')
             .eq('org_id', orgId)
             .lte('vigencia_fim', in60.toISOString().split('T')[0])
             .neq('status', 'CANCELADO')

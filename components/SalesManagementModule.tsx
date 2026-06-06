@@ -11,30 +11,10 @@ const ImovibDashboard          = React.lazy(() => import('./ImovibDashboard'))
 const ImovibForm               = React.lazy(() => import('./ImovibForm'))
 const ImovibDetailView         = React.lazy(() => import('./ImovibDetailView'))
 
-// ── Tipos ─────────────────────────────────────────────────────────────────────
-export type SalesTab = 'espelho' | 'alugueis' | 'corretores' | 'crm' | 'contratos' | 'viabilidade'
-
-// Mapeia views antigas para a aba correspondente
-export const VIEW_TO_SALES_TAB: Record<string, SalesTab> = {
-  'sales':               'espelho',
-  'rentals':             'alugueis',
-  'broker-area':         'corretores',
-  'broker-proposals':    'corretores',
-  'broker-leads':        'corretores',
-  'broker-commissions':  'corretores',
-  'broker-materials':    'corretores',
-  'broker-ranking':      'corretores',
-  'broker-training':     'corretores',
-  'broker-events':       'corretores',
-  'broker-chat':         'corretores',
-  'broker-analytics':    'corretores',
-  'broker-health':       'corretores',
-  'broker-integrations': 'corretores',
-  'services-commercial': 'crm',
-  'service-contracts':   'contratos',
-  'imovib':              'viabilidade',
-  'gestao-vendas':       'espelho',
-}
+// ── Tipos e mapa de views ─────────────────────────────────────────────────────
+export type { SalesTab } from '../constants/salesTabs'
+export { VIEW_TO_SALES_TAB } from '../constants/salesTabs'
+import type { SalesTab } from '../constants/salesTabs'
 
 // Mapeia tab de broker para o internal tab do BrokerPortal
 const BROKER_INTERNAL_TAB: Record<string, string> = {

@@ -214,8 +214,8 @@ export const payrollService = {
     async listRuns(orgId?: string, type?: string, startDate?: string, endDate?: string) {
         let query = supabase
             .from('payroll_runs')
-            .select('*');
-            
+            .select('id, org_id, start_date, end_date, status, type, subtype, vacation_start, vacation_end, termination_reason, validation_logs, created_at');
+
         if (orgId && orgId !== 'all' && orgId !== '') {
             query = query.eq('org_id', orgId);
         }
@@ -239,7 +239,7 @@ export const payrollService = {
     async getRun(id: string) {
         const { data, error } = await supabase
             .from('payroll_runs')
-            .select('*')
+            .select('id, org_id, start_date, end_date, status, type, subtype, vacation_start, vacation_end, termination_reason, validation_logs, created_at')
             .eq('id', id)
             .single();
 
@@ -319,7 +319,7 @@ export const payrollService = {
     async listRubrics(includeInactive: boolean = false) {
         let query = supabase
             .from('rubrics')
-            .select('*')
+            .select('code, name, type, incidence_inss, incidence_fgts, incidence_irrf, is_automatic, is_clt_mandatory, calculation_type, calculation_config, category, formula, active, lancamento_individualizado, dia_lancamento')
             .order('code');
             
         if (!includeInactive) {
@@ -334,7 +334,7 @@ export const payrollService = {
     async getRubric(code: string) {
         const { data, error } = await supabase
             .from('rubrics')
-            .select('*')
+            .select('code, name, type, incidence_inss, incidence_fgts, incidence_irrf, is_automatic, is_clt_mandatory, calculation_type, calculation_config, category, formula, active, lancamento_individualizado, dia_lancamento')
             .eq('code', code)
             .single();
 
@@ -451,7 +451,7 @@ export const payrollService = {
     async listFiscalRanges(year: number = 2024) {
         const { data, error } = await supabase
             .from('payroll_fiscal_ranges')
-            .select('*')
+            .select('id, type, year, min_value, max_value, rate, deduction')
             .eq('year', year)
             .order('min_value');
 
@@ -520,7 +520,7 @@ export const payrollService = {
         // Tenta buscar por payroll_run_id (V2)
         const { data: v2, error: e2 } = await supabase
             .from('payroll_items')
-            .select('*')
+            .select('id, payroll_run_id, employee_id, code, type, amount, base_amount, reference, origin')
             .eq('payroll_run_id', runId)
             .eq('employee_id', employeeId);
 
@@ -529,7 +529,7 @@ export const payrollService = {
         // Fallback para run_id (V1)
         const { data: v1, error: e1 } = await supabase
             .from('payroll_items')
-            .select('*')
+            .select('id, payroll_run_id, employee_id, code, type, amount, base_amount, reference, origin')
             .eq('run_id', runId)
             .eq('employee_id', employeeId);
 
@@ -651,7 +651,7 @@ export const payrollService = {
     },
 
     async listEvents(orgId: string, runId?: string) {
-        let query = supabase.from('payroll_events').select('*');
+        let query = supabase.from('payroll_events').select('id, org_id, employee_id, payroll_run_id, code, rubric_code, type, amount, description, reference_date, is_recurring, origin, unit, quantity, approval_status');
         if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (runId) query = query.eq('payroll_run_id', runId);
 
@@ -663,7 +663,7 @@ export const payrollService = {
     async listEventsByPeriod(employeeId: string, start: string, end: string, currentRunId?: string) {
         let query = supabase
             .from('payroll_events')
-            .select('*')
+            .select('id, org_id, employee_id, payroll_run_id, code, rubric_code, type, amount, description, reference_date, is_recurring, origin, unit, quantity, approval_status')
             .eq('employee_id', employeeId)
             .gte('reference_date', start)
             .lte('reference_date', end);
@@ -715,7 +715,7 @@ export const payrollService = {
     },
 
     async updateEvent(id: string, event: Partial<PayrollEvent>) {
-        const { data: oldData } = await supabase.from('payroll_events').select('*').eq('id', id).single();
+        const { data: oldData } = await supabase.from('payroll_events').select('id, org_id, employee_id, payroll_run_id, code, rubric_code, type, amount, description, reference_date, is_recurring, origin, unit, quantity, approval_status').eq('id', id).single();
 
         const { data, error } = await supabase
             .from('payroll_events')
@@ -1240,7 +1240,7 @@ export const payrollService = {
     },
 
     async listAuditLogs(orgId: string, entity_type?: string, entity_id?: string) {
-        let query = supabase.from('payroll_audit_logs').select('*').eq('org_id', orgId);
+        let query = supabase.from('payroll_audit_logs').select('id, org_id, user_email, action, entity_type, entity_id, old_data, new_data, description, created_at').eq('org_id', orgId);
         if (entity_type) query = query.eq('entity_type', entity_type);
         if (entity_id) query = query.eq('entity_id', entity_id);
         
@@ -1278,7 +1278,7 @@ export const payrollService = {
         // 2. Buscar resultado do funcionário nessa folha
         const { data: result, error: resErr } = await supabase
             .from('payroll_results')
-            .select('*')
+            .select('id, payroll_run_id, employee_id, gross, discounts, net, employer_cost, base_inss, base_fgts, base_irrf')
             .eq('payroll_run_id', run.id)
             .eq('employee_id', employeeId)
             .single();

@@ -149,7 +149,7 @@ export const servicesCommercialService = {
   async listOpportunities(organizationId: string): Promise<ServiceOpportunity[]> {
     const { data, error } = await supabase
       .from('services_opportunities')
-      .select('*')
+      .select('id, organization_id, contact_name, contact_phone, contact_email, contact_whatsapp, city, work_type, estimated_area, estimated_value, scope_summary, stage, assigned_to, priority, origin_channel, lost_reason, won_at, lost_at, converted_project_id, converted_contract_id, rich_contract_id, budget_source, engineering_project_id, engineering_request_status, assigned_email, notes, created_at, updated_at')
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -159,7 +159,7 @@ export const servicesCommercialService = {
   async getOpportunity(id: string): Promise<ServiceOpportunity | null> {
     const { data, error } = await supabase
       .from('services_opportunities')
-      .select('*')
+      .select('id, organization_id, contact_name, contact_phone, contact_email, contact_whatsapp, city, work_type, estimated_area, estimated_value, scope_summary, stage, assigned_to, priority, origin_channel, lost_reason, won_at, lost_at, converted_project_id, converted_contract_id, rich_contract_id, budget_source, engineering_project_id, engineering_request_status, assigned_email, notes, created_at, updated_at')
       .eq('id', id)
       .single();
     if (error) throw error;
@@ -203,7 +203,7 @@ export const servicesCommercialService = {
   async listEvents(opportunityId: string): Promise<ServiceOpportunityEvent[]> {
     const { data, error } = await supabase
       .from('services_opportunity_events')
-      .select('*')
+      .select('id, opportunity_id, event_type, from_value, to_value, payload, actor, created_at')
       .eq('opportunity_id', opportunityId)
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -297,7 +297,7 @@ export const servicesCommercialService = {
   async getProposal(opportunityId: string): Promise<ServiceProposal | null> {
     const { data, error } = await supabase
       .from('services_proposals')
-      .select('*')
+      .select('id, opportunity_id, organization_id, budget_id, proposal_number, total_value, scope, payment_terms, delivery_term_days, valid_until, status, pdf_storage_path, sent_at, created_at, updated_at')
       .eq('opportunity_id', opportunityId)
       .order('created_at', { ascending: false })
       .limit(1)

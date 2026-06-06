@@ -216,7 +216,7 @@ export const vrService = {
     // ── Regras ────────────────────────────────────────────────────────────────
 
     async listRegras(orgId: string): Promise<VrRegra[]> {
-        let q = supabase.from('vr_regras').select('*').order('nome');
+        let q = supabase.from('vr_regras').select('id, org_id, project_id, nome, tipo, valor_diario, desconto_folha_pct, gera_sabado, gera_domingo, gera_feriado, desconta_falta, desconta_ferias, desconta_afastamento, ativo, created_at, updated_at').order('nome');
         if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
         const { data, error } = await q;
         if (error) throw error;
@@ -241,7 +241,7 @@ export const vrService = {
     // ── Feriados ──────────────────────────────────────────────────────────────
 
     async listFeriados(orgId: string, ano?: number): Promise<VrFeriado[]> {
-        let q = supabase.from('vr_feriados').select('*').order('data');
+        let q = supabase.from('vr_feriados').select('id, org_id, data, descricao, escopo, project_id, created_at').order('data');
         if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
         if (ano) {
             q = q.gte('data', `${ano}-01-01`).lte('data', `${ano}-12-31`);
@@ -295,7 +295,7 @@ export const vrService = {
 
         const { data: regra, error: regraErr } = await supabase
             .from('vr_regras')
-            .select('*')
+            .select('id, org_id, project_id, nome, tipo, valor_diario, desconto_folha_pct, gera_sabado, gera_domingo, gera_feriado, desconta_falta, desconta_ferias, desconta_afastamento, ativo, created_at, updated_at')
             .eq('id', regraId)
             .single();
         if (regraErr) throw regraErr;
@@ -351,7 +351,7 @@ export const vrService = {
         motivo: string
     ): Promise<void> {
         const { data: atual, error: err1 } = await supabase
-            .from('vr_calculos').select('*').eq('id', calculoId).single();
+            .from('vr_calculos').select('id, org_id, regra_id, employee_id, project_id, mes_referencia, dias_uteis, dias_faltas, dias_ferias, dias_afastamento, dias_outros, dias_elegiveis, valor_diario, valor_bruto, desconto_folha, valor_liquido, status, aprovado_por, aprovado_em, observacao, created_at, updated_at').eq('id', calculoId).single();
         if (err1) throw err1;
 
         const valorAntes: number = (atual as any)[campo] ?? 0;
@@ -382,7 +382,7 @@ export const vrService = {
     async listAjustes(calculoId: string): Promise<VrAjuste[]> {
         const { data, error } = await supabase
             .from('vr_ajustes')
-            .select('*')
+            .select('id, calculo_id, campo, valor_antes, valor_depois, motivo, usuario_id, created_at')
             .eq('calculo_id', calculoId)
             .order('created_at', { ascending: false });
         if (error) throw error;

@@ -7,7 +7,7 @@ export const brokerService = {
         if (!organizationId) return [] as BrokerProfile[];
         const { data, error } = await supabase
             .from('broker_profiles')
-            .select('*')
+            .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, created_at, updated_at')
             .eq('organization_id', organizationId)
             .order('name');
 
@@ -66,7 +66,7 @@ export const brokerService = {
     async getProfile(id: string) {
         const { data, error } = await supabase
             .from('broker_profiles')
-            .select('*')
+            .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, created_at, updated_at')
             .eq('id', id)
             .single();
 
@@ -82,7 +82,7 @@ export const brokerService = {
     async listProposals(organizationId: string, brokerEmail?: string) {
         let query = supabase
             .from('broker_portal_proposals')
-            .select('*')
+            .select('id, property_id, broker_id, broker_email, organization_id, buyer_name, buyer_cpf, buyer_email, buyer_phone, buyer_income, unit_price, down_payment, monthly_installments, monthly_value, balloon_value, financing_value, payment_plan_id, discount_pct, total_value, status, notes, admin_notes, created_at, updated_at')
             .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
 
@@ -151,7 +151,7 @@ export const brokerService = {
         console.log(`[BROKER SERVICE] listing commissions for org: ${organizationId}, email: ${brokerEmail}`);
         let query = supabase
             .from('broker_portal_commissions')
-            .select('*')
+            .select('id, organization_id, proposal_id, broker_email, unit_number, block, buyer_name, sale_value, commission_pct, commission_predicted, commission_released, commission_paid, status, milestones, created_at, updated_at')
             .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
 

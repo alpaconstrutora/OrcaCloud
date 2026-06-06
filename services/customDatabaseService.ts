@@ -7,7 +7,7 @@ export const customDatabaseService = {
     async listDatabases() {
         const { data, error } = await supabase
             .from('custom_databases')
-            .select('*')
+            .select('id, name, description, created_at, updated_at')
             .order('name');
 
         if (error) throw error;
@@ -181,7 +181,7 @@ export const customDatabaseService = {
             codes?: string[];
         }
     ) {
-        let query = supabase.from('custom_items').select('*');
+        let query = supabase.from('custom_items').select('code, description, unit, price, type, category, nature, composition, database_id, is_favorite');
 
         // IMPORTANT: Filter by database ID if provided
         if (filters?.databaseId) {
@@ -318,7 +318,7 @@ export const customDatabaseService = {
         if (options.sourceBase === 'SINAPI') {
             const { data, error } = await supabase
                 .from('sinapi_items')
-                .select('*')
+                .select('code, description, unit, price, type, category, nature, composition')
                 .eq('category', sourceName);
 
             if (error) throw error;
@@ -326,7 +326,7 @@ export const customDatabaseService = {
         } else {
             const { data, error } = await supabase
                 .from('custom_items')
-                .select('*')
+                .select('code, description, unit, price, type, category, nature, composition, database_id, is_favorite')
                 .eq('category', sourceName);
 
             if (error) throw error;

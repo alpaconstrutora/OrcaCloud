@@ -526,7 +526,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     await Promise.all(projectIds.map(async (pid) => {
                         const { data: realProject } = await supabase
                             .from('projects')
-                            .select('*')
+                            .select('id, name, settings, budget')
                             .eq('id', pid)
                             .single();
 
@@ -593,7 +593,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             try {
                 const targetId = projectId || settings.id;
                 console.log(`[FINANCIAL] Fallback save starting for ID: ${targetId}`);
-                const { data: proj } = await supabase.from('projects').select('*').eq('id', targetId).single();
+                const { data: proj } = await supabase.from('projects').select('id, name, settings, budget').eq('id', targetId).single();
                 if (proj) {
                     proj.settings.financialInfo = updatedInfo;
                     await projectService.saveProject(proj);
@@ -702,7 +702,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             shouldReconcile = true;
         } else if ((inst as RichInstallment).sourceProjectId) {
             console.log(`[FINANCIAL] Remote Installment detected (${(inst as RichInstallment).sourceProjectId}). Targeting remote project.`);
-            const { data: satProj } = await supabase.from('projects').select('*').eq('id', (inst as RichInstallment).sourceProjectId).single();
+            const { data: satProj } = await supabase.from('projects').select('id, name, settings, budget').eq('id', (inst as RichInstallment).sourceProjectId).single();
             if (satProj) {
                 const satInsts: RichInstallment[] = satProj.settings?.financialInfo?.installments || [];
                 const updatedSatInsts = satInsts.map(i => i.id === inst.id ? { ...i, status: newStatus as PaymentInstallment['status'], paymentDate: payDate } : i);
@@ -732,7 +732,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             await handleSaveMultiple({ installments: updated });
             shouldReconcile = true;
         } else if (item && (item as RichInstallment).sourceProjectId) {
-            const { data: satProj } = await supabase.from('projects').select('*').eq('id', (item as RichInstallment).sourceProjectId).single();
+            const { data: satProj } = await supabase.from('projects').select('id, name, settings, budget').eq('id', (item as RichInstallment).sourceProjectId).single();
             if (satProj) {
                 const satInsts: RichInstallment[] = satProj.settings?.financialInfo?.installments || [];
                 const updatedSatInsts = satInsts.map(i => i.id === id ? { ...i, status: 'PAID' as PaymentInstallment['status'], paymentDate: date } : i);
@@ -771,7 +771,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             await handleSaveMultiple({ transactions: updated });
         } else if (exp.sourceProjectId) {
             console.log(`[FINANCIAL] Remote Expense detected (${exp.sourceProjectId}).`);
-            const { data: satProj } = await supabase.from('projects').select('*').eq('id', exp.sourceProjectId).single();
+            const { data: satProj } = await supabase.from('projects').select('id, name, settings, budget').eq('id', exp.sourceProjectId).single();
             if (satProj) {
                 const satTx: RichTransaction[] = satProj.settings?.financialInfo?.transactions || [];
                 const updatedSatTx = satTx.map(t => t.id === exp.id ? { ...t, status: newStatus as FinancialTransaction['status'], paymentDate: payDate } : t);

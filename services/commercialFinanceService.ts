@@ -217,7 +217,7 @@ export const commercialFinanceService = {
         // 1. Tenta localizar projetos vinculados a esta org
         const query = supabase
             .from('projects')
-            .select('*')
+            .select('id, name, settings, budget')
             .eq('name', 'Gestão Comercial')
             .filter('settings->>organizationId', 'eq', organizationId);
 
@@ -241,7 +241,7 @@ export const commercialFinanceService = {
         // Isso recupera os dados legados que estavam sendo compartilhados indevidamente
         const { data: orphanedProjects } = await supabase
             .from('projects')
-            .select('*')
+            .select('id, name, settings, budget')
             .eq('name', 'Gestão Comercial');
 
         if (orphanedProjects && orphanedProjects.length > 0) {
@@ -308,7 +308,7 @@ export const commercialFinanceService = {
         // 1. Listar todas as negociações finalizadas da organização
         const query = supabase
             .from('commercial_deals')
-            .select('*')
+            .select('id, organization_id, property_id, client_id, linked_project_id, type, value, status, date, contract_number, notes, payment_method, installments, installment_value, down_payment, payment_due_date, broker_id, broker_name, broker_commission_pct, broker_commission_value, broker_payment_due_date, broker_payment_method, custom_installments, signature_token, signature_status, signature_url, signature_completed_at, signed_contract_url, cancellation_reason, cancellation_date, cancellation_refund_amount, created_at')
             .eq('status', 'COMPLETED')
             .eq('organization_id', organizationId);
 

@@ -21,7 +21,7 @@ export const structuralService = {
   // ── Catálogo de aço ───────────────────────────────────────
   // Traz o catálogo base global (org_id NULL) + o da própria org.
   async listSteelCatalog(orgId?: string): Promise<SteelCatalogItem[]> {
-    const query = supabase.from('structural_steel_catalog').select('*')
+    const query = supabase.from('structural_steel_catalog').select('id, org_id, tipo, bitola_mm, peso_linear_kg_m, comprimento_barra_m, fabricante, custo_kg, custo_barra, perda_pct_padrao, created_at, created_by, updated_at')
     const filtered = orgId
       ? query.or(`org_id.is.null,org_id.eq.${orgId}`)
       : query.is('org_id', null)   // sem org → só catálogo global NBR 7480
@@ -63,7 +63,7 @@ export const structuralService = {
   async listAssemblies(projectId: string): Promise<StructuralAssembly[]> {
     const { data, error } = await supabase
       .from('structural_assemblies')
-      .select('*')
+      .select('id, org_id, project_id, nome, tipo, created_at, created_by, updated_at')
       .eq('project_id', projectId)
       .order('created_at', { ascending: true })
 
@@ -99,7 +99,7 @@ export const structuralService = {
   async listElements(assemblyId: string): Promise<StructuralElement[]> {
     const { data, error } = await supabase
       .from('structural_elements')
-      .select('*')
+      .select('id, org_id, assembly_id, tipo, nome, quantidade, geometria, cobrimento_cm, created_at, created_by, updated_at')
       .eq('assembly_id', assemblyId)
       .order('created_at', { ascending: true })
 
@@ -138,7 +138,7 @@ export const structuralService = {
   async listRebars(elementId: string): Promise<Rebar[]> {
     const { data, error } = await supabase
       .from('structural_rebars')
-      .select('*')
+      .select('id, org_id, element_id, bitola_id, funcao, posicao, quantidade, espacamento_cm, comprimento_unit_cm, formato_dobra, dobras, created_at, created_by, updated_at')
       .eq('element_id', elementId)
       .order('posicao', { ascending: true, nullsFirst: false })
 

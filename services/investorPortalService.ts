@@ -241,7 +241,20 @@ export const investorPortalService = {
             .select(INTEREST_COLS)
             .single();
         if (error) throw error;
-        return data as OpportunityInterest;
+        const saved = data as OpportunityInterest;
+
+        // Notificação por e-mail — fire-and-forget (falha silenciosa)
+        if (saved.id) {
+            supabase.functions.invoke('notify-opportunity-interest', {
+                body: {
+                    interestId:     saved.id,
+                    opportunityId:  interest.opportunity_id,
+                    organizationId: interest.organization_id,
+                },
+            }).catch(() => {/* notificação não bloqueia o fluxo */});
+        }
+
+        return saved;
     },
 
     async listInterests(organizationId: string, opportunityId?: string): Promise<OpportunityInterest[]> {

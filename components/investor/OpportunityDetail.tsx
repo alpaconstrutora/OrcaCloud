@@ -10,6 +10,7 @@ import {
     investorPortalService,
 } from '../../services/investorPortalService';
 import ScenarioComparison from './ScenarioComparison';
+import LinkedProjectPanel from './LinkedProjectPanel';
 
 interface Props {
     opportunity: InvestorOpportunity;
@@ -27,7 +28,7 @@ const fmtM2 = (v: number | null | undefined) => (v == null ? '—' : `${new Intl
 
 const ROLES: InterestRole[] = ['investidor', 'arquiteto', 'engenheiro', 'projetista', 'consultor', 'outro'];
 
-type PitchTab = 'pitch' | 'cenarios' | 'interesses';
+type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'interesses';
 type FormStep = 'view' | 'form' | 'success';
 
 const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, isAdmin = false, onClose }) => {
@@ -90,14 +91,18 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
             return acc;
         }, {});
 
+    const hasLinkedProject = !!op.project_id;
+
     const ADMIN_TABS: { id: PitchTab; label: string }[] = [
         { id: 'pitch', label: 'Detalhes' },
         { id: 'cenarios', label: 'Cenários' },
+        ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra' }] : []),
         { id: 'interesses', label: `Interesses (${interests.length || '…'})` },
     ];
     const PUBLIC_TABS: { id: PitchTab; label: string }[] = [
         { id: 'pitch', label: 'Detalhes' },
         ...(hasScenarios ? [{ id: 'cenarios' as PitchTab, label: 'Viabilidade' }] : []),
+        ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra ao Vivo' }] : []),
     ];
     const tabs = isAdmin ? ADMIN_TABS : PUBLIC_TABS;
 
@@ -297,6 +302,30 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                         {pitchTab === 'cenarios' && (
                             <div className="px-8 py-6 space-y-6">
                                 <ScenarioComparison opportunity={op} />
+                                <div className="flex gap-3 pt-2">
+                                    <button
+                                        onClick={() => setFormStep('form')}
+                                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl"
+                                    >
+                                        <Handshake className="w-4 h-4" />
+                                        Manifestar Interesse
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={onClose} className="px-6 py-4 text-gray-500 hover:text-gray-700 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
+                                        Fechar
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── ABA: Obra ao Vivo ────────────────────────── */}
+                        {pitchTab === 'obra' && hasLinkedProject && (
+                            <div className="px-8 py-6 space-y-6">
+                                <LinkedProjectPanel
+                                    projectId={op.project_id!}
+                                    organizationId={organizationId}
+                                    costEstimate={op.cost_estimate}
+                                />
                                 <div className="flex gap-3 pt-2">
                                     <button
                                         onClick={() => setFormStep('form')}

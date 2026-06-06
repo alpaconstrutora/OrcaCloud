@@ -1,9 +1,10 @@
 import React from 'react';
-import { X, Building2, MapPin, BarChart3, Ruler, Eye, EyeOff, TrendingDown, TrendingUp, SlidersHorizontal } from 'lucide-react';
+import { X, Building2, MapPin, BarChart3, Ruler, Eye, EyeOff, TrendingDown, TrendingUp, SlidersHorizontal, Link2, Unlink } from 'lucide-react';
 import {
     InvestorOpportunity, OpportunityStatus, OpportunityType,
     OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_TYPE_LABELS,
 } from '../../services/investorPortalService';
+import { opportunityProjectService } from '../../services/opportunityProjectService';
 
 interface Props {
     initial?: Partial<InvestorOpportunity>;
@@ -19,6 +20,14 @@ const fmtNum = (v: number | null | undefined) => (v != null ? String(v) : '');
 const parseNum = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
 
 const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onClose }) => {
+    const [projects, setProjects] = React.useState<{ id: string; name: string }[]>([]);
+
+    React.useEffect(() => {
+        opportunityProjectService.listForOrg(organizationId)
+            .then(setProjects)
+            .catch(() => {/* silencioso — seletor fica vazio */});
+    }, [organizationId]);
+
     const [form, setForm] = React.useState<Omit<InvestorOpportunity, 'id' | 'created_at'>>({
         organization_id: organizationId,
         title: initial?.title ?? '',
@@ -145,6 +154,47 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                         </div>
+                    </section>
+
+                    {/* ── Obra Vinculada ───────────────────────────────── */}
+                    <section className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Link2 className="w-4 h-4 text-indigo-600" />
+                            <span className="text-xs font-black text-indigo-600 uppercase tracking-widest">Obra vinculada</span>
+                            <span className="text-[10px] text-indigo-400 ml-1">(opcional)</span>
+                        </div>
+                        <p className="text-xs text-indigo-500 mb-3 leading-relaxed">
+                            Vincule a uma obra real do ORÇACLOUD para exibir dados ao vivo: progresso físico,
+                            custo realizado, timeline e galeria de fotos.
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={form.project_id ?? ''}
+                                onChange={e => set('project_id', e.target.value || null)}
+                                className="flex-1 px-4 py-2.5 border border-indigo-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
+                            >
+                                <option value="">Sem vínculo</option>
+                                {projects.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                            {form.project_id && (
+                                <button
+                                    type="button"
+                                    onClick={() => set('project_id', null)}
+                                    title="Desvincular"
+                                    className="p-2.5 text-indigo-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors border border-indigo-200 bg-white"
+                                >
+                                    <Unlink className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                        {form.project_id && (
+                            <p className="text-[10px] text-indigo-500 mt-2 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                                Dados ao vivo serão exibidos na aba "Obra" do pitch
+                            </p>
+                        )}
                     </section>
 
                     {/* ── Localização ───────────────────────────────────── */}

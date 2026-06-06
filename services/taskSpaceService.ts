@@ -201,6 +201,22 @@ async function reorderFolders(orderedIds: string[]): Promise<void> {
   )
 }
 
+// Move pasta para outro espaço — atualiza a pasta e todas as tarefas dentro dela
+async function moveFolder(folderId: string, newSpaceId: string): Promise<void> {
+  const { error: fe } = await supabase
+    .from('task_folders')
+    .update({ space_id: newSpaceId })
+    .eq('id', folderId)
+  if (fe) throw fe
+
+  // Tarefas precisam acompanhar — atualiza space_id delas também
+  const { error: te } = await supabase
+    .from('tasks')
+    .update({ space_id: newSpaceId })
+    .eq('folder_id', folderId)
+  if (te) throw te
+}
+
 // ── Export ────────────────────────────────────────────────────────────────────
 
 export const taskSpaceService = {
@@ -217,6 +233,7 @@ export const taskSpaceService = {
   removeMember,
   // folders
   createFolder,
+  moveFolder,
   updateFolder,
   deleteFolder,
   reorderFolders,

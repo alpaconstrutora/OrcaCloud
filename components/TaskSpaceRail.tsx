@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import {
   Calendar, AlertTriangle, ListChecks, Inbox,
   ChevronRight, ChevronDown, Plus, FolderOpen, Loader2, Hash, Settings2, GripVertical,
+  Pencil, Check, ArrowRightLeft,
 } from 'lucide-react'
 import { taskSpaceService, type TaskSpaceWithMeta } from '../services/taskSpaceService'
 import type { FilterView } from './TasksModule'
@@ -63,9 +64,27 @@ const TaskSpaceRail: React.FC<Props> = ({
   }
 
   // ── drag de pastas ───────────────────────────────────────────────────────
-  const [draggingFolderId, setDraggingFolderId] = useState<string | null>(null)
-  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
-  const draggingFolderSpaceId = useRef<string | null>(null)
+  const [draggingFolderId, setDraggingFolderId]       = useState<string | null>(null)
+  const [dragOverFolderId, setDragOverFolderId]       = useState<string | null>(null)
+  const draggingFolderSpaceId                         = useRef<string | null>(null)
+  // drag de pasta → espaço diferente
+  const [folderDragOverSpaceId, setFolderDragOverSpaceId] = useState<string | null>(null)
+
+  // edição inline de pasta
+  const [editingFolderId, setEditingFolderId]         = useState<string | null>(null)
+  const [editingFolderName, setEditingFolderName]     = useState('')
+  const editFolderRef                                 = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (editingFolderId) editFolderRef.current?.focus() }, [editingFolderId])
+
+  // dropdown "mover pasta para"
+  const [movingFolderId, setMovingFolderId]           = useState<string | null>(null)
+  // Fecha dropdown ao clicar fora
+  useEffect(() => {
+    if (!movingFolderId) return
+    const close = () => setMovingFolderId(null)
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [movingFolderId])
 
   const dropFolder = async (spaceId: string, targetFolderId: string) => {
     if (!draggingFolderId || draggingFolderId === targetFolderId) return
@@ -87,6 +106,40 @@ const TaskSpaceRail: React.FC<Props> = ({
       console.error('[rail] reorderFolders', e)
       setLocalSpaces(spaces)
     }
+  }
+
+  // Drag de pasta para espaço diferente
+  const dropFolderOnSpace = async (targetSpaceId: string) => {
+    const fromSpaceId = draggingFolderSpaceId.current
+    if (!draggingFolderId || !fromSpaceId || fromSpaceId === targetSpaceId) {
+      setDraggingFolderId(null); setFolderDragOverSpaceId(null); return
+    }
+    const folderId = draggingFolderId
+    setDraggingFolderId(null); setFolderDragOverSpaceId(null)
+    try {
+      await taskSpaceService.moveFolder(folderId, targetSpaceId)
+      onReloaded()
+    } catch (e) { console.error('[rail] moveFolder', e); setLocalSpaces(spaces) }
+  }
+
+  // Editar pasta inline
+  const saveEditFolder = async (folderId: string) => {
+    const name = editingFolderName.trim()
+    setEditingFolderId(null)
+    if (!name) return
+    try {
+      await taskSpaceService.updateFolder(folderId, { name })
+      onReloaded()
+    } catch (e) { console.error('[rail] renameFolder', e) }
+  }
+
+  // Mover pasta via dropdown
+  const moveFolderTo = async (folderId: string, newSpaceId: string) => {
+    setMovingFolderId(null)
+    try {
+      await taskSpaceService.moveFolder(folderId, newSpaceId)
+      onReloaded()
+    } catch (e) { console.error('[rail] moveFolderTo', e) }
   }
 
   // ── expandir / recolher ──────────────────────────────────────────────────
@@ -181,18 +234,32 @@ const TaskSpaceRail: React.FC<Props> = ({
 
       {/* Lista de espaços — draggable */}
       {localSpaces.map(space => {
-        const isExpanded    = expandedSpaces.has(space.id)
-        const isSpaceActive = selectedSpaceId === space.id && !selectedFolderId
-        const isDragging    = draggingSpaceId === space.id
-        const isOver        = dragOverSpaceId === space.id && draggingSpaceId !== space.id
+        const isExpanded      = expandedSpaces.has(space.id)
+        const isSpaceActive   = selectedSpaceId === space.id && !selectedFolderId
+        const isDragging      = draggingSpaceId === space.id
+        const isOver          = dragOverSpaceId === space.id && draggingSpaceId !== space.id
+        const isFolderTarget  = folderDragOverSpaceId === space.id && draggingFolderSpaceId.current !== space.id
 
         return (
           <div
             key={space.id}
-            onDragOver={e => { e.preventDefault(); setDragOverSpaceId(space.id) }}
-            onDragLeave={e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDragOverSpaceId(null) }}
-            onDrop={e => { e.preventDefault(); dropSpace(space.id) }}
-            className={`rounded-lg transition-all ${isDragging ? 'opacity-30' : ''} ${isOver ? 'bg-blue-50 ring-1 ring-blue-300' : ''}`}
+            onDragOver={e => {
+              e.preventDefault()
+              // distingue drag de espaço vs drag de pasta
+              if (draggingFolderId) setFolderDragOverSpaceId(space.id)
+              else setDragOverSpaceId(space.id)
+            }}
+            onDragLeave={e => {
+              if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+                setDragOverSpaceId(null); setFolderDragOverSpaceId(null)
+              }
+            }}
+            onDrop={e => {
+              e.preventDefault()
+              if (draggingFolderId) dropFolderOnSpace(space.id)
+              else dropSpace(space.id)
+            }}
+            className={`rounded-lg transition-all ${isDragging ? 'opacity-30' : ''} ${isOver ? 'bg-blue-50 ring-1 ring-blue-300' : ''} ${isFolderTarget ? 'bg-violet-50 ring-1 ring-violet-300' : ''}`}
           >
             {/* Linha do espaço */}
             <div className={`flex items-center gap-1 rounded-lg transition-all group/space ${!isDragging && !isOver && isSpaceActive ? 'bg-blue-50' : !isDragging && !isOver ? 'hover:bg-slate-100' : ''}`}>
@@ -249,43 +316,110 @@ const TaskSpaceRail: React.FC<Props> = ({
             {isExpanded && (
               <div className="ml-5 mt-0.5 space-y-0.5">
                 {space.folders.map(folder => {
-                  const isFolderActive  = selectedSpaceId === space.id && selectedFolderId === folder.id
+                  const isFolderActive   = selectedSpaceId === space.id && selectedFolderId === folder.id
                   const isFolderDragging = draggingFolderId === folder.id
-                  const isFolderOver    = dragOverFolderId === folder.id && draggingFolderId !== folder.id
+                  const isFolderOver     = dragOverFolderId === folder.id && draggingFolderId !== folder.id
+                  const isEditing        = editingFolderId === folder.id
+                  const isMoving         = movingFolderId  === folder.id
+                  const otherSpaces      = localSpaces.filter(s => s.id !== space.id)
 
                   return (
                     <div
                       key={folder.id}
-                      draggable
+                      draggable={!isEditing}
                       onDragStart={e => {
                         e.stopPropagation()
                         e.dataTransfer.effectAllowed = 'move'
                         draggingFolderSpaceId.current = space.id
                         requestAnimationFrame(() => setDraggingFolderId(folder.id))
                       }}
-                      onDragEnd={() => { setDraggingFolderId(null); setDragOverFolderId(null) }}
-                      onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverFolderId(folder.id) }}
+                      onDragEnd={() => { setDraggingFolderId(null); setDragOverFolderId(null); setFolderDragOverSpaceId(null) }}
+                      onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (!draggingFolderId || draggingFolderSpaceId.current === space.id) setDragOverFolderId(folder.id) }}
                       onDragLeave={e => { e.stopPropagation(); setDragOverFolderId(null) }}
-                      onDrop={e => { e.preventDefault(); e.stopPropagation(); dropFolder(space.id, folder.id) }}
-                      className={`group/folder flex items-center gap-1.5 rounded-lg transition-all cursor-pointer
+                      onDrop={e => { e.preventDefault(); e.stopPropagation(); if (draggingFolderSpaceId.current === space.id) dropFolder(space.id, folder.id) }}
+                      className={`group/folder flex items-center gap-1 rounded-lg transition-all
                         ${isFolderDragging ? 'opacity-30' : ''}
-                        ${isFolderOver    ? 'bg-blue-50 ring-1 ring-blue-300' : ''}
+                        ${isFolderOver     ? 'bg-blue-50 ring-1 ring-blue-300' : ''}
                         ${!isFolderDragging && !isFolderOver && isFolderActive ? 'bg-blue-50' : !isFolderDragging && !isFolderOver ? 'hover:bg-slate-100' : ''}`}
                     >
-                      {/* Grip pasta */}
+                      {/* Grip */}
                       <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600 flex-shrink-0">
                         <GripVertical className="w-3 h-3" />
                       </div>
 
-                      <button
-                        onClick={() => onSelectSpace(space.id, folder.id)}
-                        className={`flex items-center gap-2 flex-1 min-w-0 py-1.5 pr-2 text-sm font-medium text-left
-                          ${isFolderActive ? 'text-blue-700' : 'text-slate-500 group-hover/folder:text-slate-800'}`}
-                      >
-                        <FolderOpen className={`w-3.5 h-3.5 flex-shrink-0 ${isFolderActive ? 'text-blue-500' : 'text-slate-400'}`}
-                          style={folder.color ? { color: folder.color } : undefined} />
-                        <span className="truncate">{folder.name}</span>
-                      </button>
+                      {/* Nome — ou input de edição */}
+                      {isEditing ? (
+                        <input
+                          ref={editFolderRef}
+                          value={editingFolderName}
+                          onChange={e => setEditingFolderName(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter')  saveEditFolder(folder.id)
+                            if (e.key === 'Escape') setEditingFolderId(null)
+                          }}
+                          onBlur={() => saveEditFolder(folder.id)}
+                          onClick={e => e.stopPropagation()}
+                          className="flex-1 min-w-0 text-sm px-1.5 py-1 border border-blue-300 rounded-md outline-none bg-white text-slate-800"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => onSelectSpace(space.id, folder.id)}
+                          className={`flex items-center gap-2 flex-1 min-w-0 py-1.5 text-sm font-medium text-left
+                            ${isFolderActive ? 'text-blue-700' : 'text-slate-600 group-hover/folder:text-slate-900'}`}
+                        >
+                          <FolderOpen className={`w-3.5 h-3.5 flex-shrink-0 ${isFolderActive ? 'text-blue-500' : 'text-slate-400'}`}
+                            style={folder.color ? { color: folder.color } : undefined} />
+                          <span className="truncate">{folder.name}</span>
+                        </button>
+                      )}
+
+                      {/* Botão editar */}
+                      {!isEditing && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setEditingFolderId(folder.id); setEditingFolderName(folder.name); setMovingFolderId(null) }}
+                          title="Renomear pasta"
+                          className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors flex-shrink-0"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      )}
+                      {isEditing && (
+                        <button
+                          onClick={() => saveEditFolder(folder.id)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded flex-shrink-0"
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                      )}
+
+                      {/* Botão mover para + dropdown */}
+                      {!isEditing && otherSpaces.length > 0 && (
+                        <div className="relative flex-shrink-0">
+                          <button
+                            onClick={e => { e.stopPropagation(); setMovingFolderId(isMoving ? null : folder.id); setEditingFolderId(null) }}
+                            title="Mover para outro espaço"
+                            className={`p-1 rounded transition-colors ${isMoving ? 'text-violet-600 bg-violet-50' : 'text-slate-400 hover:text-violet-600 hover:bg-violet-50'}`}
+                          >
+                            <ArrowRightLeft className="w-3 h-3" />
+                          </button>
+
+                          {isMoving && (
+                            <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-lg min-w-[140px] py-1 overflow-hidden">
+                              <p className="px-3 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Mover para</p>
+                              {otherSpaces.map(s => (
+                                <button
+                                  key={s.id}
+                                  onClick={e => { e.stopPropagation(); moveFolderTo(folder.id, s.id) }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left"
+                                >
+                                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                                  <span className="truncate">{s.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}

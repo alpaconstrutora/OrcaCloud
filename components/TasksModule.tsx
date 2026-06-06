@@ -319,6 +319,15 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       ? [{ id: activeOrganizationId, name: 'Minha Organização' }]
       : []
 
+  const isSpaceMode = selectedSpaceId !== null
+
+  // Espaço selecionado sem pasta → mostra grade de pastas em vez das tarefas
+  const activeSpace    = spaces.find(s => s.id === selectedSpaceId) ?? null
+  const showFolderView = selectedSpaceId !== null
+                       && selectedSpaceId !== '__none__'
+                       && selectedFolderId === null
+                       && activeSpace !== null
+
   // Título contextual da área de conteúdo (só quando não está em folder view, que tem seu próprio header)
   const contentTitle = useMemo(() => {
     if (selectedSpaceId === '__none__') return 'Sem espaço'
@@ -333,15 +342,6 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     }
     return null
   }, [selectedSpaceId, selectedFolderId, spaces, showFolderView])
-
-  const isSpaceMode = selectedSpaceId !== null
-
-  // Espaço selecionado sem pasta → mostra grade de pastas em vez das tarefas
-  const activeSpace     = spaces.find(s => s.id === selectedSpaceId) ?? null
-  const showFolderView  = selectedSpaceId !== null
-                        && selectedSpaceId !== '__none__'
-                        && selectedFolderId === null
-                        && activeSpace !== null
 
   return (
     <div className="space-y-5">

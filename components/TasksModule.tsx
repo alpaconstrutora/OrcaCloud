@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2, Layers, List, Kanban } from 'lucide-react'
+import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2, Layers, List, Kanban, LayoutGrid, X } from 'lucide-react'
 
 export type GroupByField = 'none' | 'status' | 'assignee' | 'priority' | 'project' | 'source'
 export type FilterView   = 'today' | 'all' | 'overdue'
@@ -13,6 +13,7 @@ import TaskStatusManager from './TaskStatusManager'
 import TasksBoard from './TasksBoard'
 import TaskSpaceRail from './TaskSpaceRail'
 import TaskSpaceManager from './TaskSpaceManager'
+import TaskSpaceBottomSheet from './TaskSpaceBottomSheet'
 
 type ViewMode = 'list' | 'board'
 
@@ -73,7 +74,8 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   // null = inbox pessoal, '__none__' = sem espaço, uuid = espaço específico
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
-  const [managingSpace, setManagingSpace] = useState<TaskSpaceWithMeta | null>(null)
+  const [managingSpace, setManagingSpace]   = useState<TaskSpaceWithMeta | null>(null)
+  const [showSpaceSheet, setShowSpaceSheet] = useState(false)
 
   const loadSpaces = useCallback(async (orgId: string) => {
     setLoadingSpaces(true)
@@ -341,6 +343,19 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             <TabBtn active={!isSpaceMode && view === 'today'}   icon={Calendar}      label="Hoje"      count={today.length}   onClick={() => handleSelectInbox('today')} />
             <TabBtn active={!isSpaceMode && view === 'overdue'} icon={AlertTriangle} label="Atrasadas" count={overdue.length} onClick={() => handleSelectInbox('overdue')} />
             <TabBtn active={!isSpaceMode && view === 'all'}     icon={ListChecks}    label="Todas"                            onClick={() => handleSelectInbox('all')} />
+            {/* Botão "Espaços" no mobile */}
+            {spaces.length > 0 && (
+              <button
+                onClick={() => setShowSpaceSheet(true)}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all
+                  ${isSpaceMode
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+                Espaços
+              </button>
+            )}
           </div>
 
           {/* Toggle List / Board */}
@@ -437,6 +452,24 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           <button onClick={() => handleSelectInbox('overdue')} className="ml-auto font-black uppercase tracking-wider hover:underline">
             Ver atrasadas
           </button>
+        </div>
+      )}
+
+      {/* Chip de contexto ativo — mobile only */}
+      {isSpaceMode && contentTitle && (
+        <div className="flex items-center gap-2 md:hidden">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold">
+            {selectedSpaceId !== '__none__' && (
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: spaces.find(s => s.id === selectedSpaceId)?.color ?? '#3b82f6' }}
+              />
+            )}
+            <span className="truncate max-w-[180px]">{contentTitle}</span>
+            <button onClick={() => handleSelectInbox(view)} className="ml-1 text-blue-400 hover:text-blue-700 flex-shrink-0">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -549,6 +582,21 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           onChanged={() => loadStatuses(filterOrg || activeOrganizationId || '')}
         />
       )}
+
+      <TaskSpaceBottomSheet
+        open={showSpaceSheet}
+        spaces={spaces}
+        selectedSpaceId={selectedSpaceId}
+        selectedFolderId={selectedFolderId}
+        activeFilter={view}
+        todayCount={today.length}
+        overdueCount={overdue.length}
+        noSpaceCount={noSpaceCount}
+        onSelectInbox={handleSelectInbox}
+        onSelectSpace={handleSelectSpace}
+        onSelectNoSpace={handleSelectNoSpace}
+        onClose={() => setShowSpaceSheet(false)}
+      />
 
       {managingSpace && (
         <TaskSpaceManager

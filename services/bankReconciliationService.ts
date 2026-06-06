@@ -152,7 +152,7 @@ export const bankReconciliationService = {
     async normalizeTransactions(bankAccountId: string) {
         const { data: txs, error } = await supabase
             .from('bank_transactions')
-            .select('*')
+            .select('id, organization_id, bank_account_id, external_id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, transaction_type, fingerprint, category, status, project_id, created_at')
             .eq('bank_account_id', bankAccountId)
             .eq('status', 'IMPORTED');
 
@@ -181,7 +181,7 @@ export const bankReconciliationService = {
         let appliedCount = 0;
         let query = supabase
             .from('reconciliation_rules')
-            .select('*')
+            .select('id, name, priority, is_active, organization_id, conditions, actions, created_at')
             .eq('organization_id', organizationId)
             .eq('is_active', true);
 
@@ -212,7 +212,7 @@ export const bankReconciliationService = {
 
         const { data: txs, error: txsError } = await supabase
             .from('bank_transactions')
-            .select('*')
+            .select('id, organization_id, bank_account_id, external_id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, transaction_type, fingerprint, category, status, project_id, created_at')
             .eq('bank_account_id', bankAccountId)
             .in('status', targetStatuses)
             .order('transaction_date', { ascending: false })
@@ -324,7 +324,7 @@ export const bankReconciliationService = {
     async runMatchingEngine(bankAccountId: string, organizationId: string) {
         const { data: bankTxs } = await supabase
             .from('bank_transactions')
-            .select('*')
+            .select('id, organization_id, bank_account_id, external_id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, transaction_type, fingerprint, category, status, project_id, created_at')
             .eq('bank_account_id', bankAccountId)
             .in('status', ['NORMALIZED', 'RULE_APPLIED']);
 
@@ -340,7 +340,7 @@ export const bankReconciliationService = {
             // Layer 1: Valor Exato e Direção
             const { data: candidates } = await supabase
                 .from('internal_transactions')
-                .select('*')
+                .select('id, organization_id, source_system, reference_id, transaction_date, amount, direction, description, category, status, project_id, cost_center_id, category_id, created_at')
                 .eq('organization_id', organizationId)
                 .eq('amount', bTx.amount)
                 .eq('direction', bTx.direction)

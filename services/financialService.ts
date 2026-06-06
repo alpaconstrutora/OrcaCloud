@@ -87,7 +87,7 @@ export const financialService = {
             try {
                 const { data: vaultProjects } = await supabase
                     .from('projects')
-                    .select('*')
+                    .select('id, name, settings, budget')
                     .eq('name', 'Gestão Comercial')
                     .filter('settings->>organizationId', 'eq', orgId)
                     .order('created_at', { ascending: false })
@@ -152,7 +152,7 @@ export const financialService = {
         // 1. Fetch Order and Supplier separately (Joins on suppliers can fail due to schema caching)
         const { data: orderRaw, error: orderError } = await supabase
             .from('purchase_orders')
-            .select('*')
+            .select('id, number, status, supplier_id, project_id, items, actual_delivery_date, delivery_date, payment_method, payment_term_type, payment_installments, payment_days, bank_account, cost_center, chart_of_accounts')
             .eq('id', orderId)
             .single();
 
@@ -276,7 +276,7 @@ export const financialService = {
         // 1. Fetch Measurement
         const { data: measurement, error: mError } = await supabase
             .from('contract_measurements')
-            .select('*')
+            .select('id, contract_id, number, period_start, period_end, measurement_date, status, total_value, retention_value, net_value, notes, invoice_url, created_at')
             .eq('id', measurementId)
             .single();
 
@@ -288,7 +288,7 @@ export const financialService = {
         // 2. Fetch Contract
         const { data: contract, error: cError } = await supabase
             .from('contracts')
-            .select('*')
+            .select('id, organization_id, project_id, supplier_id, number, title, nature, start_date, end_date, status, original_value, current_value, retention_rate, responsible_email, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, direction, created_at')
             .eq('id', measurement.contract_id)
             .single();
 

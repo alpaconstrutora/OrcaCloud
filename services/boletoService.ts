@@ -141,7 +141,7 @@ export const boletoService = {
         // 2. Checar duplicidade
         const { data: existente } = await supabase
             .from(TABLE)
-            .select('*')
+            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, observacoes, created_by, created_by_email, created_at, updated_at')
             .eq('organization_id', organizationId)
             .eq('documento_hash', hash)
             .maybeSingle();
@@ -338,7 +338,7 @@ export const boletoService = {
     async aprovarECriarInvoice(boletoId: string, organizationId: string, userEmail?: string): Promise<Boleto> {
         const { data: boletoRow, error: berr } = await supabase
             .from(TABLE)
-            .select('*')
+            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, observacoes, created_by, created_by_email, created_at, updated_at')
             .eq('id', boletoId)
             .single();
         if (berr) throw berr;
@@ -430,7 +430,7 @@ export const boletoService = {
     async list(organizationId: string | undefined, filters: BoletoFilters = {}): Promise<Boleto[]> {
         let q = supabase
             .from(TABLE)
-            .select('*')
+            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, observacoes, created_by, created_by_email, created_at, updated_at')
             .order('created_at', { ascending: false });
         if (organizationId) q = q.eq('organization_id', organizationId);
 
@@ -454,7 +454,7 @@ export const boletoService = {
     async getById(boletoId: string): Promise<Boleto | null> {
         const { data, error } = await supabase
             .from(TABLE)
-            .select('*')
+            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, observacoes, created_by, created_by_email, created_at, updated_at')
             .eq('id', boletoId)
             .maybeSingle();
         if (error) throw error;
@@ -464,7 +464,7 @@ export const boletoService = {
     async listAuditoria(boletoId: string): Promise<BoletoAuditoria[]> {
         const { data, error } = await supabase
             .from(AUDIT_TABLE)
-            .select('*')
+            .select('id, boleto_id, organization_id, acao, campo, valor_antes, valor_depois, metodo, usuario_email, created_at')
             .eq('boleto_id', boletoId)
             .order('created_at', { ascending: false });
         if (error) throw error;

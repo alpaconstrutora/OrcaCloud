@@ -104,7 +104,7 @@ export const orderService = {
 
         let query = supabase
             .from('purchase_orders')
-            .select('*')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, chart_of_accounts, notes, items, version, created_at, updated_at, status_updated_at')
             .order('created_at', { ascending: false });
 
         if (projectId) {
@@ -186,7 +186,7 @@ export const orderService = {
     async getOrderById(id: string): Promise<PurchaseOrder | null> {
         const { data, error } = await supabase
             .from('purchase_orders')
-            .select('*')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, chart_of_accounts, notes, items, version, created_at, updated_at, status_updated_at')
             .eq('id', id)
             .single();
         if (error || !data) return null;
@@ -197,7 +197,7 @@ export const orderService = {
         // Pre-flight checks (single SELECT before the update)
         const { data: currentRow, error: fetchError } = await supabase
             .from('purchase_orders')
-            .select('*')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, chart_of_accounts, notes, items, version, created_at, updated_at, status_updated_at')
             .eq('id', id)
             .single();
 
@@ -258,7 +258,7 @@ export const orderService = {
         // Fetch the updated row separately — avoids PostgREST RETURNING quirks
         const { data, error: refetchError } = await supabase
             .from('purchase_orders')
-            .select('*')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, chart_of_accounts, notes, items, version, created_at, updated_at, status_updated_at')
             .eq('id', id)
             .single();
 
@@ -522,7 +522,7 @@ export const orderService = {
         // 1. Fetch current order
         const { data: original, error: fetchError } = await supabase
             .from('purchase_orders')
-            .select('*')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, chart_of_accounts, notes, items, version, created_at, updated_at, status_updated_at')
             .eq('id', id)
             .single();
 

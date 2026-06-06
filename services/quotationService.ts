@@ -160,7 +160,7 @@ export const quotationService = {
         // 1. Get current state for history
         const { data: resp, error: fetchError } = await supabase
             .from('quotation_responses')
-            .select('*')
+            .select('id, request_id, supplier_id, items, delivery_date, delivery_method, delivery_location, payment_method, payment_term_type, payment_days, payment_installments, status, negotiation_status, counter_proposal, negotiation_history, notes, total_value, created_at, updated_at')
             .eq('id', responseId)
             .single();
 
@@ -228,7 +228,7 @@ export const quotationService = {
         // 1. Get current response
         const { data: resp, error: fetchError } = await supabase
             .from('quotation_responses')
-            .select('*')
+            .select('id, request_id, supplier_id, items, delivery_date, delivery_method, delivery_location, payment_method, payment_term_type, payment_days, payment_installments, status, negotiation_status, counter_proposal, negotiation_history, notes, total_value, created_at, updated_at')
             .eq('id', responseId)
             .single();
 
@@ -320,7 +320,7 @@ export const quotationService = {
         // 1. Check if already exists
         const { data: existing } = await supabase
             .from('quotation_responses')
-            .select('*')
+            .select('id, request_id, supplier_id, items, delivery_date, delivery_method, delivery_location, payment_method, payment_term_type, payment_days, payment_installments, status, negotiation_status, counter_proposal, negotiation_history, notes, total_value, created_at, updated_at')
             .eq('request_id', response.requestId)
             .eq('supplier_id', response.supplierId)
             .single();
@@ -415,7 +415,7 @@ export const quotationService = {
 
         const { data: requestRaw } = await supabase
             .from('quotation_requests')
-            .select('*')
+            .select('id, number, project_id, title, description, deadline, status, items, invited_supplier_ids, delivery_date, delivery_method, delivery_location, payment_method, payment_term_type, payment_days, payment_installments, created_at, updated_at')
             .eq('id', requestId)
             .single();
 

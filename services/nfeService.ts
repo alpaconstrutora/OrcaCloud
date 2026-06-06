@@ -120,7 +120,7 @@ export async function uploadNFe(
 export async function listNfeInvoices(organizationId: string): Promise<NfeInvoice[]> {
   const { data, error } = await supabase
     .from('nfe_invoices')
-    .select('*')
+    .select('id, organization_id, raw_document_id, access_key, issuer_name, issuer_cnpj, recipient_name, recipient_cnpj, issue_date, total_value, document_status, payment_status, created_at')
     .eq('organization_id', organizationId)
     .order('issue_date', { ascending: false });
 
@@ -131,7 +131,7 @@ export async function listNfeInvoices(organizationId: string): Promise<NfeInvoic
 export async function getNfeInvoiceWithItems(invoiceId: string): Promise<NfeInvoiceWithItems | null> {
   const { data: invoice, error: invError } = await supabase
     .from('nfe_invoices')
-    .select('*')
+    .select('id, organization_id, raw_document_id, access_key, issuer_name, issuer_cnpj, recipient_name, recipient_cnpj, issue_date, total_value, document_status, payment_status, created_at')
     .eq('id', invoiceId)
     .single<NfeInvoice>();
 
@@ -139,7 +139,7 @@ export async function getNfeInvoiceWithItems(invoiceId: string): Promise<NfeInvo
 
   const { data: items, error: itemsError } = await supabase
     .from('nfe_invoice_items')
-    .select('*')
+    .select('id, invoice_id, line_number, description, ncm, cfop, quantity, commercial_unit, taxable_unit, unit_value, total_value, tax_value, category, created_at')
     .eq('invoice_id', invoiceId)
     .order('line_number');
 
@@ -169,7 +169,7 @@ export async function listProcessingJobs(organizationId: string): Promise<Proces
 export async function getPipelineHealth(organizationId: string): Promise<PipelineHealth | null> {
   const { data, error } = await supabase
     .from('pipeline_health')
-    .select('*')
+    .select('organization_id, queued, processing, completed, failed, dead_letter, duplicated, success_rate_pct, avg_processing_seconds, last_job_at')
     .eq('organization_id', organizationId)
     .maybeSingle<PipelineHealth>();
 
@@ -199,7 +199,7 @@ export async function listClassificationRules(
 ): Promise<ClassificationRule[]> {
   const { data, error } = await supabase
     .from('classification_rules')
-    .select('*')
+    .select('id, organization_id, rule_type, match_value, category, priority, is_active, created_at')
     .or(`organization_id.eq.${organizationId},organization_id.is.null`)
     .eq('is_active', true)
     .order('priority', { ascending: true });

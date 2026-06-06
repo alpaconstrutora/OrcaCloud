@@ -111,7 +111,7 @@ export const hrAnalyticsService = {
     async getSnapshots(orgId: string, limit = 24): Promise<HrMonthlySnapshot[]> {
         const { data, error } = await supabase
             .from('vw_hr_turnover_trend')
-            .select('*')
+            .select('id, org_id, ano_mes, headcount_inicio, headcount_fim, admissoes, demissoes, turnover_rate, turnover_voluntario, turnover_involuntario, dias_uteis, dias_ausencia, absenteismo_rate, custo_folha_total, custo_encargos, custo_medio_colaborador, horas_trabalhadas, horas_extras, horas_extras_rate, breakdown_por_funcao, breakdown_por_obra, turnover_media_3m, absenteismo_media_3m, created_at')
             .eq('org_id', orgId)
             .order('ano_mes', { ascending: false })
             .limit(limit);
@@ -180,7 +180,7 @@ export const hrAnalyticsService = {
     async getProductivityByProject(orgId: string): Promise<ProductivityByProject[]> {
         const { data, error } = await supabase
             .from('vw_hr_productivity_by_project')
-            .select('*')
+            .select('org_id, project_id, projeto_nome, hh_total, eficiencia_media_pct, custo_total_mdo, custo_previsto_total, custo_realizado_total, desvio_custo_pct, idc_medio')
             .eq('org_id', orgId)
             .order('custo_realizado_total', { ascending: false });
         if (error) throw error;
@@ -190,7 +190,7 @@ export const hrAnalyticsService = {
     async getProductivityMetrics(orgId: string, limit = 60): Promise<ProductivityMetric[]> {
         const { data, error } = await supabase
             .from('hr_productivity_metrics')
-            .select('*')
+            .select('id, org_id, project_id, ano_mes, hh_disponivel, hh_produtivo, eficiencia_pct, custo_mdo_direto, custo_mdo_indireto, avanco_fisico_pct, custo_previsto, custo_realizado, idc, headcount_obra, created_at')
             .eq('org_id', orgId)
             .order('ano_mes', { ascending: false })
             .limit(limit);
@@ -209,7 +209,7 @@ export const hrAnalyticsService = {
     async getRetentionCohorts(orgId: string): Promise<RetentionCohort[]> {
         const { data, error } = await supabase
             .from('vw_hr_retention_cohorts')
-            .select('*')
+            .select('org_id, coorte_mes, admitidos, ainda_ativos, taxa_retencao_pct, permanencia_media_dias')
             .eq('org_id', orgId)
             .order('coorte_mes', { ascending: false })
             .limit(24);
@@ -221,7 +221,7 @@ export const hrAnalyticsService = {
     async getTarget(orgId: string, ano: number): Promise<HrTarget | null> {
         const { data, error } = await supabase
             .from('hr_targets')
-            .select('*')
+            .select('id, org_id, ano, turnover_max_pct, absenteismo_max_pct, horas_extras_max_pct, eficiencia_min_pct')
             .eq('org_id', orgId)
             .eq('ano', ano)
             .maybeSingle();

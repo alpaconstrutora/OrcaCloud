@@ -132,7 +132,7 @@ export const esocialService = {
     async getConfig(orgId: string): Promise<EsocialConfig | null> {
         const { data, error } = await supabase
             .from('esocial_config')
-            .select('*')
+            .select('id, org_id, ambiente, versao_schema, tipo_inscricao, nr_inscricao, cert_serial, cert_validade, cert_status, transmissao_automatica, horario_transmissao, ativo, created_at, updated_at')
             .eq('org_id', orgId)
             .maybeSingle();
         if (error) throw error;
@@ -157,7 +157,7 @@ export const esocialService = {
     async getEvents(orgId: string, filters?: { status?: EsocialStatus; grupo?: EsocialGrupo; tipo?: string }): Promise<EsocialEvent[]> {
         let q = supabase
             .from('esocial_events')
-            .select('*')
+            .select('id, org_id, tipo_evento, grupo, entidade, entidade_id, per_apur, xml_gerado, xml_hash, protocolo, recibo, status, retorno_codigo, retorno_descricao, gerado_em, assinado_em, transmitido_em, processado_em, created_at, updated_at')
             .eq('org_id', orgId)
             .order('gerado_em', { ascending: false })
             .limit(200);
@@ -172,7 +172,7 @@ export const esocialService = {
     async getStatusPanel(orgId: string): Promise<EsocialStatusPanel[]> {
         const { data, error } = await supabase
             .from('vw_esocial_status_panel')
-            .select('*')
+            .select('org_id, tipo_evento, grupo, status, total, mais_antigo, mais_recente, total_erros, total_ok')
             .eq('org_id', orgId)
             .order('tipo_evento');
         if (error) throw error;
@@ -226,7 +226,7 @@ export const esocialService = {
     async getBatches(orgId: string): Promise<EsocialBatch[]> {
         const { data, error } = await supabase
             .from('esocial_batches')
-            .select('*')
+            .select('id, org_id, numero_lote, grupo, per_apur, total_eventos, eventos_ok, eventos_erro, status, protocolo_envio, retorno_codigo, retorno_descricao, transmitido_em, processado_em, created_at, updated_at')
             .eq('org_id', orgId)
             .order('created_at', { ascending: false })
             .limit(50);
@@ -258,7 +258,7 @@ export const esocialService = {
     async getAlerts(orgId: string): Promise<EsocialPendingAlert[]> {
         const { data, error } = await supabase
             .from('esocial_pending_alerts')
-            .select('*')
+            .select('id, org_id, tipo_evento, titulo, descricao, entidade, entidade_id, prioridade, prazo, resolvida, resolvida_em, created_at')
             .eq('org_id', orgId)
             .eq('resolvida', false)
             .order('prioridade')

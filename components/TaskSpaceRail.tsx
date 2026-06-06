@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import {
   Calendar, AlertTriangle, ListChecks, Inbox,
-  ChevronRight, ChevronDown, Plus, FolderOpen, Loader2, Hash,
+  ChevronRight, ChevronDown, Plus, FolderOpen, Loader2, Hash, Settings2,
 } from 'lucide-react'
 import type { TaskSpaceWithMeta } from '../services/taskSpaceService'
 import type { FilterView } from './TasksModule'
@@ -23,6 +23,7 @@ interface Props {
   onSelectNoSpace: () => void
   onCreateSpace: (name: string) => void
   onCreateFolder: (spaceId: string, name: string) => void
+  onManageSpace: (space: TaskSpaceWithMeta) => void
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ const TaskSpaceRail: React.FC<Props> = ({
   selectedSpaceId, selectedFolderId, activeFilter,
   todayCount, overdueCount, noSpaceCount,
   onSelectInbox, onSelectSpace, onSelectNoSpace,
-  onCreateSpace, onCreateFolder,
+  onCreateSpace, onCreateFolder, onManageSpace,
 }) => {
   const [expandedSpaces, setExpandedSpaces] = useState<Set<string>>(new Set())
   const [creatingSpace, setCreatingSpace]   = useState(false)
@@ -218,13 +219,20 @@ const TaskSpaceRail: React.FC<Props> = ({
                 )}
               </button>
 
-              {/* + pasta (aparece no hover) */}
+              {/* botões no hover */}
               <button
                 onClick={(e) => { e.stopPropagation(); setCreatingFolderIn(space.id); setExpandedSpaces(prev => new Set([...prev, space.id])) }}
                 title="Nova pasta"
                 className="opacity-0 group-hover/space:opacity-100 p-1 text-slate-300 hover:text-blue-600 transition-all flex-shrink-0"
               >
                 <Plus className="w-3 h-3" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onManageSpace(space) }}
+                title="Gerenciar espaço"
+                className="opacity-0 group-hover/space:opacity-100 p-1 text-slate-300 hover:text-slate-600 transition-all flex-shrink-0"
+              >
+                <Settings2 className="w-3 h-3" />
               </button>
             </div>
 

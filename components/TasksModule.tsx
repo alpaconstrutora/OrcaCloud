@@ -12,6 +12,7 @@ import TaskForm, { type TaskRecord, type EmployeeOption, type ProjectOption, typ
 import TaskStatusManager from './TaskStatusManager'
 import TasksBoard from './TasksBoard'
 import TaskSpaceRail from './TaskSpaceRail'
+import TaskSpaceManager from './TaskSpaceManager'
 
 type ViewMode = 'list' | 'board'
 
@@ -72,6 +73,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   // null = inbox pessoal, '__none__' = sem espaço, uuid = espaço específico
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [managingSpace, setManagingSpace] = useState<TaskSpaceWithMeta | null>(null)
 
   const loadSpaces = useCallback(async (orgId: string) => {
     setLoadingSpaces(true)
@@ -456,6 +458,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           onSelectNoSpace={handleSelectNoSpace}
           onCreateSpace={handleCreateSpace}
           onCreateFolder={handleCreateFolder}
+          onManageSpace={setManagingSpace}
         />
 
         {/* Área de conteúdo */}
@@ -544,6 +547,22 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           orgId={filterOrg || activeOrganizationId || orgsOptions[0]?.id || ''}
           onClose={() => setShowStatusMgr(false)}
           onChanged={() => loadStatuses(filterOrg || activeOrganizationId || '')}
+        />
+      )}
+
+      {managingSpace && (
+        <TaskSpaceManager
+          space={managingSpace}
+          orgId={filterOrg || activeOrganizationId || orgForNew}
+          onClose={() => setManagingSpace(null)}
+          onChanged={() => loadSpaces(filterOrg || activeOrganizationId || '')}
+          onDeleted={() => {
+            if (selectedSpaceId === managingSpace.id) {
+              setSelectedSpaceId(null)
+              setSelectedFolderId(null)
+            }
+            loadSpaces(filterOrg || activeOrganizationId || '')
+          }}
         />
       )}
     </div>

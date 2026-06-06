@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { X, Save, Trash2, Loader2, UserPlus, UserMinus, Settings, Users } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { X, Save, Trash2, Loader2, UserPlus, UserMinus, Settings, Users, FolderOpen, Plus, Pencil, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { taskSpaceService, type TaskSpace, type TaskSpaceMember } from '../services/taskSpaceService'
+import { taskSpaceService, type TaskSpace, type TaskFolder, type TaskSpaceMember } from '../services/taskSpaceService'
 
 // ── Paleta de cores predefinidas ──────────────────────────────────────────────
 const COLOR_PALETTE = [
@@ -20,7 +20,7 @@ interface Props {
   onDeleted: () => void   // espaço foi excluído
 }
 
-type Tab = 'settings' | 'members'
+type Tab = 'settings' | 'folders' | 'members'
 
 const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, onDeleted }) => {
   const [tab, setTab] = useState<Tab>('settings')
@@ -126,6 +126,73 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
     }
   }
 
+  // ── Aba Pastas ──────────────────────────────────────────────────────────
+  const [folders, setFolders]           = useState<TaskFolder[]>(space.folders as TaskFolder[])
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
+  const [editingFolderName, setEditingFolderName] = useState('')
+  const [newFolderName, setNewFolderName] = useState('')
+  const [creatingFolder, setCreatingFolder] = useState(false)
+  const [folderError, setFolderError]   = useState<string | null>(null)
+  const editFolderRef  = useRef<HTMLInputElement>(null)
+  const newFolderRef2  = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { if (editingFolderId) editFolderRef.current?.focus() }, [editingFolderId])
+  useEffect(() => { if (creatingFolder)  newFolderRef2.current?.focus()  }, [creatingFolder])
+
+  const reloadFolders = async () => {
+    // Recarrega apenas as pastas deste espaço
+    const { data } = await supabase
+      .from('task_folders')
+      .select('*')
+      .eq('space_id', space.id)
+      .order('position')
+    setFolders((data ?? []) as TaskFolder[])
+    onChanged()
+  }
+
+  const startEdit = (f: TaskFolder) => {
+    setEditingFolderId(f.id)
+    setEditingFolderName(f.name)
+  }
+
+  const saveFolder = async (id: string) => {
+    const name = editingFolderName.trim()
+    if (!name) { setEditingFolderId(null); return }
+    setFolderError(null)
+    try {
+      await taskSpaceService.updateFolder(id, { name })
+      setEditingFolderId(null)
+      await reloadFolders()
+    } catch (e) {
+      setFolderError((e as Error).message ?? 'Erro ao salvar')
+    }
+  }
+
+  const deleteFolder = async (id: string, name: string) => {
+    if (!window.confirm(`Excluir a pasta "${name}"? As tarefas voltam para o espaço (sem pasta).`)) return
+    setFolderError(null)
+    try {
+      await taskSpaceService.deleteFolder(id)
+      await reloadFolders()
+    } catch (e) {
+      setFolderError((e as Error).message ?? 'Erro ao excluir')
+    }
+  }
+
+  const createFolder = async () => {
+    const name = newFolderName.trim()
+    if (!name) { setCreatingFolder(false); return }
+    setFolderError(null)
+    try {
+      await taskSpaceService.createFolder(space.id, name)
+      setNewFolderName('')
+      setCreatingFolder(false)
+      await reloadFolders()
+    } catch (e) {
+      setFolderError((e as Error).message ?? 'Erro ao criar')
+    }
+  }
+
   // ── Initials avatar ─────────────────────────────────────────────────────
   const AVATAR_COLORS = ['bg-blue-500','bg-violet-500','bg-emerald-500','bg-orange-500','bg-pink-500']
   function avatarCls(name: string) {
@@ -157,7 +224,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
 
         {/* Tabs */}
         <div className="flex border-b border-slate-100 flex-shrink-0 px-6">
-          {([['settings','Configurações', Settings], ['members','Membros', Users]] as const).map(([t, label, Icon]) => (
+          {([['settings','Configurações', Settings], ['folders','Pastas', FolderOpen], ['members','Membros', Users]] as const).map(([t, label, Icon]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -209,6 +276,87 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
 
             {saveError && (
               <div className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</div>
+            )}
+          </div>
+        )}
+
+        {/* ── Aba Pastas ────────────────────────────────────────────────── */}
+        {tab === 'folders' && (
+          <div className="px-6 py-5 space-y-2 overflow-y-auto flex-1">
+            {folders.length === 0 && !creatingFolder && (
+              <p className="text-xs text-slate-400 text-center py-4">Nenhuma pasta ainda.</p>
+            )}
+
+            {folders.map(f => (
+              <div key={f.id} className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-50 group">
+                <FolderOpen className="w-4 h-4 text-slate-400 flex-shrink-0" style={f.color ? { color: f.color } : undefined} />
+
+                {editingFolderId === f.id ? (
+                  <input
+                    ref={editFolderRef}
+                    value={editingFolderName}
+                    onChange={e => setEditingFolderName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter')  saveFolder(f.id)
+                      if (e.key === 'Escape') setEditingFolderId(null)
+                    }}
+                    onBlur={() => saveFolder(f.id)}
+                    className="flex-1 text-sm px-2 py-1 border border-blue-300 rounded-lg outline-none bg-white"
+                  />
+                ) : (
+                  <span className="flex-1 text-sm font-medium text-slate-700 truncate">{f.name}</span>
+                )}
+
+                {/* botões no hover */}
+                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+                  {editingFolderId !== f.id && (
+                    <button onClick={() => startEdit(f)} title="Renomear"
+                      className="p-1 rounded-lg text-slate-300 hover:text-blue-600 hover:bg-blue-50">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {editingFolderId === f.id && (
+                    <button onClick={() => saveFolder(f.id)} title="Confirmar"
+                      className="p-1 rounded-lg text-blue-600 hover:bg-blue-50">
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button onClick={() => deleteFolder(f.id, f.name)} title="Excluir"
+                    className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Nova pasta */}
+            {creatingFolder ? (
+              <div className="flex items-center gap-2 px-3 py-2">
+                <FolderOpen className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <input
+                  ref={newFolderRef2}
+                  value={newFolderName}
+                  onChange={e => setNewFolderName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter')  createFolder()
+                    if (e.key === 'Escape') { setCreatingFolder(false); setNewFolderName('') }
+                  }}
+                  onBlur={createFolder}
+                  placeholder="Nome da pasta…"
+                  className="flex-1 text-sm px-2 py-1 border border-blue-300 rounded-lg outline-none bg-white"
+                />
+              </div>
+            ) : (
+              <button
+                onClick={() => setCreatingFolder(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors w-full"
+              >
+                <Plus className="w-3.5 h-3.5" /> Nova pasta
+              </button>
+            )}
+
+            {folderError && (
+              <div className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{folderError}</div>
             )}
           </div>
         )}
@@ -308,7 +456,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
               Salvar
             </button>
           )}
-          {tab === 'members' && (
+          {(tab === 'members' || tab === 'folders') && (
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-slate-500 hover:bg-slate-100">
               Fechar
             </button>

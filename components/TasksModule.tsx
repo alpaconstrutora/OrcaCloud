@@ -492,6 +492,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           onCreateSpace={handleCreateSpace}
           onCreateFolder={handleCreateFolder}
           onManageSpace={setManagingSpace}
+          onReloaded={() => loadSpaces(filterOrg || activeOrganizationId || '')}
         />
 
         {/* Área de conteúdo */}

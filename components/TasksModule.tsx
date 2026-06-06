@@ -133,7 +133,9 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     const orgId = filterOrg || activeOrganizationId || ''
     loadEmployees(orgId)
     loadStatuses(orgId)
-    loadSpaces(orgId)
+    // loadSpaces recebe filterOrg diretamente: '' = todas as orgs (RLS filtra por membro)
+    // Não usar o fallback activeOrganizationId aqui para respeitar "Todas as organizações"
+    loadSpaces(filterOrg)
   }, [filterOrg, activeOrganizationId, loadEmployees, loadStatuses, loadSpaces])
 
   // Obras disponíveis filtradas pela org selecionada

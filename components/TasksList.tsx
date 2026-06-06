@@ -468,6 +468,7 @@ const TasksList: React.FC<Props> = ({
               onDragStart={(e) => {
                 e.stopPropagation()
                 e.dataTransfer.setData('row', t.id)
+                e.dataTransfer.setData('taskId', t.id)   // para drop em pastas do rail
                 e.dataTransfer.effectAllowed = 'move'
                 requestAnimationFrame(() => setDraggingId(t.id))
               }}

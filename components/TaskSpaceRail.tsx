@@ -22,7 +22,8 @@ interface Props {
   onCreateSpace: (name: string) => void
   onCreateFolder: (spaceId: string, name: string) => void
   onManageSpace: (space: TaskSpaceWithMeta) => void
-  onReloaded: () => void   // pede ao pai para recarregar espaços após reordenação
+  onReloaded: () => void
+  onTaskDropOnFolder: (taskId: string, spaceId: string, folderId: string) => void
 }
 
 function dot(color: string) {
@@ -34,7 +35,7 @@ const TaskSpaceRail: React.FC<Props> = ({
   selectedSpaceId, selectedFolderId, activeFilter,
   todayCount, overdueCount, noSpaceCount,
   onSelectInbox, onSelectSpace, onSelectNoSpace,
-  onCreateSpace, onCreateFolder, onManageSpace, onReloaded,
+  onCreateSpace, onCreateFolder, onManageSpace, onReloaded, onTaskDropOnFolder,
 }) => {
   // ── ordem local (para feedback visual imediato no drag) ──────────────────
   const [localSpaces, setLocalSpaces] = useState(spaces)
@@ -69,6 +70,8 @@ const TaskSpaceRail: React.FC<Props> = ({
   const draggingFolderSpaceId                         = useRef<string | null>(null)
   // drag de pasta → espaço diferente
   const [folderDragOverSpaceId, setFolderDragOverSpaceId] = useState<string | null>(null)
+  // drag de tarefa → pasta (drop para mover tarefa)
+  const [taskDragOverFolderId, setTaskDragOverFolderId]   = useState<string | null>(null)
 
   // edição inline de pasta
   const [editingFolderId, setEditingFolderId]         = useState<string | null>(null)
@@ -319,6 +322,7 @@ const TaskSpaceRail: React.FC<Props> = ({
                   const isFolderActive   = selectedSpaceId === space.id && selectedFolderId === folder.id
                   const isFolderDragging = draggingFolderId === folder.id
                   const isFolderOver     = dragOverFolderId === folder.id && draggingFolderId !== folder.id
+                  const isTaskOver       = taskDragOverFolderId === folder.id
                   const isEditing        = editingFolderId === folder.id
                   const isMoving         = movingFolderId  === folder.id
                   const otherSpaces      = localSpaces.filter(s => s.id !== space.id)
@@ -333,14 +337,28 @@ const TaskSpaceRail: React.FC<Props> = ({
                         draggingFolderSpaceId.current = space.id
                         requestAnimationFrame(() => setDraggingFolderId(folder.id))
                       }}
-                      onDragEnd={() => { setDraggingFolderId(null); setDragOverFolderId(null); setFolderDragOverSpaceId(null) }}
-                      onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (!draggingFolderId || draggingFolderSpaceId.current === space.id) setDragOverFolderId(folder.id) }}
-                      onDragLeave={e => { e.stopPropagation(); setDragOverFolderId(null) }}
-                      onDrop={e => { e.preventDefault(); e.stopPropagation(); if (draggingFolderSpaceId.current === space.id) dropFolder(space.id, folder.id) }}
+                      onDragEnd={() => { setDraggingFolderId(null); setDragOverFolderId(null); setFolderDragOverSpaceId(null); setTaskDragOverFolderId(null) }}
+                      onDragOver={e => {
+                        e.preventDefault(); e.stopPropagation()
+                        const isTaskDrag = e.dataTransfer.types.includes('taskid')
+                        if (isTaskDrag) { setTaskDragOverFolderId(folder.id); return }
+                        if (!draggingFolderId || draggingFolderSpaceId.current === space.id) setDragOverFolderId(folder.id)
+                      }}
+                      onDragLeave={e => { e.stopPropagation(); setDragOverFolderId(null); setTaskDragOverFolderId(null) }}
+                      onDrop={e => {
+                        e.preventDefault(); e.stopPropagation()
+                        const taskId = e.dataTransfer.getData('taskId')
+                        if (taskId) {
+                          onTaskDropOnFolder(taskId, space.id, folder.id)
+                          setTaskDragOverFolderId(null); return
+                        }
+                        if (draggingFolderSpaceId.current === space.id) dropFolder(space.id, folder.id)
+                      }}
                       className={`group/folder flex items-center gap-1 rounded-lg transition-all
                         ${isFolderDragging ? 'opacity-30' : ''}
                         ${isFolderOver     ? 'bg-blue-50 ring-1 ring-blue-300' : ''}
-                        ${!isFolderDragging && !isFolderOver && isFolderActive ? 'bg-blue-50' : !isFolderDragging && !isFolderOver ? 'hover:bg-slate-100' : ''}`}
+                        ${isTaskOver       ? 'bg-emerald-50 ring-2 ring-emerald-400 scale-[1.02]' : ''}
+                        ${!isFolderDragging && !isFolderOver && !isTaskOver && isFolderActive ? 'bg-blue-50' : !isFolderDragging && !isFolderOver && !isTaskOver ? 'hover:bg-slate-100' : ''}`}
                     >
                       {/* Grip */}
                       <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600 flex-shrink-0">

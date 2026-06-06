@@ -248,6 +248,13 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     }
   }
 
+  const handleTaskDropOnFolder = useCallback(async (taskId: string, spaceId: string, folderId: string) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, space_id: spaceId, folder_id: folderId } : t))
+    const { error } = await supabase.from('tasks').update({ space_id: spaceId, folder_id: folderId }).eq('id', taskId)
+    if (error) { console.error('[tasks] move to folder', error); load() }
+    else loadSpaces(filterOrg || activeOrganizationId || '')
+  }, [filterOrg, activeOrganizationId, load, loadSpaces])
+
   const handleCreateFolder = async (spaceId: string, name: string) => {
     try {
       await taskSpaceService.createFolder(spaceId, name)
@@ -507,6 +514,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           onCreateFolder={handleCreateFolder}
           onManageSpace={setManagingSpace}
           onReloaded={() => loadSpaces(filterOrg || activeOrganizationId || '')}
+          onTaskDropOnFolder={handleTaskDropOnFolder}
         />
 
         {/* Área de conteúdo */}

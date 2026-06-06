@@ -28,6 +28,8 @@ export type TaskRecord = {
 export type EmployeeOption = { id: string; name: string; role: string }
 export type ProjectOption  = { id: string; name: string }
 export type OrgOption      = { id: string; name: string }
+export type FolderOption   = { id: string; space_id: string; name: string }
+export type SpaceOption    = { id: string; name: string; color: string; folders: FolderOption[] }
 
 export interface TaskDefaults {
   status_id?: string | null
@@ -44,6 +46,7 @@ interface Props {
   employees: EmployeeOption[]
   projects: ProjectOption[]
   statuses?: TaskStatus[]
+  spaces?: SpaceOption[]
   task?: TaskRecord | null
   initialDefaults?: TaskDefaults
   parentTaskId?: string | null
@@ -67,7 +70,7 @@ function toLocalInput(iso: string | null): string {
 }
 
 const TaskForm: React.FC<Props> = ({
-  orgId, orgs, employees, projects, statuses = [], task, initialDefaults = {},
+  orgId, orgs, employees, projects, statuses = [], spaces = [], task, initialDefaults = {},
   parentTaskId = null, parentTaskTitle = null,
   onClose, onSaved, onOrgChange,
 }) => {
@@ -88,8 +91,20 @@ const TaskForm: React.FC<Props> = ({
   const [projectId, setProjectId]     = useState<string>(
     task?.project_id ?? initialDefaults.project_id ?? ''
   )
+  const [spaceId, setSpaceId]         = useState<string>(
+    task?.space_id ?? initialDefaults.space_id ?? ''
+  )
+  const [folderId, setFolderId]       = useState<string>(
+    task?.folder_id ?? initialDefaults.folder_id ?? ''
+  )
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
+
+  // Pastas do espaço selecionado
+  const spaceFolders = useMemo(
+    () => spaces.find(s => s.id === spaceId)?.folders ?? [],
+    [spaces, spaceId]
+  )
 
   // Filtra apenas os status da org selecionada
   const orgStatuses = useMemo(
@@ -124,10 +139,12 @@ const TaskForm: React.FC<Props> = ({
       start_date:           startDate ? new Date(startDate).toISOString() : null,
       due_date:             due       ? new Date(due).toISOString()       : null,
       priority,
-      status_id:            statusId || null,
+      status_id:            statusId  || null,
       status:               legacyStatus,
       assignee_employee_id: assigneeId || null,
       project_id:           projectId  || null,
+      space_id:             spaceId    || null,
+      folder_id:            folderId   || null,
     }
     try {
       if (task?.id) {
@@ -228,6 +245,44 @@ const TaskForm: React.FC<Props> = ({
               </select>
             </div>
           </div>
+
+          {/* Espaço → Pasta (encadeados) — oculto em subtarefas */}
+          {!parentTaskId && spaces.length > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Espaço</label>
+                <div className="relative mt-1">
+                  {/* ponto colorido do espaço selecionado */}
+                  {spaceId && (
+                    <span
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full pointer-events-none"
+                      style={{ backgroundColor: spaces.find(s => s.id === spaceId)?.color ?? '#94a3b8' }}
+                    />
+                  )}
+                  <select
+                    value={spaceId}
+                    onChange={(e) => { setSpaceId(e.target.value); setFolderId('') }}
+                    className={sel + (spaceId ? ' pl-8' : '')}
+                  >
+                    <option value="">Nenhum</option>
+                    {spaces.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pasta</label>
+                <select
+                  value={folderId}
+                  onChange={(e) => setFolderId(e.target.value)}
+                  disabled={!spaceId || spaceFolders.length === 0}
+                  className={inp + ' disabled:opacity-40 disabled:cursor-not-allowed'}
+                >
+                  <option value="">Nenhuma</option>
+                  {spaceFolders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

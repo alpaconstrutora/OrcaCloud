@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase'
 import { taskStatusService, type TaskStatus } from '../services/taskService'
 import { taskSpaceService, type TaskSpaceWithMeta } from '../services/taskSpaceService'
 import TasksList from './TasksList'
-import TaskForm, { type TaskRecord, type EmployeeOption, type ProjectOption, type OrgOption, type TaskDefaults } from './TaskForm'
+import TaskForm, { type TaskRecord, type EmployeeOption, type ProjectOption, type OrgOption, type TaskDefaults, type SpaceOption } from './TaskForm'
 import TaskStatusManager from './TaskStatusManager'
 import TasksBoard from './TasksBoard'
 import TaskSpaceRail from './TaskSpaceRail'
@@ -63,6 +63,11 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
 
   // ── Espaços ──────────────────────────────────────────────────────────────
   const [spaces, setSpaces]                   = useState<TaskSpaceWithMeta[]>([])
+  // SpaceOption para o TaskForm (subconjunto de TaskSpaceWithMeta)
+  const spaceOptions = useMemo<SpaceOption[]>(
+    () => spaces.map(s => ({ id: s.id, name: s.name, color: s.color, folders: s.folders })),
+    [spaces]
+  )
   const [loadingSpaces, setLoadingSpaces]     = useState(false)
   // null = inbox pessoal, '__none__' = sem espaço, uuid = espaço específico
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null)
@@ -523,12 +528,13 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           employees={employees}
           projects={obras}
           statuses={statuses}
+          spaces={spaceOptions}
           task={editing}
           initialDefaults={editing ? undefined : taskDefaults}
           parentTaskId={parentTask?.id ?? null}
           parentTaskTitle={parentTask?.title ?? null}
           onClose={() => { setShowForm(false); setParentTask(null) }}
-          onOrgChange={(id) => { loadEmployees(id); loadStatuses(id) }}
+          onOrgChange={(id) => { loadEmployees(id); loadStatuses(id); loadSpaces(id) }}
           onSaved={() => { setShowForm(false); setParentTask(null); load(); loadSpaces(filterOrg || activeOrganizationId || '') }}
         />
       )}

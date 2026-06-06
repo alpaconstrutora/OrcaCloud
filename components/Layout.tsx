@@ -309,7 +309,12 @@ const Layout: React.FC<LayoutProps> = ({
               <span className="text-white font-bold text-lg" style={{ fontFamily: 'Inter, sans-serif' }}>O</span>
             </div>
           ) : (
-            <img src="/opura-logo.svg" alt="Opura" className="h-8 w-auto" />
+            <img
+              src="/opura-logo.svg"
+              alt="Opura"
+              className="h-9 w-auto"
+              style={isDarkMode ? { filter: 'brightness(0) invert(1)' } : undefined}
+            />
           )}
         </div>
 
@@ -671,7 +676,12 @@ const Layout: React.FC<LayoutProps> = ({
           <aside className={`relative flex flex-col w-72 h-full shadow-2xl animate-in slide-in-from-left duration-300 ${t.shell}`}>
             <div className={`flex items-center justify-between h-16 px-4 border-b ${t.footerBorder}`}>
               <div className="flex items-center">
-                <img src="/opura-logo.svg" alt="Opura" className="h-8 w-auto" />
+                <img
+                  src="/opura-logo.svg"
+                  alt="Opura"
+                  className="h-9 w-auto"
+                  style={isDarkMode ? { filter: 'brightness(0) invert(1)' } : undefined}
+                />
               </div>
               <button
                 onClick={() => setIsMobileMenuOpen(false)}

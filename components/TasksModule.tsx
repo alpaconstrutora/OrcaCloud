@@ -14,6 +14,7 @@ import TasksBoard from './TasksBoard'
 import TaskSpaceRail from './TaskSpaceRail'
 import TaskSpaceManager from './TaskSpaceManager'
 import TaskSpaceBottomSheet from './TaskSpaceBottomSheet'
+import TaskSpaceFolderView from './TaskSpaceFolderView'
 
 type ViewMode = 'list' | 'board'
 
@@ -185,7 +186,11 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
 
     if (selectedSpaceId) {
       let parents = byOrg.filter(t => !t.parent_task_id && t.space_id === selectedSpaceId)
-      if (selectedFolderId) parents = parents.filter(t => t.folder_id === selectedFolderId)
+      if (selectedFolderId === '__no_folder__') {
+        parents = parents.filter(t => !t.folder_id)
+      } else if (selectedFolderId) {
+        parents = parents.filter(t => t.folder_id === selectedFolderId)
+      }
       return {
         today: [], overdue: [],
         noSpaceCount,
@@ -314,10 +319,10 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       ? [{ id: activeOrganizationId, name: 'Minha Organização' }]
       : []
 
-  // Título contextual da área de conteúdo
+  // Título contextual da área de conteúdo (só quando não está em folder view, que tem seu próprio header)
   const contentTitle = useMemo(() => {
     if (selectedSpaceId === '__none__') return 'Sem espaço'
-    if (selectedSpaceId) {
+    if (selectedSpaceId && !showFolderView) {
       const space = spaces.find(s => s.id === selectedSpaceId)
       if (!space) return ''
       if (selectedFolderId) {
@@ -326,10 +331,17 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       }
       return space.name
     }
-    return null // no título — os tabs já mostram o contexto
-  }, [selectedSpaceId, selectedFolderId, spaces])
+    return null
+  }, [selectedSpaceId, selectedFolderId, spaces, showFolderView])
 
   const isSpaceMode = selectedSpaceId !== null
+
+  // Espaço selecionado sem pasta → mostra grade de pastas em vez das tarefas
+  const activeSpace     = spaces.find(s => s.id === selectedSpaceId) ?? null
+  const showFolderView  = selectedSpaceId !== null
+                        && selectedSpaceId !== '__none__'
+                        && selectedFolderId === null
+                        && activeSpace !== null
 
   return (
     <div className="space-y-5">
@@ -513,7 +525,21 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             </div>
           )}
 
-          {viewMode === 'list' ? (
+          {showFolderView && activeSpace ? (
+            /* ── Vista de pastas do espaço ── */
+            <TaskSpaceFolderView
+              space={activeSpace}
+              tasks={tasks}
+              onSelectFolder={folderId => handleSelectSpace(selectedSpaceId!, folderId)}
+              onSelectNoFolder={() => {
+                // mostra tarefas do espaço sem pasta (usa __none__ local dentro do espaço)
+                handleSelectSpace(selectedSpaceId!, '__no_folder__')
+              }}
+              onCreateFolder={async name => {
+                await handleCreateFolder(selectedSpaceId!, name)
+              }}
+            />
+          ) : viewMode === 'list' ? (
             <TasksList
               tasks={visible}
               loading={loading}
@@ -529,7 +555,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
                 setTaskDefaults({
                   ...(defaults ?? {}),
                   space_id: selectedSpaceId && selectedSpaceId !== '__none__' ? selectedSpaceId : null,
-                  folder_id: selectedFolderId,
+                  folder_id: selectedFolderId && selectedFolderId !== '__no_folder__' ? selectedFolderId : null,
                 })
                 setEditing(null)
                 setShowForm(true)
@@ -549,7 +575,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
                 setTaskDefaults({
                   ...(defaults ?? {}),
                   space_id: selectedSpaceId && selectedSpaceId !== '__none__' ? selectedSpaceId : null,
-                  folder_id: selectedFolderId,
+                  folder_id: selectedFolderId && selectedFolderId !== '__no_folder__' ? selectedFolderId : null,
                 })
                 setEditing(null)
                 setShowForm(true)

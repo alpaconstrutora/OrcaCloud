@@ -85,6 +85,13 @@ export interface InvestorOpportunity {
     expected_start?: string | null;
     project_id?: string | null;
     is_published?: boolean;
+    // campos Fase 2 — cenários de viabilidade
+    duration_months?: number | null;
+    scenario_cost_cons_pct?: number | null;
+    scenario_vgv_cons_pct?: number | null;
+    scenario_cost_opt_pct?: number | null;
+    scenario_vgv_opt_pct?: number | null;
+    scenario_notes?: string | null;
     created_at?: string;
 }
 
@@ -138,7 +145,10 @@ const OPP_COLS = [
     'status', 'opportunity_type', 'location_city', 'location_state', 'thumbnail_url',
     'land_area_m2', 'built_area_m2', 'floors',
     'vgv', 'roi_pct', 'tir_pct', 'cost_estimate', 'cost_per_m2', 'ticket_min',
-    'expected_start', 'project_id', 'is_published', 'created_at',
+    'expected_start', 'project_id', 'is_published',
+    'duration_months', 'scenario_cost_cons_pct', 'scenario_vgv_cons_pct',
+    'scenario_cost_opt_pct', 'scenario_vgv_opt_pct', 'scenario_notes',
+    'created_at',
 ].join(', ');
 
 const INTEREST_COLS = 'id, organization_id, opportunity_id, contact_name, contact_email, contact_phone, role, message, stage, created_at';

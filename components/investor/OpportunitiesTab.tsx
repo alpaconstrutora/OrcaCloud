@@ -1,7 +1,7 @@
 import React from 'react';
-import { Plus, LayoutDashboard, Table2, Pencil, Trash2, Eye, EyeOff, MapPin, Building2, TrendingUp, Users } from 'lucide-react';
+import { Plus, LayoutDashboard, Table2, Pencil, Trash2, Eye, EyeOff, MapPin, Building2, TrendingUp, Users, BarChart3 } from 'lucide-react';
 import {
-    InvestorOpportunity,
+    InvestorOpportunity, OpportunityStatus,
     OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_COLORS,
     OPPORTUNITY_TYPE_LABELS,
     investorPortalService,
@@ -71,6 +71,18 @@ const OpportunitiesTab: React.FC<Props> = ({
 
     const visibleOpportunities = isAdmin ? opportunities : opportunities.filter(o => o.is_published);
 
+    // ── Pipeline executivo ────────────────────────────────────────────────────
+    const activeOpps = opportunities.filter(o => o.status !== 'encerrada' && o.is_published);
+    const totalVgv = activeOpps.reduce((sum, o) => sum + (o.vgv ?? 0), 0);
+    const statusCounts = (['estudo','viabilidade','lancamento','captacao'] as OpportunityStatus[])
+        .map(s => ({ status: s, count: opportunities.filter(o => o.status === s).length }))
+        .filter(x => x.count > 0);
+    const fmtVgv = (v: number) => {
+        if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1).replace('.', ',')}M`;
+        if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
+        return v === 0 ? '—' : `R$ ${v}`;
+    };
+
     return (
         <div className="space-y-8">
             {/* Header */}
@@ -127,6 +139,43 @@ const OpportunitiesTab: React.FC<Props> = ({
                     </button>
                 )}
             </div>
+
+            {/* Pipeline executivo */}
+            {adminTab === 'opportunities' && opportunities.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-[#0B1727] rounded-2xl p-5 text-white col-span-2 md:col-span-1">
+                        <div className="flex items-center gap-2 mb-2">
+                            <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
+                            <span className="text-[10px] font-black text-blue-300 uppercase tracking-widest">VGV Pipeline</span>
+                        </div>
+                        <p className="text-2xl font-black">{fmtVgv(totalVgv)}</p>
+                        <p className="text-xs text-white/40 mt-1">{activeOpps.length} oportunidade{activeOpps.length !== 1 ? 's' : ''} ativas</p>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Building2 className="w-3.5 h-3.5 text-gray-400" />
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</span>
+                        </div>
+                        <p className="text-2xl font-black text-gray-900">{opportunities.length}</p>
+                        <p className="text-xs text-gray-400 mt-1">{opportunities.filter(o => o.is_published).length} publicadas</p>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 col-span-2">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Por status</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {statusCounts.length > 0 ? statusCounts.map(({ status, count }) => (
+                                <span key={status} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${OPPORTUNITY_STATUS_COLORS[status]}`}>
+                                    {OPPORTUNITY_STATUS_LABELS[status]}
+                                    <span className="font-black">{count}</span>
+                                </span>
+                            )) : (
+                                <span className="text-xs text-gray-400">Nenhuma ativa</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Painel de interesses (admin) */}
             {isAdmin && adminTab === 'interests' && organizationId && (
@@ -361,6 +410,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                 <OpportunityDetail
                     opportunity={detail}
                     organizationId={organizationId}
+                    isAdmin={isAdmin}
                     onClose={() => setDetail(null)}
                 />
             )}

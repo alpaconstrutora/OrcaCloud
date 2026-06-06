@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Building2, MapPin, BarChart3, Ruler, Eye, EyeOff } from 'lucide-react';
+import { X, Building2, MapPin, BarChart3, Ruler, Eye, EyeOff, TrendingDown, TrendingUp, SlidersHorizontal } from 'lucide-react';
 import {
     InvestorOpportunity, OpportunityStatus, OpportunityType,
     OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_TYPE_LABELS,
@@ -41,6 +41,12 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
         projected_yield: initial?.projected_yield ?? '',
         is_published: initial?.is_published ?? false,
         project_id: initial?.project_id ?? null,
+        duration_months: initial?.duration_months ?? null,
+        scenario_cost_cons_pct: initial?.scenario_cost_cons_pct ?? null,
+        scenario_vgv_cons_pct: initial?.scenario_vgv_cons_pct ?? null,
+        scenario_cost_opt_pct: initial?.scenario_cost_opt_pct ?? null,
+        scenario_vgv_opt_pct: initial?.scenario_vgv_opt_pct ?? null,
+        scenario_notes: initial?.scenario_notes ?? '',
     });
 
     const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
@@ -288,6 +294,110 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     onChange={e => set('tir_pct', parseNum(e.target.value))}
                                     placeholder="0,0"
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                />
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* ── Cenários de Viabilidade ──────────────────────── */}
+                    <section>
+                        <div className="flex items-center gap-2 mb-2">
+                            <SlidersHorizontal className="w-4 h-4 text-blue-600" />
+                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Cenários de Viabilidade</span>
+                        </div>
+                        <p className="text-xs text-gray-400 mb-4">
+                            Defina as variações para os cenários conservador e otimista em relação aos dados base.
+                            Percentuais positivos = aumento; negativos = redução.
+                        </p>
+
+                        <div className="grid grid-cols-1 gap-3">
+                            {/* Duração */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Duração prevista (meses)</label>
+                                    <input
+                                        type="number"
+                                        value={fmtNum(form.duration_months)}
+                                        onChange={e => set('duration_months', parseNum(e.target.value) != null ? Math.round(parseNum(e.target.value)!) : null)}
+                                        placeholder="Ex: 24"
+                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Conservador */}
+                            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <TrendingDown className="w-3.5 h-3.5 text-red-500" />
+                                    <span className="text-xs font-black text-red-600 uppercase tracking-wider">Cenário Conservador</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1.5">Custo sobe (%) <span className="font-normal text-gray-400">ex: 15</span></label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            value={fmtNum(form.scenario_cost_cons_pct)}
+                                            onChange={e => set('scenario_cost_cons_pct', parseNum(e.target.value))}
+                                            placeholder="15"
+                                            className="w-full px-3 py-2 border border-red-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400/30 bg-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1.5">VGV cai (%) <span className="font-normal text-gray-400">ex: 10</span></label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            value={fmtNum(form.scenario_vgv_cons_pct)}
+                                            onChange={e => set('scenario_vgv_cons_pct', parseNum(e.target.value))}
+                                            placeholder="10"
+                                            className="w-full px-3 py-2 border border-red-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400/30 bg-white"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Otimista */}
+                            <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span className="text-xs font-black text-emerald-700 uppercase tracking-wider">Cenário Otimista</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1.5">Custo cai (%) <span className="font-normal text-gray-400">ex: 5</span></label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            value={fmtNum(form.scenario_cost_opt_pct)}
+                                            onChange={e => set('scenario_cost_opt_pct', parseNum(e.target.value))}
+                                            placeholder="5"
+                                            className="w-full px-3 py-2 border border-emerald-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/30 bg-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1.5">VGV sobe (%) <span className="font-normal text-gray-400">ex: 8</span></label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            value={fmtNum(form.scenario_vgv_opt_pct)}
+                                            onChange={e => set('scenario_vgv_opt_pct', parseNum(e.target.value))}
+                                            placeholder="8"
+                                            className="w-full px-3 py-2 border border-emerald-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/30 bg-white"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Notas/premissas */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Premissas e observações</label>
+                                <textarea
+                                    rows={2}
+                                    value={form.scenario_notes ?? ''}
+                                    onChange={e => set('scenario_notes', e.target.value)}
+                                    placeholder="Ex: Custo inclui terreno. VGV baseado em pesquisa de mercado jun/2026."
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 resize-none"
                                 />
                             </div>
                         </div>

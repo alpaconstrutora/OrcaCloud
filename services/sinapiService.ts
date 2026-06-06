@@ -49,7 +49,7 @@ class SinapiDatabaseService {
   ): Promise<SinapiItem[]> {
     const cleanTerm = term.trim();
     // Allow empty term if code, group, or a list of codes is specified
-    if (cleanTerm.length < 2 && !filters?.code && !filters?.group && !filters?.nature && (!filters?.codes || filters.codes.length === 0)) return [];
+    if (cleanTerm.length < 2 && !filters?.code && !filters?.group && !filters?.nature && !filters?.type && (!filters?.codes || filters.codes.length === 0)) return [];
 
     // composition (sub-itens JSON) omitido na listagem — carregado apenas no detalhe individual
     let query = supabase.from('sinapi_items').select('code, description, unit, price, prices, category, nature, origin, created_at');

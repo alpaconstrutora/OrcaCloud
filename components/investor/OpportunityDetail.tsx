@@ -11,11 +11,13 @@ import {
 } from '../../services/investorPortalService';
 import ScenarioComparison from './ScenarioComparison';
 import LinkedProjectPanel from './LinkedProjectPanel';
+import DataRoomPanel from './DataRoomPanel';
 
 interface Props {
     opportunity: InvestorOpportunity;
     organizationId: string;
     isAdmin?: boolean;
+    uploadedBy?: string;
     onClose: () => void;
 }
 
@@ -28,10 +30,10 @@ const fmtM2 = (v: number | null | undefined) => (v == null ? '—' : `${new Intl
 
 const ROLES: InterestRole[] = ['investidor', 'arquiteto', 'engenheiro', 'projetista', 'consultor', 'outro'];
 
-type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'interesses';
+type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'documentos' | 'interesses';
 type FormStep = 'view' | 'form' | 'success';
 
-const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, isAdmin = false, onClose }) => {
+const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, isAdmin = false, uploadedBy, onClose }) => {
     const [formStep, setFormStep] = React.useState<FormStep>('view');
     const [pitchTab, setPitchTab] = React.useState<PitchTab>('pitch');
     const [saving, setSaving] = React.useState(false);
@@ -97,12 +99,14 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
         { id: 'pitch', label: 'Detalhes' },
         { id: 'cenarios', label: 'Cenários' },
         ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra' }] : []),
+        { id: 'documentos', label: 'Documentos' },
         { id: 'interesses', label: `Interesses (${interests.length || '…'})` },
     ];
     const PUBLIC_TABS: { id: PitchTab; label: string }[] = [
         { id: 'pitch', label: 'Detalhes' },
         ...(hasScenarios ? [{ id: 'cenarios' as PitchTab, label: 'Viabilidade' }] : []),
         ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra ao Vivo' }] : []),
+        { id: 'documentos', label: 'Documentos' },
     ];
     const tabs = isAdmin ? ADMIN_TABS : PUBLIC_TABS;
 
@@ -339,6 +343,18 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                         Fechar
                                     </button>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* ── ABA: Documentos ──────────────────────────── */}
+                        {pitchTab === 'documentos' && (
+                            <div className="px-8 py-6">
+                                <DataRoomPanel
+                                    opportunityId={op.id!}
+                                    organizationId={organizationId}
+                                    isAdmin={isAdmin}
+                                    uploadedBy={uploadedBy}
+                                />
                             </div>
                         )}
 

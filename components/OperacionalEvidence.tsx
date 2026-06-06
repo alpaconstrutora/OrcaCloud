@@ -51,7 +51,7 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
     try {
       const { data, error: fetchErr } = await supabase
         .from('evidence_files')
-        .select('*')
+        .select('id, file_type, file_url, thumbnail_url, gate, description, captured_at, created_at')
         .eq('work_order_id', workOrderId)
         .order('created_at', { ascending: false })
       if (fetchErr) throw fetchErr

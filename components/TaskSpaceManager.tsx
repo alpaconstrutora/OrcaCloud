@@ -143,7 +143,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
     // Recarrega apenas as pastas deste espaço
     const { data } = await supabase
       .from('task_folders')
-      .select('*')
+      .select('id, space_id, name, color, position, created_at')
       .eq('space_id', space.id)
       .order('position')
     setFolders((data ?? []) as TaskFolder[])

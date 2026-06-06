@@ -67,7 +67,7 @@ export const invoiceService = {
     async listInvoices(supplierId: string): Promise<Invoice[]> {
         const { data, error } = await supabase
             .from('invoices')
-            .select('*')
+            .select('id, supplier_id, order_id, file_path, file_name, amount, due_date, cost_center_id, chart_of_accounts_id, status, notes, created_at')
             .eq('supplier_id', supplierId)
             .order('created_at', { ascending: false });
 
@@ -92,7 +92,7 @@ export const invoiceService = {
     async listInvoicesByOrder(orderId: string): Promise<Invoice[]> {
         const { data, error } = await supabase
             .from('invoices')
-            .select('*')
+            .select('id, supplier_id, order_id, file_path, file_name, amount, due_date, cost_center_id, chart_of_accounts_id, status, notes, created_at')
             .eq('order_id', orderId)
             .order('created_at', { ascending: false });
 
@@ -150,7 +150,7 @@ export const invoiceService = {
     async listAll(organizationId?: string): Promise<(Invoice & { supplierName?: string })[]> {
         const { data: invoicesData, error: invErr } = await supabase
             .from('invoices')
-            .select('*')
+            .select('id, supplier_id, order_id, file_path, file_name, amount, due_date, cost_center_id, chart_of_accounts_id, status, notes, created_at')
             .order('created_at', { ascending: false });
         if (invErr) throw invErr;
 

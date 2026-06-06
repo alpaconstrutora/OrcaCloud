@@ -101,7 +101,7 @@ export const incentiveService = {
     async listIncentiveRubrics(): Promise<PayrollRubric[]> {
         const { data, error } = await supabase
             .from('rubrics')
-            .select('*')
+            .select('code, name, type, incidence_inss, incidence_fgts, incidence_irrf, is_automatic, is_clt_mandatory, calculation_type, calculation_config, category, formula, active, lancamento_individualizado, dia_lancamento')
             .eq('is_incentive', true)
             .eq('active', true)
             .order('code');
@@ -272,7 +272,7 @@ export const incentiveService = {
 
         const { data, error } = await supabase
             .from('vw_incentive_event_months')
-            .select('*')
+            .select('org_id, employee_id, rubric_code, month, total_amount')
             .eq('org_id', orgId)
             .gte('month', sinceStr);
         if (error) throw error;
@@ -316,7 +316,7 @@ export const incentiveService = {
     async listRules(orgId: string): Promise<IncentiveRule[]> {
         const { data, error } = await supabase
             .from('incentive_rules')
-            .select('*')
+            .select('id, org_id, name, rule_type, scope, target_rubric_code, condition, amount, formula, project_id, valid_from, valid_to, active, created_at')
             .eq('org_id', orgId)
             .order('created_at', { ascending: false });
         if (error) throw error;

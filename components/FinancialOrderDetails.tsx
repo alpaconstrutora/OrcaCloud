@@ -48,7 +48,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                 // 1. Fetch Order
                 const { data: orderData, error: orderError } = await supabase
                     .from('purchase_orders')
-                    .select('*')
+                    .select('id, number, project_id, supplier_id, supplier_name, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, chart_of_accounts, notes, items, version, created_at, updated_at, status_updated_at')
                     .eq('id', orderId)
                     .single();
 

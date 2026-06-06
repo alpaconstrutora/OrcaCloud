@@ -157,7 +157,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
             setLoading(true);
             let historyQuery = supabase
                 .from('automation_history')
-                .select('*')
+                .select('id, created_at, event_type, reference_id, reference_name, status, error_message, payload, converted_at, converted_value, project_id, organization_id')
                 .order('created_at', { ascending: false })
                 .limit(100);
 

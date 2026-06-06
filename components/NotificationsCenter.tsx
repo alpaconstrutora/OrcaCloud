@@ -246,7 +246,7 @@ const NotificationsCenter: React.FC<NotificationsCenterProps> = ({ profile, onNa
             const { supabase } = await import('../lib/supabase');
             const { data, error } = await supabase
                 .from('notification_log')
-                .select('*')
+                .select('id, order_id, channel, recipient, subject, body, status, error, metadata, created_at')
                 .order('created_at', { ascending: false })
                 .limit(200);
             if (error) throw error;

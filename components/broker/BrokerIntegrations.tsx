@@ -85,7 +85,7 @@ const webhookService = {
     async list(orgId: string): Promise<WebhookConfig[]> {
         const { data, error } = await supabase
             .from('broker_webhook_configs')
-            .select('*')
+            .select('id, organization_id, name, event_type, endpoint_url, secret_hint, status, last_triggered, events_count, created_at')
             .eq('organization_id', orgId)
             .order('created_at', { ascending: false });
         if (error) throw error;

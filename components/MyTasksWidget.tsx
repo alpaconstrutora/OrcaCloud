@@ -39,7 +39,7 @@ const MyTasksWidget: React.FC<Props> = ({ orgId, onNavigate }) => {
 
             let q = supabase
                 .from('tasks')
-                .select('*')
+                .select('id, org_id, user_id, title, description, due_date, priority, status, status_id, snoozed_until, source_module, source_ref, created_at, completed_at, parent_task_id')
                 .eq('status', 'open')
                 .is('parent_task_id', null)
                 .lte('due_date', endOfToday.toISOString())

@@ -61,7 +61,7 @@ export const creditAnalysisService = {
     get: async (dealId: string): Promise<DealCreditAnalysis | null> => {
         const { data, error } = await supabase
             .from('deal_credit_analysis')
-            .select('*')
+            .select('id, organization_id, deal_id, score, result, checklist, notes, report_pdf_url, analyzed_by, analyzed_at, created_at, updated_at')
             .eq('deal_id', dealId)
             .maybeSingle();
         if (error) throw error;

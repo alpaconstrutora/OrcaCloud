@@ -74,7 +74,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
     try {
       const { data, error: fetchErr } = await supabase
         .from('site_diary')
-        .select('*')
+        .select('id, diary_date, weather, field_condition, workers_present, general_notes, auto_generated, snapshot, reviewed_at')
         .eq('project_id', projectId)
         .order('diary_date', { ascending: false })
       if (fetchErr) throw fetchErr

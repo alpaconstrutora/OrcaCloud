@@ -9,7 +9,7 @@ export const supplierBankAccountService = {
     listBySupplier: async (supplierId: string): Promise<SupplierBankAccount[]> => {
         const { data, error } = await supabase
             .from('supplier_bank_accounts')
-            .select('*')
+            .select('id, supplier_id, organization_id, bank_code, bank_name, agency, agency_digit, account, account_digit, account_type, beneficiary_name, beneficiary_document, pix_key, pix_key_type, is_pix_primary, is_primary, status, notes, created_by, updated_by, created_at, updated_at')
             .eq('supplier_id', supplierId)
             .eq('status', 'ativo')
             .order('is_primary', { ascending: false })
@@ -25,7 +25,7 @@ export const supplierBankAccountService = {
     listAllBySupplier: async (supplierId: string): Promise<SupplierBankAccount[]> => {
         const { data, error } = await supabase
             .from('supplier_bank_accounts')
-            .select('*')
+            .select('id, supplier_id, organization_id, bank_code, bank_name, agency, agency_digit, account, account_digit, account_type, beneficiary_name, beneficiary_document, pix_key, pix_key_type, is_pix_primary, is_primary, status, notes, created_by, updated_by, created_at, updated_at')
             .eq('supplier_id', supplierId)
             .order('is_primary', { ascending: false })
             .order('created_at', { ascending: true });
@@ -40,7 +40,7 @@ export const supplierBankAccountService = {
     getPrimaryAccount: async (supplierId: string): Promise<SupplierBankAccount | null> => {
         const { data, error } = await supabase
             .from('supplier_bank_accounts')
-            .select('*')
+            .select('id, supplier_id, organization_id, bank_code, bank_name, agency, agency_digit, account, account_digit, account_type, beneficiary_name, beneficiary_document, pix_key, pix_key_type, is_pix_primary, is_primary, status, notes, created_by, updated_by, created_at, updated_at')
             .eq('supplier_id', supplierId)
             .eq('is_primary', true)
             .eq('status', 'ativo')

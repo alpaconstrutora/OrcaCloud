@@ -209,7 +209,7 @@ const TemplateCard: React.FC<{
     setLoadingItems(true)
     const { data } = await supabase
       .from('oe_checklist_items')
-      .select('*')
+      .select('id, template_id, description, required, requires_photo, gate, sort_order, severity, category')
       .eq('template_id', template.id)
       .order('sort_order')
     setItems(data ?? [])

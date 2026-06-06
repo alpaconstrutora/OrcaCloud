@@ -73,7 +73,7 @@ export const contractTemplateService = {
     list: async (organizationId: string): Promise<ContractTemplate[]> => {
         const { data, error } = await supabase
             .from('contract_templates')
-            .select('*')
+            .select('id, organization_id, name, description, contract_type, body_html, variables, version, is_active, created_by, created_at, updated_at')
             .eq('organization_id', organizationId)
             .eq('is_active', true)
             .order('name');
@@ -84,7 +84,7 @@ export const contractTemplateService = {
     get: async (id: string): Promise<ContractTemplate | null> => {
         const { data, error } = await supabase
             .from('contract_templates')
-            .select('*')
+            .select('id, organization_id, name, description, contract_type, body_html, variables, version, is_active, created_by, created_at, updated_at')
             .eq('id', id)
             .maybeSingle();
         if (error) throw error;

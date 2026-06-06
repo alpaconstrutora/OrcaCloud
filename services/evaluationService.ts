@@ -102,7 +102,7 @@ export const evaluationService = {
     async getCycles(orgId: string): Promise<EvaluationCycle[]> {
         const { data, error } = await supabase
             .from('evaluation_cycles')
-            .select('*')
+            .select('id, org_id, nome, descricao, tipo, periodo_inicio, periodo_fim, status, competencias, created_at, updated_at')
             .eq('org_id', orgId)
             .order('created_at', { ascending: false });
         if (error) throw error;

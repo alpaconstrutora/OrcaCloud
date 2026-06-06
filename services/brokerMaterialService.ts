@@ -5,7 +5,7 @@ export const brokerMaterialService = {
     async listMaterials(organizationId?: string, projectId?: string) {
         let query = supabase
             .from('broker_portal_materials')
-            .select('*')
+            .select('id, organization_id, project_id, project_name, title, type, file_url, thumbnail_url, version, is_active, views_count, created_at, updated_at')
             .order('created_at', { ascending: false });
 
         const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);

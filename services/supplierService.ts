@@ -34,7 +34,7 @@ export const supplierService = {
         try {
             const { data, error } = await supabase
                 .from('suppliers')
-                .select('*')
+                .select('id, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at')
                 .eq('email', email.toLowerCase())
                 .maybeSingle();
 
@@ -50,7 +50,7 @@ export const supplierService = {
         try {
             const { data, error } = await supabase
                 .from('suppliers')
-                .select('*')
+                .select('id, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at')
                 .eq('id', id)
                 .maybeSingle();
 

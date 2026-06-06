@@ -17,7 +17,7 @@ export const chatService = {
     async listMessages(orderId: string): Promise<OrderChatMessage[]> {
         const { data, error } = await supabase
             .from('order_chats')
-            .select('*')
+            .select('id, order_id, sender_email, sender_name, message, is_system, created_at')
             .eq('order_id', orderId)
             .order('created_at', { ascending: true });
 

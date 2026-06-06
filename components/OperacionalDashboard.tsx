@@ -117,7 +117,7 @@ const OperacionalDashboard: React.FC<Props> = ({ projectId, orgId, tipoObra }) =
           .eq('project_id', projectId),
         supabase
           .from('vw_project_cost_comparison')
-          .select('*')
+          .select('phase, work_orders, total_planned_cost, total_actual_cost, avg_completion_pct')
           .eq('project_id', projectId),
       ])
 

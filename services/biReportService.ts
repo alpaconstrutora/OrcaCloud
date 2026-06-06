@@ -32,7 +32,7 @@ export const biReportService = {
     async listSchedules(orgId: string): Promise<BIReportSchedule[]> {
         const { data, error } = await supabase
             .from('bi_report_schedules')
-            .select('*')
+            .select('id, org_id, name, frequency, day_of_week, day_of_month, hour_utc, recipients, include_dre, include_trend, include_narrative, active, last_sent_at, next_send_at, created_at')
             .eq('org_id', orgId)
             .order('created_at', { ascending: false });
         if (error) throw error;

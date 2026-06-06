@@ -12,7 +12,7 @@ export interface ContractScopeTemplate {
 const list = async (orgId: string): Promise<ContractScopeTemplate[]> => {
     const { data, error } = await supabase
         .from('contract_scope_templates')
-        .select('*')
+        .select('id, organization_id, name, content, created_at, updated_at')
         .eq('organization_id', orgId)
         .order('name');
     if (error) throw error;
@@ -44,7 +44,7 @@ const remove = async (id: string): Promise<void> => {
 const duplicate = async (id: string): Promise<ContractScopeTemplate> => {
     const { data: orig, error: fetchErr } = await supabase
         .from('contract_scope_templates')
-        .select('*')
+        .select('id, organization_id, name, content, created_at, updated_at')
         .eq('id', id)
         .single();
     if (fetchErr) throw fetchErr;

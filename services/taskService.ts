@@ -32,7 +32,7 @@ export const taskStatusService = {
     async list(orgId: string): Promise<TaskStatus[]> {
         const { data, error } = await supabase
             .from('task_statuses')
-            .select('*')
+            .select('id, org_id, name, color, position, is_default, is_done')
             .eq('org_id', orgId)
             .order('position');
         if (error) throw error;
@@ -42,7 +42,7 @@ export const taskStatusService = {
     async listAll(): Promise<TaskStatus[]> {
         const { data, error } = await supabase
             .from('task_statuses')
-            .select('*')
+            .select('id, org_id, name, color, position, is_default, is_done')
             .order('org_id')
             .order('position');
         if (error) throw error;

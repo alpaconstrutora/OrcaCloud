@@ -43,7 +43,7 @@ export const fiscalService = {
         console.log(`[fiscalService] Buscando INSS para data: ${date}`);
         const { data, error } = await supabase
             .from('inss_brackets')
-            .select('*')
+            .select('id, valid_from, valid_to, min_value, max_value, rate, deduction')
             .lte('valid_from', date)
             .or(`valid_to.is.null,valid_to.gte."${safeIsoDate(date)}"`)
             .order('min_value', { ascending: true });
@@ -63,7 +63,7 @@ export const fiscalService = {
         console.log(`[fiscalService] Buscando IRRF para data: ${date}`);
         const { data, error } = await supabase
             .from('irrf_brackets')
-            .select('*')
+            .select('id, valid_from, valid_to, min_value, max_value, rate, deduction')
             .lte('valid_from', date)
             .or(`valid_to.is.null,valid_to.gte."${safeIsoDate(date)}"`)
             .order('min_value', { ascending: true });
@@ -83,7 +83,7 @@ export const fiscalService = {
         console.log(`[fiscalService] Buscando FGTS para data: ${date}`);
         const { data, error } = await supabase
             .from('fgts_config')
-            .select('*')
+            .select('id, valid_from, valid_to, rate')
             .lte('valid_from', date)
             .or(`valid_to.is.null,valid_to.gte."${safeIsoDate(date)}"`)
             .order('valid_from', { ascending: false })

@@ -12,7 +12,7 @@ export const warrantyService = {
     async getTerms(): Promise<WarrantyTerm[]> {
         const { data, error } = await supabase
             .from('warranty_terms')
-            .select('*')
+            .select('code, descricao, prazo_meses, base_legal, active')
             .eq('active', true)
             .order('prazo_meses', { ascending: false });
         if (error) throw error;
@@ -157,7 +157,7 @@ export const warrantyService = {
     async getEvidence(claimId: string): Promise<WarrantyClaimEvidence[]> {
         const { data, error } = await supabase
             .from('warranty_claim_evidence')
-            .select('*')
+            .select('id, organization_id, claim_id, type, url, mime_type, size_bytes, captured_at, captured_by, attached_to, attached_to_ref, superseded, created_at')
             .eq('claim_id', claimId)
             .eq('superseded', false)
             .order('created_at', { ascending: false });
@@ -206,7 +206,7 @@ export const warrantyService = {
     async getEvents(claimId: string): Promise<WarrantyClaimEvent[]> {
         const { data, error } = await supabase
             .from('warranty_claim_events')
-            .select('*')
+            .select('event_id, organization_id, claim_id, event_type, payload, actor_id, occurred_at, aggregate_version')
             .eq('claim_id', claimId)
             .order('occurred_at', { ascending: true });
         if (error) throw error;

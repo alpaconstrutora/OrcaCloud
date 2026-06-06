@@ -15,7 +15,7 @@ export interface ServiceClient {
 }
 
 const listServiceClients = async (orgId?: string): Promise<ServiceClient[]> => {
-    let q = supabase.from('service_clients').select('*').order('name');
+    let q = supabase.from('service_clients').select('id, organization_id, name, document, email, phone, address, contact_name, notes, created_at, updated_at').order('name');
     if (orgId) q = q.eq('organization_id', orgId);
     const { data, error } = await q;
     if (error) throw error;
@@ -23,7 +23,7 @@ const listServiceClients = async (orgId?: string): Promise<ServiceClient[]> => {
 };
 
 const getById = async (id: string): Promise<ServiceClient | null> => {
-    const { data } = await supabase.from('service_clients').select('*').eq('id', id).maybeSingle();
+    const { data } = await supabase.from('service_clients').select('id, organization_id, name, document, email, phone, address, contact_name, notes, created_at, updated_at').eq('id', id).maybeSingle();
     return data;
 };
 

@@ -6,7 +6,7 @@ export const financialRegistryService = {
     async listPaymentAccounts(organizationId?: string, empresaId?: string): Promise<PaymentAccount[]> {
         let query = supabase
             .from('payment_accounts')
-            .select('*');
+            .select('id, organization_id, empresa_id, name, description, bank, branch, account_number, created_at');
 
         if (empresaId) {
             query = query.eq('empresa_id', empresaId);
@@ -56,7 +56,7 @@ export const financialRegistryService = {
     async listCostCenters(organizationId?: string, empresaId?: string): Promise<CostCenter[]> {
         let query = supabase
             .from('cost_centers')
-            .select('*');
+            .select('id, organization_id, empresa_id, name, code, created_at');
 
         if (empresaId) {
             query = query.eq('empresa_id', empresaId);
@@ -131,7 +131,7 @@ export const financialRegistryService = {
     async listChartOfAccounts(organizationId?: string, empresaId?: string): Promise<ChartOfAccount[]> {
         let query = supabase
             .from('chart_of_accounts')
-            .select('*');
+            .select('id, organization_id, empresa_id, name, code, type, parent_id');
 
         if (empresaId) {
             query = query.eq('empresa_id', empresaId);

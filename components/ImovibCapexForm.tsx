@@ -85,7 +85,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 // Sempre busca do banco para evitar duplicatas por race condition
                 const { data: existing, error } = await (await import('../lib/supabase')).supabase
                     .from('imovib_capex_items')
-                    .select('*')
+                    .select('id, study_id, category, subcategory, name, value_type, value, created_at, updated_at')
                     .eq('study_id', study.id)
                     .order('created_at', { ascending: true });
 

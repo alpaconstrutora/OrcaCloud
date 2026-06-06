@@ -56,7 +56,7 @@ export const discrepancyService = {
     async listByOrder(orderId: string): Promise<PurchaseDiscrepancy[]> {
         const { data, error } = await supabase
             .from('purchase_discrepancies')
-            .select('*')
+            .select('id, order_id, receipt_id, order_item_code, description, unit, issue, quantity, notes, status, resolution_notes, resolved_at, created_at')
             .eq('order_id', orderId)
             .order('created_at', { ascending: true });
         if (error) throw error;

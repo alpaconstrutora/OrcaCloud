@@ -96,13 +96,13 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     setLoading(true)
     const { data, error } = await supabase
       .from('tasks')
-      .select('*')
+      .select('id, org_id, user_id, title, description, due_date, priority, status, status_id, snoozed_until, source_module, source_ref, created_at, completed_at, parent_task_id')
       .order('status',   { ascending: true })
       .order('due_date', { ascending: true, nullsFirst: false })
       .order('priority', { ascending: true })
 
     if (error) { console.error('[tasks] load', error); setTasks([]) }
-    else        { setTasks((data ?? []) as TaskRecord[]) }
+    else        { setTasks((data ?? []) as unknown as TaskRecord[]) }
     setLoading(false)
   }, [])
 

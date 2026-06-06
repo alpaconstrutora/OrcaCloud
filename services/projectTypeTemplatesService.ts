@@ -7,7 +7,7 @@ export const projectTypeTemplatesService = {
         if (orgId) {
             const { data: orgTemplate } = await supabase
                 .from('project_type_templates')
-                .select('*')
+                .select('id, tipo_obra, org_id, eap_phases, required_docs, indicators, checklist_template')
                 .eq('tipo_obra', tipoObra)
                 .eq('org_id', orgId)
                 .maybeSingle();
@@ -17,7 +17,7 @@ export const projectTypeTemplatesService = {
 
         const { data: systemTemplate } = await supabase
             .from('project_type_templates')
-            .select('*')
+            .select('id, tipo_obra, org_id, eap_phases, required_docs, indicators, checklist_template')
             .eq('tipo_obra', tipoObra)
             .is('org_id', null)
             .maybeSingle();
@@ -28,7 +28,7 @@ export const projectTypeTemplatesService = {
     async getAllSystemTemplates(): Promise<ProjectTypeTemplate[]> {
         const { data, error } = await supabase
             .from('project_type_templates')
-            .select('*')
+            .select('id, tipo_obra, org_id, eap_phases, required_docs, indicators, checklist_template')
             .is('org_id', null)
             .order('tipo_obra');
 

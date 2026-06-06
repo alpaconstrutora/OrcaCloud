@@ -75,7 +75,7 @@ export const communicationService = {
     async getCommunications(orgId: string): Promise<Communication[]> {
         const { data, error } = await supabase
             .from('communications')
-            .select('*')
+            .select('id, org_id, titulo, conteudo, tipo, scope, scope_ids, canal_app, canal_whatsapp, agendado_para, enviado_em, status, dds_tema, dds_duracao_min, dds_assinaturas_required, anexos, created_by, created_by_nome, created_at, updated_at')
             .eq('org_id', orgId)
             .order('created_at', { ascending: false });
         if (error) throw error;
@@ -85,7 +85,7 @@ export const communicationService = {
     async getCommunicationReadRates(orgId: string): Promise<Communication[]> {
         const { data, error } = await supabase
             .from('vw_communication_read_rate')
-            .select('*')
+            .select('id, org_id, titulo, conteudo, tipo, scope, scope_ids, canal_app, canal_whatsapp, agendado_para, enviado_em, status, dds_tema, dds_duracao_min, dds_assinaturas_required, anexos, created_by, created_by_nome, created_at, updated_at, total_destinatarios, total_lidos, total_assinados, taxa_leitura_pct')
             .eq('org_id', orgId)
             .order('enviado_em', { ascending: false });
         if (error) throw error;
@@ -159,7 +159,7 @@ export const communicationService = {
     async getWhatsappConfig(orgId: string): Promise<WhatsappConfig | null> {
         const { data, error } = await supabase
             .from('whatsapp_config')
-            .select('*')
+            .select('id, org_id, provider, api_url, api_key_ref, instance_name, numero_remetente, ativo, webhook_url, created_at, updated_at')
             .eq('org_id', orgId)
             .maybeSingle();
         if (error) throw error;

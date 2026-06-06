@@ -137,7 +137,7 @@ class SinapiDatabaseService {
       if (codes.length > 0) {
         const { data: overrides } = await supabase
           .from('custom_items')
-          .select('*')
+          .select('code, description, unit, price, type, category, nature, composition, database_id, is_favorite')
           .in('code', codes);
 
         if (overrides && overrides.length > 0) {
@@ -147,7 +147,7 @@ class SinapiDatabaseService {
           // Substitui os itens oficiais pelos overrides
           results = results.map(item => {
             if (overrideMap.has(item.code)) {
-              const override = overrideMap.get(item.code);
+              const override = overrideMap.get(item.code)!;
               // Retornamos o item original misturado com o override
               // O override tem prioridade em preço, descrição, composição, etc.
               return {
@@ -182,7 +182,7 @@ class SinapiDatabaseService {
     const uniqueCodes = Array.from(new Set(codes));
     const { data, error } = await supabase
       .from('sinapi_items')
-      .select('*')
+      .select('id, code, description, unit, price, prices, category, nature, type, source, database_id, created_at, updated_at')
       .in('code', uniqueCodes)
       //.eq('database_id', 'SINAPI') // Assuming database_id column exists or similar. Wait, sinapi_items is usually just SINAPI. 
       // Let's check if there is a 'reference_date' or similar. 

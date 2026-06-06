@@ -23,7 +23,7 @@ export const contractIndexService = {
     ): Promise<ContractIndexValue[]> => {
         let q = supabase
             .from('contract_index_values')
-            .select('*')
+            .select('id, organization_id, index_name, reference_month, value, source, created_at')
             .eq('index_name', indexName)
             .order('reference_month', { ascending: false })
             .limit(months);
@@ -48,7 +48,7 @@ export const contractIndexService = {
         const monthStart = referenceDate.slice(0, 7) + '-01';
         let q = supabase
             .from('contract_index_values')
-            .select('*')
+            .select('id, organization_id, index_name, reference_month, value, source, created_at')
             .eq('index_name', indexName)
             .lte('reference_month', monthStart)
             .order('reference_month', { ascending: false })

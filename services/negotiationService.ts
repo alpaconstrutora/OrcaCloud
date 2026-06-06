@@ -52,7 +52,7 @@ export const negotiationService = {
     async listProposals(orderId: string): Promise<NegotiationProposal[]> {
         const { data, error } = await supabase
             .from('purchase_order_negotiations')
-            .select('*')
+            .select('id, order_id, sender_email, sender_role, delivery_date, items, payment_method, payment_term_type, payment_days, payment_installments, message, status, created_at')
             .eq('order_id', orderId)
             .order('created_at', { ascending: true });
 
@@ -79,7 +79,7 @@ export const negotiationService = {
         // 1. Get the proposal details
         const { data: proposal, error: fetchError } = await supabase
             .from('purchase_order_negotiations')
-            .select('*')
+            .select('id, order_id, sender_email, sender_role, delivery_date, items, payment_method, payment_term_type, payment_days, payment_installments, message, status, created_at')
             .eq('id', proposalId)
             .single();
 

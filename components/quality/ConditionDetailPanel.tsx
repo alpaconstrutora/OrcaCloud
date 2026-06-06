@@ -68,7 +68,7 @@ const ConditionDetailPanel: React.FC<Props> = ({
     setLoadingHist(true);
     qualityConditionService
       .getHistory(condition.id, organizationId)
-      .then(setHistory).catch(() => {})
+      .then(d => setHistory(d as unknown as typeof history)).catch(() => {})
       .finally(() => setLoadingHist(false));
   }, [activeTab, condition.id, organizationId]);
 

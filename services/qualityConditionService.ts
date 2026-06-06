@@ -331,7 +331,7 @@ export const qualityConditionService = {
   getHistory: async (conditionId: string, organizationId: string) => {
     const { data, error } = await supabase
       .from('condition_events')
-      .select('*')
+      .select('id, condition_id, organization_id, event_type, payload, actor_id, occurred_at, aggregate_version')
       .eq('condition_id', conditionId)
       .eq('organization_id', organizationId)
       .order('occurred_at', { ascending: true })
@@ -377,7 +377,7 @@ export const qualityConditionService = {
   getTaxonomySystems: async (): Promise<TaxonomySystem[]> => {
     const { data, error } = await supabase
       .from('condition_taxonomy_systems')
-      .select('*')
+      .select('code, name, normRef, active')
       .eq('active', true)
       .order('code')
 
@@ -388,7 +388,7 @@ export const qualityConditionService = {
   getTaxonomyPathologies: async (systemCode?: string): Promise<TaxonomyPathology[]> => {
     let query = supabase
       .from('condition_taxonomy_pathologies')
-      .select('*')
+      .select('code, name, systemCode, definition, normRef, active')
       .eq('active', true)
       .order('code')
 

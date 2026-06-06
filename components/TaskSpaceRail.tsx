@@ -202,7 +202,7 @@ const TaskSpaceRail: React.FC<Props> = ({
                 draggable
                 onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; requestAnimationFrame(() => setDraggingSpaceId(space.id)) }}
                 onDragEnd={() => { setDraggingSpaceId(null); setDragOverSpaceId(null) }}
-                className="opacity-0 group-hover/space:opacity-100 cursor-grab active:cursor-grabbing p-1 text-slate-300 hover:text-slate-500 flex-shrink-0 transition-opacity"
+                className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-700 flex-shrink-0"
                 title="Arrastar para reordenar"
               >
                 <GripVertical className="w-3 h-3" />
@@ -230,17 +230,17 @@ const TaskSpaceRail: React.FC<Props> = ({
                 )}
               </button>
 
-              {/* Botões hover */}
+              {/* Botões sempre visíveis */}
               <button
                 onClick={e => { e.stopPropagation(); setCreatingFolderIn(space.id); setExpandedSpaces(prev => new Set([...prev, space.id])) }}
                 title="Nova pasta"
-                className="opacity-0 group-hover/space:opacity-100 p-1 text-slate-300 hover:text-blue-600 transition-all flex-shrink-0">
+                className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors flex-shrink-0">
                 <Plus className="w-3 h-3" />
               </button>
               <button
                 onClick={e => { e.stopPropagation(); onManageSpace(space) }}
                 title="Gerenciar espaço"
-                className="opacity-0 group-hover/space:opacity-100 p-1 text-slate-300 hover:text-slate-600 transition-all flex-shrink-0">
+                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded transition-colors flex-shrink-0">
                 <Settings2 className="w-3 h-3" />
               </button>
             </div>
@@ -273,7 +273,7 @@ const TaskSpaceRail: React.FC<Props> = ({
                         ${!isFolderDragging && !isFolderOver && isFolderActive ? 'bg-blue-50' : !isFolderDragging && !isFolderOver ? 'hover:bg-slate-100' : ''}`}
                     >
                       {/* Grip pasta */}
-                      <div className="opacity-0 group-hover/folder:opacity-100 cursor-grab active:cursor-grabbing p-1 text-slate-300 flex-shrink-0 transition-opacity">
+                      <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600 flex-shrink-0">
                         <GripVertical className="w-3 h-3" />
                       </div>
 

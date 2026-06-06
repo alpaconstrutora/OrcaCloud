@@ -44,12 +44,9 @@ export interface TaskSpaceWithMeta extends TaskSpace {
 // ── Spaces ───────────────────────────────────────────────────────────────────
 
 async function listSpaces(orgId: string): Promise<TaskSpaceWithMeta[]> {
-  const { data: spaces, error } = await supabase
-    .from('task_spaces')
-    .select('*')
-    .eq('org_id', orgId)
-    .order('position')
-    .order('created_at')
+  let q = supabase.from('task_spaces').select('*').order('position').order('created_at')
+  if (orgId) q = q.eq('org_id', orgId)   // sem orgId = todas as orgs (RLS filtra por membro)
+  const { data: spaces, error } = await q
 
   if (error) throw error
   if (!spaces?.length) return []

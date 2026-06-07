@@ -130,7 +130,12 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                 setError('Nenhum marcador {001} encontrado no documento. Verifique se o texto usa chaves simples, ex.: {001}.');
             }
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Não foi possível ler o .docx.');
+            const raw = e instanceof Error ? e.message : '';
+            // Oculta mensagens técnicas do docxtemplater (ex.: "Multi error")
+            const friendly = /multi error|templat/i.test(raw)
+                ? 'Erro ao ler o arquivo. Verifique se é um .docx válido e tente novamente.'
+                : raw || 'Não foi possível ler o .docx.';
+            setError(friendly);
         } finally {
             setParsing(false);
         }

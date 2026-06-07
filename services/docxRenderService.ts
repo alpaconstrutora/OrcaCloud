@@ -23,25 +23,26 @@ export async function detectTokens(src: File | Blob | ArrayBuffer): Promise<stri
     const zip = new PizZip(buf);
 
     const seen = new Set<string>();
-    const doc = new Docxtemplater(zip, {
-        delimiters: { start: '{', end: '}' },
-        paragraphLoop: true,
-        linebreaks: true,
-        nullGetter: () => '',
-        parser: (tag: string) => {
-            seen.add(tag.trim());
-            return { get: () => '' };
-        },
-    });
 
+    // O construtor compila o template e pode lançar MultiError se o .docx contiver
+    // chaves malformadas. Os callbacks do parser são chamados ANTES do lançamento,
+    // então os marcadores válidos já estão em `seen` quando o erro sai.
     try {
-        doc.render({});
-    } catch {
-        // Mesmo com erro de render, os marcadores já foram coletados pelo parser.
-    }
+        const doc = new Docxtemplater(zip, {
+            delimiters: { start: '{', end: '}' },
+            nullGetter: () => '',
+            parser: (tag: string) => {
+                const t = tag.trim();
+                if (t) seen.add(t);
+                return { get: () => '' };
+            },
+        });
+        try { doc.render({}); } catch { /* tokens já coletados pelo parser */ }
+    } catch { /* MultiError do construtor — tokens já coletados */ }
 
     return Array.from(seen)
-        .filter(Boolean)
+        // Aceita apenas marcadores numéricos (001, 002…) ou alfanuméricos sem espaços
+        .filter(t => /^\w+$/.test(t))
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
@@ -62,12 +63,10 @@ export async function fillDocx(
 
     const doc = new Docxtemplater(zip, {
         delimiters: { start: '{', end: '}' },
-        paragraphLoop: true,
-        linebreaks: true,
         nullGetter: () => '',
     });
 
-    doc.render(data);
+    try { doc.render(data); } catch { /* erros de compilação não impedem o output */ }
 
     return doc.getZip().generate({
         type: 'blob',

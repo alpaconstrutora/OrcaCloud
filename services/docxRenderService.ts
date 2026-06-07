@@ -61,12 +61,27 @@ export async function fillDocx(
     const buf = await toArrayBuffer(src);
     const zip = new PizZip(buf);
 
-    const doc = new Docxtemplater(zip, {
+    // Parser customizado: nunca lança para nenhuma tag (inclusive tags internas do Word
+    // como {CTVNu}). Retorna o valor mapeado ou string vazia.
+    // Parser customizado: nunca lança para nenhuma tag (inclusive tags internas do Word
+    // como {CTVNu}). Retorna o valor mapeado ou string vazia.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const makeDoc = (opts: object) => new (Docxtemplater as any)(zip, opts);
+    let doc = makeDoc({
         delimiters: { start: '{', end: '}' },
         nullGetter: () => '',
+        parser: (tag: string) => ({ get: () => data[tag.trim()] ?? '' }),
     });
 
-    try { doc.render(data); } catch { /* erros de compilação não impedem o output */ }
+    try { doc.render(data); } catch {
+        // Se render lançou (MultiError por tag interna do Word), tenta sem parser customizado
+        try {
+            doc = makeDoc({ nullGetter: () => '' });
+            try { doc.render(data); } catch { /* ignorar */ }
+        } catch {
+            throw new Error('Não foi possível preencher o documento. Verifique se o .docx é válido.');
+        }
+    }
 
     return doc.getZip().generate({
         type: 'blob',

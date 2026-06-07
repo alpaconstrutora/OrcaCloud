@@ -71,7 +71,10 @@ const EmitDocumentModal: React.FC<Props> = ({
                 notify?.('PDF gerado com sucesso!', 'success');
             }
         } catch (e) {
-            const msg = e instanceof Error ? e.message : 'Falha ao gerar o documento.';
+            const raw = e instanceof Error ? e.message : '';
+            const msg = /multi error|templat/i.test(raw)
+                ? 'Erro ao processar o modelo. Verifique se o .docx é válido e tente novamente.'
+                : raw || 'Falha ao gerar o documento.';
             setError(msg);
             notify?.(msg, 'error');
         } finally {

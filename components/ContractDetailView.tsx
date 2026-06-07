@@ -184,7 +184,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     // Carrega templates de contrato para geração de PDF
                     contractTemplateService.list(c.organization_id).then(ts => setContractTemplates(ts)).catch(() => {});
                     // Carrega modelos de documento (.docx) para emissão por modelo
-                    documentTemplateService.list(c.organization_id).then(ts => setDocxTemplates(ts)).catch(() => {});
+                    documentTemplateService.list(c.organization_id)
+                        .then(ts => setDocxTemplates(ts))
+                        .catch(err => console.error('[docxTemplates] erro ao carregar:', err));
                 } catch (err) {
                     console.error("Erro ao carregar organização:", err);
                 }
@@ -746,7 +748,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     )}
 
                     <button
-                        onClick={() => docxTemplates.length > 0 ? setEmitModalOpen(true) : handleDownloadPDF()}
+                        onClick={() => {
+                            console.log('[Emitir Contrato] docxTemplates:', docxTemplates.length, docxTemplates);
+                            if (docxTemplates.length > 0) setEmitModalOpen(true);
+                            else handleDownloadPDF();
+                        }}
                         disabled={loading}
                         className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
                         title="Preencher seu modelo .docx com os dados do contrato"

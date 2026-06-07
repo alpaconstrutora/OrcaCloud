@@ -30,6 +30,11 @@ function dot(color: string) {
   return <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
 }
 
+const MIN_WIDTH = 160
+const MAX_WIDTH = 480
+const DEFAULT_WIDTH = 256
+const LS_KEY = 'task_rail_width'
+
 const TaskSpaceRail: React.FC<Props> = ({
   spaces, loadingSpaces,
   selectedSpaceId, selectedFolderId, activeFilter,
@@ -37,6 +42,32 @@ const TaskSpaceRail: React.FC<Props> = ({
   onSelectInbox, onSelectSpace, onSelectNoSpace,
   onCreateSpace, onCreateFolder, onManageSpace, onReloaded, onTaskDropOnFolder,
 }) => {
+  const [railWidth, setRailWidth] = useState<number>(() => {
+    try { return Number(localStorage.getItem(LS_KEY)) || DEFAULT_WIDTH } catch { return DEFAULT_WIDTH }
+  })
+  const isResizing = useRef(false)
+  const startX     = useRef(0)
+  const startWidth = useRef(0)
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isResizing.current) return
+      const delta = e.clientX - startX.current
+      const next  = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta))
+      setRailWidth(next)
+    }
+    const onUp = () => {
+      if (!isResizing.current) return
+      isResizing.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      // persiste
+      setRailWidth(w => { try { localStorage.setItem(LS_KEY, String(w)) } catch {} return w })
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup',   onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [])
   // ── ordem local (para feedback visual imediato no drag) ──────────────────
   const [localSpaces, setLocalSpaces] = useState(spaces)
   useEffect(() => setLocalSpaces(spaces), [spaces])
@@ -201,7 +232,12 @@ const TaskSpaceRail: React.FC<Props> = ({
   const isInbox = selectedSpaceId === null
 
   return (
-    <div className="hidden md:flex flex-col w-64 flex-shrink-0 gap-1 pt-1">
+    <div
+      className="hidden md:flex flex-shrink-0 gap-1 pt-1 relative"
+      style={{ width: railWidth, minWidth: MIN_WIDTH, maxWidth: MAX_WIDTH }}
+    >
+      {/* Conteúdo do rail */}
+      <div className="flex flex-col gap-1 flex-1 min-w-0 overflow-hidden">
 
       {/* ── INBOX ────────────────────────────────────────────────────────── */}
       <p className="px-2 pb-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">Inbox</p>
@@ -491,6 +527,23 @@ const TaskSpaceRail: React.FC<Props> = ({
           <Plus className="w-3.5 h-3.5" /> Criar primeiro espaço
         </button>
       )}
+      </div>{/* fim conteúdo */}
+
+      {/* Handle de resize — borda direita arrastável */}
+      <div
+        onMouseDown={e => {
+          e.preventDefault()
+          isResizing.current = true
+          startX.current     = e.clientX
+          startWidth.current = railWidth
+          document.body.style.cursor    = 'col-resize'
+          document.body.style.userSelect = 'none'
+        }}
+        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize group"
+      >
+        {/* linha visual que aparece no hover */}
+        <div className="absolute inset-y-0 right-0 w-px bg-slate-200 group-hover:bg-blue-400 group-hover:w-0.5 transition-all" />
+      </div>
     </div>
   )
 }

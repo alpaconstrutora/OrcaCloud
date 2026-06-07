@@ -117,6 +117,13 @@ const TasksList: React.FC<Props> = ({
   const [dragOverId, setDragOverId]         = useState<string | null>(null)
   const [dragOverDetach, setDragOverDetach] = useState(false)
 
+  // Garante limpeza quando o drop ocorre fora do componente (ex: no rail)
+  React.useEffect(() => {
+    const reset = () => { setDraggingId(null); setDragOverId(null); setDragOverDetach(false) }
+    window.addEventListener('dragend', reset)
+    return () => window.removeEventListener('dragend', reset)
+  }, [])
+
   const [colOrder, setColOrder]       = useState<ColKey[]>(DEFAULT_COL_ORDER)
   const [colDragging, setColDragging] = useState<ColKey | null>(null)
   const [colDragOver, setColDragOver] = useState<ColKey | null>(null)

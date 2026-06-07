@@ -4,7 +4,7 @@ const BUCKET = 'opportunity-dataroom';
 
 export type DocumentCategory =
     | 'evte' | 'sondagem' | 'planta' | 'matricula'
-    | 'financeiro' | 'licenca' | 'memorial' | 'outro';
+    | 'financeiro' | 'licenca' | 'memorial' | 'outro' | 'foto';
 
 export const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
     evte:       'EVTE',
@@ -15,6 +15,7 @@ export const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
     licenca:    'Licença / Alvará',
     memorial:   'Memorial Descritivo',
     outro:      'Outro',
+    foto:       'Fotos',
 };
 
 export const DOCUMENT_CATEGORY_ICONS: Record<DocumentCategory, string> = {
@@ -26,6 +27,7 @@ export const DOCUMENT_CATEGORY_ICONS: Record<DocumentCategory, string> = {
     licenca:    '✅',
     memorial:   '📄',
     outro:      '📎',
+    foto:       '🖼️',
 };
 
 export interface OpportunityDocument {

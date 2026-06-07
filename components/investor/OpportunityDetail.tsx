@@ -12,6 +12,7 @@ import {
 import ScenarioComparison from './ScenarioComparison';
 import LinkedProjectPanel from './LinkedProjectPanel';
 import DataRoomPanel from './DataRoomPanel';
+import OpportunityPhotosPanel from './OpportunityPhotosPanel';
 
 interface Props {
     opportunity: InvestorOpportunity;
@@ -30,7 +31,7 @@ const fmtM2 = (v: number | null | undefined) => (v == null ? '—' : `${new Intl
 
 const ROLES: InterestRole[] = ['investidor', 'arquiteto', 'engenheiro', 'projetista', 'consultor', 'outro'];
 
-type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'documentos' | 'interesses';
+type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'fotos' | 'documentos' | 'interesses';
 type FormStep = 'view' | 'form' | 'success';
 
 const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, isAdmin = false, uploadedBy, onClose }) => {
@@ -99,6 +100,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
         { id: 'pitch', label: 'Detalhes' },
         { id: 'cenarios', label: 'Cenários' },
         ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra' }] : []),
+        { id: 'fotos', label: 'Fotos' },
         { id: 'documentos', label: 'Documentos' },
         { id: 'interesses', label: `Interesses (${interests.length || '…'})` },
     ];
@@ -106,6 +108,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
         { id: 'pitch', label: 'Detalhes' },
         ...(hasScenarios ? [{ id: 'cenarios' as PitchTab, label: 'Viabilidade' }] : []),
         ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra ao Vivo' }] : []),
+        { id: 'fotos', label: 'Fotos' },
         { id: 'documentos', label: 'Documentos' },
     ];
     const tabs = isAdmin ? ADMIN_TABS : PUBLIC_TABS;
@@ -343,6 +346,18 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                         Fechar
                                     </button>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* ── ABA: Fotos ───────────────────────────────── */}
+                        {pitchTab === 'fotos' && (
+                            <div className="px-8 py-6">
+                                <OpportunityPhotosPanel
+                                    opportunityId={op.id!}
+                                    organizationId={organizationId}
+                                    isAdmin={isAdmin}
+                                    uploadedBy={uploadedBy}
+                                />
                             </div>
                         )}
 

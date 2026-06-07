@@ -738,33 +738,21 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <button
                             onClick={() => setTemplatePdfModal(true)}
                             className="flex items-center gap-2 px-6 py-4 bg-white border border-blue-200 text-blue-700 rounded-2xl hover:bg-blue-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
-                            title="Gerar PDF usando modelo de contrato"
+                            title="Gerar PDF usando modelo de contrato HTML"
                         >
                             <FileText className="w-4 h-4" />
                             PDF via Modelo
                         </button>
                     )}
 
-                    {docxTemplates.length > 0 && (
-                        <button
-                            onClick={() => setEmitModalOpen(true)}
-                            disabled={loading}
-                            className="flex items-center gap-2 px-6 py-4 bg-white border border-blue-200 text-blue-700 rounded-2xl hover:bg-blue-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
-                            title="Emitir contrato preenchendo um modelo .docx"
-                        >
-                            <FileText className="w-4 h-4" />
-                            Emitir por Modelo
-                        </button>
-                    )}
-
                     <button
-                        onClick={handleDownloadPDF}
+                        onClick={() => setEmitModalOpen(true)}
                         disabled={loading}
                         className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
-                        title="Baixar PDF do Contrato"
+                        title="Preencher seu modelo .docx com os dados do contrato"
                     >
                         <FileDown className="w-4 h-4 text-blue-600" />
-                        Emitir PDF
+                        Emitir Contrato
                     </button>
 
                     <button

@@ -745,11 +745,23 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </button>
                     )}
 
+                    {docxTemplates.length > 0 && (
+                        <button
+                            onClick={() => setEmitModalOpen(true)}
+                            disabled={loading}
+                            className="flex items-center gap-2 px-6 py-4 bg-white border border-blue-200 text-blue-700 rounded-2xl hover:bg-blue-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
+                            title="Emitir contrato preenchendo um modelo .docx"
+                        >
+                            <FileText className="w-4 h-4" />
+                            Emitir por Modelo
+                        </button>
+                    )}
+
                     <button
-                        onClick={() => { if (docxTemplates.length > 0) setEmitModalOpen(true); else handleDownloadPDF(); }}
+                        onClick={handleDownloadPDF}
                         disabled={loading}
                         className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
-                        title={docxTemplates.length > 0 ? 'Emitir contrato a partir de um modelo (.docx / PDF)' : 'Baixar PDF do Contrato'}
+                        title="Baixar PDF do Contrato"
                     >
                         <FileDown className="w-4 h-4 text-blue-600" />
                         Emitir PDF

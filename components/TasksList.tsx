@@ -19,6 +19,7 @@ interface Props {
   projects: ProjectOption[]
   statuses?: TaskStatus[]
   groupBy?: GroupByField
+  resetDragSignal?: number
   onToggleDone: (task: TaskRecord) => void
   onEdit: (task: TaskRecord) => void
   onAddSubtask: (parent: TaskRecord) => void
@@ -100,7 +101,7 @@ const COL = 'px-3 py-0 text-sm text-slate-700 whitespace-nowrap'
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TasksList: React.FC<Props> = ({
-  tasks, loading, employees, projects, statuses = [], groupBy = 'none',
+  tasks, loading, employees, projects, statuses = [], groupBy = 'none', resetDragSignal,
   onToggleDone, onEdit, onAddSubtask, onMakeSubtask, onAddTask, onNavigate,
 }) => {
   const [search, setSearch]           = useState('')
@@ -117,12 +118,27 @@ const TasksList: React.FC<Props> = ({
   const [dragOverId, setDragOverId]         = useState<string | null>(null)
   const [dragOverDetach, setDragOverDetach] = useState(false)
 
-  // Garante limpeza quando o drop ocorre fora do componente (ex: no rail)
-  React.useEffect(() => {
-    const reset = () => { setDraggingId(null); setDragOverId(null); setDragOverDetach(false) }
-    window.addEventListener('dragend', reset)
-    return () => window.removeEventListener('dragend', reset)
+  // Ref para poder cancelar o RAF antes que ele dispare
+  const dragRafRef = React.useRef<number | null>(null)
+
+  const clearDrag = React.useCallback(() => {
+    if (dragRafRef.current !== null) {
+      cancelAnimationFrame(dragRafRef.current)
+      dragRafRef.current = null
+    }
+    setDraggingId(null); setDragOverId(null); setDragOverDetach(false)
   }, [])
+
+  // Limpeza quando o drop ocorre fora do componente (ex: no rail)
+  React.useEffect(() => {
+    window.addEventListener('dragend', clearDrag)
+    return () => window.removeEventListener('dragend', clearDrag)
+  }, [clearDrag])
+
+  // Limpeza quando o pai (TasksModule) confirma que houve drop no rail
+  React.useEffect(() => {
+    if (resetDragSignal) clearDrag()
+  }, [resetDragSignal, clearDrag])
 
   const [colOrder, setColOrder]       = useState<ColKey[]>(DEFAULT_COL_ORDER)
   const [colDragging, setColDragging] = useState<ColKey | null>(null)
@@ -449,7 +465,7 @@ const TasksList: React.FC<Props> = ({
     return (
       <>
         <tr
-          onDragEnd={() => { setDraggingId(null); setDragOverId(null); setDragOverDetach(false) }}
+          onDragEnd={clearDrag}
           onDragOver={(e) => { e.preventDefault(); if (draggingId && draggingId !== t.id) setDragOverId(t.id) }}
           onDragLeave={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDragOverId(null) }}
           onDrop={(e) => {
@@ -458,7 +474,7 @@ const TasksList: React.FC<Props> = ({
               onMakeSubtask(draggingId, t.id)
               setExpanded(prev => { const s = new Set(prev); s.add(t.id); return s })
             }
-            setDraggingId(null); setDragOverId(null)
+            clearDrag()
           }}
           className={[
             'group border-b border-slate-100 transition-all duration-100',
@@ -477,7 +493,10 @@ const TasksList: React.FC<Props> = ({
                 e.dataTransfer.setData('row', t.id)
                 e.dataTransfer.setData('taskId', t.id)   // para drop em pastas do rail
                 e.dataTransfer.effectAllowed = 'move'
-                requestAnimationFrame(() => setDraggingId(t.id))
+                dragRafRef.current = requestAnimationFrame(() => {
+                  dragRafRef.current = null
+                  setDraggingId(t.id)
+                })
               }}
               className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 flex items-center py-2.5"
             >

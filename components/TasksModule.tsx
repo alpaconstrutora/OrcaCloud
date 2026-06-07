@@ -64,6 +64,8 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   const [statuses, setStatuses]       = useState<TaskStatus[]>([])
   const [parentTask, setParentTask]   = useState<TaskRecord | null>(null)
 
+  const [dragResetSignal, setDragResetSignal] = useState(0)
+
   // ── Espaços ──────────────────────────────────────────────────────────────
   const [spaces, setSpaces]                   = useState<TaskSpaceWithMeta[]>([])
   // SpaceOption para o TaskForm (subconjunto de TaskSpaceWithMeta)
@@ -249,6 +251,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   }
 
   const handleTaskDropOnFolder = useCallback(async (taskId: string, spaceId: string, folderId: string) => {
+    setDragResetSignal(s => s + 1)   // força limpeza do drag state em TasksList
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, space_id: spaceId, folder_id: folderId } : t))
     const { error } = await supabase.from('tasks').update({ space_id: spaceId, folder_id: folderId }).eq('id', taskId)
     if (error) { console.error('[tasks] move to folder', error); load() }
@@ -555,6 +558,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               projects={obras}
               statuses={statuses}
               groupBy={groupBy}
+              resetDragSignal={dragResetSignal}
               onToggleDone={toggleDone}
               onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
               onAddSubtask={(parent) => { loadEmployees(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}

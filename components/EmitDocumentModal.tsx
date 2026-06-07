@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, FileText, FileDown, Loader2, FileType2, AlertCircle, Settings } from 'lucide-react';
+import { X, FileText, FileDown, Loader2, AlertCircle, Settings } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
 import { clientService } from '../services/clientService';
-import { fillDocx, docxBlobToPdf } from '../services/docxRenderService';
+import { fillDocx } from '../services/docxRenderService';
 import { resolveFields, describeMapping } from '../services/docxFieldCatalog';
 import { Contract } from '../types/contracts';
 import { Client, Organization } from '../types/users';
@@ -27,7 +27,7 @@ const EmitDocumentModal: React.FC<Props> = ({
     const [loading, setLoading] = useState(true);
     const [templateId, setTemplateId] = useState<string>('');
     const [clientId, setClientId] = useState<string>(contract.client_id ?? '');
-    const [busy, setBusy] = useState<null | 'docx' | 'pdf'>(null);
+    const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -54,22 +54,17 @@ const EmitDocumentModal: React.FC<Props> = ({
 
     const unmapped = template ? template.detected_tokens.filter(tk => !template.token_map?.[tk]) : [];
 
-    const emit = async (kind: 'docx' | 'pdf') => {
+    const emit = async () => {
         if (!template) return;
-        setBusy(kind);
+        setBusy(true);
         setError(null);
         try {
             const sourceBlob = await documentTemplateService.downloadFile(template);
             const filled = await fillDocx(sourceBlob, resolved);
             const baseName = `${slug(contract.number)}_${slug(template.name)}`;
-            if (kind === 'docx') {
-                saveAs(filled, `${baseName}.docx`);
-                notify?.('Documento .docx gerado com sucesso!', 'success');
-            } else {
-                const pdf = await docxBlobToPdf(filled);
-                saveAs(pdf, `${baseName}.pdf`);
-                notify?.('PDF gerado com sucesso!', 'success');
-            }
+            saveAs(filled, `${baseName}.docx`);
+            notify?.('Documento gerado com sucesso!', 'success');
+            onClose();
         } catch (e) {
             const raw = e instanceof Error ? e.message : '';
             const msg = /multi error|templat/i.test(raw)
@@ -78,7 +73,7 @@ const EmitDocumentModal: React.FC<Props> = ({
             setError(msg);
             notify?.(msg, 'error');
         } finally {
-            setBusy(null);
+            setBusy(false);
         }
     };
 
@@ -180,20 +175,12 @@ const EmitDocumentModal: React.FC<Props> = ({
                             Cancelar
                         </button>
                         <button
-                            onClick={() => emit('docx')}
-                            disabled={!template || busy !== null}
-                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                            onClick={emit}
+                            disabled={!template || busy}
+                            className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
                         >
-                            {busy === 'docx' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileType2 className="w-4 h-4 text-blue-600" />}
-                            Baixar .docx
-                        </button>
-                        <button
-                            onClick={() => emit('pdf')}
-                            disabled={!template || busy !== null}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            {busy === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                            Baixar PDF
+                            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                            {busy ? 'Gerando…' : 'Emitir documento'}
                         </button>
                     </div>
                 )}

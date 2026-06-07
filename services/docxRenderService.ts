@@ -111,3 +111,41 @@ export async function docxToHtml(docx: Blob | ArrayBuffer): Promise<string> {
     const result = await mammoth.convertToHtml({ arrayBuffer });
     return result.value as string;
 }
+
+/**
+ * Gera um PDF a partir de um .docx já preenchido.
+ * docx → HTML (mammoth) → PDF (jsPDF + html2canvas) — tudo no navegador.
+ */
+export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
+    const html = await docxToHtml(docx);
+    const { jsPDF } = await import('jspdf');
+    const { default: html2canvas } = await import('html2canvas');
+
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const container = window.document.createElement('div');
+    container.style.cssText =
+        'position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:48px;' +
+        'font-family:Arial,sans-serif;font-size:12px;line-height:1.6;color:#000';
+    container.innerHTML = html;
+    window.document.body.appendChild(container);
+
+    try {
+        const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const pageW = doc.internal.pageSize.getWidth();
+        const pageH = doc.internal.pageSize.getHeight();
+        const imgW = pageW - 20;
+        const imgH = (canvas.height * imgW) / canvas.width;
+        let y = 10;
+        let remaining = imgH;
+        while (remaining > 0) {
+            doc.addImage(imgData, 'JPEG', 10, y, imgW, imgH);
+            remaining -= pageH - 20;
+            if (remaining > 0) { doc.addPage(); y = 10 - (imgH - remaining); }
+        }
+    } finally {
+        window.document.body.removeChild(container);
+    }
+
+    return doc.output('blob');
+}

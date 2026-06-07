@@ -746,7 +746,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     )}
 
                     <button
-                        onClick={() => setEmitModalOpen(true)}
+                        onClick={() => docxTemplates.length > 0 ? setEmitModalOpen(true) : handleDownloadPDF()}
                         disabled={loading}
                         className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
                         title="Preencher seu modelo .docx com os dados do contrato"

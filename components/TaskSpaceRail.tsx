@@ -201,7 +201,7 @@ const TaskSpaceRail: React.FC<Props> = ({
   const isInbox = selectedSpaceId === null
 
   return (
-    <div className="hidden md:flex flex-col w-52 flex-shrink-0 gap-1 pt-1">
+    <div className="hidden md:flex flex-col w-64 flex-shrink-0 gap-1 pt-1">
 
       {/* ── INBOX ────────────────────────────────────────────────────────── */}
       <p className="px-2 pb-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">Inbox</p>

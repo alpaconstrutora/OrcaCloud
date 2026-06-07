@@ -17,6 +17,9 @@ import {
 import { contractService } from '../services/contractService';
 import { contractIndexService, IndexName } from '../services/contractIndexService';
 import { contractTemplateService, ContractTemplate as DBContractTemplate, renderTemplate, buildVariableMap } from '../services/contractTemplateService';
+import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
+import EmitDocumentModal from './EmitDocumentModal';
+import DocxTemplateManager from './DocxTemplateManager';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { projectService } from '../services/projectService';
 import BudgetPickerModal from './BudgetPickerModal';
@@ -77,6 +80,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
     const [contractTemplates, setContractTemplates] = React.useState<DBContractTemplate[]>([]);
+    const [docxTemplates, setDocxTemplates] = React.useState<DocumentTemplate[]>([]);
+    const [emitModalOpen, setEmitModalOpen] = React.useState(false);
+    const [docxManagerOpen, setDocxManagerOpen] = React.useState(false);
     const [templatePdfModal, setTemplatePdfModal] = React.useState(false);
     const [generatingTemplatePdf, setGeneratingTemplatePdf] = React.useState(false);
     const [reajusteModal, setReajusteModal] = React.useState(false);
@@ -177,6 +183,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     if (org) setOrganization(org);
                     // Carrega templates de contrato para geração de PDF
                     contractTemplateService.list(c.organization_id).then(ts => setContractTemplates(ts)).catch(() => {});
+                    // Carrega modelos de documento (.docx) para emissão por modelo
+                    documentTemplateService.list(c.organization_id).then(ts => setDocxTemplates(ts)).catch(() => {});
                 } catch (err) {
                     console.error("Erro ao carregar organização:", err);
                 }
@@ -738,10 +746,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     )}
 
                     <button
-                        onClick={handleDownloadPDF}
+                        onClick={() => { if (docxTemplates.length > 0) setEmitModalOpen(true); else handleDownloadPDF(); }}
                         disabled={loading}
                         className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
-                        title="Baixar PDF do Contrato"
+                        title={docxTemplates.length > 0 ? 'Emitir contrato a partir de um modelo (.docx / PDF)' : 'Baixar PDF do Contrato'}
                     >
                         <FileDown className="w-4 h-4 text-blue-600" />
                         Emitir PDF
@@ -2058,6 +2066,29 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </button>
                     </div>
                 </div>
+            )}
+
+            {/* Modal: Emitir documento via modelo .docx (.docx / PDF) */}
+            {emitModalOpen && contract && (
+                <EmitDocumentModal
+                    organizationId={contract.organization_id}
+                    contract={contract}
+                    organization={organization}
+                    onClose={() => setEmitModalOpen(false)}
+                    onManageTemplates={() => { setEmitModalOpen(false); setDocxManagerOpen(true); }}
+                    notify={notify}
+                />
+            )}
+
+            {/* Ambiente de gestão de modelos de documento (.docx) */}
+            {docxManagerOpen && contract && (
+                <DocxTemplateManager
+                    organizationId={contract.organization_id}
+                    onClose={() => {
+                        setDocxManagerOpen(false);
+                        documentTemplateService.list(contract.organization_id).then(setDocxTemplates).catch(() => {});
+                    }}
+                />
             )}
 
             {/* Modal de Reajuste */}

@@ -37,13 +37,16 @@ export async function generateMonthlyReportPdf(organizationId: string): Promise<
 
     // ── Fetch data ────────────────────────────────────────────────────────────
     const [projectsRes, contribsRes] = await Promise.all([
-        supabase.from('projects').select('id, name, settings').not('investor_id', 'is', null),
+        supabase.from('projects').select('id, name, settings'),
         supabase.from('investor_contributions').select('project_id, type, amount, status').eq('organization_id', organizationId),
     ]);
 
-    const orgProjects = ((projectsRes.data ?? []) as any[]).filter(
-        p => p.settings?.organizationId === organizationId,
-    );
+    // Filtra em memória: projetos da org (via settings.organizationId) com classificação OBRA
+    const orgProjects = ((projectsRes.data ?? []) as any[]).filter(p => {
+        const orgMatch = p.settings?.organizationId === organizationId;
+        const isObra   = !p.settings?.classification || p.settings?.classification === 'OBRA';
+        return orgMatch && isObra;
+    });
     const contribs = (contribsRes.data ?? []) as any[];
 
     let milestones: any[] = [];
@@ -182,6 +185,16 @@ export async function generateMonthlyReportPdf(organizationId: string): Promise<
                 3: { cellWidth: 20, halign: 'center' },
             },
         });
+    }
+
+    // ── Fallback quando não há nenhum dado ────────────────────────────────────
+    if (!orgProjects.length && !financialRows.length && !completedMs.length) {
+        doc.setTextColor(...GRAY);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text('Nenhum empreendimento ou movimentação financeira encontrado para este período.', 14, y);
+        doc.setFontSize(9);
+        doc.text('Verifique se os projetos estão vinculados à organização correta e possuem dados cadastrados.', 14, y + 7);
     }
 
     // ── Footer em todas as páginas ────────────────────────────────────────────

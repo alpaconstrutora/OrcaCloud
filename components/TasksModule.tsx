@@ -436,7 +436,14 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             </button>
           )}
           <button
-            onClick={() => { setEditing(null); setShowForm(true) }}
+            onClick={() => {
+              setEditing(null)
+              setTaskDefaults({
+                space_id: selectedSpaceId && selectedSpaceId !== '__none__' ? selectedSpaceId : null,
+                folder_id: selectedFolderId && selectedFolderId !== '__no_folder__' ? selectedFolderId : null,
+              })
+              setShowForm(true)
+            }}
             disabled={!orgForNew}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >

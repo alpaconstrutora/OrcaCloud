@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 const BUCKET = 'opportunity-dataroom';
+const PHOTO_BUCKET = 'opportunity-photos';
 
 export type DocumentCategory =
     | 'evte' | 'sondagem' | 'planta' | 'matricula'
@@ -63,6 +64,11 @@ export { fmtFileSize };
 
 export const opportunityDocumentsService = {
 
+    getPublicPhotoUrl(filePath: string): string {
+        const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(filePath);
+        return data.publicUrl;
+    },
+
     async list(opportunityId: string): Promise<OpportunityDocument[]> {
         const { data, error } = await supabase
             .from('opportunity_documents')
@@ -81,10 +87,10 @@ export const opportunityDocumentsService = {
         onProgress?: (pct: number) => void,
     ): Promise<OpportunityDocument> {
         const path = buildPath(orgId, oppId, file.name);
+        const bucket = meta.category === 'foto' ? PHOTO_BUCKET : BUCKET;
 
-        // Upload para o bucket privado
         const { error: upErr } = await supabase.storage
-            .from(BUCKET)
+            .from(bucket)
             .upload(path, file, { cacheControl: '3600', upsert: false });
 
         if (upErr) throw upErr;
@@ -108,8 +114,7 @@ export const opportunityDocumentsService = {
             .single();
 
         if (dbErr) {
-            // Limpa o arquivo do storage se a inserção falhou
-            await supabase.storage.from(BUCKET).remove([path]).catch(() => {});
+            await supabase.storage.from(bucket).remove([path]).catch(() => {});
             throw dbErr;
         }
 
@@ -124,9 +129,9 @@ export const opportunityDocumentsService = {
         return data.signedUrl;
     },
 
-    async remove(id: string, filePath: string): Promise<void> {
-        // Remove do storage primeiro, depois da tabela
-        await supabase.storage.from(BUCKET).remove([filePath]).catch(() => {});
+    async remove(id: string, filePath: string, category?: DocumentCategory): Promise<void> {
+        const bucket = category === 'foto' ? PHOTO_BUCKET : BUCKET;
+        await supabase.storage.from(bucket).remove([filePath]).catch(() => {});
         const { error } = await supabase
             .from('opportunity_documents')
             .delete()

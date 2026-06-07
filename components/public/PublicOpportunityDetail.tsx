@@ -1,72 +1,62 @@
 import React from 'react';
 import {
     X, MapPin, TrendingUp, BarChart3, Ruler, Calendar,
-    Building2, CheckCircle2, ChevronRight, Handshake, Users, Clock,
+    Building2, CheckCircle2, ChevronRight, Handshake, Clock, Image,
 } from 'lucide-react';
 import {
-    InvestorOpportunity, InterestRole, OpportunityInterest,
     OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_COLORS,
-    OPPORTUNITY_TYPE_LABELS, INTEREST_ROLE_LABELS, INTEREST_STAGE_LABELS,
-    investorPortalService,
+    OPPORTUNITY_TYPE_LABELS, INTEREST_ROLE_LABELS,
+    type InterestRole,
 } from '../../services/investorPortalService';
-import ScenarioComparison from './ScenarioComparison';
-import LinkedProjectPanel from './LinkedProjectPanel';
-import DataRoomPanel from './DataRoomPanel';
-import OpportunityPhotosPanel from './OpportunityPhotosPanel';
+import {
+    type PublicOpportunity,
+    type SubmitInterestPayload,
+    publicMarketplaceService,
+} from '../../services/publicMarketplaceService';
+import ScenarioComparison from '../investor/ScenarioComparison';
+import PhotoGallery from '../investor/PhotoGallery';
 import { fmtBRL, fmtPct, fmtM2 } from '../../utils/format';
 
 interface Props {
-    opportunity: InvestorOpportunity;
-    organizationId: string;
-    isAdmin?: boolean;
-    uploadedBy?: string;
+    opportunity: PublicOpportunity;
     onClose: () => void;
 }
 
+type Tab = 'pitch' | 'cenarios' | 'fotos';
+type Step = 'view' | 'form' | 'success';
 
 const ROLES: InterestRole[] = ['investidor', 'arquiteto', 'engenheiro', 'projetista', 'consultor', 'outro'];
 
-type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'fotos' | 'documentos' | 'interesses';
-type FormStep = 'view' | 'form' | 'success';
-
-const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, isAdmin = false, uploadedBy, onClose }) => {
-    const [formStep, setFormStep] = React.useState<FormStep>('view');
-    const [pitchTab, setPitchTab] = React.useState<PitchTab>('pitch');
+const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, onClose }) => {
+    const [tab, setTab] = React.useState<Tab>('pitch');
+    const [step, setStep] = React.useState<Step>('view');
     const [saving, setSaving] = React.useState(false);
-    const [interests, setInterests] = React.useState<OpportunityInterest[]>([]);
-    const [loadingInterests, setLoadingInterests] = React.useState(false);
-    const [interest, setInterest] = React.useState({
-        contact_name: '',
-        contact_email: '',
-        contact_phone: '',
-        role: 'investidor' as InterestRole,
+    const [form, setForm] = React.useState<SubmitInterestPayload>({
+        opportunity_id: op.id!,
+        name: '',
+        email: '',
+        phone: '',
+        role: 'investidor',
         message: '',
     });
 
-    const loadInterests = React.useCallback(() => {
-        if (!op.id) return;
-        setLoadingInterests(true);
-        investorPortalService.listInterests(organizationId, op.id)
-            .then(setInterests)
-            .catch(err => console.error('Erro ao carregar interesses', err))
-            .finally(() => setLoadingInterests(false));
-    }, [organizationId, op.id]);
+    const hasFinancials = op.vgv || op.roi_pct != null || op.tir_pct != null || op.cost_estimate;
+    const hasScenarios  = !!(op.vgv && op.cost_estimate);
+    const photos        = publicMarketplaceService.resolvePhotoUrls(op.photos ?? []);
 
-    React.useEffect(() => {
-        if (pitchTab === 'interesses' && isAdmin) loadInterests();
-    }, [pitchTab, isAdmin, loadInterests]);
+    const TABS: { id: Tab; label: string }[] = [
+        { id: 'pitch', label: 'Detalhes' },
+        ...(hasScenarios      ? [{ id: 'cenarios' as Tab, label: 'Viabilidade' }] : []),
+        ...(photos.length > 0 ? [{ id: 'fotos'    as Tab, label: 'Fotos' }]      : []),
+    ];
 
-    const handleInterestSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!interest.contact_name.trim()) return;
+        if (!form.name.trim()) return;
         setSaving(true);
         try {
-            await investorPortalService.addInterest({
-                organization_id: organizationId,
-                opportunity_id: op.id!,
-                ...interest,
-            });
-            setFormStep('success');
+            await publicMarketplaceService.submitInterest(form);
+            setStep('success');
         } catch (err) {
             console.error('Erro ao registrar interesse', err);
             alert('Erro ao registrar interesse. Tente novamente.');
@@ -75,38 +65,24 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
         }
     };
 
-    const hasFinancials = op.vgv || op.roi_pct != null || op.tir_pct != null || op.cost_estimate;
-    const hasScenarios = (op.vgv && op.cost_estimate);
-
-    // ── Analytics de interesses ──────────────────────────────────
-    const interestsByRole = ROLES.reduce<Record<string, number>>((acc, r) => {
-        acc[r] = interests.filter(i => i.role === r).length;
-        return acc;
-    }, {});
-    const interestsByStage = (['lead','interesse','reuniao','proposta','negociacao','fechado'] as const)
-        .reduce<Record<string, number>>((acc, s) => {
-            acc[s] = interests.filter(i => (i.stage ?? 'lead') === s).length;
-            return acc;
-        }, {});
-
-    const hasLinkedProject = !!op.project_id;
-
-    const ADMIN_TABS: { id: PitchTab; label: string }[] = [
-        { id: 'pitch', label: 'Detalhes' },
-        { id: 'cenarios', label: 'Cenários' },
-        ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra' }] : []),
-        { id: 'fotos', label: 'Fotos' },
-        { id: 'documentos', label: 'Documentos' },
-        { id: 'interesses', label: `Interesses (${interests.length || '…'})` },
-    ];
-    const PUBLIC_TABS: { id: PitchTab; label: string }[] = [
-        { id: 'pitch', label: 'Detalhes' },
-        ...(hasScenarios ? [{ id: 'cenarios' as PitchTab, label: 'Viabilidade' }] : []),
-        ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra ao Vivo' }] : []),
-        { id: 'fotos', label: 'Fotos' },
-        { id: 'documentos', label: 'Documentos' },
-    ];
-    const tabs = isAdmin ? ADMIN_TABS : PUBLIC_TABS;
+    const CTA = (
+        <div className="flex gap-3 pt-2">
+            <button
+                onClick={() => setStep('form')}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl"
+            >
+                <Handshake className="w-4 h-4" />
+                Manifestar Interesse
+                <ChevronRight className="w-4 h-4" />
+            </button>
+            <button
+                onClick={onClose}
+                className="px-6 py-4 text-gray-500 hover:text-gray-700 font-bold rounded-2xl hover:bg-gray-100 transition-colors"
+            >
+                Fechar
+            </button>
+        </div>
+    );
 
     return (
         <div
@@ -117,7 +93,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                 className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
                 onClick={e => e.stopPropagation()}
             >
-                {/* ── Thumbnail / Hero ─────────────────────────────────── */}
+                {/* Hero */}
                 {op.thumbnail_url ? (
                     <div className="relative h-48 rounded-t-3xl overflow-hidden flex-shrink-0">
                         <img src={op.thumbnail_url} alt={op.title} className="w-full h-full object-cover" />
@@ -139,9 +115,9 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                     </div>
                 )}
 
-                {formStep === 'view' && (
+                {step === 'view' && (
                     <div className="flex flex-col">
-                        {/* Header executivo */}
+                        {/* Header */}
                         <div className="px-8 pt-6 pb-4">
                             {!op.thumbnail_url && op.status && (
                                 <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3 ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
@@ -179,27 +155,23 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                         </div>
 
                         {/* Tabs */}
-                        {tabs.length > 1 && (
+                        {TABS.length > 1 && (
                             <div className="px-8 pb-2 flex gap-1 border-b border-gray-100">
-                                {tabs.map(tab => (
+                                {TABS.map(t => (
                                     <button
-                                        key={tab.id}
-                                        onClick={() => setPitchTab(tab.id)}
-                                        className={`px-4 py-2 rounded-t-xl text-xs font-bold transition-all ${pitchTab === tab.id
-                                            ? 'text-blue-600 border-b-2 border-blue-600'
-                                            : 'text-gray-400 hover:text-gray-600'
-                                        }`}
+                                        key={t.id}
+                                        onClick={() => setTab(t.id)}
+                                        className={`px-4 py-2 rounded-t-xl text-xs font-bold transition-all ${tab === t.id ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
                                     >
-                                        {tab.label}
+                                        {t.label}
                                     </button>
                                 ))}
                             </div>
                         )}
 
-                        {/* ── ABA: Detalhes ─────────────────────────────── */}
-                        {pitchTab === 'pitch' && (
+                        {/* ── ABA: Detalhes ── */}
+                        {tab === 'pitch' && (
                             <div className="px-8 py-6 space-y-6">
-                                {/* KPIs financeiros */}
                                 {hasFinancials && (
                                     <div>
                                         <div className="flex items-center gap-2 mb-3">
@@ -250,7 +222,6 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     </div>
                                 )}
 
-                                {/* Dados técnicos */}
                                 {(op.land_area_m2 || op.built_area_m2 || op.floors) && (
                                     <div>
                                         <div className="flex items-center gap-2 mb-3">
@@ -280,181 +251,58 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     </div>
                                 )}
 
-                                {/* CTA */}
-                                <div className="flex gap-3 pt-2">
-                                    <button
-                                        onClick={() => setFormStep('form')}
-                                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl"
-                                    >
-                                        <Handshake className="w-4 h-4" />
-                                        Manifestar Interesse
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={onClose}
-                                        className="px-6 py-4 text-gray-500 hover:text-gray-700 font-bold rounded-2xl hover:bg-gray-100 transition-colors"
-                                    >
-                                        Fechar
-                                    </button>
-                                </div>
+                                {CTA}
                             </div>
                         )}
 
-                        {/* ── ABA: Cenários ─────────────────────────────── */}
-                        {pitchTab === 'cenarios' && (
+                        {/* ── ABA: Viabilidade ── */}
+                        {tab === 'cenarios' && hasScenarios && (
                             <div className="px-8 py-6 space-y-6">
                                 <ScenarioComparison opportunity={op} />
-                                <div className="flex gap-3 pt-2">
-                                    <button
-                                        onClick={() => setFormStep('form')}
-                                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl"
-                                    >
-                                        <Handshake className="w-4 h-4" />
-                                        Manifestar Interesse
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={onClose} className="px-6 py-4 text-gray-500 hover:text-gray-700 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
-                                        Fechar
-                                    </button>
-                                </div>
+                                {CTA}
                             </div>
                         )}
 
-                        {/* ── ABA: Obra ao Vivo ────────────────────────── */}
-                        {pitchTab === 'obra' && hasLinkedProject && (
-                            <div className="px-8 py-6 space-y-6">
-                                <LinkedProjectPanel
-                                    projectId={op.project_id!}
-                                    organizationId={organizationId}
-                                    costEstimate={op.cost_estimate}
-                                />
-                                <div className="flex gap-3 pt-2">
-                                    <button
-                                        onClick={() => setFormStep('form')}
-                                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl"
-                                    >
-                                        <Handshake className="w-4 h-4" />
-                                        Manifestar Interesse
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={onClose} className="px-6 py-4 text-gray-500 hover:text-gray-700 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
-                                        Fechar
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ── ABA: Fotos ───────────────────────────────── */}
-                        {pitchTab === 'fotos' && (
-                            <div className="px-8 py-6">
-                                <OpportunityPhotosPanel
-                                    opportunityId={op.id!}
-                                    organizationId={organizationId}
-                                    isAdmin={isAdmin}
-                                    uploadedBy={uploadedBy}
-                                />
-                            </div>
-                        )}
-
-                        {/* ── ABA: Documentos ──────────────────────────── */}
-                        {pitchTab === 'documentos' && (
-                            <div className="px-8 py-6">
-                                <DataRoomPanel
-                                    opportunityId={op.id!}
-                                    organizationId={organizationId}
-                                    isAdmin={isAdmin}
-                                    uploadedBy={uploadedBy}
-                                />
-                            </div>
-                        )}
-
-                        {/* ── ABA: Interesses (admin) ───────────────────── */}
-                        {pitchTab === 'interesses' && isAdmin && (
-                            <div className="px-8 py-6 space-y-6">
-                                {loadingInterests ? (
-                                    <p className="text-sm text-gray-400 text-center py-8">Carregando...</p>
-                                ) : interests.length === 0 ? (
-                                    <div className="text-center py-12 bg-gray-50 rounded-2xl">
-                                        <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                                        <p className="text-sm font-bold text-gray-400">Nenhum interesse recebido ainda</p>
-                                    </div>
-                                ) : (
+                        {/* ── ABA: Fotos ── */}
+                        {tab === 'fotos' && (
+                            <div className="px-8 py-6 space-y-4">
+                                {photos.length > 0 ? (
                                     <>
-                                        {/* Funil por estágio */}
-                                        <div>
-                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Funil de conversão</p>
-                                            <div className="space-y-2">
-                                                {(['lead','interesse','reuniao','proposta','negociacao','fechado'] as const).map(s => {
-                                                    const count = interestsByStage[s] ?? 0;
-                                                    const pct = interests.length > 0 ? (count / interests.length) * 100 : 0;
-                                                    return (
-                                                        <div key={s} className="flex items-center gap-3">
-                                                            <span className="text-xs text-gray-500 w-24 font-medium">{INTEREST_STAGE_LABELS[s]}</span>
-                                                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
-                                                            </div>
-                                                            <span className="text-xs font-bold text-gray-700 w-6 text-right">{count}</span>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        {/* Distribuição por perfil */}
-                                        <div>
-                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Perfil dos interessados</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {ROLES.filter(r => (interestsByRole[r] ?? 0) > 0).map(r => (
-                                                    <div key={r} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-xl">
-                                                        <span className="text-xs font-bold text-gray-700">{INTEREST_ROLE_LABELS[r]}</span>
-                                                        <span className="text-xs font-black text-blue-600">{interestsByRole[r]}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Lista recente */}
-                                        <div>
-                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Mais recentes</p>
-                                            <div className="space-y-2">
-                                                {interests.slice(0, 6).map(i => (
-                                                    <div key={i.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                                                        <div>
-                                                            <span className="text-sm font-bold text-gray-800">{i.contact_name}</span>
-                                                            <span className="ml-2 text-xs text-gray-400">{INTEREST_ROLE_LABELS[i.role]}</span>
-                                                        </div>
-                                                        <span className="text-[10px] font-bold px-2 py-1 bg-gray-100 text-gray-500 rounded-lg">
-                                                            {INTEREST_STAGE_LABELS[i.stage ?? 'lead']}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
+                                        <PhotoGallery photos={photos} />
+                                        <p className="text-xs text-gray-400 text-center">
+                                            {photos.length} foto{photos.length !== 1 ? 's' : ''}
+                                        </p>
                                     </>
+                                ) : (
+                                    <div className="text-center py-12 bg-gray-50 rounded-2xl">
+                                        <Image className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                                        <p className="text-sm font-bold text-gray-400">Nenhuma foto disponível</p>
+                                    </div>
                                 )}
+                                {CTA}
                             </div>
                         )}
                     </div>
                 )}
 
-                {/* ── Formulário de interesse ───────────────────────────── */}
-                {formStep === 'form' && (
+                {/* ── Formulário de interesse ── */}
+                {step === 'form' && (
                     <div className="p-8">
                         <div className="mb-6">
-                            <button onClick={() => setFormStep('view')} className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 mb-3">
+                            <button onClick={() => setStep('view')} className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 mb-3">
                                 ← Voltar
                             </button>
                             <h3 className="text-xl font-black text-gray-900">Manifestar Interesse</h3>
                             <p className="text-sm text-gray-500 mt-1">{op.title}</p>
                         </div>
-                        <form onSubmit={handleInterestSubmit} className="space-y-4">
+                        <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-600 mb-1.5">Nome completo *</label>
                                 <input
                                     type="text"
                                     required
-                                    value={interest.contact_name}
-                                    onChange={e => setInterest(p => ({ ...p, contact_name: e.target.value }))}
+                                    value={form.name}
+                                    onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                                     placeholder="Seu nome"
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
@@ -464,8 +312,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     <label className="block text-xs font-bold text-gray-600 mb-1.5">E-mail</label>
                                     <input
                                         type="email"
-                                        value={interest.contact_email}
-                                        onChange={e => setInterest(p => ({ ...p, contact_email: e.target.value }))}
+                                        value={form.email ?? ''}
+                                        onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
                                         placeholder="seu@email.com"
                                         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                     />
@@ -474,8 +322,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     <label className="block text-xs font-bold text-gray-600 mb-1.5">Telefone / WhatsApp</label>
                                     <input
                                         type="tel"
-                                        value={interest.contact_phone}
-                                        onChange={e => setInterest(p => ({ ...p, contact_phone: e.target.value }))}
+                                        value={form.phone ?? ''}
+                                        onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
                                         placeholder="(00) 00000-0000"
                                         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                     />
@@ -488,11 +336,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                         <button
                                             key={r}
                                             type="button"
-                                            onClick={() => setInterest(p => ({ ...p, role: r }))}
-                                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${interest.role === r
-                                                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25'
-                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                            }`}
+                                            onClick={() => setForm(p => ({ ...p, role: r }))}
+                                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${form.role === r ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                                         >
                                             {INTEREST_ROLE_LABELS[r]}
                                         </button>
@@ -503,8 +348,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                 <label className="block text-xs font-bold text-gray-600 mb-1.5">Mensagem (opcional)</label>
                                 <textarea
                                     rows={3}
-                                    value={interest.message}
-                                    onChange={e => setInterest(p => ({ ...p, message: e.target.value }))}
+                                    value={form.message ?? ''}
+                                    onChange={e => setForm(p => ({ ...p, message: e.target.value }))}
                                     placeholder="Conte um pouco sobre seu interesse ou proposta..."
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 resize-none"
                                 />
@@ -517,7 +362,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                 >
                                     {saving ? 'Enviando...' : 'Enviar manifestação'}
                                 </button>
-                                <button type="button" onClick={() => setFormStep('view')} className="px-6 py-3 text-gray-500 hover:text-gray-700 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
+                                <button type="button" onClick={() => setStep('view')} className="px-6 py-3 text-gray-500 hover:text-gray-700 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
                                     Voltar
                                 </button>
                             </div>
@@ -525,8 +370,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                     </div>
                 )}
 
-                {/* ── Sucesso ──────────────────────────────────────────── */}
-                {formStep === 'success' && (
+                {/* ── Sucesso ── */}
+                {step === 'success' && (
                     <div className="p-12 text-center">
                         <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
                             <CheckCircle2 className="w-8 h-8 text-emerald-600" />
@@ -546,4 +391,4 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
     );
 };
 
-export default OpportunityDetail;
+export default PublicOpportunityDetail;

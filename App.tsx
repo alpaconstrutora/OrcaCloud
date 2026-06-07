@@ -69,6 +69,7 @@ import { useAuthSync } from './hooks/useAuthSync';
 import { useProjectOperations } from './hooks/useProjectOperations';
 import AppRouter from './components/AppRouter';
 import { ErrorBoundary } from './components/ErrorBoundary';
+const PublicMarketplaceView = React.lazy(() => import('./components/public/PublicMarketplaceView'));
 import { PWAInstallPrompt, OfflineIndicator } from './components/PWAInstallPrompt';
 import { useTabRouter } from './hooks/useTabRouter';
 import { syncViewToUrl } from './lib/tabRouter';
@@ -254,6 +255,18 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (orderShareToken) return <PublicOrderView token={orderShareToken} />;
+
+  // ── Guard público: marketplace de oportunidades por slug ─────────────────────
+  const marketplaceSlug = React.useMemo(() => {
+    const match = window.location.pathname.match(/^\/m\/([a-z0-9-]+)\/?$/i);
+    return match ? match[1] : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (marketplaceSlug) return (
+    <React.Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+      <PublicMarketplaceView slug={marketplaceSlug} />
+    </React.Suspense>
+  );
 
   // ── Guards de autenticação ───────────────────────────────────────────────────
   if (isResettingPassword) return <ResetPassword onComplete={() => setIsResettingPassword(false)} />;

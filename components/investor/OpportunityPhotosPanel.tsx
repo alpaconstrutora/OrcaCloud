@@ -1,9 +1,10 @@
 import React from 'react';
-import { Upload, Trash2, Loader2, AlertCircle, X, ZoomIn, Image } from 'lucide-react';
+import { Upload, Loader2, AlertCircle, X, Image } from 'lucide-react';
 import {
     opportunityDocumentsService,
     OpportunityDocument,
 } from '../../services/opportunityDocumentsService';
+import PhotoGallery, { PhotoItem } from './PhotoGallery';
 
 interface Props {
     opportunityId: string;
@@ -12,20 +13,14 @@ interface Props {
     uploadedBy?: string;
 }
 
-interface PhotoEntry {
-    doc: OpportunityDocument;
-    url: string | null;
-}
-
 const OpportunityPhotosPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin, uploadedBy }) => {
-    const [photos, setPhotos] = React.useState<PhotoEntry[]>([]);
+    const [photos, setPhotos] = React.useState<PhotoItem[]>([]);
+    const [docs, setDocs] = React.useState<OpportunityDocument[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState(false);
     const [dragOver, setDragOver] = React.useState(false);
     const [uploading, setUploading] = React.useState(false);
     const [uploadError, setUploadError] = React.useState<string | null>(null);
-    const [deleting, setDeleting] = React.useState<string | null>(null);
-    const [lightbox, setLightbox] = React.useState<string | null>(null);
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -35,17 +30,12 @@ const OpportunityPhotosPanel: React.FC<Props> = ({ opportunityId, organizationId
         try {
             const all = await opportunityDocumentsService.list(opportunityId);
             const fotoDocs = all.filter(d => d.category === 'foto');
-            const withUrls = await Promise.all(
-                fotoDocs.map(async doc => {
-                    try {
-                        const url = await opportunityDocumentsService.getSignedUrl(doc.file_path);
-                        return { doc, url };
-                    } catch {
-                        return { doc, url: null };
-                    }
-                }),
-            );
-            setPhotos(withUrls);
+            setDocs(fotoDocs);
+            setPhotos(fotoDocs.map(d => ({
+                id: d.id!,
+                url: opportunityDocumentsService.getPublicPhotoUrl(d.file_path),
+                description: d.description,
+            })));
         } catch {
             setError(true);
         } finally {
@@ -60,20 +50,20 @@ const OpportunityPhotosPanel: React.FC<Props> = ({ opportunityId, organizationId
         setUploading(true);
         setUploadError(null);
         try {
-            const added: PhotoEntry[] = [];
             for (const file of Array.from(files)) {
                 if (!file.type.startsWith('image/')) continue;
                 const doc = await opportunityDocumentsService.upload(
-                    organizationId,
-                    opportunityId,
-                    file,
+                    organizationId, opportunityId, file,
                     { category: 'foto', uploadedBy },
                 );
-                let url: string | null = null;
-                try { url = await opportunityDocumentsService.getSignedUrl(doc.file_path); } catch { /* no-op */ }
-                added.push({ doc, url });
+                const item: PhotoItem = {
+                    id: doc.id!,
+                    url: opportunityDocumentsService.getPublicPhotoUrl(doc.file_path),
+                    description: doc.description,
+                };
+                setDocs(prev => [doc, ...prev]);
+                setPhotos(prev => [item, ...prev]);
             }
-            if (added.length > 0) setPhotos(prev => [...added, ...prev]);
         } catch (err: any) {
             setUploadError(err?.message ?? 'Erro ao fazer upload.');
         } finally {
@@ -81,18 +71,12 @@ const OpportunityPhotosPanel: React.FC<Props> = ({ opportunityId, organizationId
         }
     };
 
-    const handleDelete = async (entry: PhotoEntry) => {
-        if (!window.confirm('Remover esta foto?')) return;
-        setDeleting(entry.doc.id!);
-        try {
-            await opportunityDocumentsService.remove(entry.doc.id!, entry.doc.file_path);
-            setPhotos(prev => prev.filter(p => p.doc.id !== entry.doc.id));
-            if (lightbox === entry.url) setLightbox(null);
-        } catch {
-            alert('Erro ao remover foto.');
-        } finally {
-            setDeleting(null);
-        }
+    const handleDelete = async (id: string) => {
+        const doc = docs.find(d => d.id === id);
+        if (!doc) return;
+        await opportunityDocumentsService.remove(doc.id!, doc.file_path, 'foto');
+        setDocs(prev => prev.filter(d => d.id !== id));
+        setPhotos(prev => prev.filter(p => p.id !== id));
     };
 
     if (loading) {
@@ -115,17 +99,13 @@ const OpportunityPhotosPanel: React.FC<Props> = ({ opportunityId, organizationId
 
     return (
         <div className="space-y-5">
-            {/* Upload zone (admin) */}
             {isAdmin && (
                 <div
                     onDragOver={e => { e.preventDefault(); setDragOver(true); }}
                     onDragLeave={() => setDragOver(false)}
                     onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
                     onClick={() => !uploading && fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${uploading ? 'cursor-wait' : 'cursor-pointer'} ${dragOver
-                        ? 'border-blue-400 bg-blue-50'
-                        : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
-                    }`}
+                    className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${uploading ? 'cursor-wait' : 'cursor-pointer'} ${dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}`}
                 >
                     {uploading ? (
                         <div className="flex items-center justify-center gap-2 text-blue-500">
@@ -143,10 +123,7 @@ const OpportunityPhotosPanel: React.FC<Props> = ({ opportunityId, organizationId
                     )}
                     <input
                         ref={fileInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        className="hidden"
+                        type="file" multiple accept="image/*" className="hidden"
                         onChange={e => { handleFiles(e.target.files); e.target.value = ''; }}
                     />
                 </div>
@@ -160,7 +137,6 @@ const OpportunityPhotosPanel: React.FC<Props> = ({ opportunityId, organizationId
                 </div>
             )}
 
-            {/* Gallery grid */}
             {photos.length === 0 ? (
                 <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-100">
                     <Image className="w-10 h-10 text-gray-300 mx-auto mb-3" />
@@ -169,73 +145,11 @@ const OpportunityPhotosPanel: React.FC<Props> = ({ opportunityId, organizationId
                 </div>
             ) : (
                 <>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {photos.map(entry => (
-                            <div key={entry.doc.id} className="relative group aspect-square rounded-2xl overflow-hidden bg-gray-100">
-                                {entry.url ? (
-                                    <>
-                                        <img
-                                            src={entry.url}
-                                            alt={entry.doc.description || entry.doc.name}
-                                            className="w-full h-full object-cover cursor-zoom-in transition-transform duration-300 group-hover:scale-105"
-                                            onClick={() => setLightbox(entry.url!)}
-                                        />
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors pointer-events-none flex items-center justify-center">
-                                            <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                        </div>
-                                        {entry.doc.description && (
-                                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 translate-y-full group-hover:translate-y-0 transition-transform">
-                                                <p className="text-xs text-white font-medium truncate">{entry.doc.description}</p>
-                                            </div>
-                                        )}
-                                    </>
-                                ) : (
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <AlertCircle className="w-6 h-6 text-gray-300" />
-                                    </div>
-                                )}
-
-                                {isAdmin && (
-                                    <button
-                                        onClick={e => { e.stopPropagation(); handleDelete(entry); }}
-                                        disabled={deleting === entry.doc.id}
-                                        className="absolute top-2 right-2 p-1.5 bg-black/40 hover:bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
-                                        title="Remover foto"
-                                    >
-                                        {deleting === entry.doc.id
-                                            ? <Loader2 className="w-3 h-3 animate-spin" />
-                                            : <Trash2 className="w-3 h-3" />
-                                        }
-                                    </button>
-                                )}
-                            </div>
-                        ))}
-                    </div>
+                    <PhotoGallery photos={photos} onDelete={isAdmin ? handleDelete : undefined} />
                     <p className="text-xs text-gray-400 text-center">
                         {photos.length} foto{photos.length !== 1 ? 's' : ''}
                     </p>
                 </>
-            )}
-
-            {/* Lightbox */}
-            {lightbox && (
-                <div
-                    className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-4"
-                    onClick={() => setLightbox(null)}
-                >
-                    <button
-                        className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition-colors"
-                        onClick={() => setLightbox(null)}
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                    <img
-                        src={lightbox}
-                        alt="Foto ampliada"
-                        className="max-w-full max-h-full rounded-2xl object-contain shadow-2xl"
-                        onClick={e => e.stopPropagation()}
-                    />
-                </div>
             )}
         </div>
     );

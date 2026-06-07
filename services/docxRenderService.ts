@@ -1,6 +1,6 @@
-// Renderização de documentos .docx com marcadores de chave única {001}, {002}…
-// Usa docxtemplater (delimitadores nativos { }) para fidelidade total no Word
-// e mammoth + jsPDF para um PDF de conveniência gerado no navegador.
+// Renderização de documentos .docx com marcadores {001}, {002}…
+// Detecção: docxtemplater (normaliza marcadores quebrados entre "runs" do Word)
+// Preenchimento: substituição direta no XML — evita MultiError de tokens internos do Word
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -41,57 +41,49 @@ export async function detectTokens(src: File | Blob | ArrayBuffer): Promise<stri
     } catch { /* MultiError do construtor — tokens já coletados */ }
 
     return Array.from(seen)
-        // Aceita apenas marcadores numéricos (001, 002…) ou alfanuméricos sem espaços
         .filter(t => /^\w+$/.test(t))
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
 /**
- * Preenche o .docx substituindo cada marcador pelo valor de `data`.
- * Marcadores sem valor viram string vazia. Retorna um Blob .docx.
+ * Preenche o .docx substituindo cada marcador {token} pelo valor de `data`.
+ * Substitui diretamente no XML para evitar MultiError causado por tokens internos
+ * do Word (ex.: {CTVNu}, {STYLEREF}, etc.) que o docxtemplater não tolera.
+ * Valores são escapados para XML antes da inserção.
  */
 export async function fillDocx(
     src: File | Blob | ArrayBuffer,
     data: Record<string, string>,
 ): Promise<Blob> {
-    const [{ default: PizZip }, { default: Docxtemplater }] = await Promise.all([
-        import('pizzip'),
-        import('docxtemplater'),
-    ]);
+    const { default: PizZip } = await import('pizzip');
     const buf = await toArrayBuffer(src);
     const zip = new PizZip(buf);
 
-    // Parser customizado: nunca lança para nenhuma tag (inclusive tags internas do Word
-    // como {CTVNu}). Retorna o valor mapeado ou string vazia.
-    // Parser customizado: nunca lança para nenhuma tag (inclusive tags internas do Word
-    // como {CTVNu}). Retorna o valor mapeado ou string vazia.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const makeDoc = (opts: object) => new (Docxtemplater as any)(zip, opts);
-    let doc = makeDoc({
-        delimiters: { start: '{', end: '}' },
-        nullGetter: () => '',
-        parser: (tag: string) => ({ get: () => data[tag.trim()] ?? '' }),
-    });
+    const escapeXml = (v: string) =>
+        v.replace(/&/g, '&amp;')
+         .replace(/</g, '&lt;')
+         .replace(/>/g, '&gt;')
+         .replace(/"/g, '&quot;');
 
-    try { doc.render(data); } catch {
-        // Se render lançou (MultiError por tag interna do Word), tenta sem parser customizado
-        try {
-            doc = makeDoc({ nullGetter: () => '' });
-            try { doc.render(data); } catch { /* ignorar */ }
-        } catch {
-            throw new Error('Não foi possível preencher o documento. Verifique se o .docx é válido.');
+    // Processa todos os XMLs de conteúdo (corpo, cabeçalho, rodapé, notas…)
+    const xmlEntries = Object.keys(zip.files).filter(
+        f => f.startsWith('word/') && f.endsWith('.xml') && !zip.files[f].dir,
+    );
+
+    for (const fileName of xmlEntries) {
+        let content = zip.files[fileName].asText();
+        for (const [token, value] of Object.entries(data)) {
+            content = content.split(`{${token}}`).join(escapeXml(value ?? ''));
         }
+        zip.file(fileName, content);
     }
 
-    return doc.getZip().generate({
-        type: 'blob',
-        mimeType: DOCX_MIME,
-        compression: 'DEFLATE',
-    });
+    return zip.generate({ type: 'blob', mimeType: DOCX_MIME, compression: 'DEFLATE' });
 }
 
 /** Converte um .docx (Blob) em HTML usando mammoth. */
 export async function docxToHtml(docx: Blob | ArrayBuffer): Promise<string> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mammoth: any = await import('mammoth');
     const arrayBuffer = await toArrayBuffer(docx);
     const result = await mammoth.convertToHtml({ arrayBuffer });
@@ -101,8 +93,6 @@ export async function docxToHtml(docx: Blob | ArrayBuffer): Promise<string> {
 /**
  * Gera um PDF (Blob) a partir de um .docx já preenchido.
  * Caminho 100% no navegador: docx → HTML (mammoth) → PDF (jsPDF + html2canvas).
- * A fidelidade é boa para texto/parágrafos; layouts muito ricos do Word podem
- * simplificar — nesses casos use o .docx preenchido.
  */
 export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
     const html = await docxToHtml(docx);

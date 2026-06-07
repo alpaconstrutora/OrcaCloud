@@ -10,7 +10,7 @@ export const imovibService = {
         // Campos numéricos de cenário omitidos na lista (carregados em getStudyById)
         let query = supabase
             .from('imovib_studies')
-            .select('id, organization_id, name, cnpj, developer, manager, version, segment, status, location, city, standard, total_area, created_at, updated_at')
+            .select('id, organization_id, name, cnpj, developer, manager, version, segment, sub_classification, phase, development_modality, zoning, created_at, updated_at')
             .order('created_at', { ascending: false });
 
         if (organizationId) {

@@ -63,6 +63,16 @@ const PublicMarketplaceView: React.FC<Props> = ({ slug }) => {
 
     const { organization: org, opportunities } = data;
 
+    if (selected) {
+        return (
+            <PublicOpportunityDetail
+                opportunity={selected}
+                organization={org}
+                onBack={() => { setSelected(null); window.scrollTo(0, 0); }}
+            />
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* ── Header da organização ─────────────────────────────── */}
@@ -211,14 +221,6 @@ const PublicMarketplaceView: React.FC<Props> = ({ slug }) => {
             <footer className="text-center py-8 text-xs text-gray-400 border-t border-gray-100">
                 Powered by <span className="font-bold text-gray-600">OrçaCloud</span>
             </footer>
-
-            {/* ── Modal detalhe ── */}
-            {selected && (
-                <PublicOpportunityDetail
-                    opportunity={selected}
-                    onClose={() => setSelected(null)}
-                />
-            )}
         </div>
     );
 };

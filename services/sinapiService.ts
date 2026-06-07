@@ -206,7 +206,7 @@ class SinapiDatabaseService {
 
     try {
       // Tenta buscar via RPC primeiro (muito mais rápido e não sofre com limites de max_rows da API)
-      const { data: rpcData, error: rpcError } = await supabase.rpc('get_distinct_categories');
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_distinct_categories').limit(1000);
 
       if (!rpcError && rpcData && rpcData.length > 0) {
         rpcData.forEach((row: any) => {

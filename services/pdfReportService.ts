@@ -42,11 +42,10 @@ export async function generateMonthlyReportPdf(organizationId: string): Promise<
     ]);
 
     // Filtra em memória: projetos da org (via settings.organizationId) com classificação OBRA
-    const orgProjects = ((projectsRes.data ?? []) as any[]).filter(p => {
-        const orgMatch = p.settings?.organizationId === organizationId;
-        const isObra   = !p.settings?.classification || p.settings?.classification === 'OBRA';
-        return orgMatch && isObra;
-    });
+    const orgProjects = ((projectsRes.data ?? []) as any[]).filter(p =>
+        p.settings?.organizationId === organizationId &&
+        p.settings?.classification === 'OBRA',
+    );
     const contribs = (contribsRes.data ?? []) as any[];
 
     let milestones: any[] = [];

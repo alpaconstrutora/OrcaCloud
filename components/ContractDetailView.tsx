@@ -748,11 +748,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     )}
 
                     <button
-                        onClick={() => {
-                            console.log('[Emitir Contrato] docxTemplates:', docxTemplates.length, docxTemplates);
-                            if (docxTemplates.length > 0) setEmitModalOpen(true);
-                            else handleDownloadPDF();
-                        }}
+                        onClick={() => setEmitModalOpen(true)}
                         disabled={loading}
                         className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
                         title="Preencher seu modelo .docx com os dados do contrato"
@@ -2082,6 +2078,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     organization={organization}
                     onClose={() => setEmitModalOpen(false)}
                     onManageTemplates={() => { setEmitModalOpen(false); setDocxManagerOpen(true); }}
+                    onFallbackPdf={() => { setEmitModalOpen(false); handleDownloadPDF(); }}
                     notify={notify}
                 />
             )}

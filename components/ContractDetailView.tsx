@@ -52,9 +52,10 @@ interface ContractDetailViewProps {
     contractId: string;
     onBack: () => void;
     budget: BudgetEntry[];
+    organizationId?: string;
 }
 
-const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onBack, budget }) => {
+const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onBack, budget, organizationId: orgIdProp }) => {
     const [contract, setContract] = React.useState<Contract | null>(null);
     const [items, setItems] = React.useState<ContractItem[]>([]);
     const [addendums, setAddendums] = React.useState<ContractAddendum[]>([]);
@@ -175,16 +176,17 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 }
             }
 
-            // 2. Always try to load organization if contract has it
-            if (c?.organization_id) {
+            // 2. Always try to load organization if contract has it (or orgIdProp as fallback)
+            const resolvedOrgId = c?.organization_id || orgIdProp;
+            if (resolvedOrgId) {
                 try {
                     const orgs = await organizationService.listOrganizations();
-                    const org = orgs.find((o) => o.id === c.organization_id);
+                    const org = orgs.find((o) => o.id === resolvedOrgId);
                     if (org) setOrganization(org);
                     // Carrega templates de contrato para geração de PDF
-                    contractTemplateService.list(c.organization_id).then(ts => setContractTemplates(ts)).catch(() => {});
+                    contractTemplateService.list(resolvedOrgId).then(ts => setContractTemplates(ts)).catch(() => {});
                     // Carrega modelos de documento (.docx) para emissão por modelo
-                    documentTemplateService.list(c.organization_id)
+                    documentTemplateService.list(resolvedOrgId)
                         .then(ts => setDocxTemplates(ts))
                         .catch(err => console.error('[docxTemplates] erro ao carregar:', err));
                 } catch (err) {
@@ -2073,7 +2075,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Modal: Emitir documento via modelo .docx (.docx / PDF) */}
             {emitModalOpen && contract && (
                 <EmitDocumentModal
-                    organizationId={contract.organization_id || organization?.id || ''}
+                    organizationId={contract.organization_id || organization?.id || orgIdProp || ''}
                     contract={contract}
                     organization={organization}
                     onClose={() => setEmitModalOpen(false)}
@@ -2086,9 +2088,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Ambiente de gestão de modelos de documento (.docx) */}
             {docxManagerOpen && contract && (
                 <DocxTemplateManager
-                    organizationId={contract.organization_id || organization?.id || ''}
+                    organizationId={contract.organization_id || organization?.id || orgIdProp || ''}
                     onClose={() => {
-                        const orgId = contract.organization_id || organization?.id || '';
+                        const orgId = contract.organization_id || organization?.id || orgIdProp || '';
                         setDocxManagerOpen(false);
                         documentTemplateService.list(orgId).then(setDocxTemplates).catch(() => {});
                     }}

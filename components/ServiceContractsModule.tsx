@@ -45,6 +45,7 @@ const ServiceContractsModule: React.FC<Props> = ({
                 contractId={selectedId}
                 onBack={() => { setView('list'); setSelectedId(null); }}
                 budget={budget}
+                organizationId={organizationId}
             />
         );
     }

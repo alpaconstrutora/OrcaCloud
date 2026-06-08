@@ -79,13 +79,14 @@ export async function fillDocx(
             // retorna o valor do data ou string vazia.
             parser: (tag: string) => ({ get: () => data[tag.trim()] ?? '' }),
         });
-        // render pode lançar MultiError por chaves sem par no documento (ex.: 100 { itens}).
-        // Mesmo assim, tenta gerar o zip — em geral as substituições já foram feitas.
-        try { doc.render(data); } catch { /* ignorar — gerar mesmo assim */ }
-        return doc.getZip().generate({ type: 'blob', mimeType: DOCX_MIME, compression: 'DEFLATE' });
+        let renderOk = true;
+        try { doc.render(data); } catch { renderOk = false; }
+        if (renderOk) {
+            return doc.getZip().generate({ type: 'blob', mimeType: DOCX_MIME, compression: 'DEFLATE' });
+        }
+        // render lançou (ex.: {CTVNu} interno do Word causa MultiError) — cai na estratégia 2
     } catch {
-        // Se o próprio construtor falhou (zip inválido ou outro erro grave),
-        // cai na estratégia 2.
+        // construtor falhou — cai na estratégia 2
     }
 
     // ── Estratégia 2: substituição direta no XML ─────────────────────────────

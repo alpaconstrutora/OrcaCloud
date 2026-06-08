@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, FileText, FileDown, Loader2, AlertCircle, Settings, File } from 'lucide-react';
+import { X, FileText, FileDown, Loader2, AlertCircle, Settings, File, AlertTriangle } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
 import { clientService } from '../services/clientService';
@@ -53,7 +53,9 @@ const EmitDocumentModal: React.FC<Props> = ({
         return resolveFields(template.token_map ?? {}, { organization, client, contract });
     }, [template, organization, client, contract]);
 
-    const unmapped = template ? template.detected_tokens.filter(tk => !template.token_map?.[tk]) : [];
+    const mappedTokens = template ? template.detected_tokens.filter(tk => template.token_map?.[tk]) : [];
+    const unmappedTokens = template ? template.detected_tokens.filter(tk => !template.token_map?.[tk]) : [];
+    const allUnmapped = template && template.detected_tokens.length > 0 && mappedTokens.length === 0;
 
     const emit = async (kind: 'docx' | 'pdf') => {
         if (!template) return;
@@ -148,24 +150,47 @@ const EmitDocumentModal: React.FC<Props> = ({
                                 </div>
                             </div>
 
-                            {template && unmapped.length > 0 && (
+                            {/* Aviso crítico: nenhum token mapeado */}
+                            {allUnmapped && (
+                                <div className="flex flex-col gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-300 px-4 py-3">
+                                    <div className="flex items-start gap-2 text-red-700 dark:text-red-300">
+                                        <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+                                        <div>
+                                            <p className="text-sm font-semibold">Os marcadores deste modelo não estão mapeados</p>
+                                            <p className="text-xs mt-0.5">O documento será gerado com os marcadores em branco ({template!.detected_tokens.map(t => `{${t}}`).join(', ')}). Para inserir os dados do contrato, edite o modelo e associe cada marcador a um campo.</p>
+                                        </div>
+                                    </div>
+                                    {onManageTemplates && (
+                                        <button onClick={onManageTemplates} className="self-start flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700">
+                                            <Settings className="w-3.5 h-3.5" /> Editar modelo agora
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Aviso parcial: alguns tokens sem mapeamento */}
+                            {!allUnmapped && unmappedTokens.length > 0 && (
                                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                                     <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                                    {unmapped.length} marcador(es) sem mapeamento ({unmapped.map(t => `{${t}}`).join(', ')}) ficarão em branco no documento.
+                                    {unmappedTokens.length} marcador(es) sem mapeamento ({unmappedTokens.map(t => `{${t}}`).join(', ')}) ficarão em branco.
                                 </div>
                             )}
 
                             {/* Pré-visualização dos valores */}
                             {template && template.detected_tokens.length > 0 && (
                                 <div>
-                                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Pré-visualização dos valores</h3>
+                                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                        Pré-visualização · {mappedTokens.length}/{template.detected_tokens.length} campos mapeados
+                                    </h3>
                                     <div className="rounded-lg border border-gray-100 dark:border-gray-700 divide-y divide-gray-50 dark:divide-gray-700/50 max-h-64 overflow-auto">
                                         {template.detected_tokens.map(tk => (
                                             <div key={tk} className="grid grid-cols-[64px_1fr] gap-2 px-3 py-2 text-sm">
                                                 <span className="font-mono text-xs font-semibold text-blue-700 dark:text-blue-400">{`{${tk}}`}</span>
                                                 <div className="min-w-0">
                                                     <p className="text-[11px] text-gray-400 truncate">{describeMapping(template.token_map?.[tk])}</p>
-                                                    <p className="text-gray-900 dark:text-white truncate">{resolved[tk] || <span className="text-gray-300">(vazio)</span>}</p>
+                                                    <p className={`truncate ${resolved[tk] ? 'text-gray-900 dark:text-white' : 'text-red-400 italic'}`}>
+                                                        {resolved[tk] || '(vazio — não mapeado)'}
+                                                    </p>
                                                 </div>
                                             </div>
                                         ))}

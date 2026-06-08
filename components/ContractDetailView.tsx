@@ -2073,7 +2073,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Modal: Emitir documento via modelo .docx (.docx / PDF) */}
             {emitModalOpen && contract && (
                 <EmitDocumentModal
-                    organizationId={contract.organization_id}
+                    organizationId={contract.organization_id || organization?.id || ''}
                     contract={contract}
                     organization={organization}
                     onClose={() => setEmitModalOpen(false)}
@@ -2086,10 +2086,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Ambiente de gestão de modelos de documento (.docx) */}
             {docxManagerOpen && contract && (
                 <DocxTemplateManager
-                    organizationId={contract.organization_id}
+                    organizationId={contract.organization_id || organization?.id || ''}
                     onClose={() => {
+                        const orgId = contract.organization_id || organization?.id || '';
                         setDocxManagerOpen(false);
-                        documentTemplateService.list(contract.organization_id).then(setDocxTemplates).catch(() => {});
+                        documentTemplateService.list(orgId).then(setDocxTemplates).catch(() => {});
                     }}
                 />
             )}

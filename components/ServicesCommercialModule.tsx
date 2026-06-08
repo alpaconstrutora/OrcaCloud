@@ -103,6 +103,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
             contractId={selectedContractId}
             onBack={() => setView('contracts')}
             budget={[]}
+            organizationId={organizationId}
           />
         ) : null;
       default:

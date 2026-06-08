@@ -32,17 +32,20 @@ const EmitDocumentModal: React.FC<Props> = ({
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        Promise.all([
-            documentTemplateService.list(organizationId || undefined),
-            clientService.listClients(organizationId),
-        ])
-            .then(([tpls, cls]) => {
+        setLoading(true);
+        // Carrega templates e clientes independentemente — falha em um não afeta o outro
+        documentTemplateService.list(organizationId || undefined)
+            .then(tpls => {
                 setTemplates(tpls);
-                setClients(cls);
                 if (tpls.length === 1) setTemplateId(tpls[0].id);
             })
-            .catch(e => setError(e instanceof Error ? e.message : 'Erro ao carregar dados'))
+            .catch(e => setError(e instanceof Error ? e.message : 'Erro ao carregar modelos'))
             .finally(() => setLoading(false));
+        if (organizationId) {
+            clientService.listClients(organizationId)
+                .then(setClients)
+                .catch(() => {/* clientes opcionais */});
+        }
     }, [organizationId]);
 
     const template = useMemo(() => templates.find(t => t.id === templateId) ?? null, [templates, templateId]);

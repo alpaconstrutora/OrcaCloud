@@ -23,13 +23,14 @@ const SELECT_COLS =
     'id, organization_id, name, description, file_path, file_name, detected_tokens, token_map, is_active, created_by, created_at, updated_at';
 
 export const documentTemplateService = {
-    async list(organizationId: string): Promise<DocumentTemplate[]> {
-        const { data, error } = await supabase
+    async list(organizationId?: string): Promise<DocumentTemplate[]> {
+        let q = supabase
             .from('document_templates')
             .select(SELECT_COLS)
-            .eq('organization_id', organizationId)
             .eq('is_active', true)
             .order('name');
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const { data, error } = await q;
         if (error) throw error;
         return (data ?? []) as DocumentTemplate[];
     },

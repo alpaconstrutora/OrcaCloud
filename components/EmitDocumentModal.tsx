@@ -33,7 +33,7 @@ const EmitDocumentModal: React.FC<Props> = ({
 
     useEffect(() => {
         Promise.all([
-            documentTemplateService.list(organizationId),
+            documentTemplateService.list(organizationId || undefined),
             clientService.listClients(organizationId),
         ])
             .then(([tpls, cls]) => {

@@ -108,109 +108,83 @@ export async function docxToHtml(docx: Blob | ArrayBuffer): Promise<string> {
     return result.value as string;
 }
 
+const PX_TO_MM = 25.4 / 96;
+
 /**
- * Gera um PDF a partir de um .docx já preenchido.
- * docx → HTML (mammoth) → PDF (jsPDF + html2canvas) — tudo no navegador.
+ * Gera um PDF **fiel ao layout do Word** a partir de um .docx já preenchido.
+ *
+ * Usa docx-preview (renderiza o .docx preservando fontes, margens, tabelas e o
+ * tamanho de página real do Word) e captura **cada página** com html2canvas,
+ * adicionando-a ao PDF no tamanho exato da página. Tudo dentro de um <iframe>
+ * isolado: o html2canvas 1.4.1 quebra com as cores `oklch()` do Tailwind v4 da
+ * página principal, e o iframe garante que ele só veja estilos simples.
  */
 export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
-    const html = await docxToHtml(docx);
-    const { jsPDF } = await import('jspdf');
-    const { default: html2canvas } = await import('html2canvas');
+    const [{ jsPDF }, { default: html2canvas }, docxPreview] = await Promise.all([
+        import('jspdf'),
+        import('html2canvas'),
+        import('docx-preview'),
+    ]);
+    const buf = await toArrayBuffer(docx);
 
-    const RENDER_WIDTH = 794; // ~ largura de A4 a 96dpi
-    const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
-
-    // IMPORTANTE: renderizamos dentro de um <iframe> com documento próprio e CSS
-    // simples (hex/rgb). Se usássemos um <div> na própria página, o html2canvas
-    // 1.4.1 lê os estilos computados do app (Tailwind v4 usa cores `oklch()`) e
-    // LANÇA "unsupported color function oklch", abortando o PDF. O iframe isola
-    // totalmente o conteúdo desses estilos.
     const iframe = window.document.createElement('iframe');
     iframe.style.cssText =
-        `position:absolute;left:0;top:0;width:${RENDER_WIDTH}px;height:10px;` +
+        'position:absolute;left:0;top:0;width:1200px;height:10px;' +
         'border:0;opacity:0;pointer-events:none;z-index:-1';
     window.document.body.appendChild(iframe);
-
-    const body = html && html.trim() ? html : '<p>(documento sem conteúdo)</p>';
-    const srcDoc =
-        '<!doctype html><html><head><meta charset="utf-8"><style>' +
-        '*{box-sizing:border-box}' +
-        'html,body{margin:0;padding:0;background:#ffffff}' +
-        `body{width:${RENDER_WIDTH}px;padding:48px;` +
-        'font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#000000}' +
-        'p{margin:0 0 8px}table{border-collapse:collapse}td,th{border:1px solid #000;padding:4px}' +
-        'img{max-width:100%}' +
-        '</style></head><body>' + body + '</body></html>';
 
     try {
         const idoc = iframe.contentDocument!;
         idoc.open();
-        idoc.write(srcDoc);
+        idoc.write('<!doctype html><html><head><meta charset="utf-8">' +
+            '<style>html,body{margin:0;padding:0;background:#fff}</style></head><body></body></html>');
         idoc.close();
 
-        // Aguarda layout + fontes do documento do iframe
-        await new Promise<void>(resolve => {
-            if (idoc.readyState === 'complete') resolve();
-            else iframe.addEventListener('load', () => resolve(), { once: true });
+        // docx-preview injeta seus próprios estilos (rgb/hex) e renderiza uma
+        // <section> por página, com a largura/altura/margens reais do documento.
+        await docxPreview.renderAsync(buf, idoc.body, undefined, {
+            className: 'docx',
+            inWrapper: true,
+            ignoreWidth: false,
+            ignoreHeight: false,
+            breakPages: true,
+            renderHeaders: true,
+            renderFooters: true,
+            useBase64URL: true,
         });
+
         try { await idoc.fonts?.ready; } catch { /* ignore */ }
+        iframe.style.height = `${idoc.body.scrollHeight}px`;
 
-        const target = idoc.body;
-        iframe.style.height = `${target.scrollHeight}px`;
-
-        const canvas = await html2canvas(target, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            width: RENDER_WIDTH,
-            windowWidth: RENDER_WIDTH,
-            height: target.scrollHeight,
-            windowHeight: target.scrollHeight,
-        });
-
-        if (!canvas.width || !canvas.height) {
-            throw new Error('Não foi possível renderizar o conteúdo do documento.');
+        const pages = Array.from(idoc.querySelectorAll<HTMLElement>('section.docx'));
+        if (pages.length === 0) {
+            throw new Error('Não foi possível renderizar as páginas do documento.');
         }
 
-        const margin = 10; // mm
-        const pageW = doc.internal.pageSize.getWidth();
-        const pageH = doc.internal.pageSize.getHeight();
-        const usableW = pageW - margin * 2;
-        const usableH = pageH - margin * 2;
+        let doc: import('jspdf').jsPDF | null = null;
+        for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
+            const wMm = page.offsetWidth * PX_TO_MM;
+            const hMm = page.offsetHeight * PX_TO_MM;
+            const orientation = wMm > hMm ? 'l' : 'p';
 
-        // px por mm na largura renderizada → altura de uma página em px do canvas
-        const pxPerMm = canvas.width / usableW;
-        const pageHpx = Math.floor(usableH * pxPerMm);
+            const canvas = await html2canvas(page, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+            });
+            const img = canvas.toDataURL('image/jpeg', 0.95);
 
-        let renderedHpx = 0;
-        let pageIndex = 0;
-        while (renderedHpx < canvas.height) {
-            const sliceHpx = Math.min(pageHpx, canvas.height - renderedHpx);
-
-            // Fatia esta página em um canvas próprio e adiciona como imagem.
-            const pageCanvas = window.document.createElement('canvas');
-            pageCanvas.width = canvas.width;
-            pageCanvas.height = sliceHpx;
-            const ctx = pageCanvas.getContext('2d');
-            if (ctx) {
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-                ctx.drawImage(
-                    canvas,
-                    0, renderedHpx, canvas.width, sliceHpx,
-                    0, 0, canvas.width, sliceHpx,
-                );
+            if (!doc) {
+                doc = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation, compress: true });
+            } else {
+                doc.addPage([wMm, hMm], orientation);
             }
-            const img = pageCanvas.toDataURL('image/jpeg', 0.95);
-            if (pageIndex > 0) doc.addPage();
-            doc.addImage(img, 'JPEG', margin, margin, usableW, sliceHpx / pxPerMm);
-
-            renderedHpx += sliceHpx;
-            pageIndex += 1;
+            doc.addImage(img, 'JPEG', 0, 0, wMm, hMm);
         }
+
+        return doc!.output('blob');
     } finally {
         window.document.body.removeChild(iframe);
     }
-
-    return doc.output('blob');
 }

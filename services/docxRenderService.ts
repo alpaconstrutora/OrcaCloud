@@ -120,28 +120,52 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
     const RENDER_WIDTH = 794; // ~ largura de A4 a 96dpi
     const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
 
-    // Container fora da tela, mas com posição/dimensões reais para o html2canvas
-    // conseguir medir e pintar (left:-9999px com position:fixed costuma sair em branco).
-    const container = window.document.createElement('div');
-    container.style.cssText =
-        `position:absolute;left:0;top:0;width:${RENDER_WIDTH}px;background:#ffffff;` +
-        'padding:48px;box-sizing:border-box;z-index:-1;opacity:0;pointer-events:none;' +
-        'font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#000';
-    container.innerHTML = html && html.trim() ? html : '<p>(documento sem conteúdo)</p>';
-    window.document.body.appendChild(container);
+    // IMPORTANTE: renderizamos dentro de um <iframe> com documento próprio e CSS
+    // simples (hex/rgb). Se usássemos um <div> na própria página, o html2canvas
+    // 1.4.1 lê os estilos computados do app (Tailwind v4 usa cores `oklch()`) e
+    // LANÇA "unsupported color function oklch", abortando o PDF. O iframe isola
+    // totalmente o conteúdo desses estilos.
+    const iframe = window.document.createElement('iframe');
+    iframe.style.cssText =
+        `position:absolute;left:0;top:0;width:${RENDER_WIDTH}px;height:10px;` +
+        'border:0;opacity:0;pointer-events:none;z-index:-1';
+    window.document.body.appendChild(iframe);
+
+    const body = html && html.trim() ? html : '<p>(documento sem conteúdo)</p>';
+    const srcDoc =
+        '<!doctype html><html><head><meta charset="utf-8"><style>' +
+        '*{box-sizing:border-box}' +
+        'html,body{margin:0;padding:0;background:#ffffff}' +
+        `body{width:${RENDER_WIDTH}px;padding:48px;` +
+        'font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#000000}' +
+        'p{margin:0 0 8px}table{border-collapse:collapse}td,th{border:1px solid #000;padding:4px}' +
+        'img{max-width:100%}' +
+        '</style></head><body>' + body + '</body></html>';
 
     try {
-        // Garante que as fontes carregaram antes de tirar o "print"
-        if (window.document.fonts?.ready) {
-            try { await window.document.fonts.ready; } catch { /* ignore */ }
-        }
+        const idoc = iframe.contentDocument!;
+        idoc.open();
+        idoc.write(srcDoc);
+        idoc.close();
 
-        const canvas = await html2canvas(container, {
+        // Aguarda layout + fontes do documento do iframe
+        await new Promise<void>(resolve => {
+            if (idoc.readyState === 'complete') resolve();
+            else iframe.addEventListener('load', () => resolve(), { once: true });
+        });
+        try { await idoc.fonts?.ready; } catch { /* ignore */ }
+
+        const target = idoc.body;
+        iframe.style.height = `${target.scrollHeight}px`;
+
+        const canvas = await html2canvas(target, {
             scale: 2,
             useCORS: true,
             backgroundColor: '#ffffff',
             width: RENDER_WIDTH,
             windowWidth: RENDER_WIDTH,
+            height: target.scrollHeight,
+            windowHeight: target.scrollHeight,
         });
 
         if (!canvas.width || !canvas.height) {
@@ -185,7 +209,7 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
             pageIndex += 1;
         }
     } finally {
-        window.document.body.removeChild(container);
+        window.document.body.removeChild(iframe);
     }
 
     return doc.output('blob');

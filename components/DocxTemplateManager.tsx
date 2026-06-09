@@ -7,6 +7,8 @@ import {
 } from '../services/documentTemplateService';
 import { detectTokens } from '../services/docxRenderService';
 import { FIELD_GROUPS, TokenMap, TokenMapping } from '../services/docxFieldCatalog';
+import { organizationService } from '../services/organizationService';
+import { supabase } from '../lib/supabase';
 
 interface Props {
     organizationId: string;
@@ -79,14 +81,34 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
     const [parsing, setParsing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Org efetiva: usa a prop quando válida; senão resolve a organização do
+    // usuário. Sem ela, o upload no storage perde a pasta {org}/ e o RLS barra
+    // o INSERT ("new row violates row-level security policy").
+    const [orgId, setOrgId] = useState<string>(organizationId);
+
+    useEffect(() => {
+        if (organizationId) { setOrgId(organizationId); return; }
+        (async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                const email = user?.email?.toLowerCase();
+                const orgs = await organizationService.listOrganizations();
+                const mine = email
+                    ? orgs.find(o => (o.members ?? []).some(m => m.email?.toLowerCase() === email))
+                    : undefined;
+                const chosen = mine ?? orgs[0];
+                if (chosen) setOrgId(chosen.id);
+            } catch { /* mantém vazio; save mostrará erro */ }
+        })();
+    }, [organizationId]);
 
     const load = useCallback(() => {
         setLoading(true);
-        documentTemplateService.list(organizationId)
+        documentTemplateService.list(orgId || undefined)
             .then(setTemplates)
             .catch(e => setError(e instanceof Error ? e.message : 'Erro ao carregar modelos'))
             .finally(() => setLoading(false));
-    }, [organizationId]);
+    }, [orgId]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -154,12 +176,16 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
 
     const save = async () => {
         if (!draft || !canSave) return;
+        if (!orgId) {
+            setError('Organização não identificada. Recarregue a página e tente novamente.');
+            return;
+        }
         setSaving(true);
         setError(null);
         try {
             if (draft.id) {
                 await documentTemplateService.update(
-                    draft.id, organizationId,
+                    draft.id, orgId,
                     {
                         name: draft.name.trim(),
                         description: draft.description.trim() || undefined,
@@ -169,7 +195,7 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                     draft.file ?? undefined,
                 );
             } else {
-                await documentTemplateService.create(organizationId, draft.file!, {
+                await documentTemplateService.create(orgId, draft.file!, {
                     name: draft.name.trim(),
                     description: draft.description.trim() || undefined,
                     detected_tokens: draft.detectedTokens,

@@ -41,63 +41,58 @@ export async function detectTokens(src: File | Blob | ArrayBuffer): Promise<stri
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
+const escapeXml = (v: string) =>
+    v.replace(/&/g, '&amp;')
+     .replace(/</g, '&lt;')
+     .replace(/>/g, '&gt;')
+     .replace(/"/g, '&quot;');
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
- * Preenche o .docx com os valores de `data`.
+ * Constrói um regex que casa o marcador `{token}` no XML do Word **mesmo quando
+ * o Word quebrou o marcador em vários "runs"**. Entre cada caractere (e ao redor
+ * das chaves) toleramos qualquer sequência de tags XML — ex.:
+ *   {001}                                    → casa
+ *   {</w:t></w:r><w:r><w:t>001</w:t>...<w:t>} → casa
  *
- * Estratégia 1 (preferida): docxtemplater com parser customizado — resolve tokens
- * quebrados entre múltiplos "runs" do Word. Tolerante a tags internas do Word
- * ({CTVNu} etc.) graças ao nullGetter + parser que nunca lança.
- *
- * Estratégia 2 (fallback): substituição direta no XML — funciona quando o token
- * está em um único run (caso comum), não depende de docxtemplater.
+ * Só casa o token informado (chaves do `data`), então nunca toca em outras
+ * chaves do documento — diferente do docxtemplater, que apagaria qualquer `{…}`.
+ */
+function buildSplitTokenRegex(token: string): RegExp {
+    const TAG = '(?:<[^>]+>)*';
+    const chars = token.split('').map(escapeRegExp).join(TAG);
+    return new RegExp('\\{' + TAG + chars + TAG + '\\}', 'g');
+}
+
+/**
+ * Preenche o .docx com os valores de `data`, substituindo cada `{token}` pelo
+ * valor correspondente. Tolerante à fragmentação de marcadores entre "runs" do
+ * Word e imune a chaves soltas/tokens internos ({CTVNu} etc.): nunca lança e
+ * nunca remove conteúdo que não seja um marcador conhecido.
  */
 export async function fillDocx(
     src: File | Blob | ArrayBuffer,
     data: Record<string, string>,
 ): Promise<Blob> {
-    const [{ default: PizZip }, { default: Docxtemplater }] = await Promise.all([
-        import('pizzip'),
-        import('docxtemplater'),
-    ]);
+    const { default: PizZip } = await import('pizzip');
     const buf = await toArrayBuffer(src);
-
-    const escapeXml = (v: string) =>
-        v.replace(/&/g, '&amp;')
-         .replace(/</g, '&lt;')
-         .replace(/>/g, '&gt;')
-         .replace(/"/g, '&quot;');
-
-    // ── Estratégia 1: docxtemplater ──────────────────────────────────────────
-    try {
-        const zip = new PizZip(buf);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const DXT = Docxtemplater as any;
-        const doc = new DXT(zip, {
-            delimiters: { start: '{', end: '}' },
-            nullGetter: () => '',
-            // Parser customizado: nunca lança para nenhuma tag —
-            // retorna o valor do data ou string vazia.
-            parser: (tag: string) => ({ get: () => data[tag.trim()] ?? '' }),
-        });
-        let renderOk = true;
-        try { doc.render(data); } catch { renderOk = false; }
-        if (renderOk) {
-            return doc.getZip().generate({ type: 'blob', mimeType: DOCX_MIME, compression: 'DEFLATE' });
-        }
-        // render lançou (ex.: {CTVNu} interno do Word causa MultiError) — cai na estratégia 2
-    } catch {
-        // construtor falhou — cai na estratégia 2
-    }
-
-    // ── Estratégia 2: substituição direta no XML ─────────────────────────────
     const zip = new PizZip(buf);
+
+    // Pré-compila um regex tolerante por token (ordena por tamanho desc. para
+    // evitar que um token prefixo case dentro de outro maior).
+    const replacements = Object.entries(data)
+        .filter(([token]) => /^\w+$/.test(token))
+        .sort((a, b) => b[0].length - a[0].length)
+        .map(([token, value]) => ({ re: buildSplitTokenRegex(token), value: escapeXml(value ?? '') }));
+
     const xmlEntries = Object.keys(zip.files).filter(
         f => f.startsWith('word/') && f.endsWith('.xml') && !zip.files[f].dir,
     );
     for (const fileName of xmlEntries) {
         let content = zip.files[fileName].asText();
-        for (const [token, value] of Object.entries(data)) {
-            content = content.split(`{${token}}`).join(escapeXml(value ?? ''));
+        for (const { re, value } of replacements) {
+            content = content.replace(re, value);
         }
         zip.file(fileName, content);
     }

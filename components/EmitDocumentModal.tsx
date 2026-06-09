@@ -3,6 +3,7 @@ import { X, FileText, FileDown, Loader2, AlertCircle, Settings, File, AlertTrian
 import { saveAs } from 'file-saver';
 import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
 import { clientService } from '../services/clientService';
+import { organizationService } from '../services/organizationService';
 import { fillDocx, docxBlobToPdf } from '../services/docxRenderService';
 import { resolveFields, describeMapping } from '../services/docxFieldCatalog';
 import { Contract } from '../types/contracts';
@@ -21,10 +22,11 @@ interface Props {
 const slug = (s: string) => (s || '').replace(/[^\w.\-]+/g, '_').replace(/^_+|_+$/g, '');
 
 const EmitDocumentModal: React.FC<Props> = ({
-    organizationId, contract, organization, onClose, onManageTemplates, onFallbackPdf, notify,
+    organizationId, contract, organization: organizationProp, onClose, onManageTemplates, onFallbackPdf, notify,
 }) => {
     const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
+    const [organization, setOrganization] = useState<Organization | null>(organizationProp);
     const [loading, setLoading] = useState(true);
     const [templateId, setTemplateId] = useState<string>('');
     const [clientId, setClientId] = useState<string>(contract.client_id ?? '');
@@ -33,7 +35,8 @@ const EmitDocumentModal: React.FC<Props> = ({
 
     useEffect(() => {
         setLoading(true);
-        // Carrega templates e clientes independentemente — falha em um não afeta o outro
+
+        // Carrega templates (sem filtro de org garante que RLS retorna o que o usuário pode ver)
         documentTemplateService.list(organizationId || undefined)
             .then(tpls => {
                 setTemplates(tpls);
@@ -41,12 +44,24 @@ const EmitDocumentModal: React.FC<Props> = ({
             })
             .catch(e => setError(e instanceof Error ? e.message : 'Erro ao carregar modelos'))
             .finally(() => setLoading(false));
+
+        // Carrega organização diretamente no modal — não depende do pai passar organization
+        if (!organizationProp) {
+            organizationService.listOrganizations()
+                .then(orgs => {
+                    const match = orgs.find(o => o.id === organizationId) ?? orgs[0] ?? null;
+                    setOrganization(match);
+                })
+                .catch(() => {});
+        }
+
+        // Clientes opcionais
         if (organizationId) {
             clientService.listClients(organizationId)
                 .then(setClients)
-                .catch(() => {/* clientes opcionais */});
+                .catch(() => {});
         }
-    }, [organizationId]);
+    }, [organizationId, organizationProp]);
 
     const template = useMemo(() => templates.find(t => t.id === templateId) ?? null, [templates, templateId]);
     const client = useMemo(() => clients.find(c => c.id === clientId) ?? null, [clients, clientId]);
@@ -92,7 +107,6 @@ const EmitDocumentModal: React.FC<Props> = ({
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-                {/* Header */}
                 <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 dark:border-gray-700">
                     <FileDown className="w-5 h-5 text-blue-600" />
                     <div className="flex-1">
@@ -153,14 +167,13 @@ const EmitDocumentModal: React.FC<Props> = ({
                                 </div>
                             </div>
 
-                            {/* Aviso crítico: nenhum token mapeado */}
                             {allUnmapped && (
                                 <div className="flex flex-col gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-300 px-4 py-3">
                                     <div className="flex items-start gap-2 text-red-700 dark:text-red-300">
                                         <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
                                         <div>
                                             <p className="text-sm font-semibold">Os marcadores deste modelo não estão mapeados</p>
-                                            <p className="text-xs mt-0.5">O documento será gerado com os marcadores em branco ({template!.detected_tokens.map(t => `{${t}}`).join(', ')}). Para inserir os dados do contrato, edite o modelo e associe cada marcador a um campo.</p>
+                                            <p className="text-xs mt-0.5">Edite o modelo e associe cada marcador a um campo do contrato.</p>
                                         </div>
                                     </div>
                                     {onManageTemplates && (
@@ -171,7 +184,6 @@ const EmitDocumentModal: React.FC<Props> = ({
                                 </div>
                             )}
 
-                            {/* Aviso parcial: alguns tokens sem mapeamento */}
                             {!allUnmapped && unmappedTokens.length > 0 && (
                                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                                     <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -179,11 +191,11 @@ const EmitDocumentModal: React.FC<Props> = ({
                                 </div>
                             )}
 
-                            {/* Pré-visualização dos valores */}
                             {template && template.detected_tokens.length > 0 && (
                                 <div>
                                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
                                         Pré-visualização · {mappedTokens.length}/{template.detected_tokens.length} campos mapeados
+                                        {organization && <span className="ml-2 text-xs font-normal text-green-600">· org: {organization.name}</span>}
                                     </h3>
                                     <div className="rounded-lg border border-gray-100 dark:border-gray-700 divide-y divide-gray-50 dark:divide-gray-700/50 max-h-64 overflow-auto">
                                         {template.detected_tokens.map(tk => (
@@ -192,7 +204,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                                                 <div className="min-w-0">
                                                     <p className="text-[11px] text-gray-400 truncate">{describeMapping(template.token_map?.[tk])}</p>
                                                     <p className={`truncate ${resolved[tk] ? 'text-gray-900 dark:text-white' : 'text-red-400 italic'}`}>
-                                                        {resolved[tk] || '(vazio — não mapeado)'}
+                                                        {resolved[tk] || '(vazio — não mapeado ou sem dados)'}
                                                     </p>
                                                 </div>
                                             </div>
@@ -210,7 +222,6 @@ const EmitDocumentModal: React.FC<Props> = ({
                     )}
                 </div>
 
-                {/* Footer */}
                 {templates.length > 0 && (
                     <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
                         <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">

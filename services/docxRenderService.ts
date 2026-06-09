@@ -117,27 +117,72 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
     const { jsPDF } = await import('jspdf');
     const { default: html2canvas } = await import('html2canvas');
 
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const RENDER_WIDTH = 794; // ~ largura de A4 a 96dpi
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+
+    // Container fora da tela, mas com posição/dimensões reais para o html2canvas
+    // conseguir medir e pintar (left:-9999px com position:fixed costuma sair em branco).
     const container = window.document.createElement('div');
     container.style.cssText =
-        'position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:48px;' +
-        'font-family:Arial,sans-serif;font-size:12px;line-height:1.6;color:#000';
-    container.innerHTML = html;
+        `position:absolute;left:0;top:0;width:${RENDER_WIDTH}px;background:#ffffff;` +
+        'padding:48px;box-sizing:border-box;z-index:-1;opacity:0;pointer-events:none;' +
+        'font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#000';
+    container.innerHTML = html && html.trim() ? html : '<p>(documento sem conteúdo)</p>';
     window.document.body.appendChild(container);
 
     try {
-        const canvas = await html2canvas(container, { scale: 2, useCORS: true });
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        // Garante que as fontes carregaram antes de tirar o "print"
+        if (window.document.fonts?.ready) {
+            try { await window.document.fonts.ready; } catch { /* ignore */ }
+        }
+
+        const canvas = await html2canvas(container, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            width: RENDER_WIDTH,
+            windowWidth: RENDER_WIDTH,
+        });
+
+        if (!canvas.width || !canvas.height) {
+            throw new Error('Não foi possível renderizar o conteúdo do documento.');
+        }
+
+        const margin = 10; // mm
         const pageW = doc.internal.pageSize.getWidth();
         const pageH = doc.internal.pageSize.getHeight();
-        const imgW = pageW - 20;
-        const imgH = (canvas.height * imgW) / canvas.width;
-        let y = 10;
-        let remaining = imgH;
-        while (remaining > 0) {
-            doc.addImage(imgData, 'JPEG', 10, y, imgW, imgH);
-            remaining -= pageH - 20;
-            if (remaining > 0) { doc.addPage(); y = 10 - (imgH - remaining); }
+        const usableW = pageW - margin * 2;
+        const usableH = pageH - margin * 2;
+
+        // px por mm na largura renderizada → altura de uma página em px do canvas
+        const pxPerMm = canvas.width / usableW;
+        const pageHpx = Math.floor(usableH * pxPerMm);
+
+        let renderedHpx = 0;
+        let pageIndex = 0;
+        while (renderedHpx < canvas.height) {
+            const sliceHpx = Math.min(pageHpx, canvas.height - renderedHpx);
+
+            // Fatia esta página em um canvas próprio e adiciona como imagem.
+            const pageCanvas = window.document.createElement('canvas');
+            pageCanvas.width = canvas.width;
+            pageCanvas.height = sliceHpx;
+            const ctx = pageCanvas.getContext('2d');
+            if (ctx) {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+                ctx.drawImage(
+                    canvas,
+                    0, renderedHpx, canvas.width, sliceHpx,
+                    0, 0, canvas.width, sliceHpx,
+                );
+            }
+            const img = pageCanvas.toDataURL('image/jpeg', 0.95);
+            if (pageIndex > 0) doc.addPage();
+            doc.addImage(img, 'JPEG', margin, margin, usableW, sliceHpx / pxPerMm);
+
+            renderedHpx += sliceHpx;
+            pageIndex += 1;
         }
     } finally {
         window.document.body.removeChild(container);

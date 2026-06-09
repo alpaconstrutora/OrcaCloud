@@ -142,9 +142,11 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
 
         // docx-preview injeta seus próprios estilos (rgb/hex) e renderiza uma
         // <section> por página, com a largura/altura/margens reais do documento.
+        // inWrapper:false → seções ficam direto no body (sem o wrapper cinza),
+        // facilitando capturar o body inteiro e fatiar por página.
         await docxPreview.renderAsync(buf, idoc.body, undefined, {
             className: 'docx',
-            inWrapper: true,
+            inWrapper: false,
             ignoreWidth: false,
             ignoreHeight: false,
             breakPages: true,
@@ -153,27 +155,62 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
             useBase64URL: true,
         });
 
+        // Remove margens/sombras entre páginas para o fatiamento ficar exato.
+        const reset = idoc.createElement('style');
+        reset.textContent =
+            'body{margin:0;background:#fff}' +
+            'section.docx{margin:0 !important;box-shadow:none !important}';
+        idoc.head.appendChild(reset);
+
         try { await idoc.fonts?.ready; } catch { /* ignore */ }
-        iframe.style.height = `${idoc.body.scrollHeight}px`;
 
         const pages = Array.from(idoc.querySelectorAll<HTMLElement>('section.docx'));
         if (pages.length === 0) {
             throw new Error('Não foi possível renderizar as páginas do documento.');
         }
+        iframe.style.height = `${idoc.body.scrollHeight}px`;
+
+        // Captura o body inteiro de uma vez (caminho comprovado) e depois fatia
+        // o canvas resultante nos limites de cada página do documento.
+        const SCALE = 2;
+        const fullCanvas = await html2canvas(idoc.body, {
+            scale: SCALE,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            width: idoc.body.offsetWidth,
+            height: idoc.body.scrollHeight,
+            windowWidth: idoc.body.offsetWidth,
+            windowHeight: idoc.body.scrollHeight,
+        });
+
+        if (!fullCanvas.width || !fullCanvas.height) {
+            throw new Error('Não foi possível renderizar o conteúdo do documento.');
+        }
+
+        const sy = fullCanvas.height / idoc.body.scrollHeight;
+        const sx = fullCanvas.width / idoc.body.offsetWidth;
 
         let doc: import('jspdf').jsPDF | null = null;
-        for (let i = 0; i < pages.length; i++) {
-            const page = pages[i];
+        for (const page of pages) {
             const wMm = page.offsetWidth * PX_TO_MM;
             const hMm = page.offsetHeight * PX_TO_MM;
             const orientation = wMm > hMm ? 'l' : 'p';
 
-            const canvas = await html2canvas(page, {
-                scale: 2,
-                useCORS: true,
-                backgroundColor: '#ffffff',
-            });
-            const img = canvas.toDataURL('image/jpeg', 0.95);
+            const sliceX = Math.round(page.offsetLeft * sx);
+            const sliceY = Math.round(page.offsetTop * sy);
+            const sliceW = Math.max(1, Math.round(page.offsetWidth * sx));
+            const sliceH = Math.max(1, Math.round(page.offsetHeight * sy));
+
+            const pageCanvas = window.document.createElement('canvas');
+            pageCanvas.width = sliceW;
+            pageCanvas.height = sliceH;
+            const ctx = pageCanvas.getContext('2d');
+            if (ctx) {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, sliceW, sliceH);
+                ctx.drawImage(fullCanvas, sliceX, sliceY, sliceW, sliceH, 0, 0, sliceW, sliceH);
+            }
+            const img = pageCanvas.toDataURL('image/jpeg', 0.95);
 
             if (!doc) {
                 doc = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation, compress: true });

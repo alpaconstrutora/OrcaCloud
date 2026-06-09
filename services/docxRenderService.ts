@@ -209,12 +209,18 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
 
             if (!canvas.width || !canvas.height) continue;
 
+            // Gera o JPEG nós mesmos: passar o canvas + 'JPEG' faz o jsPDF tratar
+            // um PNG como JPEG e quebrar no atob. Com o canvas já preenchido, este
+            // data URL é válido (não volta o 'data:,').
+            const img = canvas.toDataURL('image/jpeg', 0.95);
+            if (!img || img === 'data:,') continue;
+
             if (!doc) {
                 doc = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation, compress: true });
             } else {
                 doc.addPage([wMm, hMm], orientation);
             }
-            doc.addImage(canvas, 'JPEG', 0, 0, wMm, hMm); // canvas direto, sem data URL
+            doc.addImage(img, 'JPEG', 0, 0, wMm, hMm);
             added++;
         }
 

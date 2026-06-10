@@ -294,15 +294,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             } else {
                 payload.payment_schedule = undefined;
             }
-            // Sanitize UUID fields: empty string would fail Postgres UUID cast
-            if (!payload.cost_center_id) payload.cost_center_id = undefined;
-            if (!payload.category_id) payload.category_id = undefined;
-            if (!payload.supplier_id) payload.supplier_id = undefined;
-            if (!payload.client_id) payload.client_id = undefined;
-            if (!payload.budget_id) payload.budget_id = undefined;
-            if (!payload.project_id) payload.project_id = undefined;
-            if (!payload.empresa_id) payload.empresa_id = undefined;
-            if (!(payload as any).template_id) (payload as any).template_id = undefined;
+            // Sanitize all UUID fields: any _id key with empty string fails Postgres UUID cast
+            for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
+                if (key.endsWith('_id') && (payload[key] as unknown) === '') {
+                    (payload as Record<string, unknown>)[key] = undefined;
+                }
+            }
             // Sanitize DATE fields: empty string would fail Postgres date cast
             if (!payload.end_date) payload.end_date = undefined;
             if (!payload.start_date) payload.start_date = undefined;

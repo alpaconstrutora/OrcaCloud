@@ -496,6 +496,13 @@ export const contractService = {
             updates.current_value = updates.original_value + addendumsTotal;
         }
 
+        // Sanitize UUID fields: empty string fails Postgres UUID cast
+        for (const key of Object.keys(updates) as (keyof typeof updates)[]) {
+            if (key.endsWith('_id') && (updates[key] as unknown) === '') {
+                (updates as Record<string, unknown>)[key] = undefined;
+            }
+        }
+
         // Refresh budget_snapshot when budget_id changes
         if (updates.budget_id) {
             try {

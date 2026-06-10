@@ -7,7 +7,7 @@ import {
 import { storageService } from '../services/storageService';
 import {
     Contract, ContractItem, ContractAddendum, ContractMeasurement,
-    ContractMeasurementItem
+    ContractMeasurementItem, MeasurementMode
 } from '../types';
 import { contractService } from '../services/contractService';
 import { sanitizeFileName } from '../utils/storageUtils';
@@ -31,7 +31,15 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
     const [periodEnd, setPeriodEnd] = React.useState(initialData?.period_end || '');
     const [measurementDate, setMeasurementDate] = React.useState(initialData?.measurement_date || new Date().toISOString().split('T')[0]);
     const [notes, setNotes] = React.useState(initialData?.notes || '');
+    const [measurementMode, setMeasurementMode] = React.useState<MeasurementMode>(
+        initialData?.measurement_mode ?? 'QUANTITATIVO'
+    );
+    // Quantitativo: qty por item
     const [quantities, setQuantities] = React.useState<Record<string, number>>({});
+    // Percentual/Híbrido: % por item neste período
+    const [percentages, setPercentages] = React.useState<Record<string, number>>({});
+    // Híbrido: modo escolhido por item
+    const [itemModes, setItemModes] = React.useState<Record<string, 'QUANTITATIVO' | 'PERCENTUAL'>>({});
     const [attachments, setAttachments] = React.useState<Record<string, string[]>>({});
     const [uploadingItems, setUploadingItems] = React.useState<Record<string, boolean>>({});
     const [previousItems, setPreviousItems] = React.useState<Record<string, number>>({});
@@ -54,6 +62,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                     if (cancelled) return;
                     allItems.push(...mItems);
                 }
+                // previousItems: qty acumulada excluindo medição em edição
                 const totals: Record<string, number> = {};
                 allItems.forEach(item => {
                     if (initialData && item.measurement_id === initialData.id) return;
@@ -66,17 +75,27 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
         })();
 
         setInvoiceUrl(initialData?.invoice_url || '');
+        setMeasurementMode(initialData?.measurement_mode ?? 'QUANTITATIVO');
+
         if (initialItems) {
             const initialQtys: Record<string, number> = {};
+            const initialPcts: Record<string, number> = {};
+            const initialModes: Record<string, 'QUANTITATIVO' | 'PERCENTUAL'> = {};
             const initialAtts: Record<string, string[]> = {};
             initialItems.forEach(item => {
                 initialQtys[item.contract_item_id] = item.quantity_executed;
+                if (item.percent_executed != null) initialPcts[item.contract_item_id] = item.percent_executed;
+                if (item.item_mode) initialModes[item.contract_item_id] = item.item_mode;
                 if (item.attachment_urls) initialAtts[item.contract_item_id] = item.attachment_urls;
             });
             setQuantities(initialQtys);
+            setPercentages(initialPcts);
+            setItemModes(initialModes);
             setAttachments(initialAtts);
         } else {
             setQuantities({});
+            setPercentages({});
+            setItemModes({});
             setAttachments({});
         }
 
@@ -85,47 +104,53 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
 
     if (!isOpen) return null;
 
-    const handleQtyChange = (itemId: string, val: string) => {
-        const num = parseFloat(val) || 0;
-        setQuantities(prev => ({ ...prev, [itemId]: num }));
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    // Retorna o modo efetivo de um item (leva em conta HIBRIDO)
+    const effectiveItemMode = (itemId: string): 'QUANTITATIVO' | 'PERCENTUAL' => {
+        if (measurementMode === 'QUANTITATIVO') return 'QUANTITATIVO';
+        if (measurementMode === 'PERCENTUAL') return 'PERCENTUAL';
+        // HIBRIDO: default QUANTITATIVO se não escolhido
+        return itemModes[itemId] ?? 'QUANTITATIVO';
     };
 
-    const totalValue = items.reduce((sum, item) => {
-        const qty = quantities[item.id] || 0;
-        return sum + (qty * item.unit_price);
-    }, 0);
+    // Valor medido para um item neste período
+    const itemValue = (item: ContractItem): number => {
+        const mode = effectiveItemMode(item.id);
+        if (mode === 'QUANTITATIVO') {
+            return (quantities[item.id] || 0) * item.unit_price;
+        }
+        // PERCENTUAL: % do valor total do item neste período
+        return ((percentages[item.id] || 0) / 100) * item.total_price;
+    };
 
-    // Use item-based previous value (qty × unit_price) to stay consistent with the
-    // "Saldo Ant." column in the table, avoiding drift from stored measurement totals.
+    // % já medida anteriormente para um item (0–100)
+    const previousPercent = (item: ContractItem): number => {
+        if (!item.total_price) return 0;
+        const prevQty = previousItems[item.id] || 0;
+        return Math.min(100, (prevQty * item.unit_price / item.total_price) * 100);
+    };
+
+    const totalValue = items.reduce((sum, item) => sum + itemValue(item), 0);
+
     const previousValueByItems = items.reduce((sum, item) => {
         return sum + (previousItems[item.id] || 0) * item.unit_price;
     }, 0);
 
     const saldoAFaturar = contract.current_value - previousValueByItems - totalValue;
 
+    // ── Upload helpers ──────────────────────────────────────────────────────────
+
     const handleFileUpload = async (itemId: string, file: File) => {
         try {
             setUploadingItems(prev => ({ ...prev, [itemId]: true }));
-
             const sanitizedName = sanitizeFileName(file.name);
-            const fileName = `${contract.id}/${Date.now()}_${sanitizedName}`;
-            const path = `measurements/${fileName}`;
-
-            console.log(`[UPLOAD] Starting upload for item ${itemId}: ${path}`);
-
-            const uploadResult = await storageService.uploadFile('documents', path, file);
-            console.log(`[UPLOAD] Success:`, uploadResult);
-
+            const path = `measurements/${contract.id}/${Date.now()}_${sanitizedName}`;
+            await storageService.uploadFile('documents', path, file);
             const publicUrl = storageService.getPublicUrl('documents', path);
-
-            setAttachments(prev => ({
-                ...prev,
-                [itemId]: [...(prev[itemId] || []), publicUrl]
-            }));
+            setAttachments(prev => ({ ...prev, [itemId]: [...(prev[itemId] || []), publicUrl] }));
         } catch (error: any) {
-            console.error("Erro ao fazer upload:", error);
-            const errorMsg = error.message || error.error_description || "Erro desconhecido";
-            setModalError(`Erro ao fazer upload do arquivo: ${errorMsg}`);
+            setModalError(`Erro ao fazer upload do arquivo: ${error.message || 'Erro desconhecido'}`);
         } finally {
             setUploadingItems(prev => ({ ...prev, [itemId]: false }));
         }
@@ -134,22 +159,21 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
     const handleInvoiceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
         try {
             setIsUploadingInvoice(true);
             const sanitizedName = sanitizeFileName(file.name);
             const path = `invoices/${contract.id}/${Date.now()}_${sanitizedName}`;
-
             await storageService.uploadFile('documents', path, file);
             const publicUrl = storageService.getPublicUrl('documents', path);
             setInvoiceUrl(publicUrl);
         } catch (error: any) {
-            console.error("Erro no upload da NF:", error);
             setModalError(`Erro no upload da NF: ${error.message}`);
         } finally {
             setIsUploadingInvoice(false);
         }
     };
+
+    // ── Save ───────────────────────────────────────────────────────────────────
 
     const handleSave = async () => {
         if (!periodStart || !periodEnd) {
@@ -168,24 +192,39 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                 period_end: periodEnd,
                 measurement_date: measurementDate,
                 status: initialData?.status || 'Pendente',
+                measurement_mode: measurementMode,
                 total_value: totalValue,
+                // retention_value e net_value são recalculados pelo service
                 retention_value: initialData?.retention_value || 0,
                 net_value: totalValue - (initialData?.retention_value || 0),
-                notes: notes,
-                invoice_url: invoiceUrl
+                notes,
+                invoice_url: invoiceUrl,
             };
 
+            // Constrói itens conforme o modo
             const measurementItems: Omit<ContractMeasurementItem, 'id' | 'measurement_id' | 'created_at'>[] = items
-                .filter(item => (quantities[item.id] || 0) > 0 || (attachments[item.id] && attachments[item.id].length > 0))
-                .map(item => ({
-                    contract_item_id: item.id,
-                    quantity_executed: quantities[item.id] || 0,
-                    value_executed: (quantities[item.id] || 0) * item.unit_price,
-                    attachment_urls: attachments[item.id] || []
-                }));
+                .filter(item => {
+                    const mode = effectiveItemMode(item.id);
+                    if (mode === 'QUANTITATIVO') return (quantities[item.id] || 0) > 0 || (attachments[item.id]?.length || 0) > 0;
+                    return (percentages[item.id] || 0) > 0 || (attachments[item.id]?.length || 0) > 0;
+                })
+                .map(item => {
+                    const mode = effectiveItemMode(item.id);
+                    const qty = mode === 'QUANTITATIVO' ? (quantities[item.id] || 0) : 0;
+                    const pct = mode === 'PERCENTUAL' ? (percentages[item.id] || 0) : null;
+                    const val = itemValue(item);
+                    return {
+                        contract_item_id: item.id,
+                        quantity_executed: qty,
+                        value_executed: val,
+                        percent_executed: pct ?? undefined,
+                        item_mode: mode,
+                        attachment_urls: attachments[item.id] || [],
+                    };
+                });
 
             if (measurementItems.length === 0) {
-                setModalError("Insira ao menos uma quantidade medida ou um anexo de evidência.");
+                setModalError("Insira ao menos uma quantidade/percentual medido ou um anexo de evidência.");
                 setLoading(false);
                 return;
             }
@@ -198,12 +237,18 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
             onSuccess();
             onClose();
         } catch (error: any) {
-            console.error("Erro ao salvar medição:", error);
-            const errorMsg = error.message || error.error_description || "Erro desconhecido";
-            setModalError(`Erro ao salvar medição: ${errorMsg}`);
+            setModalError(`Erro ao salvar medição: ${error.message || 'Erro desconhecido'}`);
         } finally {
             setLoading(false);
         }
+    };
+
+    // ── Render ─────────────────────────────────────────────────────────────────
+
+    const MODE_LABELS: Record<MeasurementMode, string> = {
+        QUANTITATIVO: 'Quantitativo',
+        PERCENTUAL: 'Percentual',
+        HIBRIDO: 'Híbrido',
     };
 
     return (
@@ -226,66 +271,71 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                 </div>
                             </div>
                             <p className="text-gray-400 font-medium text-sm max-w-xl">
-                                Lancamento de execução física e conferência de saldo para liberação financeira.
+                                Lançamento de execução física e conferência de saldo para liberação financeira.
                             </p>
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all text-gray-400 hover:text-white border border-white/10"
-                        >
+                        <button onClick={onClose} className="p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all text-gray-400 hover:text-white border border-white/10">
                             <X className="w-5 h-5" />
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-5 gap-6 mt-12 relative z-10 bg-white/5 p-6 rounded-3xl border border-white/10">
+                    {/* Datas + modo de medição */}
+                    <div className="grid grid-cols-6 gap-4 mt-10 relative z-10 bg-white/5 p-5 rounded-3xl border border-white/10">
                         <div className="space-y-2 text-left">
                             <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                <Calendar className="w-3 h-3" /> Início Período
+                                <Calendar className="w-3 h-3" /> Início
                             </p>
-                            <input
-                                type="date"
-                                value={periodStart}
-                                onChange={e => setPeriodStart(e.target.value)}
-                                className="w-full bg-transparent text-white font-medium text-sm outline-none border-b border-white/10 focus:border-blue-500 transition-colors p-1"
-                            />
+                            <input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)}
+                                className="w-full bg-transparent text-white font-medium text-sm outline-none border-b border-white/10 focus:border-blue-500 transition-colors p-1" />
                         </div>
                         <div className="space-y-2 text-left">
                             <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                <Calendar className="w-3 h-3" /> Fim Período
+                                <Calendar className="w-3 h-3" /> Fim
                             </p>
-                            <input
-                                type="date"
-                                value={periodEnd}
-                                onChange={e => setPeriodEnd(e.target.value)}
-                                className="w-full bg-transparent text-white font-medium text-sm outline-none border-b border-white/10 focus:border-blue-500 transition-colors p-1"
-                            />
+                            <input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)}
+                                className="w-full bg-transparent text-white font-medium text-sm outline-none border-b border-white/10 focus:border-blue-500 transition-colors p-1" />
                         </div>
                         <div className="space-y-2 text-left">
                             <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                 <Calendar className="w-3 h-3" /> Data Medição
                             </p>
-                            <input
-                                type="date"
-                                value={measurementDate}
-                                onChange={e => setMeasurementDate(e.target.value)}
-                                className="w-full bg-transparent text-white font-medium text-sm outline-none border-b border-white/10 focus:border-blue-500 transition-colors p-1"
-                            />
+                            <input type="date" value={measurementDate} onChange={e => setMeasurementDate(e.target.value)}
+                                className="w-full bg-transparent text-white font-medium text-sm outline-none border-b border-white/10 focus:border-blue-500 transition-colors p-1" />
                         </div>
-                        <div className="text-right flex flex-col justify-center border-l border-white/10 pl-6">
+                        {/* Modo de medição */}
+                        <div className="space-y-2">
+                            <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Tipo de Medição</p>
+                            <div className="flex gap-1">
+                                {(['QUANTITATIVO', 'PERCENTUAL', 'HIBRIDO'] as MeasurementMode[]).map(m => (
+                                    <button
+                                        key={m}
+                                        type="button"
+                                        onClick={() => setMeasurementMode(m)}
+                                        className={`flex-1 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-wider transition-all ${
+                                            measurementMode === m
+                                                ? 'bg-blue-600 text-white'
+                                                : 'bg-white/10 text-gray-400 hover:bg-white/20'
+                                        }`}
+                                    >
+                                        {MODE_LABELS[m].split(' ')[0]}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="text-right flex flex-col justify-center border-l border-white/10 pl-4">
                             <p className="text-[12px] font-medium text-emerald-400 uppercase tracking-widest mb-1">Saldo a Faturar</p>
                             <p className={`text-2xl font-medium tracking-tighter ${saldoAFaturar < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                                 R$ {saldoAFaturar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </p>
-                            <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest">após este período</p>
                         </div>
-                        <div className="text-right flex flex-col justify-center border-l border-white/10 pl-6">
+                        <div className="text-right flex flex-col justify-center border-l border-white/10 pl-4">
                             <p className="text-[12px] font-medium text-blue-400 uppercase tracking-widest mb-1">Total do Período</p>
                             <p className="text-3xl font-medium tracking-tighter">R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         </div>
                     </div>
 
-                    {/* NF Upload Area */}
-                    <div className="mt-6 flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 animate-in fade-in duration-500">
+                    {/* NF Upload */}
+                    <div className="mt-5 flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10">
                         <div className="flex items-center gap-4">
                             <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${invoiceUrl ? 'bg-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-white/10'}`}>
                                 <FileText className="w-6 h-6 text-white" />
@@ -297,41 +347,26 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                 </p>
                             </div>
                         </div>
-
                         <div className="flex items-center gap-3">
-                            <input
-                                type="file"
-                                id="invoice-upload"
-                                className="hidden"
-                                accept=".pdf,.doc,.docx,image/*"
-                                onChange={handleInvoiceUpload}
-                            />
+                            <input type="file" id="invoice-upload" className="hidden" accept=".pdf,.doc,.docx,image/*" onChange={handleInvoiceUpload} />
                             {isUploadingInvoice ? (
                                 <div className="flex items-center gap-2 px-6 py-3 bg-white/5 text-gray-400 rounded-xl text-[12px] font-medium uppercase tracking-widest animate-pulse">
                                     <Loader2 className="w-4 h-4 animate-spin" /> Subindo...
                                 </div>
                             ) : invoiceUrl ? (
                                 <>
-                                    <a
-                                        href={invoiceUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl text-[12px] font-medium uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20"
-                                    >
+                                    <a href={invoiceUrl} target="_blank" rel="noopener noreferrer"
+                                        className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl text-[12px] font-medium uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20">
                                         <ExternalLink className="w-4 h-4" /> Ver Arquivo
                                     </a>
-                                    <button
-                                        onClick={() => setInvoiceUrl('')}
-                                        className="p-3 bg-white/5 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-white/10"
-                                    >
+                                    <button onClick={() => setInvoiceUrl('')}
+                                        className="p-3 bg-white/5 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-white/10">
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 </>
                             ) : (
-                                <button
-                                    onClick={() => document.getElementById('invoice-upload')?.click()}
-                                    className="flex items-center gap-2 px-8 py-3 bg-white text-gray-900 rounded-xl text-[12px] font-medium uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-gray-200"
-                                >
+                                <button onClick={() => document.getElementById('invoice-upload')?.click()}
+                                    className="flex items-center gap-2 px-8 py-3 bg-white text-gray-900 rounded-xl text-[12px] font-medium uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-gray-200">
                                     <Upload className="w-4 h-4" /> Anexar Nota Fiscal
                                 </button>
                             )}
@@ -372,7 +407,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                     </div>
                 )}
 
-                {/* Body Table */}
+                {/* Tabela de itens */}
                 <div className="flex-1 overflow-y-auto p-12 bg-white">
                     <div className="bg-gray-50 rounded-[32px] border border-gray-100 overflow-hidden">
                         <table className="w-full text-left border-collapse">
@@ -381,58 +416,124 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                     <th className="px-8 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Item / Descrição</th>
                                     <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Unid.</th>
                                     <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest text-right">Qtd. Contrato</th>
-                                    <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest text-right">Saldo Ant.</th>
-                                    <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest text-right">Qtd. Medida</th>
-                                    <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Anexo / Foto (URL)</th>
+                                    <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest text-right">
+                                        {measurementMode === 'QUANTITATIVO' ? 'Saldo Ant.' : '% Ant.'}
+                                    </th>
+                                    <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest text-right">
+                                        {measurementMode === 'QUANTITATIVO' ? 'Qtd. Medida' : measurementMode === 'PERCENTUAL' ? '% Período' : 'Medição'}
+                                    </th>
+                                    <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Anexo / Foto</th>
                                     <th className="px-8 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest text-right">Valor Período</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-gray-700">
                                 {items.map((item) => {
+                                    const mode = effectiveItemMode(item.id);
                                     const prevQty = previousItems[item.id] || 0;
+                                    const prevPct = previousPercent(item);
                                     const currentQty = quantities[item.id] || 0;
+                                    const currentPct = percentages[item.id] || 0;
                                     const remainingQty = item.quantity - prevQty;
-                                    const isExceeded = currentQty > remainingQty;
+                                    const remainingPct = Math.max(0, 100 - prevPct);
+                                    const isQtyExceeded = mode === 'QUANTITATIVO' && currentQty > remainingQty;
+                                    const isPctExceeded = mode === 'PERCENTUAL' && currentPct > remainingPct;
+                                    const isExceeded = isQtyExceeded || isPctExceeded;
 
                                     return (
                                         <tr key={item.id} className="hover:bg-blue-50/20 transition-all group">
-                                            <td className="px-8 py-6">
+                                            <td className="px-8 py-5">
                                                 <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">{item.description}</p>
                                                 <p className="text-[12px] text-gray-400 font-medium">ID: {item.id.slice(0, 8)}</p>
                                             </td>
-                                            <td className="px-6 py-6 font-medium text-xs uppercase text-gray-400">{item.unit}</td>
-                                            <td className="px-6 py-6 text-right font-medium text-sm text-gray-700">{item.quantity.toLocaleString('pt-BR')}</td>
-                                            <td className="px-6 py-6 text-right font-medium text-sm text-gray-400">{prevQty.toLocaleString('pt-BR')}</td>
-                                            <td className="px-6 py-6 text-right">
-                                                <div className="relative inline-block w-24">
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={quantities[item.id] || ''}
-                                                        onChange={e => handleQtyChange(item.id, e.target.value)}
-                                                        placeholder="0,00"
-                                                        className={`w-full bg-white border ${isExceeded ? 'border-red-300 bg-red-50 text-red-600' : 'border-gray-200 focus:border-blue-500'} rounded-xl px-3 py-2 text-right font-medium text-sm outline-none transition-all`}
-                                                    />
-                                                    {isExceeded && (
-                                                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[12px] font-medium px-2 py-1 rounded-lg whitespace-nowrap shadow-lg">
-                                                            Acima do Saldo
+                                            <td className="px-6 py-5 font-medium text-xs uppercase text-gray-400">{item.unit}</td>
+                                            <td className="px-6 py-5 text-right font-medium text-sm text-gray-700">{item.quantity.toLocaleString('pt-BR')}</td>
+
+                                            {/* Saldo anterior — qty ou % conforme modo */}
+                                            <td className="px-6 py-5 text-right font-medium text-sm text-gray-400">
+                                                {mode === 'QUANTITATIVO'
+                                                    ? prevQty.toLocaleString('pt-BR')
+                                                    : `${prevPct.toFixed(1)}%`
+                                                }
+                                            </td>
+
+                                            {/* Input de medição */}
+                                            <td className="px-6 py-5 text-right">
+                                                {/* Híbrido: toggle por item */}
+                                                {measurementMode === 'HIBRIDO' && (
+                                                    <div className="flex gap-1 justify-end mb-1">
+                                                        {(['QUANTITATIVO', 'PERCENTUAL'] as const).map(m => (
+                                                            <button
+                                                                key={m}
+                                                                type="button"
+                                                                onClick={() => setItemModes(prev => ({ ...prev, [item.id]: m }))}
+                                                                className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all ${
+                                                                    (itemModes[item.id] ?? 'QUANTITATIVO') === m
+                                                                        ? 'bg-blue-600 text-white'
+                                                                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                                                }`}
+                                                            >
+                                                                {m === 'QUANTITATIVO' ? 'Qtd' : '%'}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                <div className="relative inline-block">
+                                                    {mode === 'QUANTITATIVO' ? (
+                                                        <div className="relative">
+                                                            <input
+                                                                type="number"
+                                                                step="0.01"
+                                                                value={quantities[item.id] || ''}
+                                                                onChange={e => setQuantities(prev => ({ ...prev, [item.id]: parseFloat(e.target.value) || 0 }))}
+                                                                placeholder="0,00"
+                                                                className={`w-24 bg-white border ${isExceeded ? 'border-red-300 bg-red-50 text-red-600' : 'border-gray-200 focus:border-blue-500'} rounded-xl px-3 py-2 text-right font-medium text-sm outline-none transition-all`}
+                                                            />
+                                                            {isExceeded && (
+                                                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] font-medium px-2 py-1 rounded-lg whitespace-nowrap shadow-lg z-10">
+                                                                    Acima do Saldo
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="relative">
+                                                            <input
+                                                                type="number"
+                                                                step="0.1"
+                                                                min="0"
+                                                                max="100"
+                                                                value={percentages[item.id] || ''}
+                                                                onChange={e => setPercentages(prev => ({ ...prev, [item.id]: parseFloat(e.target.value) || 0 }))}
+                                                                placeholder="0,0"
+                                                                className={`w-20 bg-white border ${isExceeded ? 'border-red-300 bg-red-50 text-red-600' : 'border-gray-200 focus:border-blue-500'} rounded-xl pl-3 pr-6 py-2 text-right font-medium text-sm outline-none transition-all`}
+                                                            />
+                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400">%</span>
+                                                            {isExceeded && (
+                                                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] font-medium px-2 py-1 rounded-lg whitespace-nowrap shadow-lg z-10">
+                                                                    Acima de {remainingPct.toFixed(1)}%
+                                                                </div>
+                                                            )}
+                                                            {/* Saldo % disponível */}
+                                                            {remainingPct < 100 && (
+                                                                <p className="text-[10px] text-gray-400 mt-0.5 text-right">
+                                                                    Disp: {remainingPct.toFixed(1)}%
+                                                                </p>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-6">
-                                                <div className="flex items-center gap-3">
+
+                                            {/* Anexos */}
+                                            <td className="px-6 py-5">
+                                                <div className="flex items-center gap-2">
                                                     <input
                                                         type="file"
                                                         id={`file-${item.id}`}
                                                         className="hidden"
                                                         accept="image/*,video/*"
-                                                        onChange={(e) => {
-                                                            const file = e.target.files?.[0];
-                                                            if (file) handleFileUpload(item.id, file);
-                                                        }}
+                                                        onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(item.id, f); }}
                                                     />
-
                                                     {uploadingItems[item.id] ? (
                                                         <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 text-gray-400 rounded-xl text-[12px] font-medium uppercase tracking-widest border border-gray-100">
                                                             <Loader2 className="w-3 h-3 animate-spin" /> Subindo...
@@ -465,11 +566,9 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                                                     </button>
                                                                 </div>
                                                             ))}
-
                                                             <button
                                                                 onClick={() => document.getElementById(`file-${item.id}`)?.click()}
                                                                 className="flex items-center gap-2 px-3 py-2 bg-white text-blue-600 rounded-xl text-[12px] font-medium uppercase tracking-widest border border-blue-100 hover:bg-blue-50 transition-all shadow-sm"
-                                                                title="Adicionar Novo Anexo"
                                                             >
                                                                 <Upload className="w-3 h-3" />
                                                                 {attachments[item.id]?.length > 0 ? 'Add' : 'Anexar'}
@@ -478,8 +577,9 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-8 py-6 text-right font-medium text-sm text-gray-900">
-                                                R$ {(currentQty * item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+
+                                            <td className="px-8 py-5 text-right font-medium text-sm text-gray-900">
+                                                R$ {itemValue(item).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </td>
                                         </tr>
                                     );

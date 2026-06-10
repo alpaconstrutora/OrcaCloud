@@ -181,51 +181,53 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
         const SCALE = 2;
         let doc: import('jspdf').jsPDF | null = null;
         let added = 0;
+        const diag: string[] = [];
 
-        // Captura CADA página individualmente (uma <section> = uma página A4) e
-        // passa o canvas DIRETO ao jsPDF (evita toDataURL/loadFile e o XHR data:,).
-        for (const page of pages) {
+        // Captura CADA página individualmente (uma <section> = uma página A4).
+        for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
             const wMm = page.offsetWidth * PX_TO_MM;
             const hMm = page.offsetHeight * PX_TO_MM;
-            if (wMm < 1 || hMm < 1) continue; // página colapsada — pula
             const orientation = wMm > hMm ? 'l' : 'p';
 
-            const canvas = await html2canvas(page, {
-                scale: SCALE,
-                useCORS: true,
-                backgroundColor: '#ffffff',
-            });
-
-            // Diagnóstico: quantos pixels não-brancos a página tem.
-            let nonWhite = 0;
+            let canvas: HTMLCanvasElement | null = null;
+            let canvasInfo = '';
+            let nonWhite = -1;
+            let imgLen = 0;
+            let err = '';
             try {
-                const data = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, Math.min(canvas.height, 500)).data;
-                if (data) for (let i = 0; i < data.length; i += 4) {
-                    if (data[i] < 245 || data[i + 1] < 245 || data[i + 2] < 245) { nonWhite++; if (nonWhite > 80) break; }
+                canvas = await html2canvas(page, { scale: SCALE, useCORS: true, backgroundColor: '#ffffff' });
+                canvasInfo = `${canvas.width}x${canvas.height}`;
+                try {
+                    const data = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, Math.min(canvas.height, 500)).data;
+                    nonWhite = 0;
+                    if (data) for (let k = 0; k < data.length; k += 4) {
+                        if (data[k] < 245 || data[k + 1] < 245 || data[k + 2] < 245) { nonWhite++; if (nonWhite > 80) break; }
+                    }
+                } catch (e) { nonWhite = -2; err = 'tainted'; }
+
+                if (canvas.width && canvas.height) {
+                    const img = canvas.toDataURL('image/jpeg', 0.95);
+                    imgLen = img.length;
+                    if (img && img !== 'data:,') {
+                        if (!doc) doc = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation, compress: true });
+                        else doc.addPage([wMm, hMm], orientation);
+                        doc.addImage(img, 'JPEG', 0, 0, wMm, hMm);
+                        added++;
+                    }
                 }
-            } catch { /* tainted */ }
-            // eslint-disable-next-line no-console
-            console.log('[docxBlobToPdf] página', added + 1, `canvas ${canvas.width}x${canvas.height}`, 'nonWhite:', nonWhite);
-
-            if (!canvas.width || !canvas.height) continue;
-
-            // Gera o JPEG nós mesmos: passar o canvas + 'JPEG' faz o jsPDF tratar
-            // um PNG como JPEG e quebrar no atob. Com o canvas já preenchido, este
-            // data URL é válido (não volta o 'data:,').
-            const img = canvas.toDataURL('image/jpeg', 0.95);
-            if (!img || img === 'data:,') continue;
-
-            if (!doc) {
-                doc = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation, compress: true });
-            } else {
-                doc.addPage([wMm, hMm], orientation);
+            } catch (e) {
+                err = e instanceof Error ? e.message : String(e);
             }
-            doc.addImage(img, 'JPEG', 0, 0, wMm, hMm);
-            added++;
+
+            const line = `p${i + 1}:${page.offsetWidth}x${page.offsetHeight}|cv:${canvasInfo || 'none'}|nw:${nonWhite}|img:${imgLen}${err ? '|err:' + err : ''}`;
+            diag.push(line);
+            // eslint-disable-next-line no-console
+            console.log('[docxBlobToPdf]', line);
         }
 
         if (!doc || added === 0) {
-            throw new Error('O documento foi processado mas não gerou conteúdo visível no PDF.');
+            throw new Error('PDF sem conteúdo. Diagnóstico → ' + diag.join('  ||  '));
         }
         return doc.output('blob');
     } finally {

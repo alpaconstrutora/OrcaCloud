@@ -39,77 +39,81 @@ const ServiceContractsModule: React.FC<Props> = ({
         setView('detail');
     };
 
-    if (view === 'detail' && selectedId) {
-        return (
-            <ContractDetailView
-                contractId={selectedId}
-                onBack={() => { setView('list'); setSelectedId(null); }}
-                budget={budget}
-                organizationId={organizationId}
-            />
-        );
-    }
-
     return (
-        <div className="h-full flex flex-col">
-            {/* Barra de ações */}
-            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
-                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
-                    <FileText size={18} className="text-blue-600" />
-                    <span className="font-semibold text-sm">Contratos de Serviço</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setIsTemplateManagerOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                        title="Gerenciar modelos de documento (.docx) para emissão"
-                    >
-                        <FileStack size={15} className="text-blue-600" /> Modelos de Documento
-                    </button>
-                    <button
-                        onClick={() => {
-                            setEditingContract({
-                                contract_type: 'Prestação de Serviços',
-                                nature: 'Serviço',
-                                direction: 'OUTGOING',
-                            } as any);
-                            setIsModalOpen(true);
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
-                    >
-                        <Plus size={15} /> Novo Contrato
-                    </button>
-                </div>
-            </div>
-
-            {/* Dashboard filtrado: só contratos OUTGOING (emitidos para clientes) */}
-            <div className="flex-1 overflow-auto" key={version}>
-                <ContractsDashboard
+        <>
+            {view === 'detail' && selectedId ? (
+                <ContractDetailView
+                    contractId={selectedId}
+                    onBack={() => { setView('list'); setSelectedId(null); }}
+                    budget={budget}
                     organizationId={organizationId}
-                    direction="OUTGOING"
-                    onViewContract={(id) => { setSelectedId(id); setView('detail'); }}
+                    onEdit={(contract) => {
+                        setEditingContract(contract);
+                        setIsModalOpen(true);
+                    }}
                 />
-            </div>
+            ) : (
+                <div className="h-full flex flex-col">
+                    {/* Barra de ações */}
+                    <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
+                        <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                            <FileText size={18} className="text-blue-600" />
+                            <span className="font-semibold text-sm">Contratos de Serviço</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setIsTemplateManagerOpen(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                title="Gerenciar modelos de documento (.docx) para emissão"
+                            >
+                                <FileStack size={15} className="text-blue-600" /> Modelos de Documento
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setEditingContract({
+                                        contract_type: 'Prestação de Serviços',
+                                        nature: 'Serviço',
+                                        direction: 'OUTGOING',
+                                    } as any);
+                                    setIsModalOpen(true);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
+                            >
+                                <Plus size={15} /> Novo Contrato
+                            </button>
+                        </div>
+                    </div>
 
-            {/* Modal de criação/edição */}
+                    {/* Dashboard filtrado: só contratos OUTGOING (emitidos para clientes) */}
+                    <div className="flex-1 overflow-auto" key={version}>
+                        <ContractsDashboard
+                            organizationId={organizationId}
+                            direction="OUTGOING"
+                            onViewContract={(id) => { setSelectedId(id); setView('detail'); }}
+                        />
+                    </div>
+
+                    {/* Ambiente de gestão de modelos de documento (.docx) */}
+                    {isTemplateManagerOpen && (
+                        <DocxTemplateManager
+                            organizationId={organizationId}
+                            onClose={() => setIsTemplateManagerOpen(false)}
+                        />
+                    )}
+                </div>
+            )}
+
+            {/* Modal de criação/edição — acessível em qualquer view */}
             <ContractModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => { setIsModalOpen(false); setEditingContract(null); }}
                 onSubmit={handleSubmit}
                 projectId={editingContract?.project_id ?? ''}
                 organizationId={organizationId}
                 initialData={editingContract ?? undefined}
                 direction="OUTGOING"
             />
-
-            {/* Ambiente de gestão de modelos de documento (.docx) */}
-            {isTemplateManagerOpen && (
-                <DocxTemplateManager
-                    organizationId={organizationId}
-                    onClose={() => setIsTemplateManagerOpen(false)}
-                />
-            )}
-        </div>
+        </>
     );
 };
 

@@ -53,9 +53,10 @@ interface ContractDetailViewProps {
     onBack: () => void;
     budget: BudgetEntry[];
     organizationId?: string;
+    onEdit?: (contract: Contract) => void;
 }
 
-const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onBack, budget, organizationId: orgIdProp }) => {
+const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onBack, budget, organizationId: orgIdProp, onEdit }) => {
     const [contract, setContract] = React.useState<Contract | null>(null);
     const [items, setItems] = React.useState<ContractItem[]>([]);
     const [addendums, setAddendums] = React.useState<ContractAddendum[]>([]);
@@ -746,6 +747,17 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         >
                             <FileText className="w-4 h-4" />
                             PDF via Modelo
+                        </button>
+                    )}
+
+                    {onEdit && (
+                        <button
+                            onClick={() => onEdit(contract)}
+                            className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
+                            title="Editar dados do contrato"
+                        >
+                            <Edit3 className="w-4 h-4 text-gray-500" />
+                            Editar
                         </button>
                     )}
 

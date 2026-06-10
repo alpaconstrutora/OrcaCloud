@@ -177,10 +177,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             setActiveBudget(projectData.budget);
                             projectBudgetLoaded = true;
                             // Refresh snapshot in background so fallback stays fresh
-                            supabase.from('contracts')
+                            void supabase.from('contracts')
                                 .update({ budget_snapshot: projectData.budget })
                                 .eq('id', contractId)
-                                .then(() => {}).catch(() => {});
+                                .then(() => {});
                         }
                     }
                 } catch (err) {
@@ -429,24 +429,26 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         });
     };
 
-    const handleSelectBudgetItem = async (budgetItem: BudgetEntry) => {
-        if (!contract) return;
+    const handleSelectBudgetItem = async (budgetItems: BudgetEntry[]) => {
+        if (!contract || budgetItems.length === 0) return;
 
         try {
-            await contractService.addContractItem({
-                contract_id: contractId,
-                budget_item_id: budgetItem.id || budgetItem.sinapiItem?.code || 'WBS',
-                description: budgetItem.sinapiItem?.description || 'Item sem descrição',
-                unit: budgetItem.sinapiItem?.unit || 'UNID',
-                quantity: budgetItem.quantity || 1,
-                unit_price: budgetItem.sinapiItem?.price || 0,
-                total_price: (budgetItem.quantity || 1) * (budgetItem.sinapiItem?.price || 0)
-            });
+            await Promise.all(budgetItems.map(budgetItem =>
+                contractService.addContractItem({
+                    contract_id: contractId,
+                    budget_item_id: budgetItem.id || budgetItem.sinapiItem?.code || 'WBS',
+                    description: budgetItem.sinapiItem?.description || 'Item sem descrição',
+                    unit: budgetItem.sinapiItem?.unit || 'UNID',
+                    quantity: budgetItem.quantity || 1,
+                    unit_price: budgetItem.sinapiItem?.price || 0,
+                    total_price: (budgetItem.quantity || 1) * (budgetItem.sinapiItem?.price || 0)
+                })
+            ));
 
-            // Recarregar itens
             const updatedItems = await contractService.listContractItems(contractId);
             setItems(updatedItems);
             setIsBudgetPickerOpen(false);
+            if (budgetItems.length > 1) notify(`${budgetItems.length} itens importados com sucesso!`, 'success');
         } catch (error) {
             console.error("Erro ao importar item do orçamento:", error);
             notify("Erro ao importar item. Tente novamente.", "error");
@@ -1945,6 +1947,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 onClose={() => setIsBudgetPickerOpen(false)}
                 onSelect={handleSelectBudgetItem}
                 budget={activeBudget}
+                wbs={projectSettings?.wbs}
             />
 
             {isMeasurementModalOpen && contract && (

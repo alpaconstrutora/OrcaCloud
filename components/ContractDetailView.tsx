@@ -94,6 +94,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [applyingReajuste, setApplyingReajuste] = React.useState(false);
     const [reajusteSuggestion, setReajusteSuggestion] = React.useState<{ base: number; atual: number; baseMonth: string; atualMonth: string } | null>(null);
     const [counterpartyName, setCounterpartyName] = React.useState<string | null>(null);
+    const [rejectModal, setRejectModal] = React.useState<{ measurementId: string } | null>(null);
+    const [rejectReason, setRejectReason] = React.useState('');
+    const [measurementActionBusy, setMeasurementActionBusy] = React.useState<string | null>(null);
 
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
@@ -268,6 +271,49 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         } catch (error) {
             console.error("Erro ao carregar itens da medição:", error);
             notify("Erro ao carregar detalhes da medição.", "error");
+        }
+    };
+
+    const handleSubmitMeasurementForReview = async (id: string) => {
+        setMeasurementActionBusy(id);
+        try {
+            const updated = await contractService.submitMeasurementForReview(id);
+            setMeasurements(prev => prev.map(m => m.id === id ? updated : m));
+            notify('Medição enviada para conferência.', 'success');
+        } catch (e) {
+            notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
+        } finally {
+            setMeasurementActionBusy(null);
+        }
+    };
+
+    const handleApproveMeasurement = async (id: string) => {
+        setMeasurementActionBusy(id);
+        try {
+            const updated = await contractService.approveMeasurement(id, 'Usuário');
+            setMeasurements(prev => prev.map(m => m.id === id ? updated : m));
+            notify('Medição aprovada! Lançamento financeiro gerado.', 'success');
+        } catch (e) {
+            notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
+        } finally {
+            setMeasurementActionBusy(null);
+        }
+    };
+
+    const handleRejectMeasurement = async () => {
+        if (!rejectModal) return;
+        if (!rejectReason.trim()) { notify('Informe o motivo da rejeição.', 'error'); return; }
+        setMeasurementActionBusy(rejectModal.measurementId);
+        try {
+            const updated = await contractService.rejectMeasurement(rejectModal.measurementId, rejectReason.trim());
+            setMeasurements(prev => prev.map(m => m.id === rejectModal.measurementId ? updated : m));
+            notify('Medição devolvida para correção.', 'info');
+            setRejectModal(null);
+            setRejectReason('');
+        } catch (e) {
+            notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
+        } finally {
+            setMeasurementActionBusy(null);
         }
     };
 
@@ -1658,11 +1704,27 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             </div>
                                         </td>
                                         <td className="px-6 py-6 font-normal text-sm">
-                                            <span className={`px-2 py-1 rounded-lg text-[12px] font-medium uppercase tracking-widest ${m.status === 'Paga' ? 'bg-green-100 text-green-800' :
-                                                m.status === 'Processada' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                                            <div className="flex flex-col gap-1">
+                                                <span className={`inline-flex px-2 py-1 rounded-lg text-[12px] font-medium uppercase tracking-widest w-fit ${
+                                                    m.status === 'Paga' ? 'bg-green-100 text-green-800' :
+                                                    m.status === 'Processada' ? 'bg-blue-100 text-blue-800' :
+                                                    m.status === 'Em Análise' ? 'bg-purple-100 text-purple-800' :
+                                                    m.status === 'Cancelada' ? 'bg-gray-100 text-gray-500' :
+                                                    'bg-amber-100 text-amber-800'
                                                 }`}>
-                                                {m.status}
-                                            </span>
+                                                    {m.status}
+                                                </span>
+                                                {m.rejection_reason && (
+                                                    <span className="text-[11px] text-red-500 font-medium max-w-[160px] truncate" title={m.rejection_reason}>
+                                                        ↩ {m.rejection_reason}
+                                                    </span>
+                                                )}
+                                                {m.approved_by && m.status === 'Processada' && (
+                                                    <span className="text-[11px] text-blue-500 font-medium">
+                                                        ✓ {m.approved_by}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-6 text-right font-normal text-sm text-gray-700">
                                             R$ {m.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -1673,27 +1735,60 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <td className="px-8 py-6 text-right">
                                             <p className="text-base font-medium text-gray-900 tracking-tighter">R$ {m.net_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                         </td>
-                                        <td className="px-6 py-6 border-l border-gray-50 flex items-center gap-2">
-                                            {m.invoice_url && (
-                                                <a
-                                                    href={m.invoice_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm border border-emerald-100/50"
-                                                    title="Ver Nota Fiscal (NF)"
-                                                >
-                                                    <FileText className="w-4 h-4" />
-                                                </a>
-                                            )}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleEditMeasurement(m);
-                                                }}
-                                                className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:text-blue-600 hover:bg-white transition-all shadow-sm group-hover:text-blue-600"
-                                            >
-                                                <Edit3 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                            </button>
+                                        <td className="px-6 py-6 border-l border-gray-50">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {/* Workflow de aprovação — só para contratos por medição */}
+                                                {contract.billing_mode === 'MEDICAO' && m.status === 'Pendente' && (
+                                                    <button
+                                                        onClick={e => { e.stopPropagation(); handleSubmitMeasurementForReview(m.id); }}
+                                                        disabled={measurementActionBusy === m.id}
+                                                        className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-[11px] font-medium uppercase tracking-wider hover:bg-purple-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                                                        title="Enviar para conferência/aprovação"
+                                                    >
+                                                        <Send className="w-3 h-3" /> Enviar
+                                                    </button>
+                                                )}
+                                                {contract.billing_mode === 'MEDICAO' && m.status === 'Em Análise' && (
+                                                    <>
+                                                        <button
+                                                            onClick={e => { e.stopPropagation(); handleApproveMeasurement(m.id); }}
+                                                            disabled={measurementActionBusy === m.id}
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-medium uppercase tracking-wider hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                                                            title="Aprovar medição e liberar financeiro"
+                                                        >
+                                                            <CheckCircle2 className="w-3 h-3" /> Aprovar
+                                                        </button>
+                                                        <button
+                                                            onClick={e => { e.stopPropagation(); setRejectModal({ measurementId: m.id }); setRejectReason(''); }}
+                                                            disabled={measurementActionBusy === m.id}
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-[11px] font-medium uppercase tracking-wider hover:bg-red-600 hover:text-white disabled:opacity-50 transition-colors whitespace-nowrap"
+                                                            title="Rejeitar e devolver para correção"
+                                                        >
+                                                            <XCircleIcon className="w-3 h-3" /> Rejeitar
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {m.invoice_url && (
+                                                    <a
+                                                        href={m.invoice_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm border border-emerald-100/50"
+                                                        title="Ver Nota Fiscal (NF)"
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5" />
+                                                    </a>
+                                                )}
+                                                {m.status === 'Pendente' && (
+                                                    <button
+                                                        onClick={e => { e.stopPropagation(); handleEditMeasurement(m); }}
+                                                        className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-300 hover:text-blue-600 hover:bg-white transition-all shadow-sm"
+                                                        title="Editar medição"
+                                                    >
+                                                        <Edit3 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -2179,6 +2274,39 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
                             >
                                 {applyingReajuste ? 'Aplicando…' : 'Aplicar Reajuste'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de rejeição de medição */}
+            {rejectModal && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+                        <h3 className="text-base font-semibold text-gray-900">Rejeitar Medição</h3>
+                        <p className="text-sm text-gray-500">Informe o motivo para devolver a medição ao emitente.</p>
+                        <textarea
+                            autoFocus
+                            rows={3}
+                            value={rejectReason}
+                            onChange={e => setRejectReason(e.target.value)}
+                            placeholder="Ex: Quantidades não conferem com o diário de obra..."
+                            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                        />
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setRejectModal(null); setRejectReason(''); }}
+                                className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleRejectMeasurement}
+                                disabled={!rejectReason.trim() || measurementActionBusy !== null}
+                                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                            >
+                                Confirmar Rejeição
                             </button>
                         </div>
                     </div>

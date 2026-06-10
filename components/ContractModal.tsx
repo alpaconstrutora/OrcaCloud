@@ -871,6 +871,63 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Condições de Pagamento</h3>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
+                                {/* Modalidade de faturamento */}
+                                <div className="col-span-2 space-y-2">
+                                    <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Modalidade de Faturamento</label>
+                                    <div className="flex gap-2 flex-wrap">
+                                        {([
+                                            { value: undefined, label: 'Padrão' },
+                                            { value: 'MEDICAO', label: 'Por Medição' },
+                                            { value: 'ETAPA', label: 'Por Etapa' },
+                                            { value: 'SINAL_PARCELAS', label: 'Sinal + Parcelas' },
+                                            { value: 'COST_PLUS', label: 'Administração' },
+                                        ] as const).map(opt => (
+                                            <button
+                                                key={opt.label}
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, billing_mode: opt.value as any }))}
+                                                className={`px-4 py-2 rounded-xl text-[12px] font-medium uppercase tracking-wider border transition-all ${
+                                                    (formData.billing_mode ?? undefined) === opt.value
+                                                        ? 'bg-blue-600 text-white border-blue-600'
+                                                        : 'bg-gray-50 text-gray-500 border-gray-100 hover:border-blue-300'
+                                                }`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {formData.billing_mode === 'MEDICAO' && (
+                                        <div className="mt-3 p-4 bg-blue-50 border border-blue-100 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider">Exigências para liberar pagamento</p>
+                                            <div className="space-y-2">
+                                                {([
+                                                    { key: 'require_invoice' as const, label: 'Nota Fiscal obrigatória' },
+                                                    { key: 'require_evidence' as const, label: 'Evidência fotográfica obrigatória' },
+                                                    { key: 'require_approval' as const, label: 'Aprovação manual obrigatória' },
+                                                ]).map(({ key, label }) => (
+                                                    <label key={key} className="flex items-center gap-3 cursor-pointer group">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={(formData.release_requirements as any)?.[key] ?? false}
+                                                            onChange={e => setFormData(prev => ({
+                                                                ...prev,
+                                                                release_requirements: {
+                                                                    require_invoice: false,
+                                                                    require_evidence: false,
+                                                                    require_approval: false,
+                                                                    ...(prev.release_requirements ?? {}),
+                                                                    [key]: e.target.checked,
+                                                                },
+                                                            }))}
+                                                            className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                        <span className="text-[12px] font-medium text-blue-800">{label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="space-y-2">
                                     <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Forma de Pagamento</label>
                                     <select

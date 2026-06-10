@@ -2,6 +2,16 @@ export type ContractType =
     | 'Empreitada Global' | 'Empreitada Parcial' | 'Preço Fechado' | 'Preço Unitário'
     | 'Contrato por Medição' | 'Contrato Recorrente' | 'Manutenção' | 'Prestação de Serviços'
     | 'Instalação' | 'Reforma' | 'Administração' | 'Subempreitada' | 'Outros';
+
+export type BillingMode = 'MEDICAO' | 'ETAPA' | 'SINAL_PARCELAS' | 'COST_PLUS';
+
+export interface ReleaseRequirements {
+    require_invoice: boolean;
+    require_evidence: boolean;
+    require_approval: boolean;
+}
+
+export type MeasurementMode = 'QUANTITATIVO' | 'PERCENTUAL' | 'HIBRIDO';
 export type ContractNature = 'Fornecimento' | 'Serviço' | 'Mão de Obra' | 'Locação' | 'Consumo' | 'Outros';
 export type ContractStatus =
     | 'Rascunho' | 'Revisão' | 'Enviado' | 'Aprovado' | 'Assinado'
@@ -59,6 +69,8 @@ export interface Contract {
     approval_status?: 'RASCUNHO' | 'PENDENTE' | 'APROVADO' | 'REJEITADO';
     approval_chain?: ContractApprovalStep[];
     approval_required_levels?: 1 | 2;
+    billing_mode?: BillingMode;
+    release_requirements?: ReleaseRequirements;
     created_at?: string;
 }
 
@@ -117,11 +129,15 @@ export interface ContractMeasurement {
     period_end: string;
     measurement_date: string;
     status: MeasurementStatus;
+    measurement_mode?: MeasurementMode;
     total_value: number;
     retention_value: number;
     net_value: number;
     notes?: string;
     invoice_url?: string;
+    approved_by?: string;
+    approved_at?: string;
+    rejection_reason?: string;
     created_at?: string;
 }
 
@@ -132,6 +148,8 @@ export interface ContractMeasurementItem {
     quantity_executed: number;
     value_executed: number;
     attachment_urls?: string[];
+    percent_executed?: number;
+    item_mode?: 'QUANTITATIVO' | 'PERCENTUAL';
     created_at?: string;
 }
 

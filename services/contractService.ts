@@ -844,10 +844,10 @@ export const contractService = {
         measurement: Omit<ContractMeasurement, 'id' | 'created_at'>,
         items: Omit<ContractMeasurementItem, 'id' | 'measurement_id' | 'created_at'>[]
     ): Promise<ContractMeasurement> => {
-        // Regra 3: medição não pode ultrapassar saldo contratual
+        // 0. Carrega contrato para validar saldo e calcular retenção
         const { data: contract, error: contractErr } = await supabase
             .from('contracts')
-            .select('current_value, retention_rate')
+            .select('current_value, retention_rate, billing_mode, release_requirements')
             .eq('id', measurement.contract_id)
             .single();
         if (contractErr) throw contractErr;
@@ -866,16 +866,21 @@ export const contractService = {
             );
         }
 
-        // 1. Create measurement header
+        // Retenção automática calculada a partir do contrato
+        const retentionRate = contract.retention_rate ?? 0;
+        const retentionValue = Math.round(measurement.total_value * retentionRate) / 100;
+        const netValue = measurement.total_value - retentionValue;
+
+        // 1. Cria cabeçalho da medição
         const { data: mData, error: mError } = await supabase
             .from('contract_measurements')
-            .insert(measurement)
+            .insert({ ...measurement, retention_value: retentionValue, net_value: netValue })
             .select()
             .single();
 
         if (mError) throw mError;
 
-        // 2. Create measurement items
+        // 2. Cria itens da medição
         const measurementItems = items.map(item => ({
             ...item,
             measurement_id: mData.id
@@ -887,11 +892,13 @@ export const contractService = {
 
         if (itemsError) throw itemsError;
 
-        // 3. Trigger Financial Sync (Background)
-        // We don't await this to keep the UI responsive, as it's a non-blocking automation
-        financialService.syncMeasurementToFinance(mData.id).catch(err => {
-            console.error("[FINANCIAL SYNC ERROR]", err);
-        });
+        // 3. Sync financeiro — apenas quando NÃO é contrato por medição com gating.
+        // Para billing_mode=MEDICAO o sync só ocorre após approveMeasurement().
+        if (contract.billing_mode !== 'MEDICAO') {
+            financialService.syncMeasurementToFinance(mData.id).catch(err => {
+                console.error("[FINANCIAL SYNC ERROR]", err);
+            });
+        }
 
         return mData as ContractMeasurement;
     },
@@ -901,17 +908,39 @@ export const contractService = {
         measurement: Partial<ContractMeasurement>,
         items: Omit<ContractMeasurementItem, 'id' | 'measurement_id' | 'created_at'>[]
     ): Promise<ContractMeasurement> => {
-        // 1. Update measurement header
+        // Recalcula retenção se total_value mudou
+        let patch = { ...measurement };
+        if (patch.total_value !== undefined) {
+            const { data: cm } = await supabase
+                .from('contract_measurements')
+                .select('contract_id')
+                .eq('id', id)
+                .single();
+            if (cm?.contract_id) {
+                const { data: ct } = await supabase
+                    .from('contracts')
+                    .select('retention_rate')
+                    .eq('id', cm.contract_id)
+                    .single();
+                if (ct) {
+                    const retentionValue = Math.round(patch.total_value * (ct.retention_rate ?? 0)) / 100;
+                    patch.retention_value = retentionValue;
+                    patch.net_value = patch.total_value - retentionValue;
+                }
+            }
+        }
+
+        // 1. Atualiza cabeçalho
         const { data: mData, error: mError } = await supabase
             .from('contract_measurements')
-            .update(measurement)
+            .update(patch)
             .eq('id', id)
             .select()
             .single();
 
         if (mError) throw mError;
 
-        // 2. Delete existing items
+        // 2. Substitui itens
         const { error: deleteError } = await supabase
             .from('contract_measurement_items')
             .delete()
@@ -919,7 +948,6 @@ export const contractService = {
 
         if (deleteError) throw deleteError;
 
-        // 3. Create new measurement items
         const measurementItems = items.map(item => ({
             ...item,
             measurement_id: id
@@ -931,11 +959,18 @@ export const contractService = {
 
         if (itemsError) throw itemsError;
 
-        // 4. Trigger Financial Sync (Background)
-        // syncMeasurementToFinance will handle cleaning up old transactions
-        financialService.syncMeasurementToFinance(id).catch(err => {
-            console.error("[FINANCIAL SYNC ERROR]", err);
-        });
+        // 3. Sync financeiro — só se não for gating por medição (ou se já estava Processada)
+        const { data: ct2 } = await supabase
+            .from('contracts')
+            .select('billing_mode')
+            .eq('id', mData.contract_id)
+            .single();
+
+        if (ct2?.billing_mode !== 'MEDICAO') {
+            financialService.syncMeasurementToFinance(id).catch(err => {
+                console.error("[FINANCIAL SYNC ERROR]", err);
+            });
+        }
 
         return mData as ContractMeasurement;
     },
@@ -947,6 +982,83 @@ export const contractService = {
             .eq('id', id);
 
         if (error) throw error;
+    },
+
+    // Workflow de aprovação para contratos billing_mode=MEDICAO
+    submitMeasurementForReview: async (id: string): Promise<ContractMeasurement> => {
+        const { data, error } = await supabase
+            .from('contract_measurements')
+            .update({ status: 'Em Análise' })
+            .eq('id', id)
+            .eq('status', 'Pendente')
+            .select()
+            .single();
+        if (error) throw error;
+        if (!data) throw new Error('Medição não encontrada ou já enviada para análise.');
+        return data as ContractMeasurement;
+    },
+
+    approveMeasurement: async (id: string, approvedBy: string): Promise<ContractMeasurement> => {
+        // Valida checklist de liberação
+        const { data: m, error: mErr } = await supabase
+            .from('contract_measurements')
+            .select('contract_id, status, invoice_url, total_value')
+            .eq('id', id)
+            .single();
+        if (mErr) throw mErr;
+        if (m.status !== 'Em Análise')
+            throw new Error(`Medição não está Em Análise (status atual: ${m.status}).`);
+
+        const { data: ct } = await supabase
+            .from('contracts')
+            .select('billing_mode, release_requirements')
+            .eq('id', m.contract_id)
+            .single();
+
+        const req = ct?.release_requirements ?? {};
+        if (req.require_invoice && !m.invoice_url)
+            throw new Error('Aprovação bloqueada: Nota Fiscal não anexada.');
+
+        if (req.require_evidence) {
+            const { data: itemsWithEvidence } = await supabase
+                .from('contract_measurement_items')
+                .select('attachment_urls')
+                .eq('measurement_id', id);
+            const hasEvidence = (itemsWithEvidence ?? []).some(
+                (i: { attachment_urls?: string[] }) => (i.attachment_urls ?? []).length > 0
+            );
+            if (!hasEvidence)
+                throw new Error('Aprovação bloqueada: nenhuma evidência fotográfica anexada.');
+        }
+
+        const now = new Date().toISOString();
+        const { data: updated, error: upErr } = await supabase
+            .from('contract_measurements')
+            .update({ status: 'Processada', approved_by: approvedBy, approved_at: now, rejection_reason: null })
+            .eq('id', id)
+            .select()
+            .single();
+        if (upErr) throw upErr;
+
+        // Sync financeiro só ocorre aqui — após aprovação
+        financialService.syncMeasurementToFinance(id).catch(err => {
+            console.error('[FINANCIAL SYNC ERROR]', err);
+        });
+
+        return updated as ContractMeasurement;
+    },
+
+    rejectMeasurement: async (id: string, reason: string): Promise<ContractMeasurement> => {
+        const { data, error } = await supabase
+            .from('contract_measurements')
+            .update({ status: 'Pendente', rejection_reason: reason, approved_by: null, approved_at: null })
+            .eq('id', id)
+            .in('status', ['Em Análise', 'Processada'])
+            .select()
+            .single();
+        if (error) throw error;
+        if (!data) throw new Error('Medição não encontrada ou não pode ser rejeitada neste status.');
+        return data as ContractMeasurement;
     },
 
     getMeasurementItems: async (measurementId: string): Promise<ContractMeasurementItem[]> => {

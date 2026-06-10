@@ -172,9 +172,6 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
         await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
 
         const pages = Array.from(idoc.querySelectorAll<HTMLElement>('section.docx'));
-        // eslint-disable-next-line no-console
-        console.log('[docxBlobToPdf] páginas detectadas:', pages.length,
-            pages.map(p => `${p.offsetWidth}x${p.offsetHeight}`));
         if (pages.length === 0) {
             throw new Error('Não foi possível renderizar as páginas do documento.');
         }
@@ -182,16 +179,17 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
         iframe.style.height = `${idoc.documentElement.scrollHeight}px`;
 
         const SCALE = 2;
-        const A4_RATIO = 297 / 210; // altura/largura de uma folha A4
+        const A4_RATIO = 297 / 210;           // altura/largura de uma folha A4
+        const MAX_CHUNK_PX = 14000;           // conteúdo por captura (×SCALE fica < 32767)
         let doc: import('jspdf').jsPDF | null = null;
         let added = 0;
         const diag: string[] = [];
 
-        // Para cada <section>, captura em FATIAS de altura A4. Uma seção pode ter
-        // 30+ folhas de altura (docx-preview às vezes não pagina); um canvas único
-        // dessa altura estoura o limite do navegador (~32767px) e o toDataURL
-        // devolve 'data:,'. Capturando por região (x/y/width/height) cada fatia
-        // fica num canvas pequeno e válido.
+        // Estratégia: poucas capturas grandes + fatiamento em memória.
+        // Cada html2canvas re-renderiza o documento inteiro, então chamá-lo 30×
+        // (uma por folha A4) é lento. Capturamos em blocos altos (~14000px, abaixo
+        // do limite de canvas do navegador) e depois recortamos cada bloco em
+        // páginas A4 com drawImage (barato), reduzindo de ~30 para ~3 capturas.
         for (let i = 0; i < pages.length; i++) {
             const page = pages[i];
             const w = page.offsetWidth;
@@ -199,38 +197,57 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
             if (w < 1 || totalH < 1) { diag.push(`p${i + 1}:vazia ${w}x${totalH}`); continue; }
 
             const wMm = w * PX_TO_MM;
-            const sliceHpx = Math.max(200, Math.floor(w * A4_RATIO)); // ~1123px p/ A4
+            const pageHpx = Math.max(200, Math.floor(w * A4_RATIO)); // altura de 1 folha A4
+            const wScaled = Math.round(w * SCALE);
 
-            for (let top = 0; top < totalH; top += sliceHpx) {
-                const hPx = Math.min(sliceHpx, totalH - top);
-                const hMm = hPx * PX_TO_MM;
-                const orientation = wMm > hMm ? 'l' : 'p';
-                let info = '';
+            for (let chunkTop = 0; chunkTop < totalH; chunkTop += MAX_CHUNK_PX) {
+                const chunkH = Math.min(MAX_CHUNK_PX, totalH - chunkTop);
+                let big: HTMLCanvasElement;
                 try {
-                    const canvas = await html2canvas(page, {
+                    big = await html2canvas(page, {
                         scale: SCALE,
                         useCORS: true,
                         backgroundColor: '#ffffff',
+                        logging: false,        // evita o despejo de centenas de linhas no console
                         x: 0,
-                        y: top,
+                        y: chunkTop,
                         width: w,
-                        height: hPx,
+                        height: chunkH,
                         windowWidth: w,
                         windowHeight: totalH,
                         scrollX: 0,
                         scrollY: 0,
                     });
-                    info = `${canvas.width}x${canvas.height}`;
-                    if (!canvas.width || !canvas.height) { diag.push(`p${i + 1}@${top}:cv0`); continue; }
-                    const img = canvas.toDataURL('image/jpeg', 0.92);
-                    if (!img || img === 'data:,') { diag.push(`p${i + 1}@${top}:img0 cv:${info}`); continue; }
+                } catch (e) {
+                    diag.push(`p${i + 1}@${chunkTop}:err ${e instanceof Error ? e.message : String(e)}`);
+                    continue;
+                }
+                if (!big.width || !big.height) { diag.push(`p${i + 1}@${chunkTop}:cv0`); continue; }
 
+                // Recorta o bloco em páginas A4 (drawImage em memória — rápido).
+                for (let off = 0; off < chunkH; off += pageHpx) {
+                    const sliceH = Math.min(pageHpx, chunkH - off);
+                    const sliceCanvas = window.document.createElement('canvas');
+                    sliceCanvas.width = wScaled;
+                    sliceCanvas.height = Math.round(sliceH * SCALE);
+                    const ctx = sliceCanvas.getContext('2d');
+                    if (!ctx) continue;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+                    ctx.drawImage(
+                        big,
+                        0, Math.round(off * SCALE), wScaled, sliceCanvas.height,
+                        0, 0, wScaled, sliceCanvas.height,
+                    );
+                    const img = sliceCanvas.toDataURL('image/jpeg', 0.9);
+                    if (!img || img === 'data:,') { diag.push(`p${i + 1}@${chunkTop}+${off}:img0`); continue; }
+
+                    const hMm = sliceH * PX_TO_MM;
+                    const orientation = wMm > hMm ? 'l' : 'p';
                     if (!doc) doc = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation, compress: true });
                     else doc.addPage([wMm, hMm], orientation);
                     doc.addImage(img, 'JPEG', 0, 0, wMm, hMm);
                     added++;
-                } catch (e) {
-                    diag.push(`p${i + 1}@${top}:err ${e instanceof Error ? e.message : String(e)} cv:${info}`);
                 }
             }
         }
@@ -238,8 +255,6 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
         if (!doc || added === 0) {
             throw new Error('PDF sem conteúdo. Diagnóstico → ' + diag.slice(0, 6).join('  ||  '));
         }
-        // eslint-disable-next-line no-console
-        console.log('[docxBlobToPdf] páginas adicionadas:', added);
         return doc.output('blob');
     } finally {
         window.document.body.removeChild(iframe);

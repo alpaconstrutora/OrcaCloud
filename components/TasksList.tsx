@@ -53,6 +53,7 @@ const COLUMN_DEFS = [
   { key: 'due_date',   label: 'Vencimento',    sortCol: 'due_date'   as const },
   { key: 'priority',   label: 'Prioridade',    sortCol: 'priority'   as const },
   { key: 'source',     label: 'Origem',        sortCol: null },
+  { key: 'alert',      label: 'Alerta',        sortCol: 'alert'      as const },
   { key: 'status',     label: 'Status',        sortCol: 'status'     as const },
   { key: 'actions',    label: '',              sortCol: null },
 ] as const
@@ -195,6 +196,7 @@ const TasksList: React.FC<Props> = ({
         if (sortCol === 'due_date')   { av = a.due_date ?? ''; bv = b.due_date ?? '' }
         if (sortCol === 'assignee')   { av = (empMap[a.assignee_employee_id ?? '']?.name ?? '').toLowerCase(); bv = (empMap[b.assignee_employee_id ?? '']?.name ?? '').toLowerCase() }
         if (sortCol === 'project')    { av = (projMap[a.project_id ?? '']?.name ?? '').toLowerCase(); bv = (projMap[b.project_id ?? '']?.name ?? '').toLowerCase() }
+        if (sortCol === 'alert')      { av = a.alert_at ?? ''; bv = b.alert_at ?? '' }
         return av < bv ? (sortDir === 'asc' ? -1 : 1) : av > bv ? (sortDir === 'asc' ? 1 : -1) : 0
       })
     }
@@ -423,6 +425,28 @@ const TasksList: React.FC<Props> = ({
           <span className={`text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-full ${mod.cls}`}>
             {mod.label}
           </span>
+        </td>
+      ),
+
+      // ── Alerta / Lembrete ─────────────────────────────────────────────────
+      alert: (
+        <td key="alert" className={COL}>
+          {t.alert_at ? (() => {
+            const d = new Date(t.alert_at)
+            const past = d < new Date()
+            return (
+              <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold
+                ${past ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}
+              >
+                <Bell className="w-3 h-3 flex-shrink-0" />
+                {d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                {' '}
+                {d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )
+          })() : (
+            <span className="text-slate-300">—</span>
+          )}
         </td>
       ),
 

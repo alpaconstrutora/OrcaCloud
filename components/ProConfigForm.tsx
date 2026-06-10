@@ -69,23 +69,23 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 min-h-[400px]">
-        <Loader2 className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-3 text-orange-500" />
+      <div className="flex flex-col items-center justify-center p-8 min-h-[400px] bg-[#F3F7F9]">
+        <Loader2 className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-3 text-teal-500" />
         <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando Configurações...</span>
       </div>
     );
   }
 
   return (
-    <div className="p-5 flex flex-col h-full bg-slate-900 text-slate-100 pb-20">
+    <div className="p-5 flex flex-col h-full bg-[#F3F7F9] text-slate-800 pb-20">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors">
+        <button onClick={onBack} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-base font-black text-white">Configurações do Perfil</h1>
-          <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">ÒPURA Pro</p>
+          <h1 className="text-base font-black text-slate-800">Configurações do Perfil</h1>
+          <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">ÒPURA Pro</p>
         </div>
       </div>
 
@@ -93,8 +93,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
       <form onSubmit={handleSave} className="space-y-4 flex-1">
         
         {/* Bloco: Identidade Fantasia */}
-        <div className="bg-[#070913] p-4 border border-white/5 rounded-2xl space-y-3.5 shadow-xl">
-          <span className="text-[10px] font-black uppercase tracking-widest text-orange-500 flex items-center gap-1.5">
+        <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
+          <span className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
             <User className="w-3.5 h-3.5" />
             Dados do Profissional
           </span>
@@ -106,10 +106,10 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               placeholder="Ex: Alpa Refrigeração & Climatização"
               value={templateHeader}
               onChange={(e) => setTemplateHeader(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500 font-medium"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
               required
             />
-            <span className="block text-[8px] text-slate-500">Este nome aparecerá em destaque no cabeçalho do PDF dos seus orçamentos.</span>
+            <span className="block text-[8px] text-slate-400">Este nome aparecerá em destaque no cabeçalho do PDF dos seus orçamentos.</span>
           </div>
 
           <div className="space-y-1.5">
@@ -117,20 +117,20 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             <select
               value={profissao}
               onChange={(e) => setProfissao(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500 font-medium"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
             >
               <option value="AR_CONDICIONADO">Ar-condicionado e Refrigeração</option>
               <option value="ELETRICISTA">Eletricista / Instalações Elétricas</option>
               <option value="ENCANADOR">Encanador / Sistemas Hidráulicos</option>
               <option value="PINTOR">Pintor / Acabamentos</option>
             </select>
-            <span className="block text-[8px] text-slate-500">Determina quais os modelos de orçamento padrão serão sugeridos.</span>
+            <span className="block text-[8px] text-slate-400">Determina quais os modelos de orçamento padrão serão sugeridos.</span>
           </div>
         </div>
 
         {/* Bloco: Dados de Faturamento PIX */}
-        <div className="bg-[#070913] p-4 border border-white/5 rounded-2xl space-y-3.5 shadow-xl">
-          <span className="text-[10px] font-black uppercase tracking-widest text-orange-500 flex items-center gap-1.5">
+        <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
+          <span className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
             <Landmark className="w-3.5 h-3.5" />
             Faturamento & Pix
           </span>
@@ -141,7 +141,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               <select
                 value={pixKeyType}
                 onChange={(e) => setPixKeyType(e.target.value as ProPixKeyType)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2.5 text-xs text-white outline-none focus:border-orange-500 font-medium"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
               >
                 <option value="CPF">CPF</option>
                 <option value="CNPJ">CNPJ</option>
@@ -157,17 +157,17 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 placeholder="Insira a chave pix"
                 value={pixKey}
                 onChange={(e) => setPixKey(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500 font-medium"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
                 required
               />
             </div>
           </div>
-          <span className="block text-[8px] text-slate-500">Utilizada para gerar o QR Code Dinâmico e o código Copia e Cola ao concluir um serviço.</span>
+          <span className="block text-[8px] text-slate-400">Utilizada para gerar o QR Code Dinâmico e o código Copia e Cola ao concluir um serviço.</span>
         </div>
 
         {/* Bloco: Layout de Documentos */}
-        <div className="bg-[#070913] p-4 border border-white/5 rounded-2xl space-y-3.5 shadow-xl">
-          <span className="text-[10px] font-black uppercase tracking-widest text-orange-500 flex items-center gap-1.5">
+        <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
+          <span className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
             <FileText className="w-3.5 h-3.5" />
             Textos do Documento
           </span>
@@ -179,7 +179,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               placeholder="Ex: Obrigado pela preferência! Garantia de 90 dias conforme CDC."
               value={templateFooter}
               onChange={(e) => setTemplateFooter(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500 resize-none font-medium"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none font-medium"
             />
           </div>
         </div>
@@ -189,7 +189,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           <button
             type="submit"
             disabled={saving}
-            className="w-full py-3 bg-gradient-to-tr from-orange-600 to-amber-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+            className="w-full py-3 bg-gradient-to-tr from-teal-500 to-cyan-400 text-white text-xs font-black uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
           >
             {saving ? (
               <>

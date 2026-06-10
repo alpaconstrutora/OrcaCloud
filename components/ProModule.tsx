@@ -33,7 +33,7 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
   };
 
   return (
-    <div className="min-h-full bg-slate-900 text-slate-100 flex flex-col md:max-w-md md:mx-auto md:shadow-2xl md:border md:border-slate-800 md:rounded-3xl md:my-4 md:overflow-hidden relative pb-16">
+    <div className="min-h-full bg-[#F3F7F9] text-slate-800 flex flex-col md:max-w-md md:mx-auto md:shadow-2xl md:border md:border-slate-200 md:rounded-[32px] md:my-4 md:overflow-hidden relative pb-16">
       {/* Container Principal */}
       <div className="flex-1 flex flex-col overflow-y-auto scrollbar-hide">
         {activeView === 'pro-dashboard' && (
@@ -80,11 +80,11 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
       </div>
 
       {/* Menu Inferior Fixo (Mobile Bottom Bar) */}
-      <div className="absolute bottom-0 left-0 right-0 h-16 bg-slate-950/90 backdrop-blur-md border-t border-slate-800/80 flex items-center justify-around z-40 px-2">
+      <div className="absolute bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-slate-200/60 flex items-center justify-around z-40 px-2 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
         <button
           onClick={() => onChangeView('pro-dashboard')}
           className={`flex flex-col items-center justify-center w-12 h-12 transition-colors ${
-            activeView === 'pro-dashboard' ? 'text-orange-500' : 'text-slate-400 hover:text-slate-200'
+            activeView === 'pro-dashboard' ? 'text-teal-500' : 'text-slate-400 hover:text-slate-600'
           }`}
         >
           <span className="text-xl">📅</span>
@@ -94,7 +94,7 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
         <button
           onClick={() => onChangeView('pro-clientes-lista')}
           className={`flex flex-col items-center justify-center w-12 h-12 transition-colors ${
-            activeView === 'pro-clientes-lista' ? 'text-orange-500' : 'text-slate-400 hover:text-slate-200'
+            activeView === 'pro-clientes-lista' ? 'text-teal-500' : 'text-slate-400 hover:text-slate-600'
           }`}
         >
           <span className="text-xl">👤</span>
@@ -103,7 +103,7 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
 
         <button
           onClick={handleCreateOrcamento}
-          className={`flex flex-col items-center justify-center w-14 h-14 bg-gradient-to-tr from-orange-600 to-amber-500 text-white rounded-full -translate-y-4 shadow-lg shadow-orange-950/40 border-4 border-slate-900 active:scale-95 transition-transform`}
+          className={`flex flex-col items-center justify-center w-14 h-14 bg-gradient-to-tr from-teal-500 to-cyan-400 text-white rounded-full -translate-y-4 shadow-lg shadow-teal-500/20 border-4 border-[#F3F7F9] active:scale-95 transition-transform`}
         >
           <span className="text-xl font-bold">+</span>
         </button>
@@ -111,7 +111,7 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
         <button
           onClick={() => onChangeView('pro-config')}
           className={`flex flex-col items-center justify-center w-12 h-12 transition-colors ${
-            activeView === 'pro-config' ? 'text-orange-500' : 'text-slate-400 hover:text-slate-200'
+            activeView === 'pro-config' ? 'text-teal-500' : 'text-slate-400 hover:text-slate-600'
           }`}
         >
           <span className="text-xl">⚙️</span>

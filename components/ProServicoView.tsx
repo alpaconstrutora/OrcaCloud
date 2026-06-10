@@ -339,8 +339,8 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-900 text-slate-100">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-3" />
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#F3F7F9] text-slate-800">
+        <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-3" />
         <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando Serviço...</span>
       </div>
     );
@@ -348,7 +348,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
   if (!servico) {
     return (
-      <div className="flex-1 p-5 text-center text-slate-400 bg-slate-900 h-full">
+      <div className="flex-1 p-5 text-center text-slate-500 bg-[#F3F7F9] h-full">
         Serviço não encontrado.
       </div>
     );
@@ -365,33 +365,33 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
     : '';
 
   return (
-    <div className="p-5 flex flex-col h-full bg-slate-900 text-slate-100 pb-24 space-y-5">
+    <div className="p-5 flex flex-col h-full bg-[#F3F7F9] text-slate-800 pb-24 space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={onBack} className="text-slate-400 hover:text-white text-lg">
+        <button onClick={onBack} className="text-slate-400 hover:text-slate-750 text-lg">
           ←
         </button>
-        <h1 className="text-lg font-black text-white">Executar Serviço</h1>
+        <h1 className="text-lg font-black text-slate-800">Executar Serviço</h1>
       </div>
 
       {/* Cartão de Informações */}
-      <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl space-y-2">
-        <span className="block text-[9px] font-black uppercase tracking-widest text-orange-500">Cliente & Local</span>
+      <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-2">
+        <span className="block text-[9px] font-black uppercase tracking-widest text-teal-600">Cliente & Local</span>
         <div className="space-y-0.5">
-          <span className="block font-black text-base text-white">{cli?.nome}</span>
-          <span className="block text-xs text-slate-400">{cli?.telefone}</span>
-          <span className="block text-xs text-orange-400">📍 {cli?.endereco || 'Endereço não informado'}</span>
+          <span className="block font-black text-base text-slate-800">{cli?.nome}</span>
+          <span className="block text-xs text-slate-500">{cli?.telefone}</span>
+          <span className="block text-xs text-teal-600 font-semibold">📍 {cli?.endereco || 'Endereço não informado'}</span>
         </div>
-        <div className="pt-2 border-t border-slate-800/80 mt-2">
-          <span className="block text-[9px] font-black uppercase tracking-widest text-slate-500">Descrição do Trabalho</span>
-          <p className="text-xs text-slate-300 mt-1">{orc?.descricao}</p>
+        <div className="pt-2 border-t border-slate-100 mt-2">
+          <span className="block text-[9px] font-black uppercase tracking-widest text-slate-450">Descrição do Trabalho</span>
+          <p className="text-xs text-slate-650 mt-1 font-medium">{orc?.descricao}</p>
         </div>
       </div>
 
       {/* Checklist Touch */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Etapas do Serviço</h2>
-        <div className="space-y-2 bg-slate-950/40 p-4 border border-slate-850 rounded-2xl">
+        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Etapas do Serviço</h2>
+        <div className="space-y-2.5 bg-white p-4 border border-slate-200/40 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
           {checklist.map(item => (
             <div
               key={item.id}
@@ -399,11 +399,11 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               className="flex items-center gap-3 py-1 cursor-pointer select-none"
             >
               <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
-                item.completed ? 'bg-orange-500 border-orange-600 text-white' : 'border-slate-700 bg-slate-900'
+                item.completed ? 'bg-teal-500 border-teal-600 text-white shadow-sm' : 'border-slate-200 bg-slate-50'
               }`}>
                 {item.completed && '✓'}
               </div>
-              <span className={`text-xs ${item.completed ? 'line-through text-slate-500' : 'text-slate-300'}`}>
+              <span className={`text-xs font-medium ${item.completed ? 'line-through text-slate-400' : 'text-slate-650'}`}>
                 {item.text}
               </span>
             </div>
@@ -413,31 +413,31 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
       {/* Fotos Antes / Depois */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Fotos de Registro</h2>
+        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Fotos de Registro</h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-500">Antes</span>
+            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Antes</span>
             {antesFoto ? (
-              <div className="relative rounded-xl overflow-hidden border border-slate-800 aspect-video">
+              <div className="relative rounded-[18px] overflow-hidden border border-slate-200 aspect-video shadow-sm">
                 <img src={antesFoto} alt="Antes" className="w-full h-full object-cover" />
-                <button onClick={() => setAntesFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600/80 text-white text-xs flex items-center justify-center">×</button>
+                <button onClick={() => setAntesFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-xs flex items-center justify-center">×</button>
               </div>
             ) : (
-              <label className="w-full h-20 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 flex flex-col items-center justify-center text-[10px] uppercase font-bold cursor-pointer transition-all active:scale-[0.98]">
+              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-[10px] uppercase font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
                 📸 Adicionar
                 <input type="file" accept="image/*" className="hidden" onChange={handleFotoAntesUpload} />
               </label>
             )}
           </div>
           <div className="space-y-1">
-            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-500">Depois</span>
+            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Depois</span>
             {depoisFoto ? (
-              <div className="relative rounded-xl overflow-hidden border border-slate-800 aspect-video">
+              <div className="relative rounded-[18px] overflow-hidden border border-slate-200 aspect-video shadow-sm">
                 <img src={depoisFoto} alt="Depois" className="w-full h-full object-cover" />
-                <button onClick={() => setDepoisFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600/80 text-white text-xs flex items-center justify-center">×</button>
+                <button onClick={() => setDepoisFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-xs flex items-center justify-center">×</button>
               </div>
             ) : (
-              <label className="w-full h-20 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 flex flex-col items-center justify-center text-[10px] uppercase font-bold cursor-pointer transition-all active:scale-[0.98]">
+              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-[10px] uppercase font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
                 📸 Adicionar
                 <input type="file" accept="image/*" className="hidden" onChange={handleFotoDepoisUpload} />
               </label>
@@ -448,17 +448,17 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
       {/* Assinatura Digital Touch */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Assinatura de Aceite</h2>
+        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Assinatura de Aceite</h2>
         {assinaturaImagem ? (
-          <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl flex flex-col items-center gap-2">
-            <img src={assinaturaImagem} alt="Assinatura" className="h-16 w-auto border-b border-slate-850 pb-2" />
+          <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col items-center gap-2">
+            <img src={assinaturaImagem} alt="Assinatura" className="h-16 w-auto border-b border-slate-100 pb-2" />
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Assinado por: {assinaturaNome}</span>
             <button onClick={() => { setAssinaturaImagem(''); setAssinaturaNome(''); }} className="text-[9px] font-black uppercase tracking-widest text-red-500 mt-1">Refazer Assinatura</button>
           </div>
         ) : (
           <button
             onClick={() => setMostrarAssinatura(true)}
-            className="w-full py-3 bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-300"
+            className="w-full py-3 bg-white border border-slate-200 hover:bg-slate-50/50 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 shadow-sm transition-colors active:scale-98"
           >
             ✍ Colher Assinatura Touch
           </button>
@@ -467,11 +467,11 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
       {/* Modal Assinatura Digital Canvas */}
       {mostrarAssinatura && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm space-y-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-[28px] p-5 w-full max-w-sm space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-black uppercase tracking-widest text-orange-500">Assine na Tela</span>
-              <button onClick={() => setMostrarAssinatura(false)} className="text-slate-400 text-lg">×</button>
+              <span className="text-xs font-black uppercase tracking-widest text-teal-600">Assine na Tela</span>
+              <button onClick={() => setMostrarAssinatura(false)} className="text-slate-400 text-lg hover:text-slate-650">×</button>
             </div>
 
             <input
@@ -479,7 +479,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               placeholder="Nome de quem está assinando"
               value={assinaturaNome}
               onChange={(e) => setAssinaturaNome(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
 
             <canvas
@@ -493,20 +493,20 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               onTouchStart={startDrawing}
               onTouchMove={draw}
               onTouchEnd={stopDrawing}
-              className="bg-slate-950 border border-slate-800 rounded-2xl cursor-crosshair touch-none w-full"
+              className="bg-slate-800 border border-slate-700 rounded-2xl cursor-crosshair touch-none w-full"
             />
 
             <div className="flex gap-3 pt-2">
               <button
                 onClick={clearCanvas}
-                className="flex-1 py-2 bg-slate-800 text-slate-300 font-bold text-xs rounded-xl border border-slate-750"
+                className="flex-1 py-2 bg-slate-100 text-slate-505 font-bold text-xs rounded-xl border border-slate-200 transition-colors hover:bg-slate-200"
               >
                 Limpar
               </button>
               <button
                 onClick={saveSignature}
                 disabled={!assinaturaNome}
-                className="flex-1 py-2 bg-orange-600 text-white font-bold text-xs rounded-xl disabled:opacity-50"
+                className="flex-1 py-2 bg-teal-500 text-white font-bold text-xs rounded-xl disabled:opacity-50 transition-colors hover:bg-teal-600"
               >
                 Confirmar
               </button>
@@ -517,15 +517,15 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
       {/* Cobrança PIX - Copiar Código e QR Code */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Cobrança PIX</h2>
-        <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl flex flex-col items-center text-center gap-3">
-          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Receber Pagamento</span>
+        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Cobrança PIX</h2>
+        <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col items-center text-center gap-3">
+          <span className="text-[10px] font-black uppercase tracking-widest text-teal-600">Receber Pagamento</span>
           {qrCodeUrl ? (
             <>
-              <img src={qrCodeUrl} alt="QR Code PIX" className="w-40 h-40 bg-white p-2 rounded-xl" />
+              <img src={qrCodeUrl} alt="QR Code PIX" className="w-40 h-40 bg-white p-2 rounded-xl border border-slate-100" />
               <div className="space-y-1">
                 <span className="block text-[10px] text-slate-400">Chave PIX: {pixKey}</span>
-                <span className="block font-black text-white text-base">
+                <span className="block font-black text-slate-800 text-base">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)}
                 </span>
               </div>
@@ -534,13 +534,13 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                   navigator.clipboard.writeText(pixKey);
                   alert('Chave PIX copiada para a área de transferência.');
                 }}
-                className="px-4 py-2 bg-slate-850 hover:bg-slate-800 border border-slate-750 text-slate-300 text-xs font-bold rounded-xl transition-colors active:scale-95"
+                className="px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold rounded-xl transition-colors active:scale-95 shadow-sm"
               >
                 📋 Copiar Chave PIX
               </button>
             </>
           ) : (
-            <span className="text-xs text-slate-500 italic">Configure sua chave Pix no seu cadastro para gerar cobranças.</span>
+            <span className="text-xs text-slate-400 italic">Configure sua chave Pix no seu cadastro para gerar cobranças.</span>
           )}
         </div>
       </div>
@@ -550,12 +550,12 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
         {status !== 'CONCLUIDO' && (
           <>
             {/* Campo de Programar Recorrência */}
-            <div className="space-y-1 bg-slate-950 p-3.5 border border-slate-850 rounded-2xl">
+            <div className="space-y-1 bg-white p-3.5 border border-slate-200/40 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
               <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Programar Próxima Revisão / Limpeza</label>
               <select
                 value={recorrenciaMeses}
                 onChange={(e) => setRecorrenciaMeses(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500 mt-1"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 mt-1"
               >
                 <option value="">Não programar recorrência</option>
                 <option value="1">Daqui a 1 mês (Mensal)</option>
@@ -563,25 +563,25 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 <option value="6">Daqui a 6 meses (Semestral)</option>
                 <option value="12">Daqui a 12 meses (Anual)</option>
               </select>
-              <span className="block text-[8px] text-slate-500 mt-0.5">O sistema avisará no painel quando estiver na hora de refazer o serviço.</span>
+              <span className="block text-[8px] text-slate-400 mt-0.5">O sistema avisará no painel quando estiver na hora de refazer o serviço.</span>
             </div>
 
             <button
               onClick={() => handleUpdate('CONCLUIDO')}
-              className="w-full py-3 bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-emerald-950/20 transition-all active:scale-[0.98]"
+              className="w-full py-3.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-black text-xs uppercase tracking-widest rounded-full shadow-md shadow-teal-500/10 transition-all active:scale-[0.98]"
             >
               🏁 Finalizar e Concluir Serviço
             </button>
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => handleUpdate(status === 'EM_ANDAMENTO' ? 'PENDENTE' : 'EM_ANDAMENTO')}
-                className="py-2.5 bg-slate-850 hover:bg-slate-800 text-slate-300 font-bold text-xs rounded-xl border border-slate-800 transition-colors"
+                className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl border border-slate-200 transition-colors"
               >
                 {status === 'EM_ANDAMENTO' ? '⏸ Pausar' : '▶ Iniciar Trabalho'}
               </button>
               <button
                 onClick={() => handleUpdate('BLOQUEADO')}
-                className="py-2.5 bg-red-650/20 hover:bg-red-650/40 text-red-400 font-bold text-xs rounded-xl border border-red-900/30 transition-colors"
+                className="py-2.5 bg-red-50 hover:bg-red-100 text-red-500 font-bold text-xs rounded-xl border border-red-200/50 transition-colors"
               >
                 ⚠️ Bloqueado / Parado
               </button>
@@ -590,13 +590,13 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
         )}
         {status === 'CONCLUIDO' && (
           <div className="space-y-3">
-            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-center rounded-2xl">
-              <span className="text-xs font-black text-emerald-400 uppercase tracking-widest">Serviço Concluído</span>
-              <p className="text-[10px] text-slate-400 mt-1">Todas as etapas foram finalizadas e o Pix de cobrança foi gerado.</p>
+            <div className="p-4 bg-emerald-50 border border-emerald-100 text-center rounded-[20px] text-emerald-700">
+              <span className="text-xs font-black uppercase tracking-widest">Serviço Concluído</span>
+              <p className="text-[10px] text-slate-500 mt-1">Todas as etapas foram finalizadas e o Pix de cobrança foi gerado.</p>
             </div>
             <button
               onClick={generateComprovantePDF}
-              className="w-full py-3 bg-gradient-to-tr from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-orange-950/30 flex items-center justify-center gap-1.5 active:scale-95"
+              className="w-full py-3.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-black text-xs uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 flex items-center justify-center gap-1.5 active:scale-95"
             >
               📄 Enviar Comprovante via WhatsApp
             </button>

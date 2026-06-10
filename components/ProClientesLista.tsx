@@ -77,26 +77,26 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-900 text-slate-100">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-3" />
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#F3F7F9] text-slate-800">
+        <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-3" />
         <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando Clientes...</span>
       </div>
     );
   }
 
   return (
-    <div className="p-5 flex flex-col h-full bg-slate-900 text-slate-100 pb-24 space-y-5">
+    <div className="p-5 flex flex-col h-full bg-[#F3F7F9] text-slate-800 pb-24 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="text-slate-400 hover:text-white text-lg">
+          <button onClick={onBack} className="text-slate-400 hover:text-slate-700 text-lg">
             ←
           </button>
-          <h1 className="text-lg font-black text-white">Meus Clientes</h1>
+          <h1 className="text-lg font-black text-slate-800">Meus Clientes</h1>
         </div>
         <button
           onClick={() => setMostrarForm(!mostrarForm)}
-          className="text-xs font-black uppercase tracking-widest text-orange-500 hover:text-orange-400"
+          className="text-xs font-black uppercase tracking-widest text-teal-600 hover:text-teal-500"
         >
           {mostrarForm ? 'Cancelar' : '+ Cadastrar'}
         </button>
@@ -104,41 +104,41 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
 
       {/* Formulário Novo Cliente */}
       {mostrarForm && (
-        <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-3 animate-in slide-in-from-top-3 duration-250">
-          <span className="block text-[10px] font-black uppercase tracking-widest text-orange-500">Novo Cadastro</span>
+        <div className="bg-white border border-slate-200/50 p-4 rounded-[24px] space-y-3 animate-in slide-in-from-top-3 duration-250 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
+          <span className="block text-[10px] font-black uppercase tracking-widest text-teal-600">Novo Cadastro</span>
           <div className="space-y-2.5">
             <input
               type="text"
               placeholder="Nome do Cliente"
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
             <input
               type="tel"
               placeholder="WhatsApp / Telefone (com DDD)"
               value={telefone}
               onChange={(e) => setTelefone(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
             <input
               type="text"
               placeholder="Endereço de execução"
               value={endereco}
               onChange={(e) => setEndereco(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
             <textarea
               rows={2}
               placeholder="Observações úteis..."
               value={observacoes}
               onChange={(e) => setObservacoes(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500 resize-none"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none"
             />
           </div>
           <button
             onClick={handleCreate}
-            className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all"
+            className="w-full py-2.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white text-xs font-black uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 active:scale-95"
           >
             Confirmar Cadastro
           </button>
@@ -148,7 +148,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
       {/* Lista de Clientes */}
       <div className="space-y-3 flex-1 overflow-y-auto">
         {clientes.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 text-xs border border-dashed border-slate-800 rounded-2xl">
+          <div className="text-center py-12 text-slate-450 text-xs bg-white border border-dashed border-slate-200 rounded-[24px]">
             Nenhum cliente cadastrado ainda.
           </div>
         ) : (
@@ -163,20 +163,20 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
             return (
               <div
                 key={c.id}
-                className="bg-slate-950/40 border border-slate-800 rounded-2xl overflow-hidden transition-all duration-200"
+                className="bg-white border border-slate-200/30 rounded-[24px] overflow-hidden transition-all duration-200 shadow-[0_8px_30px_rgb(0,0,0,0.03)]"
               >
                 {/* Header do Card */}
                 <div
                   onClick={() => setClienteExpandidoId(estaExpandido ? null : c.id)}
-                  className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-950/20"
+                  className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50/50"
                 >
                   <div className="space-y-1">
-                    <span className="block font-black text-sm text-white">{c.nome}</span>
+                    <span className="block font-black text-sm text-slate-800">{c.nome}</span>
                     <span className="block text-[10px] text-slate-400">{c.telefone}</span>
                   </div>
                   <div className="text-right space-y-1">
-                    <span className="block text-[9px] font-black uppercase tracking-widest text-slate-500">Total Acumulado</span>
-                    <span className="block font-black text-white text-xs">
+                    <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Total Acumulado</span>
+                    <span className="block font-black text-slate-800 text-xs">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalGasto)}
                     </span>
                   </div>
@@ -184,38 +184,38 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
 
                 {/* Detalhes Expandidos (Histórico) */}
                 {estaExpandido && (
-                  <div className="px-4 pb-4 pt-2 border-t border-slate-900/60 bg-slate-950/20 space-y-4">
+                  <div className="px-4 pb-4 pt-2 border-t border-slate-100 bg-slate-50/30 space-y-4">
                     {c.endereco && (
                       <div className="space-y-0.5">
-                        <span className="block text-[9px] font-black uppercase tracking-widest text-slate-500">Endereço Principal</span>
-                        <span className="block text-xs text-orange-400">📍 {c.endereco}</span>
+                        <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Endereço Principal</span>
+                        <span className="block text-xs text-teal-600 font-semibold">📍 {c.endereco}</span>
                       </div>
                     )}
 
                     {c.observacoes && (
                       <div className="space-y-0.5">
-                        <span className="block text-[9px] font-black uppercase tracking-widest text-slate-500">Notas</span>
-                        <p className="text-xs text-slate-400">{c.observacoes}</p>
+                        <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Notas</span>
+                        <p className="text-xs text-slate-650">{c.observacoes}</p>
                       </div>
                     )}
 
                     {/* Histórico de Serviços / Orçamentos */}
                     <div className="space-y-2">
-                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-500">Histórico de Orçamentos</span>
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Histórico de Orçamentos</span>
                       {orcamentosDoCliente.length === 0 ? (
-                        <span className="block text-[10px] text-slate-500 italic">Nenhum orçamento para este cliente.</span>
+                        <span className="block text-[10px] text-slate-400 italic">Nenhum orçamento para este cliente.</span>
                       ) : (
                         <div className="space-y-1.5">
                           {orcamentosDoCliente.map(o => (
-                            <div key={o.id} className="flex items-center justify-between py-1 border-b border-slate-900/20 text-xs">
-                              <span className="text-slate-300 truncate max-w-[60%]">{o.descricao}</span>
+                            <div key={o.id} className="flex items-center justify-between py-1.5 border-b border-slate-100 text-xs">
+                              <span className="text-slate-650 truncate max-w-[60%] font-medium">{o.descricao}</span>
                               <div className="flex items-center gap-2">
-                                <span className="font-bold text-white">
+                                <span className="font-bold text-slate-800">
                                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(o.valor)}
                                 </span>
-                                <span className={`text-[8px] font-black uppercase px-1.5 py-0.25 rounded ${
-                                  o.status === 'APROVADO' ? 'bg-emerald-500/20 text-emerald-400' :
-                                  o.status === 'ENVIADO' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-400'
+                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                  o.status === 'APROVADO' ? 'bg-emerald-50 text-emerald-600' :
+                                  o.status === 'ENVIADO' ? 'bg-teal-50 text-teal-600' : 'bg-slate-100 text-slate-500'
                                 }`}>
                                   {o.status}
                                 </span>
@@ -234,7 +234,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
                         const targetPhone = cleanPhone.length === 10 || cleanPhone.length === 11 ? `55${cleanPhone}` : cleanPhone;
                         window.open(`https://wa.me/${targetPhone}`, '_blank');
                       }}
-                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-colors text-center"
+                      className="w-full py-2 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200/50 text-emerald-600 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all text-center shadow-sm"
                     >
                       💬 Chamar no WhatsApp
                     </button>

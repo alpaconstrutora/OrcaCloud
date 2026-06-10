@@ -3,7 +3,7 @@ import {
   DndContext, DragOverlay, useDroppable, useDraggable,
   type DragEndEvent, type DragStartEvent, PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core'
-import { CheckCircle2, Plus, Calendar, CheckSquare, AlertTriangle } from 'lucide-react'
+import { CheckCircle2, Plus, Calendar, CheckSquare, AlertTriangle, Bell } from 'lucide-react'
 import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
 import type { GroupByField } from './TasksModule'
@@ -144,9 +144,16 @@ function DraggableCard({
             onClick={e => { e.stopPropagation(); onEdit(task) }}
             className="text-left min-w-0 flex-1"
           >
-            <p className={`text-sm font-bold text-slate-900 leading-snug ${isDone ? 'line-through text-slate-400' : ''}`}>
-              {task.title}
-            </p>
+            <div className="flex items-start gap-1.5">
+              <p className={`text-sm font-bold text-slate-900 leading-snug flex-1 ${isDone ? 'line-through text-slate-400' : ''}`}>
+                {task.title}
+              </p>
+              {task.alert_at && (
+                <span title={`Alerta: ${new Date(task.alert_at).toLocaleString('pt-BR')}`} className="flex-shrink-0 mt-0.5">
+                  <Bell className={`w-3 h-3 ${new Date(task.alert_at) < new Date() ? 'text-red-400' : 'text-amber-400'}`} />
+                </span>
+              )}
+            </div>
             {task.description && (
               <p className="text-xs text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
                 {task.description}

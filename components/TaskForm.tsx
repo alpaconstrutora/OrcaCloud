@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { X, Loader2, Save, Trash2 } from 'lucide-react'
+import { X, Loader2, Save, Trash2, Bell } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { TaskStatus } from '../services/taskService'
 
@@ -23,6 +23,7 @@ export type TaskRecord = {
   folder_id: string | null
   completed_at: string | null
   created_at: string
+  alert_at: string | null
 }
 
 export type EmployeeOption = { id: string; name: string; role: string }
@@ -97,6 +98,7 @@ const TaskForm: React.FC<Props> = ({
   const [folderId, setFolderId]       = useState<string>(
     task?.folder_id ?? initialDefaults.folder_id ?? ''
   )
+  const [alertAt, setAlertAt]         = useState(toLocalInput(task?.alert_at ?? null))
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
 
@@ -145,6 +147,7 @@ const TaskForm: React.FC<Props> = ({
       project_id:           projectId  || null,
       space_id:             spaceId    || null,
       folder_id:            folderId   || null,
+      alert_at:             alertAt    ? new Date(alertAt).toISOString() : null,
     }
     try {
       if (task?.id) {
@@ -293,6 +296,36 @@ const TaskForm: React.FC<Props> = ({
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Término</label>
               <input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} className={inp} />
             </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+              <Bell className="w-3 h-3" /> Alerta / Lembrete
+            </label>
+            <div className="relative mt-1">
+              <input
+                type="datetime-local"
+                value={alertAt}
+                onChange={(e) => setAlertAt(e.target.value)}
+                className={sel + ' pr-8'}
+              />
+              {alertAt && (
+                <button
+                  type="button"
+                  onClick={() => setAlertAt('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-400 transition-colors"
+                  title="Remover alerta"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {alertAt && (
+              <p className="text-[10px] text-amber-600 font-medium mt-1 flex items-center gap-1">
+                <Bell className="w-3 h-3" />
+                Alerta agendado para {new Date(alertAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </p>
+            )}
           </div>
 
           <div>

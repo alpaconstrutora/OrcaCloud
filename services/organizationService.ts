@@ -63,10 +63,11 @@ export const organizationService = {
             const orgLaborTeams = allLaborTeams.filter(t => t.org_id === org.id);
             
             // Map de cargos para garantir IDs consistentes
-            const generateRoleId = (name: string) => `role-${name.toLowerCase().trim().replace(/\s+/g, '-')}`;
-            
-            // Sintetizar Cargos a partir dos funcionários
-            const employeeRoles = Array.from(new Set(orgEmployees.map(e => e.role))).map(rName => ({
+            const generateRoleId = (name: string | null | undefined) =>
+                `role-${(name || 'sem-cargo').toLowerCase().trim().replace(/\s+/g, '-')}`;
+
+            // Sintetizar Cargos a partir dos funcionários (ignorar roles nulos)
+            const employeeRoles = Array.from(new Set(orgEmployees.map(e => e.role).filter(Boolean))).map(rName => ({
                 id: generateRoleId(rName),
                 name: rName,
                 costPerHour: 0,

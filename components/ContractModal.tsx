@@ -259,9 +259,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         }
     };
 
+    const NON_OBRA = new Set(['ORCAMENTO', 'DIARIO', 'PLANEJAMENTO']);
     const obrasList = projects.filter(p =>
         p.name !== 'Gestão Comercial' &&
-        (!p.settings?.classification || p.settings.classification === 'OBRA')
+        !NON_OBRA.has(p.settings?.classification ?? '')
     );
     const orcamentosList = projects.filter(p => p.settings?.classification === 'ORCAMENTO');
 

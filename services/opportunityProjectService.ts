@@ -45,12 +45,16 @@ export const opportunityProjectService = {
     async listForOrg(organizationId: string): Promise<{ id: string; name: string }[]> {
         const { data, error } = await supabase
             .from('projects')
-            .select('id, name')
+            .select('id, name, settings')
             .filter('settings->>organizationId', 'eq', organizationId)
             .neq('name', 'Gestão Comercial')
             .order('name', { ascending: true });
         if (error) throw error;
-        return (data ?? []) as { id: string; name: string }[];
+        // Exclude non-obra projects (orçamentos, diários, planejamentos)
+        const rows = (data ?? []) as { id: string; name: string; settings?: { classification?: string } }[];
+        return rows.filter(p =>
+            !p.settings?.classification || p.settings.classification === 'OBRA'
+        ).map(({ id, name }) => ({ id, name }));
     },
 
     async getPitchData(projectId: string, organizationId: string): Promise<ProjectPitchData> {

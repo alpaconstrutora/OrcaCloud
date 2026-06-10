@@ -109,48 +109,47 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
     const tabs = isAdmin ? ADMIN_TABS : PUBLIC_TABS;
 
     return (
-        <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-            onClick={onClose}
-        >
-            <div
-                className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-                onClick={e => e.stopPropagation()}
-            >
-                {/* ── Thumbnail / Hero ─────────────────────────────────── */}
-                {op.thumbnail_url ? (
-                    <div className="relative h-48 rounded-t-3xl overflow-hidden flex-shrink-0">
-                        <img src={op.thumbnail_url} alt={op.title} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />
-                        <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-black/30 hover:bg-black/50 text-white rounded-xl transition-colors backdrop-blur-sm">
-                            <X className="w-4 h-4" />
-                        </button>
-                        {op.status && (
-                            <span className={`absolute bottom-4 left-6 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
+        <div className="fixed inset-0 z-[60] bg-white overflow-y-auto">
+            {/* ── Navbar sticky ── */}
+            <nav className="sticky top-0 z-10 bg-white/90 backdrop-blur-sm border-b border-gray-100 shadow-sm">
+                <div className="max-w-4xl mx-auto px-6 h-14 flex items-center gap-4">
+                    <button
+                        onClick={onClose}
+                        className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
+                    >
+                        <X className="w-4 h-4" />
+                        Voltar
+                    </button>
+                    <span className="text-sm font-black text-gray-800 truncate flex-1">{op.title}</span>
+                    {op.status && (
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex-shrink-0 ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
+                            {OPPORTUNITY_STATUS_LABELS[op.status]}
+                        </span>
+                    )}
+                </div>
+            </nav>
+
+            {/* ── Hero ── */}
+            {op.thumbnail_url ? (
+                <div className="relative h-64 sm:h-80 overflow-hidden">
+                    <img src={op.thumbnail_url} alt={op.title} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                    {op.status && (
+                        <span className={`absolute bottom-4 left-6 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
                                 {OPPORTUNITY_STATUS_LABELS[op.status]}
                             </span>
                         )}
                     </div>
-                ) : (
-                    <div className="h-14 bg-[#0B1727] rounded-t-3xl flex items-center justify-end px-6 flex-shrink-0">
-                        <button onClick={onClose} className="p-2 text-white/50 hover:text-white rounded-xl transition-colors">
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-                )}
+            ) : null}
 
+            <div className="max-w-4xl mx-auto px-6 sm:px-8 py-8">
                 {formStep === 'view' && (
                     <div className="flex flex-col">
                         {/* Header executivo */}
-                        <div className="px-8 pt-6 pb-4">
-                            {!op.thumbnail_url && op.status && (
-                                <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3 ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
-                                    {OPPORTUNITY_STATUS_LABELS[op.status]}
-                                </span>
-                            )}
-                            <h2 className="text-2xl font-black text-gray-900 leading-tight">{op.title}</h2>
-                            {op.subtitle && <p className="text-gray-500 mt-1.5 text-sm leading-relaxed">{op.subtitle}</p>}
-                            <div className="flex flex-wrap gap-4 mt-3 text-xs text-gray-400">
+                        <div className="pb-6">
+                            <h2 className="text-3xl font-black text-gray-900 leading-tight">{op.title}</h2>
+                            {op.subtitle && <p className="text-gray-500 mt-2 text-base leading-relaxed">{op.subtitle}</p>}
+                            <div className="flex flex-wrap gap-4 mt-4 text-sm text-gray-400">
                                 {(op.location_city || op.location_state) && (
                                     <span className="flex items-center gap-1.5">
                                         <MapPin className="w-3.5 h-3.5" />
@@ -180,14 +179,14 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
 
                         {/* Tabs */}
                         {tabs.length > 1 && (
-                            <div className="px-8 pb-2 flex gap-1 border-b border-gray-100">
+                            <div className="flex gap-1 border-b border-gray-200 mb-6">
                                 {tabs.map(tab => (
                                     <button
                                         key={tab.id}
                                         onClick={() => setPitchTab(tab.id)}
-                                        className={`px-4 py-2 rounded-t-xl text-xs font-bold transition-all ${pitchTab === tab.id
-                                            ? 'text-blue-600 border-b-2 border-blue-600'
-                                            : 'text-gray-400 hover:text-gray-600'
+                                        className={`px-5 py-3 text-sm font-bold transition-all border-b-2 -mb-px ${pitchTab === tab.id
+                                            ? 'text-blue-600 border-blue-600'
+                                            : 'text-gray-400 border-transparent hover:text-gray-600'
                                         }`}
                                     >
                                         {tab.label}
@@ -198,7 +197,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
 
                         {/* ── ABA: Detalhes ─────────────────────────────── */}
                         {pitchTab === 'pitch' && (
-                            <div className="px-8 py-6 space-y-6">
+                            <div className="space-y-6">
                                 {/* KPIs financeiros */}
                                 {hasFinancials && (
                                     <div>
@@ -281,96 +280,74 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                 )}
 
                                 {/* CTA */}
-                                <div className="flex gap-3 pt-2">
-                                    <button
-                                        onClick={() => setFormStep('form')}
-                                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl"
-                                    >
-                                        <Handshake className="w-4 h-4" />
-                                        Manifestar Interesse
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={onClose}
-                                        className="px-6 py-4 text-gray-500 hover:text-gray-700 font-bold rounded-2xl hover:bg-gray-100 transition-colors"
-                                    >
-                                        Fechar
-                                    </button>
-                                </div>
+                                <button
+                                    onClick={() => setFormStep('form')}
+                                    className="flex items-center gap-2 px-8 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl text-sm"
+                                >
+                                    <Handshake className="w-4 h-4" />
+                                    Manifestar Interesse
+                                    <ChevronRight className="w-4 h-4" />
+                                </button>
                             </div>
                         )}
 
                         {/* ── ABA: Cenários ─────────────────────────────── */}
                         {pitchTab === 'cenarios' && (
-                            <div className="px-8 py-6 space-y-6">
+                            <div className="space-y-6">
                                 <ScenarioComparison opportunity={op} />
-                                <div className="flex gap-3 pt-2">
-                                    <button
-                                        onClick={() => setFormStep('form')}
-                                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl"
-                                    >
-                                        <Handshake className="w-4 h-4" />
-                                        Manifestar Interesse
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={onClose} className="px-6 py-4 text-gray-500 hover:text-gray-700 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
-                                        Fechar
-                                    </button>
-                                </div>
+                                <button
+                                    onClick={() => setFormStep('form')}
+                                    className="flex items-center gap-2 px-8 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl text-sm"
+                                >
+                                    <Handshake className="w-4 h-4" />
+                                    Manifestar Interesse
+                                    <ChevronRight className="w-4 h-4" />
+                                </button>
                             </div>
                         )}
 
                         {/* ── ABA: Obra ao Vivo ────────────────────────── */}
                         {pitchTab === 'obra' && hasLinkedProject && (
-                            <div className="px-8 py-6 space-y-6">
+                            <div className="space-y-6">
                                 <LinkedProjectPanel
                                     projectId={op.project_id!}
                                     organizationId={organizationId}
                                     costEstimate={op.cost_estimate}
                                 />
-                                <div className="flex gap-3 pt-2">
-                                    <button
-                                        onClick={() => setFormStep('form')}
-                                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl"
-                                    >
-                                        <Handshake className="w-4 h-4" />
-                                        Manifestar Interesse
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={onClose} className="px-6 py-4 text-gray-500 hover:text-gray-700 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
-                                        Fechar
-                                    </button>
-                                </div>
+                                <button
+                                    onClick={() => setFormStep('form')}
+                                    className="flex items-center gap-2 px-8 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl text-sm"
+                                >
+                                    <Handshake className="w-4 h-4" />
+                                    Manifestar Interesse
+                                    <ChevronRight className="w-4 h-4" />
+                                </button>
                             </div>
                         )}
 
                         {/* ── ABA: Fotos ───────────────────────────────── */}
                         {pitchTab === 'fotos' && (
-                            <div className="px-8 py-6">
-                                <OpportunityPhotosPanel
-                                    opportunityId={op.id!}
-                                    organizationId={organizationId}
-                                    isAdmin={isAdmin}
-                                    uploadedBy={uploadedBy}
-                                />
-                            </div>
+                            <OpportunityPhotosPanel
+                                opportunityId={op.id!}
+                                organizationId={organizationId}
+                                isAdmin={isAdmin}
+                                uploadedBy={uploadedBy}
+                            />
                         )}
 
                         {/* ── ABA: Documentos ──────────────────────────── */}
                         {pitchTab === 'documentos' && (
-                            <div className="px-8 py-6">
-                                <DataRoomPanel
-                                    opportunityId={op.id!}
-                                    organizationId={organizationId}
-                                    isAdmin={isAdmin}
-                                    uploadedBy={uploadedBy}
-                                />
-                            </div>
+                            <DataRoomPanel
+                                opportunityId={op.id!}
+                                organizationId={organizationId}
+                                isAdmin={isAdmin}
+                                uploadedBy={uploadedBy}
+                            />
                         )}
 
                         {/* ── ABA: Interesses (admin) ───────────────────── */}
                         {pitchTab === 'interesses' && isAdmin && (
-                            <div className="px-8 py-6 space-y-6">
+                            <div className="space-y-6">
                                 {loadingInterests ? (
                                     <p className="text-sm text-gray-400 text-center py-8">Carregando...</p>
                                 ) : interests.length === 0 ? (
@@ -439,12 +416,12 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
 
                 {/* ── Formulário de interesse ───────────────────────────── */}
                 {formStep === 'form' && (
-                    <div className="p-8">
+                    <div className="max-w-lg">
                         <div className="mb-6">
                             <button onClick={() => setFormStep('view')} className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 mb-3">
                                 ← Voltar
                             </button>
-                            <h3 className="text-xl font-black text-gray-900">Manifestar Interesse</h3>
+                            <h3 className="text-2xl font-black text-gray-900">Manifestar Interesse</h3>
                             <p className="text-sm text-gray-500 mt-1">{op.title}</p>
                         </div>
                         <form onSubmit={handleInterestSubmit} className="space-y-4">
@@ -509,35 +486,30 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 resize-none"
                                 />
                             </div>
-                            <div className="flex gap-3 pt-2">
-                                <button
-                                    type="submit"
-                                    disabled={saving}
-                                    className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-2xl transition-colors shadow-lg shadow-blue-600/20"
-                                >
-                                    {saving ? 'Enviando...' : 'Enviar manifestação'}
-                                </button>
-                                <button type="button" onClick={() => setFormStep('view')} className="px-6 py-3 text-gray-500 hover:text-gray-700 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
-                                    Voltar
-                                </button>
-                            </div>
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="w-full px-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-2xl transition-colors shadow-lg shadow-blue-600/20"
+                            >
+                                {saving ? 'Enviando...' : 'Enviar manifestação'}
+                            </button>
                         </form>
                     </div>
                 )}
 
                 {/* ── Sucesso ──────────────────────────────────────────── */}
                 {formStep === 'success' && (
-                    <div className="p-12 text-center">
-                        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                    <div className="max-w-md mx-auto text-center py-16">
+                        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <CheckCircle2 className="w-10 h-10 text-emerald-600" />
                         </div>
-                        <h3 className="text-2xl font-black text-gray-900 mb-2">Interesse registrado!</h3>
-                        <p className="text-gray-500 text-sm mb-8">
+                        <h3 className="text-3xl font-black text-gray-900 mb-3">Interesse registrado!</h3>
+                        <p className="text-gray-500 mb-8">
                             Sua manifestação de interesse em <strong>{op.title}</strong> foi recebida.
                             Nossa equipe entrará em contato em breve.
                         </p>
                         <button onClick={onClose} className="px-8 py-3 bg-gray-900 text-white font-bold rounded-2xl hover:bg-gray-700 transition-colors">
-                            Fechar
+                            Voltar às oportunidades
                         </button>
                     </div>
                 )}

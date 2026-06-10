@@ -391,6 +391,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
                 ${viewMode === 'list' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}
             >
               <List className="w-3.5 h-3.5" />
+              Lista
             </button>
             <button
               onClick={() => {
@@ -402,6 +403,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
                 ${viewMode === 'board' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}
             >
               <Kanban className="w-3.5 h-3.5" />
+              Kanban
             </button>
           </div>
 

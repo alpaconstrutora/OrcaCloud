@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   Plus, Trash2, Loader2, AlertCircle, ChevronDown, ChevronRight,
-  Edit2, Check, X, GripVertical, ClipboardList, Copy, Download, Upload,
+  Edit2, Check, X, GripVertical, ClipboardList, Copy, Download, Upload, FileSpreadsheet,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 
 interface Template {
@@ -481,6 +482,7 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
   const [savingNew, setSavingNew] = useState(false)
   const [importing, setImporting] = useState(false)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const importXlsxRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadTemplates() }, [orgId])
 
@@ -633,6 +635,101 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
     }
   }
 
+  // ── Importar a partir de Excel (.xlsx / .xls) ────────────────────────────
+  // Formato esperado: colunas nome_template | tipo_servico | descricao | gate |
+  //                   obrigatorio | foto | severidade | categoria
+  // Linhas com o mesmo nome_template são agrupadas em um template.
+  // Aceita uma ou múltiplas abas; cada aba vira um template separado se tiver
+  // cabeçalho "descricao". Se a planilha tiver a coluna "nome_template",
+  // agrupa dinamicamente; caso contrário, usa o nome da aba.
+  const handleImportExcel = async (file: File) => {
+    setImporting(true)
+    setError(null)
+    try {
+      const buffer = await file.arrayBuffer()
+      const wb = XLSX.read(buffer, { type: 'array' })
+
+      // Normaliza cabeçalho: remove acentos, espaços → underscore, lowercase
+      const norm = (s: string) =>
+        s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, '_')
+
+      type RawRow = Record<string, string | undefined>
+
+      // Coleta templates de todas as abas
+      const templateMap = new Map<string, { service_type: string | null; items: RawRow[] }>()
+
+      for (const sheetName of wb.SheetNames) {
+        const rows: RawRow[] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' })
+        if (rows.length === 0) continue
+
+        // Normalizar chaves das linhas
+        const normalized: RawRow[] = rows.map(r =>
+          Object.fromEntries(Object.entries(r).map(([k, v]) => [norm(k), String(v ?? '').trim()]))
+        )
+
+        for (const row of normalized) {
+          if (!row['descricao'] && !row['description']) continue // linha sem item
+
+          const tmplName = row['nome_template'] || row['template'] || sheetName
+          const svcType = row['tipo_servico'] || row['service_type'] || null
+
+          if (!templateMap.has(tmplName)) {
+            templateMap.set(tmplName, { service_type: svcType || null, items: [] })
+          }
+          templateMap.get(tmplName)!.items.push(row)
+        }
+      }
+
+      if (templateMap.size === 0) {
+        setError('Nenhum dado encontrado. Verifique se a planilha tem a coluna "descricao".')
+        return
+      }
+
+      const parseGate = (v: string): TemplateItem['gate'] => {
+        const g = norm(v)
+        if (g.includes('inicio') || g.includes('start') || g === 'pre_start') return 'pre_start'
+        if (g.includes('conclus') || g.includes('completion') || g === 'pre_completion') return 'pre_completion'
+        return 'free'
+      }
+      const parseSeverity = (v: string): TemplateItem['severity'] => {
+        const s = norm(v)
+        if (s.includes('grave') || s.includes('major') || s === 'major') return 'major'
+        if (s.includes('leve') || s.includes('minor') || s === 'minor') return 'minor'
+        return 'moderate'
+      }
+      const parseBool = (v: string) => ['sim','yes','true','1','x','✓'].includes(norm(v))
+
+      for (const [name, { service_type, items }] of templateMap) {
+        const { data: newTmpl, error: insErr } = await supabase
+          .from('oe_checklist_templates')
+          .insert({ org_id: orgId, name, service_type, active: false })
+          .select()
+          .single()
+        if (insErr || !newTmpl) continue
+
+        await supabase.from('oe_checklist_items').insert(
+          items.map((row, idx) => ({
+            template_id: newTmpl.id,
+            description: row['descricao'] || row['description'] || '',
+            gate: parseGate(row['gate'] || ''),
+            required: parseBool(row['obrigatorio'] || row['required'] || ''),
+            requires_photo: parseBool(row['foto'] || row['requires_photo'] || ''),
+            severity: parseSeverity(row['severidade'] || row['severity'] || ''),
+            category: row['categoria'] || row['category'] || null,
+            sort_order: idx,
+          }))
+        )
+      }
+
+      await loadTemplates()
+    } catch (e) {
+      setError(`Erro ao ler planilha: ${e instanceof Error ? e.message : 'arquivo inválido'}`)
+    } finally {
+      setImporting(false)
+      if (importXlsxRef.current) importXlsxRef.current.value = ''
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40">
@@ -665,6 +762,13 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
             className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleImport(f) }}
           />
+          <input
+            ref={importXlsxRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImportExcel(f) }}
+          />
           <button
             onClick={() => importInputRef.current?.click()}
             disabled={importing}
@@ -672,6 +776,14 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
           >
             {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
             Importar
+          </button>
+          <button
+            onClick={() => importXlsxRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-50 transition-colors"
+          >
+            {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            Importar Excel
           </button>
           <button
             onClick={() => setShowNewForm(s => !s)}

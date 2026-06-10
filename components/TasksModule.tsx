@@ -567,7 +567,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               groupBy={groupBy}
               resetDragSignal={dragResetSignal}
               onToggleDone={toggleDone}
-              onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
+              onEdit={(t) => { loadEmployees(t.org_id); loadSpaces(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
               onAddSubtask={(parent) => { loadEmployees(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
               onMakeSubtask={makeSubtask}
               onAddTask={orgForNew ? (defaults) => {
@@ -589,7 +589,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               statuses={statuses}
               groupBy={groupBy === 'none' ? 'status' : groupBy}
               onToggleDone={toggleDone}
-              onEdit={(t) => { loadEmployees(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
+              onEdit={(t) => { loadEmployees(t.org_id); loadSpaces(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
               onAddTask={orgForNew ? (defaults) => {
                 setTaskDefaults({
                   ...(defaults ?? {}),
@@ -614,7 +614,10 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           statuses={statuses}
           spaces={spaceOptions}
           task={editing}
-          initialDefaults={editing ? undefined : taskDefaults}
+          initialDefaults={editing ? {
+            space_id:  editing.space_id  ?? (selectedSpaceId  && selectedSpaceId  !== '__none__'     ? selectedSpaceId  : null),
+            folder_id: editing.folder_id ?? (selectedFolderId && selectedFolderId !== '__no_folder__' ? selectedFolderId : null),
+          } : taskDefaults}
           parentTaskId={parentTask?.id ?? null}
           parentTaskTitle={parentTask?.title ?? null}
           onClose={() => { setShowForm(false); setParentTask(null) }}

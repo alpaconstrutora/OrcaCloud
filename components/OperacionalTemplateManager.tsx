@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Plus, Trash2, Loader2, AlertCircle, ChevronDown, ChevronRight,
-  Edit2, Check, X, GripVertical, ClipboardList,
+  Edit2, Check, X, GripVertical, ClipboardList, Copy, Download, Upload,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -189,7 +189,9 @@ const TemplateCard: React.FC<{
   onToggleActive: (id: string, active: boolean) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onRename: (id: string, name: string, serviceType: string) => Promise<void>
-}> = ({ template, onToggleActive, onDelete, onRename }) => {
+  onDuplicate: (id: string) => Promise<void>
+  onExport: (id: string) => Promise<void>
+}> = ({ template, onToggleActive, onDelete, onRename, onDuplicate, onExport }) => {
   const [expanded, setExpanded] = useState(false)
   const [items, setItems] = useState<TemplateItem[]>([])
   const [loadingItems, setLoadingItems] = useState(false)
@@ -312,9 +314,24 @@ const TemplateCard: React.FC<{
           )}
           <button
             onClick={e => { e.stopPropagation(); setEditingName(true); setDraftName(template.name); setDraftServiceType(template.service_type ?? '') }}
+            title="Renomear"
             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
           >
             <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={e => { e.stopPropagation(); onDuplicate(template.id) }}
+            title="Duplicar"
+            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+          >
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={e => { e.stopPropagation(); onExport(template.id) }}
+            title="Exportar JSON"
+            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
           </button>
           <label className="relative inline-flex items-center cursor-pointer" title={template.active ? 'Ativo' : 'Inativo'}>
             <input
@@ -462,6 +479,8 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
   const [newName, setNewName] = useState('')
   const [newServiceType, setNewServiceType] = useState('')
   const [savingNew, setSavingNew] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadTemplates() }, [orgId])
 
@@ -534,6 +553,86 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
     await loadTemplates()
   }
 
+  const handleDuplicate = async (id: string) => {
+    const tmpl = templates.find(t => t.id === id)
+    if (!tmpl) return
+    const { data: items } = await supabase
+      .from('oe_checklist_items')
+      .select('description, required, requires_photo, gate, sort_order, severity, category')
+      .eq('template_id', id)
+      .order('sort_order')
+    const { data: newTmpl, error: insErr } = await supabase
+      .from('oe_checklist_templates')
+      .insert({ org_id: orgId, name: `${tmpl.name} (cópia)`, service_type: tmpl.service_type, active: false })
+      .select()
+      .single()
+    if (insErr || !newTmpl) { setError('Erro ao duplicar template'); return }
+    if (items && items.length > 0) {
+      await supabase.from('oe_checklist_items').insert(
+        items.map(item => ({ ...item, template_id: newTmpl.id }))
+      )
+    }
+    await loadTemplates()
+  }
+
+  const handleExport = async (id: string) => {
+    const tmpl = templates.find(t => t.id === id)
+    if (!tmpl) return
+    const { data: items } = await supabase
+      .from('oe_checklist_items')
+      .select('description, required, requires_photo, gate, sort_order, severity, category')
+      .eq('template_id', id)
+      .order('sort_order')
+    const payload = { name: tmpl.name, service_type: tmpl.service_type, items: items ?? [] }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `checklist-${tmpl.name.toLowerCase().replace(/\s+/g, '-')}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImport = async (file: File) => {
+    setImporting(true)
+    setError(null)
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text)
+      const list: { name?: string; service_type?: string | null; items?: Partial<TemplateItem>[] }[] =
+        Array.isArray(parsed) ? parsed : [parsed]
+      for (const tmpl of list) {
+        if (!tmpl.name) continue
+        const { data: newTmpl, error: insErr } = await supabase
+          .from('oe_checklist_templates')
+          .insert({ org_id: orgId, name: tmpl.name, service_type: tmpl.service_type ?? null, active: false })
+          .select()
+          .single()
+        if (insErr || !newTmpl) continue
+        if (tmpl.items && tmpl.items.length > 0) {
+          await supabase.from('oe_checklist_items').insert(
+            tmpl.items.map((item, idx) => ({
+              template_id: newTmpl.id,
+              description: item.description ?? '',
+              gate: item.gate ?? 'free',
+              required: item.required ?? false,
+              requires_photo: item.requires_photo ?? false,
+              severity: item.severity ?? 'moderate',
+              category: item.category ?? null,
+              sort_order: item.sort_order ?? idx,
+            }))
+          )
+        }
+      }
+      await loadTemplates()
+    } catch {
+      setError('Arquivo inválido. Use o formato JSON exportado pelo sistema.')
+    } finally {
+      setImporting(false)
+      if (importInputRef.current) importInputRef.current.value = ''
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40">
@@ -558,13 +657,30 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
             Biblioteca reutilizável. Vincule um template ao criar uma OE.
           </p>
         </div>
-        <button
-          onClick={() => setShowNewForm(s => !s)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20"
-        >
-          <Plus className="w-4 h-4" />
-          Novo template
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImport(f) }}
+          />
+          <button
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-colors"
+          >
+            {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            Importar
+          </button>
+          <button
+            onClick={() => setShowNewForm(s => !s)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20"
+          >
+            <Plus className="w-4 h-4" />
+            Novo template
+          </button>
+        </div>
       </div>
 
       {/* New template form */}
@@ -630,6 +746,8 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
               onToggleActive={handleToggleActive}
               onDelete={handleDelete}
               onRename={handleRename}
+              onDuplicate={handleDuplicate}
+              onExport={handleExport}
             />
           ))}
         </div>

@@ -36,6 +36,40 @@ const BudgetPickerModal: React.FC<BudgetPickerModalProps> = ({
     const [expandedSubPhases, setExpandedSubPhases] = React.useState<Set<string>>(new Set());
     const [compositionItem, setCompositionItem] = React.useState<BudgetEntry | null>(null);
 
+    // Derive structure from budget when wbs is not provided — must be before early return (rules of hooks)
+    const effectiveWbs: WBSGroup[] = React.useMemo(() => {
+        if (wbs && wbs.length > 0) return wbs;
+        const groupMap = new Map<string, Map<string, Set<string>>>();
+        budget.forEach(e => {
+            const g = e.group || 'Sem grupo';
+            const p = e.phase || 'Sem etapa';
+            const sp = e.subPhase || '';
+            if (!groupMap.has(g)) groupMap.set(g, new Map());
+            const phaseMap = groupMap.get(g)!;
+            if (!phaseMap.has(p)) phaseMap.set(p, new Set());
+            if (sp) phaseMap.get(p)!.add(sp);
+        });
+        return Array.from(groupMap.entries()).map(([gName, phaseMap], gi) => ({
+            id: `g-${gi}`,
+            name: gName,
+            phases: Array.from(phaseMap.entries()).map(([pName, subSet], pi) => ({
+                id: `p-${gi}-${pi}`,
+                name: pName,
+                subPhases: Array.from(subSet)
+            }))
+        }));
+    }, [wbs, budget]);
+
+    const isSearching = searchTerm.trim().length > 0;
+    const filteredItems = isSearching ? budget.filter(item => {
+        const term = searchTerm.toLowerCase();
+        const desc = (item.sinapiItem?.description || '').toLowerCase();
+        const code = (item.sinapiItem?.code || '').toLowerCase();
+        const grp = (item.group || '').toLowerCase();
+        const ph = (item.phase || '').toLowerCase();
+        return desc.includes(term) || code.includes(term) || grp.includes(term) || ph.includes(term);
+    }) : [];
+
     if (!isOpen) return null;
 
     const toggleGroup = (name: string) => {
@@ -62,41 +96,6 @@ const BudgetPickerModal: React.FC<BudgetPickerModalProps> = ({
         });
     };
 
-    // Derive structure from budget when wbs is not provided
-    const effectiveWbs: WBSGroup[] = React.useMemo(() => {
-        if (wbs && wbs.length > 0) return wbs;
-        // Build WBS from budget entries
-        const groupMap = new Map<string, Map<string, Set<string>>>();
-        budget.forEach(e => {
-            const g = e.group || 'Sem grupo';
-            const p = e.phase || 'Sem etapa';
-            const sp = e.subPhase || '';
-            if (!groupMap.has(g)) groupMap.set(g, new Map());
-            const phaseMap = groupMap.get(g)!;
-            if (!phaseMap.has(p)) phaseMap.set(p, new Set());
-            if (sp) phaseMap.get(p)!.add(sp);
-        });
-        return Array.from(groupMap.entries()).map(([gName, phaseMap], gi) => ({
-            id: `g-${gi}`,
-            name: gName,
-            phases: Array.from(phaseMap.entries()).map(([pName, subSet], pi) => ({
-                id: `p-${gi}-${pi}`,
-                name: pName,
-                subPhases: Array.from(subSet)
-            }))
-        }));
-    }, [wbs, budget]);
-
-    // Search mode: flat filtered list
-    const isSearching = searchTerm.trim().length > 0;
-    const filteredItems = isSearching ? budget.filter(item => {
-        const term = searchTerm.toLowerCase();
-        const desc = (item.sinapiItem?.description || '').toLowerCase();
-        const code = (item.sinapiItem?.code || '').toLowerCase();
-        const grp = (item.group || '').toLowerCase();
-        const ph = (item.phase || '').toLowerCase();
-        return desc.includes(term) || code.includes(term) || grp.includes(term) || ph.includes(term);
-    }) : [];
 
     const handleSelectItem = (item: BudgetEntry) => {
         if (item.sinapiItem?.type === SinapiType.COMPOSITION) {

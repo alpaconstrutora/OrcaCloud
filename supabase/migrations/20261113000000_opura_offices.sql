@@ -55,12 +55,14 @@ ALTER TABLE public.offices_especificacoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.offices_timesheet ENABLE ROW LEVEL SECURITY;
 
 -- 1. Políticas para offices_leads
+DROP POLICY IF EXISTS "Enable all access for owners" ON public.offices_leads;
 CREATE POLICY "Enable all access for owners" ON public.offices_leads
     FOR ALL
     TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Enable all for anon in dev" ON public.offices_leads;
 CREATE POLICY "Enable all for anon in dev" ON public.offices_leads
     FOR ALL
     TO anon
@@ -68,12 +70,14 @@ CREATE POLICY "Enable all for anon in dev" ON public.offices_leads
     WITH CHECK (true);
 
 -- 2. Políticas para offices_especificacoes
+DROP POLICY IF EXISTS "Enable all access for owners" ON public.offices_especificacoes;
 CREATE POLICY "Enable all access for owners" ON public.offices_especificacoes
     FOR ALL
     TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Enable all for anon in dev" ON public.offices_especificacoes;
 CREATE POLICY "Enable all for anon in dev" ON public.offices_especificacoes
     FOR ALL
     TO anon
@@ -81,12 +85,14 @@ CREATE POLICY "Enable all for anon in dev" ON public.offices_especificacoes
     WITH CHECK (true);
 
 -- 3. Políticas para offices_timesheet
+DROP POLICY IF EXISTS "Enable all access for owners" ON public.offices_timesheet;
 CREATE POLICY "Enable all access for owners" ON public.offices_timesheet
     FOR ALL
     TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Enable all for anon in dev" ON public.offices_timesheet;
 CREATE POLICY "Enable all for anon in dev" ON public.offices_timesheet
     FOR ALL
     TO anon

@@ -14,6 +14,7 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- Admins da org fazem upload
+DROP POLICY IF EXISTS "Admins can upload opportunity photos" ON storage.objects;
 CREATE POLICY "Admins can upload opportunity photos" ON storage.objects
     FOR INSERT TO authenticated
     WITH CHECK (
@@ -25,6 +26,7 @@ CREATE POLICY "Admins can upload opportunity photos" ON storage.objects
     );
 
 -- Admins atualizam (upsert)
+DROP POLICY IF EXISTS "Admins can update opportunity photos" ON storage.objects;
 CREATE POLICY "Admins can update opportunity photos" ON storage.objects
     FOR UPDATE TO authenticated
     USING (
@@ -36,6 +38,7 @@ CREATE POLICY "Admins can update opportunity photos" ON storage.objects
     );
 
 -- Admins deletam
+DROP POLICY IF EXISTS "Admins can delete opportunity photos" ON storage.objects;
 CREATE POLICY "Admins can delete opportunity photos" ON storage.objects
     FOR DELETE TO authenticated
     USING (
@@ -47,6 +50,7 @@ CREATE POLICY "Admins can delete opportunity photos" ON storage.objects
     );
 
 -- Leitura pública (bucket public=true já permite, mas policy explícita garante)
+DROP POLICY IF EXISTS "Public can read opportunity photos" ON storage.objects;
 CREATE POLICY "Public can read opportunity photos" ON storage.objects
     FOR SELECT TO anon, authenticated
     USING (bucket_id = 'opportunity-photos');

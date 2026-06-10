@@ -56,12 +56,14 @@ ALTER TABLE public.reformas_diarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reformas_cronograma ENABLE ROW LEVEL SECURITY;
 
 -- 1. Políticas para reformas_projetos
+DROP POLICY IF EXISTS "Enable all access for owners" ON public.reformas_projetos;
 CREATE POLICY "Enable all access for owners" ON public.reformas_projetos
     FOR ALL
     TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Enable all for anon in dev" ON public.reformas_projetos;
 CREATE POLICY "Enable all for anon in dev" ON public.reformas_projetos
     FOR ALL
     TO anon
@@ -69,12 +71,14 @@ CREATE POLICY "Enable all for anon in dev" ON public.reformas_projetos
     WITH CHECK (true);
 
 -- 2. Políticas para reformas_diarios
+DROP POLICY IF EXISTS "Enable all access for owners" ON public.reformas_diarios;
 CREATE POLICY "Enable all access for owners" ON public.reformas_diarios
     FOR ALL
     TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Enable all for anon in dev" ON public.reformas_diarios;
 CREATE POLICY "Enable all for anon in dev" ON public.reformas_diarios
     FOR ALL
     TO anon
@@ -82,12 +86,14 @@ CREATE POLICY "Enable all for anon in dev" ON public.reformas_diarios
     WITH CHECK (true);
 
 -- 3. Políticas para reformas_cronograma
+DROP POLICY IF EXISTS "Enable all access for owners" ON public.reformas_cronograma;
 CREATE POLICY "Enable all access for owners" ON public.reformas_cronograma
     FOR ALL
     TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Enable all for anon in dev" ON public.reformas_cronograma;
 CREATE POLICY "Enable all for anon in dev" ON public.reformas_cronograma
     FOR ALL
     TO anon

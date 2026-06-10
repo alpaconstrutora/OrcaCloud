@@ -148,7 +148,7 @@ const Layout: React.FC<LayoutProps> = ({
   // Fallback: tudo true quando não há empresa selecionada (compatibilidade).
   const mod = React.useMemo(() => {
     const m = activeEmpresa?.modulos_habilitados;
-    if (!m) return { obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true };
+    if (!m) return { obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: false, offices: false, reformas: false };
     return m;
   }, [activeEmpresa]);
   const isDev = profile.group === 'DESENVOLVEDOR';
@@ -215,16 +215,16 @@ const Layout: React.FC<LayoutProps> = ({
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
   React.useEffect(() => { if (activeView.startsWith('labor-')) setIsLaborOpen(true); }, [activeView]);
 
-  // Preserva o scroll do sidebar entre re-renders e re-mounts
+  // Preserva o scroll do sidebar entre re-renders E remounts (via sessionStorage)
   const navRef = React.useRef<HTMLElement>(null);
-  const navScrollSaved = React.useRef<number>(0);
+  const NAV_SCROLL_KEY = 'orca_nav_scroll';
   const handleNavScroll = React.useCallback((e: React.UIEvent<HTMLElement>) => {
-    navScrollSaved.current = e.currentTarget.scrollTop;
+    sessionStorage.setItem(NAV_SCROLL_KEY, String(e.currentTarget.scrollTop));
   }, []);
   React.useLayoutEffect(() => {
-    if (navRef.current && navScrollSaved.current > 0) {
-      navRef.current.scrollTop = navScrollSaved.current;
-    }
+    if (!navRef.current) return;
+    const saved = parseInt(sessionStorage.getItem(NAV_SCROLL_KEY) ?? '0', 10);
+    if (saved > 0) navRef.current.scrollTop = saved;
   });
 
   const [unreadCount, setUnreadCount] = React.useState(0);
@@ -342,9 +342,9 @@ const Layout: React.FC<LayoutProps> = ({
           {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR') && (
             <>
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
-              <NavItem id="pro-dashboard" icon={Briefcase} label="ÒPURA Pro" />
-              <NavItem id="offices-dashboard" icon={Palette} label="ÒPURA Offices" />
-              <NavItem id="reformas-dashboard" icon={Hammer} label="ÒPURA Reformas" />
+              {(mod.pro       || isDev) && <NavItem id="pro-dashboard"      icon={Briefcase} label="ÒPURA Pro"      />}
+              {(mod.offices   || isDev) && <NavItem id="offices-dashboard"  icon={Palette}   label="ÒPURA Offices"  />}
+              {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" />}
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />

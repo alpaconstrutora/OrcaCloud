@@ -36,6 +36,9 @@ export interface CompanyModulos {
   crm: boolean;
   estoque: boolean;
   broker_portal: boolean;
+  pro: boolean;
+  offices: boolean;
+  reformas: boolean;
 }
 
 export interface Company {
@@ -413,6 +416,9 @@ export const DEFAULT_MODULOS: CompanyModulos = {
   crm:           false,
   estoque:       false,
   broker_portal: false,
+  pro:           false,
+  offices:       false,
+  reformas:      false,
 };
 
 export const MODULOS_POR_TIPO: Record<CompanyTipo, Partial<CompanyModulos>> = {

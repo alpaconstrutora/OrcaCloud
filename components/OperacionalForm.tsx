@@ -363,8 +363,8 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
 
   const loadReferenceData = async () => {
     const [teamsRes, empRes, templatesRes, siblingsRes, projectRes] = await Promise.all([
-      supabase.from('labor_teams').select('id, name').eq('org_id', orgId).order('name'),
-      supabase.from('employees').select('id, name, role').eq('org_id', orgId).eq('status', 'ATIVO').order('name'),
+      supabase.from('labor_teams').select('id, name').order('name'),
+      supabase.from('employees').select('id, name, role').eq('status', 'ATIVO').order('name'),
       supabase.from('oe_checklist_templates').select('id, name, service_type').eq('org_id', orgId).eq('active', true).order('name'),
       (() => {
         let q = supabase.from('work_orders').select('id, code, title').eq('project_id', projectId)

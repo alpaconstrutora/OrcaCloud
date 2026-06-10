@@ -7,6 +7,7 @@ import { clientService as crmClientService } from '../services/clientService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { storageService } from '../services/storageService';
+import { laborService } from '../services/laborService';
 import { sanitizeFileName } from '../utils/storageUtils';
 import ContractScopeManager from './ContractScopeManager';
 import { Upload, Trash2, ExternalLink } from 'lucide-react';
@@ -84,6 +85,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [crmClients, setCrmClients] = React.useState<{ id: string; name: string; document?: string }[]>([]);
     const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
+    const [employees, setEmployees] = React.useState<{ id: string; name: string; role?: string }[]>([]);
     const [chartOfAccounts, setChartOfAccounts] = React.useState<ChartOfAccount[]>([]);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [scopePickerOpen, setScopePickerOpen] = React.useState(false);
@@ -198,18 +200,20 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const loadDependencies = async () => {
         setIsSubmitting(true);
         try {
-            const [s, cl, cc, ca, p] = await Promise.all([
+            const [s, cl, cc, ca, p, emps] = await Promise.all([
                 supplierService.listSuppliers(organizationId),
                 crmClientService.listClients(organizationId),
                 financialRegistryService.listCostCenters(organizationId),
                 financialRegistryService.listChartOfAccounts(organizationId),
-                projectService.listProjects(undefined, organizationId, true)
+                projectService.listProjects(undefined, organizationId, true),
+                laborService.listEmployees(organizationId).catch(() => [] as { id: string; name: string; role?: string }[])
             ]);
             setSuppliers(s);
             setCrmClients((cl as any[]).map(c => ({ id: c.id, name: c.name, document: c.document })));
             setCostCenters(cc);
             setChartOfAccounts(ca);
             setProjects(p);
+            setEmployees((emps as any[]).filter(e => e.status !== 'DEMITIDO').map(e => ({ id: e.id, name: e.name, role: e.role })));
         } catch (error) {
             console.error("Erro ao carregar dependências do contrato:", error);
         } finally {
@@ -687,13 +691,28 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 <div className="grid grid-cols-2 gap-6">
                                     <div className="space-y-2">
                                         <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Responsável Interno</label>
-                                        <input
-                                            type="text"
-                                            placeholder="Nome do responsável pela empresa"
-                                            value={formData.internal_responsible || ''}
-                                            onChange={(e) => setFormData({ ...formData, internal_responsible: e.target.value })}
-                                            className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
-                                        />
+                                        {employees.length > 0 ? (
+                                            <select
+                                                value={formData.internal_responsible || ''}
+                                                onChange={e => setFormData({ ...formData, internal_responsible: e.target.value })}
+                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                            >
+                                                <option value="">Selecione o responsável</option>
+                                                {employees.map(e => (
+                                                    <option key={e.id} value={e.name}>
+                                                        {e.name}{e.role ? ` — ${e.role}` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                placeholder="Nome do responsável pela empresa"
+                                                value={formData.internal_responsible || ''}
+                                                onChange={e => setFormData({ ...formData, internal_responsible: e.target.value })}
+                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            />
+                                        )}
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Responsável do Cliente</label>

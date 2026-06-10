@@ -1,11 +1,114 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed, Gift } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
 import { notificationService } from '../services/notificationService';
 import { taskService } from '../services/taskService';
 import { viewUrl } from '../lib/tabRouter';
+
+// ── Nav context ───────────────────────────────────────────────────────────────
+// Defining NavItem/DropdownItem etc. inside Layout creates a new function type
+// on every render, causing React to unmount+remount all nav children and reset
+// the nav's scrollTop to 0. Moving them to module level gives stable references.
+type NavTheme = Record<string, string>;
+interface NavCtxValue {
+  activeView: string;
+  isCollapsed: boolean;
+  t: NavTheme;
+  onChangeView: (view: string) => void;
+  setIsMobileMenuOpen: (open: boolean) => void;
+}
+const NavContext = React.createContext<NavCtxValue | null>(null);
+const useNavCtx = () => React.useContext(NavContext)!;
+
+const NavItem = ({ id, icon: Icon, label, badge, forceFull, onClickOverride }: {
+  id: string; icon: React.ElementType; label: string; badge?: number;
+  forceFull?: boolean; onClickOverride?: () => void;
+}) => {
+  const { activeView, isCollapsed, t, onChangeView, setIsMobileMenuOpen } = useNavCtx();
+  const isActive = activeView === id;
+  const effectivelyCollapsed = isCollapsed && !forceFull;
+  const href = onClickOverride ? undefined : viewUrl(id);
+  const handleClick = (e: React.MouseEvent) => {
+    if (!onClickOverride && (e.button !== 0 || e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    if (onClickOverride) { onClickOverride(); } else { onChangeView(id); }
+    setIsMobileMenuOpen(false);
+  };
+  const commonProps = {
+    onClick: handleClick,
+    className: `flex items-center w-full py-2 text-sm font-medium transition-colors duration-150 rounded-lg mb-0.5 group relative
+      ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}
+      ${effectivelyCollapsed ? 'justify-center px-0' : 'justify-between px-3'}`,
+    title: effectivelyCollapsed ? label : undefined,
+  };
+  const content = (
+    <>
+      <div className={`flex items-center ${effectivelyCollapsed ? 'justify-center' : ''}`}>
+        <Icon className={`w-4 h-4 transition-colors ${isActive ? t.itemIconActive : t.itemIcon} ${!effectivelyCollapsed ? 'mr-3' : ''}`} strokeWidth={2} />
+        {!effectivelyCollapsed && <span>{label}</span>}
+      </div>
+      {!effectivelyCollapsed && badge !== undefined && (
+        <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500/20 text-orange-500'}`}>{badge}</span>
+      )}
+      {effectivelyCollapsed && badge !== undefined && (
+        <div className={`absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full border-2 ${t.badgeBgRing}`} />
+      )}
+    </>
+  );
+  return href ? <a href={href} {...commonProps}>{content}</a> : <button type="button" {...commonProps}>{content}</button>;
+};
+
+const NavGroup = ({ label, forceFull }: { label: string; forceFull?: boolean }) => {
+  const { isCollapsed, t } = useNavCtx();
+  if (isCollapsed && !forceFull) return <div className={`h-px ${t.divider} my-4 mx-4`} />;
+  return <div className="px-3 mt-4 mb-1.5"><span className={`text-[11px] font-semibold uppercase tracking-wider ${t.groupLabel}`}>{label}</span></div>;
+};
+
+const NavDropdown = ({ label, icon: Icon, isOpen, onToggle, children, hasActiveChild }: {
+  label: string; icon: React.ElementType; isOpen: boolean; onToggle: () => void;
+  children: React.ReactNode; hasActiveChild?: boolean;
+}) => {
+  const { isCollapsed, t } = useNavCtx();
+  return (
+    <div className="mb-1">
+      <button onClick={onToggle} className={`flex items-center w-full px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-lg justify-between group ${hasActiveChild ? t.itemActive : `${t.itemText} ${t.itemHover}`} ${isCollapsed ? 'justify-center' : ''}`}>
+        <div className="flex items-center">
+          <Icon className={`w-4 h-4 mr-3 transition-colors ${hasActiveChild ? t.itemIconActive : t.itemIcon} ${isCollapsed ? 'mr-0' : ''}`} strokeWidth={2} />
+          {!isCollapsed && <span>{label}</span>}
+        </div>
+        {!isCollapsed && <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />}
+      </button>
+      {isOpen && !isCollapsed && <div className={`mt-1 ml-4 pl-4 border-l ${t.dropdownBorder} space-y-0.5`}>{children}</div>}
+    </div>
+  );
+};
+
+const DropdownItem = ({ id, label, icon: Icon, badge }: {
+  id: string; label: string; icon?: React.ElementType; badge?: number;
+}) => {
+  const { activeView, t, onChangeView, setIsMobileMenuOpen } = useNavCtx();
+  const isActive = activeView === id;
+  const handleClick = (e: React.MouseEvent) => {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+    onChangeView(id);
+    setIsMobileMenuOpen(false);
+  };
+  return (
+    <a href={viewUrl(id)} onClick={handleClick} className={`flex items-center w-full px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-lg ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}`}>
+      {Icon && <Icon className="w-4 h-4 mr-3 shrink-0" strokeWidth={2} />}
+      <span className="flex-1 text-left">{label}</span>
+      {badge !== undefined && badge > 0 && <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ml-1 ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500 text-white'}`}>{badge}</span>}
+    </a>
+  );
+};
+
+const DropdownGroupLabel = ({ label }: { label: string }) => {
+  const { t } = useNavCtx();
+  return <div className="px-4 pt-3 pb-1"><span className={`text-[9px] font-black uppercase tracking-[0.15em] ${t.dropdownGroupLabel}`}>{label}</span></div>;
+};
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -111,6 +214,19 @@ const Layout: React.FC<LayoutProps> = ({
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
   React.useEffect(() => { if (activeView.startsWith('labor-')) setIsLaborOpen(true); }, [activeView]);
+
+  // Preserva o scroll do sidebar entre re-renders e re-mounts
+  const navRef = React.useRef<HTMLElement>(null);
+  const navScrollSaved = React.useRef<number>(0);
+  const handleNavScroll = React.useCallback((e: React.UIEvent<HTMLElement>) => {
+    navScrollSaved.current = e.currentTarget.scrollTop;
+  }, []);
+  React.useLayoutEffect(() => {
+    if (navRef.current && navScrollSaved.current > 0) {
+      navRef.current.scrollTop = navScrollSaved.current;
+    }
+  });
+
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [openTaskCount, setOpenTaskCount] = React.useState(0);
   const [toast, setToast] = React.useState<{ title: string; message: string } | null>(null);
@@ -177,120 +293,8 @@ const Layout: React.FC<LayoutProps> = ({
     };
   }, [profile.email, profile.group, fetchUnreadCount]);
 
-  const NavItem = ({ id, icon: Icon, label, badge, forceFull, onClickOverride }: { id: string, icon: React.ElementType, label: string, badge?: number, forceFull?: boolean, onClickOverride?: () => void }) => {
-    const isActive = activeView === id;
-    const effectivelyCollapsed = isCollapsed && !forceFull;
-    const href = onClickOverride ? undefined : viewUrl(id);
-
-    const handleClick = (e: React.MouseEvent) => {
-      // Allow middle-click and Ctrl/Cmd+click to open in a new tab via the href.
-      if (!onClickOverride && (e.button !== 0 || e.ctrlKey || e.metaKey)) return;
-      e.preventDefault();
-      if (onClickOverride) {
-        onClickOverride();
-      } else {
-        onChangeView(id);
-      }
-      setIsMobileMenuOpen(false);
-    };
-
-    const commonProps = {
-      onClick: handleClick,
-      className: `flex items-center w-full py-2 text-sm font-medium transition-colors duration-150 rounded-lg mb-0.5 group relative
-        ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}
-        ${effectivelyCollapsed ? 'justify-center px-0' : 'justify-between px-3'}`,
-      title: effectivelyCollapsed ? label : undefined,
-    };
-
-    const content = (
-      <>
-        <div className={`flex items-center ${effectivelyCollapsed ? 'justify-center' : ''}`}>
-          <Icon className={`w-4 h-4 transition-colors ${isActive ? t.itemIconActive : t.itemIcon} ${!effectivelyCollapsed ? 'mr-3' : ''}`} strokeWidth={2} />
-          {!effectivelyCollapsed && <span>{label}</span>}
-        </div>
-        {!effectivelyCollapsed && badge !== undefined && (
-          <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500/20 text-orange-500'}`}>
-            {badge}
-          </span>
-        )}
-        {effectivelyCollapsed && badge !== undefined && (
-          <div className={`absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full border-2 ${t.badgeBgRing}`} />
-        )}
-      </>
-    );
-
-    return href
-      ? <a href={href} {...commonProps}>{content}</a>
-      : <button type="button" {...commonProps}>{content}</button>;
-  };
-
-  const NavGroup = ({ label, forceFull }: { label: string, forceFull?: boolean }) => {
-    if (isCollapsed && !forceFull) return <div className={`h-px ${t.divider} my-4 mx-4`} />;
-
-    return (
-      <div className="px-3 mt-4 mb-1.5">
-        <span className={`text-[11px] font-semibold uppercase tracking-wider ${t.groupLabel}`}>{label}</span>
-      </div>
-    );
-  };
-
-  const NavDropdown = ({ label, icon: Icon, isOpen, onToggle, children, hasActiveChild }: { label: string, icon: React.ElementType, isOpen: boolean, onToggle: () => void, children: React.ReactNode, hasActiveChild?: boolean }) => {
-    return (
-      <div className="mb-1">
-        <button
-          onClick={onToggle}
-          className={`flex items-center w-full px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-lg justify-between group
-            ${hasActiveChild ? t.itemActive : `${t.itemText} ${t.itemHover}`}
-            ${isCollapsed ? 'justify-center' : ''}`}
-        >
-          <div className="flex items-center">
-            <Icon className={`w-4 h-4 mr-3 transition-colors ${hasActiveChild ? t.itemIconActive : t.itemIcon} ${isCollapsed ? 'mr-0' : ''}`} strokeWidth={2} />
-            {!isCollapsed && <span>{label}</span>}
-          </div>
-          {!isCollapsed && (
-            <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
-          )}
-        </button>
-        {isOpen && !isCollapsed && (
-          <div className={`mt-1 ml-4 pl-4 border-l ${t.dropdownBorder} space-y-0.5`}>
-            {children}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const DropdownItem = ({ id, label, icon: Icon, badge }: { id: string, label: string, icon?: React.ElementType, badge?: number }) => {
-    const isActive = activeView === id;
-    const handleClick = (e: React.MouseEvent) => {
-      if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
-      e.preventDefault();
-      onChangeView(id);
-      setIsMobileMenuOpen(false);
-    };
-    return (
-      <a
-        href={viewUrl(id)}
-        onClick={handleClick}
-        className={`flex items-center w-full px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-lg
-          ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}`}
-      >
-        {Icon && <Icon className="w-4 h-4 mr-3 shrink-0" strokeWidth={2} />}
-        <span className="flex-1 text-left">{label}</span>
-        {badge !== undefined && badge > 0 && (
-          <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ml-1 ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500 text-white'}`}>{badge}</span>
-        )}
-      </a>
-    );
-  };
-
-  const DropdownGroupLabel = ({ label }: { label: string }) => (
-    <div className="px-4 pt-3 pb-1">
-      <span className={`text-[9px] font-black uppercase tracking-[0.15em] ${t.dropdownGroupLabel}`}>{label}</span>
-    </div>
-  );
-
   return (
+    <NavContext.Provider value={{ activeView, isCollapsed, t, onChangeView, setIsMobileMenuOpen }}>
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans relative">
       {/* Sidebar - Desktop */}
       <aside className={`hidden md:flex flex-col border-r shadow-2xl relative z-20 transition-all duration-300 ease-in-out ${t.shell} ${isCollapsed ? 'w-20' : 'w-72'}`}>
@@ -334,10 +338,13 @@ const Layout: React.FC<LayoutProps> = ({
         )}
 
         {/* Navigation */}
-        <nav className={`flex-1 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-3'} py-2`}>
+        <nav ref={navRef} onScroll={handleNavScroll} className={`flex-1 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-3'} py-2`}>
           {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR') && (
             <>
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
+              <NavItem id="pro-dashboard" icon={Briefcase} label="ÒPURA Pro" />
+              <NavItem id="offices-dashboard" icon={Palette} label="ÒPURA Offices" />
+              <NavItem id="reformas-dashboard" icon={Hammer} label="ÒPURA Reformas" />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
@@ -692,6 +699,9 @@ const Layout: React.FC<LayoutProps> = ({
             </div>
             <nav className="flex-1 py-6 px-4 overflow-y-auto">
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" forceFull />
+              <NavItem id="pro-dashboard" icon={Briefcase} label="ÒPURA Pro" forceFull />
+              <NavItem id="offices-dashboard" icon={Palette} label="ÒPURA Offices" forceFull />
+              <NavItem id="reformas-dashboard" icon={Hammer} label="ÒPURA Reformas" forceFull />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' ? (
                 <div className="space-y-1 mb-4">
@@ -845,6 +855,7 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
       )}
     </div>
+    </NavContext.Provider>
   );
 };
 

@@ -136,6 +136,7 @@ export interface WorkOrder {
 
   teamId: string | null
   responsibleId: string | null
+  collaboratorIds: string[]
 
   plannedStartDate: string | null
   plannedEndDate: string | null
@@ -344,6 +345,7 @@ export interface CreateWorkOrderInput {
   priority?: WorkOrderPriority
   teamId?: string
   responsibleId?: string
+  collaboratorIds?: string[]
   plannedStartDate?: string
   plannedEndDate?: string
   measurementUnit?: string
@@ -363,6 +365,7 @@ export interface UpdateWorkOrderInput {
   priority?: WorkOrderPriority
   teamId?: string
   responsibleId?: string
+  collaboratorIds?: string[]
   plannedStartDate?: string
   plannedEndDate?: string
   measurementUnit?: string

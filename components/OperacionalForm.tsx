@@ -347,6 +347,7 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
     priority: 'normal' as WorkOrderPriority,
     teamId: '',
     responsibleId: '',
+    collaboratorIds: [] as string[],
     plannedStartDate: '',
     plannedEndDate: '',
     measurementUnit: '',
@@ -400,6 +401,7 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
         priority: (wo.priority as WorkOrderPriority) ?? 'normal',
         teamId: wo.team_id ?? '',
         responsibleId: wo.responsible_id ?? '',
+        collaboratorIds: (wo.collaborator_ids as string[] | null) ?? [],
         plannedStartDate: wo.planned_start_date ?? '',
         plannedEndDate: wo.planned_end_date ?? '',
         measurementUnit: wo.measurement_unit ?? '',
@@ -468,6 +470,7 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
         projectId,
         teamId: form.teamId || undefined,
         responsibleId: form.responsibleId || undefined,
+        collaboratorIds: form.collaboratorIds,
         plannedStartDate: form.plannedStartDate || undefined,
         plannedEndDate: form.plannedEndDate || undefined,
         measurementUnit: form.measurementUnit || undefined,
@@ -767,6 +770,49 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
               </div>
             </Field>
           </div>
+
+          {/* Colaboradores — multi-select */}
+          <Field label="Colaboradores" colSpan={2}>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {form.collaboratorIds.map(id => {
+                const emp = employees.find(e => e.id === id)
+                if (!emp) return null
+                return (
+                  <span key={id} className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                    {emp.name}{emp.role ? ` — ${emp.role}` : ''}
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, collaboratorIds: f.collaboratorIds.filter(x => x !== id) }))}
+                      className="text-blue-400 hover:text-blue-700"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )
+              })}
+            </div>
+            <div className="relative">
+              <select
+                value=""
+                onChange={e => {
+                  const val = e.target.value
+                  if (val && !form.collaboratorIds.includes(val))
+                    setForm(f => ({ ...f, collaboratorIds: [...f.collaboratorIds, val] }))
+                }}
+                className={selectCls}
+              >
+                <option value="">Adicionar colaborador...</option>
+                {employees
+                  .filter(emp => !form.collaboratorIds.includes(emp.id))
+                  .map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name}{emp.role ? ` — ${emp.role}` : ''}
+                    </option>
+                  ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+          </Field>
         </div>
 
         {/* Section: Datas */}

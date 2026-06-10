@@ -3,6 +3,7 @@ import ProDashboard from './ProDashboard';
 import ProOrcamentoForm from './ProOrcamentoForm';
 import ProServicoView from './ProServicoView';
 import ProClientesLista from './ProClientesLista';
+import ProConfigForm from './ProConfigForm';
 
 interface ProModuleProps {
   activeView: string;
@@ -69,6 +70,13 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
             onBack={() => onChangeView('pro-dashboard')}
           />
         )}
+
+        {activeView === 'pro-config' && (
+          <ProConfigForm
+            userId={userId}
+            onBack={() => onChangeView('pro-dashboard')}
+          />
+        )}
       </div>
 
       {/* Menu Inferior Fixo (Mobile Bottom Bar) */}
@@ -84,13 +92,6 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
         </button>
 
         <button
-          onClick={handleCreateOrcamento}
-          className={`flex flex-col items-center justify-center w-14 h-14 bg-gradient-to-tr from-orange-600 to-amber-500 text-white rounded-full -translate-y-4 shadow-lg shadow-orange-950/40 border-4 border-slate-900 active:scale-95 transition-transform`}
-        >
-          <span className="text-xl font-bold">+</span>
-        </button>
-
-        <button
           onClick={() => onChangeView('pro-clientes-lista')}
           className={`flex flex-col items-center justify-center w-12 h-12 transition-colors ${
             activeView === 'pro-clientes-lista' ? 'text-orange-500' : 'text-slate-400 hover:text-slate-200'
@@ -98,6 +99,23 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
         >
           <span className="text-xl">👤</span>
           <span className="text-[9px] font-black uppercase mt-0.5 tracking-tighter">Clientes</span>
+        </button>
+
+        <button
+          onClick={handleCreateOrcamento}
+          className={`flex flex-col items-center justify-center w-14 h-14 bg-gradient-to-tr from-orange-600 to-amber-500 text-white rounded-full -translate-y-4 shadow-lg shadow-orange-950/40 border-4 border-slate-900 active:scale-95 transition-transform`}
+        >
+          <span className="text-xl font-bold">+</span>
+        </button>
+
+        <button
+          onClick={() => onChangeView('pro-config')}
+          className={`flex flex-col items-center justify-center w-12 h-12 transition-colors ${
+            activeView === 'pro-config' ? 'text-orange-500' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <span className="text-xl">⚙️</span>
+          <span className="text-[9px] font-black uppercase mt-0.5 tracking-tighter">Ajustes</span>
         </button>
       </div>
     </div>

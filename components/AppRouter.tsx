@@ -242,6 +242,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'pro-orcamento-form':
     case 'pro-servico-detalhe':
     case 'pro-clientes-lista':
+    case 'pro-config':
       return (
         <ProModule
           activeView={activeView}

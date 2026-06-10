@@ -144,6 +144,30 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
     setMostrarAssinatura(false);
   };
 
+  const handleFotoAntesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setAntesFoto(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFotoDepoisUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setDepoisFoto(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Lógica do Checklist
   const toggleChecklistItem = (itemId: string) => {
     const updated = checklist.map(item =>
@@ -399,12 +423,10 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 <button onClick={() => setAntesFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600/80 text-white text-xs flex items-center justify-center">×</button>
               </div>
             ) : (
-              <button
-                onClick={() => setAntesFoto('https://images.unsplash.com/photo-1581094288338-2314dddb7eed?w=400')}
-                className="w-full h-20 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 flex flex-col items-center justify-center text-[10px] uppercase font-bold"
-              >
+              <label className="w-full h-20 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 flex flex-col items-center justify-center text-[10px] uppercase font-bold cursor-pointer transition-all active:scale-[0.98]">
                 📸 Adicionar
-              </button>
+                <input type="file" accept="image/*" className="hidden" onChange={handleFotoAntesUpload} />
+              </label>
             )}
           </div>
           <div className="space-y-1">
@@ -415,12 +437,10 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 <button onClick={() => setDepoisFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600/80 text-white text-xs flex items-center justify-center">×</button>
               </div>
             ) : (
-              <button
-                onClick={() => setDepoisFoto('https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400')}
-                className="w-full h-20 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 flex flex-col items-center justify-center text-[10px] uppercase font-bold"
-              >
+              <label className="w-full h-20 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 flex flex-col items-center justify-center text-[10px] uppercase font-bold cursor-pointer transition-all active:scale-[0.98]">
                 📸 Adicionar
-              </button>
+                <input type="file" accept="image/*" className="hidden" onChange={handleFotoDepoisUpload} />
+              </label>
             )}
           </div>
         </div>

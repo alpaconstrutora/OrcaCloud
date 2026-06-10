@@ -428,7 +428,7 @@ export const contractService = {
     getContractById: async (id: string): Promise<Contract | null> => {
         const { data, error } = await supabase
             .from('contracts')
-            .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, billing_mode, release_requirements, created_at')
+            .select('id, organization_id, project_id, budget_id, budget_snapshot, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, billing_mode, release_requirements, created_at')
             .eq('id', id)
             .maybeSingle();
 
@@ -444,7 +444,7 @@ export const contractService = {
                 const { data: proj } = await supabase
                     .from('projects')
                     .select('budget')
-                    .eq('id', contract.project_id)
+                    .eq('id', contract.budget_id)
                     .maybeSingle();
                 if (proj?.budget) budgetSnapshot = proj.budget;
             } catch { /* snapshot opcional, não bloqueia */ }
@@ -494,6 +494,18 @@ export const contractService = {
 
             const addendumsTotal = (addendums || []).reduce((sum, a) => sum + (a.value_impact || 0), 0);
             updates.current_value = updates.original_value + addendumsTotal;
+        }
+
+        // Refresh budget_snapshot when budget_id changes
+        if (updates.budget_id) {
+            try {
+                const { data: proj } = await supabase
+                    .from('projects')
+                    .select('budget')
+                    .eq('id', updates.budget_id)
+                    .maybeSingle();
+                if (proj?.budget) (updates as any).budget_snapshot = proj.budget;
+            } catch { /* snapshot opcional */ }
         }
 
         const { data, error } = await supabase

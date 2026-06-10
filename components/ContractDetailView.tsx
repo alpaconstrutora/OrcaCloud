@@ -22,6 +22,7 @@ import EmitDocumentModal from './EmitDocumentModal';
 import DocxTemplateManager from './DocxTemplateManager';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { projectService } from '../services/projectService';
+import { supabase } from '../lib/supabase';
 import BudgetPickerModal from './BudgetPickerModal';
 import ContractMeasurementModal from './ContractMeasurementModal';
 import ContractAddendumModal from './ContractAddendumModal';
@@ -159,6 +160,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             // 1. Try to load project settings if obra is linked
             const sourceProjectId = c?.budget_id || c?.project_id;
+            let projectBudgetLoaded = false;
             if (sourceProjectId) {
                 try {
                     const projectData = await projectService.loadProject(sourceProjectId);
@@ -173,10 +175,23 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         // Always load budget from linked project (budget_id takes precedence)
                         if (projectData.budget && projectData.budget.length > 0) {
                             setActiveBudget(projectData.budget);
+                            projectBudgetLoaded = true;
+                            // Refresh snapshot in background so fallback stays fresh
+                            supabase.from('contracts')
+                                .update({ budget_snapshot: projectData.budget })
+                                .eq('id', contractId)
+                                .then(() => {}).catch(() => {});
                         }
                     }
                 } catch (err) {
                     console.error("Erro ao carregar dados do projeto:", err);
+                }
+            }
+            // Fallback: use budget_snapshot stored on the contract itself
+            if (!projectBudgetLoaded) {
+                const snap = (c as any)?.budget_snapshot;
+                if (Array.isArray(snap) && snap.length > 0) {
+                    setActiveBudget(snap);
                 }
             }
 

@@ -56,6 +56,7 @@ const PortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
   );
 };
 import PublicOrderView from './components/PublicOrderView';
+import { PublicEspecificacoesView } from './components/PublicEspecificacoesView';
 import { ContractModal } from './components/ContractModal';
 import SupplyChainQuotationForm from './components/SupplyChainQuotationForm';
 import SupplyChainOrderForm from './components/SupplyChainOrderForm';
@@ -255,6 +256,14 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (orderShareToken) return <PublicOrderView token={orderShareToken} />;
+
+  // ── Guard público: aprovação de especificações de arquitetura do cliente ────
+  const officesShareProjectId = React.useMemo(() => {
+    const match = window.location.pathname.match(/^\/especificacoes-cliente\/([0-9a-f-]{36})$/i);
+    return match ? match[1] : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (officesShareProjectId) return <PublicEspecificacoesView projetoId={officesShareProjectId} />;
 
   // ── Guard público: marketplace de oportunidades por slug ─────────────────────
   const marketplaceSlug = React.useMemo(() => {

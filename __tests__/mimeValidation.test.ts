@@ -237,7 +237,7 @@ describe('validateDocumentFile — cobertura das regras do service', () => {
             makeFile('spoof.pdf',    'application/x-msdownload'),
             makeFile('trojan.pdf',   'text/html'),
             makeFile('empty.pdf',    'application/pdf', 0),
-            makeFile('huge.pdf',     'application/pdf', 10 * MB + 1),
+            makeFile('huge.pdf',     'application/pdf', 25 * MB + 1),
         ];
 
         for (const f of maliciousFiles) {

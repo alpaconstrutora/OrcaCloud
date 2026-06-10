@@ -67,6 +67,9 @@ const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
 const ControladoriaModule   = React.lazy(() => import('./ControladoriaModule'));
 const MasterDataBrowser     = React.lazy(() => import('./MasterDataBrowser'));
+const ProModule             = React.lazy(() => import('./ProModule'));
+const OfficesModule         = React.lazy(() => import('./OfficesModule'));
+const ReformasModule        = React.lazy(() => import('./ReformasModule'));
 
 // Suspense fallback
 const Spinner = () => (
@@ -235,6 +238,41 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
   // ── Roteamento principal ─────────────────────────────────────────────────────
   switch (activeView) {
+    case 'pro-dashboard':
+    case 'pro-orcamento-form':
+    case 'pro-servico-detalhe':
+    case 'pro-clientes-lista':
+      return (
+        <ProModule
+          activeView={activeView}
+          onChangeView={setActiveView}
+          userId={session?.user?.id || ''}
+        />
+      );
+
+    case 'offices-dashboard':
+    case 'offices-crm':
+    case 'offices-especificador':
+    case 'offices-timesheet':
+      return (
+        <OfficesModule
+          activeView={activeView}
+          onChangeView={setActiveView}
+          userId={session?.user?.id || ''}
+        />
+      );
+
+    case 'reformas-dashboard':
+    case 'reformas-diarios':
+    case 'reformas-cronograma':
+      return (
+        <ReformasModule
+          activeView={activeView}
+          onChangeView={setActiveView}
+          userId={session?.user?.id || ''}
+        />
+      );
+
     case 'dashboard':
       if (settingsWithId.classification === 'OBRA') {
         return (

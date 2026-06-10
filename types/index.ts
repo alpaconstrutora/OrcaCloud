@@ -15,3 +15,7 @@ export * from "./company";
 export * from "./fiscal";
 export * from "./operational-control";
 export * from "./supplierBankAccount";
+export * from "./pro";
+export * from "./offices";
+export * from "./reformas";
+

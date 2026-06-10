@@ -153,6 +153,9 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
             ignoreWidth: false,
             ignoreHeight: false,
             breakPages: true,
+            // honra as marcas de quebra de página do Word (quando existirem),
+            // ajudando a paginar em vez de uma única seção gigante
+            ignoreLastRenderedPageBreak: false,
             renderHeaders: true,
             renderFooters: true,
             useBase64URL: true,
@@ -179,56 +182,64 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
         iframe.style.height = `${idoc.documentElement.scrollHeight}px`;
 
         const SCALE = 2;
+        const A4_RATIO = 297 / 210; // altura/largura de uma folha A4
         let doc: import('jspdf').jsPDF | null = null;
         let added = 0;
         const diag: string[] = [];
 
-        // Captura CADA página individualmente (uma <section> = uma página A4).
+        // Para cada <section>, captura em FATIAS de altura A4. Uma seção pode ter
+        // 30+ folhas de altura (docx-preview às vezes não pagina); um canvas único
+        // dessa altura estoura o limite do navegador (~32767px) e o toDataURL
+        // devolve 'data:,'. Capturando por região (x/y/width/height) cada fatia
+        // fica num canvas pequeno e válido.
         for (let i = 0; i < pages.length; i++) {
             const page = pages[i];
-            const wMm = page.offsetWidth * PX_TO_MM;
-            const hMm = page.offsetHeight * PX_TO_MM;
-            const orientation = wMm > hMm ? 'l' : 'p';
+            const w = page.offsetWidth;
+            const totalH = page.offsetHeight;
+            if (w < 1 || totalH < 1) { diag.push(`p${i + 1}:vazia ${w}x${totalH}`); continue; }
 
-            let canvas: HTMLCanvasElement | null = null;
-            let canvasInfo = '';
-            let nonWhite = -1;
-            let imgLen = 0;
-            let err = '';
-            try {
-                canvas = await html2canvas(page, { scale: SCALE, useCORS: true, backgroundColor: '#ffffff' });
-                canvasInfo = `${canvas.width}x${canvas.height}`;
+            const wMm = w * PX_TO_MM;
+            const sliceHpx = Math.max(200, Math.floor(w * A4_RATIO)); // ~1123px p/ A4
+
+            for (let top = 0; top < totalH; top += sliceHpx) {
+                const hPx = Math.min(sliceHpx, totalH - top);
+                const hMm = hPx * PX_TO_MM;
+                const orientation = wMm > hMm ? 'l' : 'p';
+                let info = '';
                 try {
-                    const data = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, Math.min(canvas.height, 500)).data;
-                    nonWhite = 0;
-                    if (data) for (let k = 0; k < data.length; k += 4) {
-                        if (data[k] < 245 || data[k + 1] < 245 || data[k + 2] < 245) { nonWhite++; if (nonWhite > 80) break; }
-                    }
-                } catch (e) { nonWhite = -2; err = 'tainted'; }
+                    const canvas = await html2canvas(page, {
+                        scale: SCALE,
+                        useCORS: true,
+                        backgroundColor: '#ffffff',
+                        x: 0,
+                        y: top,
+                        width: w,
+                        height: hPx,
+                        windowWidth: w,
+                        windowHeight: totalH,
+                        scrollX: 0,
+                        scrollY: 0,
+                    });
+                    info = `${canvas.width}x${canvas.height}`;
+                    if (!canvas.width || !canvas.height) { diag.push(`p${i + 1}@${top}:cv0`); continue; }
+                    const img = canvas.toDataURL('image/jpeg', 0.92);
+                    if (!img || img === 'data:,') { diag.push(`p${i + 1}@${top}:img0 cv:${info}`); continue; }
 
-                if (canvas.width && canvas.height) {
-                    const img = canvas.toDataURL('image/jpeg', 0.95);
-                    imgLen = img.length;
-                    if (img && img !== 'data:,') {
-                        if (!doc) doc = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation, compress: true });
-                        else doc.addPage([wMm, hMm], orientation);
-                        doc.addImage(img, 'JPEG', 0, 0, wMm, hMm);
-                        added++;
-                    }
+                    if (!doc) doc = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation, compress: true });
+                    else doc.addPage([wMm, hMm], orientation);
+                    doc.addImage(img, 'JPEG', 0, 0, wMm, hMm);
+                    added++;
+                } catch (e) {
+                    diag.push(`p${i + 1}@${top}:err ${e instanceof Error ? e.message : String(e)} cv:${info}`);
                 }
-            } catch (e) {
-                err = e instanceof Error ? e.message : String(e);
             }
-
-            const line = `p${i + 1}:${page.offsetWidth}x${page.offsetHeight}|cv:${canvasInfo || 'none'}|nw:${nonWhite}|img:${imgLen}${err ? '|err:' + err : ''}`;
-            diag.push(line);
-            // eslint-disable-next-line no-console
-            console.log('[docxBlobToPdf]', line);
         }
 
         if (!doc || added === 0) {
-            throw new Error('PDF sem conteúdo. Diagnóstico → ' + diag.join('  ||  '));
+            throw new Error('PDF sem conteúdo. Diagnóstico → ' + diag.slice(0, 6).join('  ||  '));
         }
+        // eslint-disable-next-line no-console
+        console.log('[docxBlobToPdf] páginas adicionadas:', added);
         return doc.output('blob');
     } finally {
         window.document.body.removeChild(iframe);

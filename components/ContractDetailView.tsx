@@ -321,9 +321,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [itemHistory, setItemHistory] = React.useState<{ measurement: ContractMeasurement, item: ContractMeasurementItem }[]>([]);
 
     const handleViewItemHistory = async (item: ContractItem) => {
+        if (!contract) return;
         try {
             setLoading(true);
-            const allMeasurements = await contractService.listMeasurements(contract?.id || '');
+            const allMeasurements = await contractService.listMeasurements(contract.id);
             const allItems = await Promise.all(
                 allMeasurements.map(m => contractService.getMeasurementItems(m.id))
             );

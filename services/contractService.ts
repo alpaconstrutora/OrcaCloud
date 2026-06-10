@@ -428,7 +428,7 @@ export const contractService = {
     getContractById: async (id: string): Promise<Contract | null> => {
         const { data, error } = await supabase
             .from('contracts')
-            .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, created_at')
+            .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, billing_mode, release_requirements, created_at')
             .eq('id', id)
             .maybeSingle();
 
@@ -832,7 +832,7 @@ export const contractService = {
     listMeasurements: async (contractId: string): Promise<ContractMeasurement[]> => {
         const { data, error } = await supabase
             .from('contract_measurements')
-            .select('id, contract_id, number, period_start, period_end, measurement_date, status, total_value, retention_value, net_value, notes, invoice_url, created_at')
+            .select('id, contract_id, number, period_start, period_end, measurement_date, status, measurement_mode, total_value, retention_value, net_value, notes, invoice_url, approved_by, approved_at, rejection_reason, created_at')
             .eq('contract_id', contractId)
             .order('number', { ascending: false });
 
@@ -1064,7 +1064,7 @@ export const contractService = {
     getMeasurementItems: async (measurementId: string): Promise<ContractMeasurementItem[]> => {
         const { data, error } = await supabase
             .from('contract_measurement_items')
-            .select('id, measurement_id, contract_item_id, quantity_executed, value_executed, attachment_urls, created_at')
+            .select('id, measurement_id, contract_item_id, quantity_executed, value_executed, attachment_urls, percent_executed, item_mode, created_at')
             .eq('measurement_id', measurementId);
 
         if (error) throw error;

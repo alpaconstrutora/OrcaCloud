@@ -98,7 +98,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     setLoading(true)
     const { data, error } = await supabase
       .from('tasks')
-      .select('id, org_id, user_id, title, description, due_date, priority, status, status_id, snoozed_until, source_module, source_ref, created_at, completed_at, parent_task_id, space_id, folder_id')
+      .select('id, org_id, user_id, title, description, start_date, due_date, priority, status, status_id, snoozed_until, source_module, source_ref, created_at, completed_at, assignee_employee_id, project_id, parent_task_id, space_id, folder_id')
       .order('status',   { ascending: true })
       .order('due_date', { ascending: true, nullsFirst: false })
       .order('priority', { ascending: true })

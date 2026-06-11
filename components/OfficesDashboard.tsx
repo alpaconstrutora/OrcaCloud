@@ -18,7 +18,7 @@ import {
 
 interface OfficesDashboardProps {
   userId: string;
-  onNavigate: (tab: 'DASHBOARD' | 'CRM' | 'ESPECIFICADOR' | 'TIMESHEET') => void;
+  onNavigate: (tab: 'DASHBOARD' | 'CRM' | 'ESPECIFICADOR' | 'TIMESHEET' | 'FINANCEIRO') => void;
 }
 
 // Imagens premium de arquitetura e interiores para ilustrar os cards dos projetos
@@ -132,7 +132,10 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({
               <span className="block text-[8px] font-black uppercase tracking-widest text-slate-500">Aprovação</span>
               <span className="block text-sm font-black text-white">{propostasPendentes} Propostas</span>
             </div>
-            <div className="bg-slate-900/40 p-3 rounded-2xl border border-white/5 space-y-1">
+            <div 
+              onClick={() => onNavigate('FINANCEIRO')}
+              className="bg-slate-900/40 p-3 rounded-2xl border border-white/5 space-y-1 cursor-pointer hover:border-[#D47A55]/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+            >
               <span className="block text-[8px] font-black uppercase tracking-widest text-slate-500">Contratos</span>
               <span className="block text-xs font-black text-[#D47A55] truncate">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(faturamentoReal)}

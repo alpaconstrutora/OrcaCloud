@@ -255,6 +255,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'offices-crm':
     case 'offices-especificador':
     case 'offices-timesheet':
+    case 'offices-biblioteca':
+    case 'offices-financeiro':
       return (
         <OfficesModule
           activeView={activeView}

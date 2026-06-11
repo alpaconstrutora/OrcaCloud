@@ -3,7 +3,10 @@ import OfficesDashboard from './OfficesDashboard';
 import OfficesCRM from './OfficesCRM';
 import OfficesEspecificador from './OfficesEspecificador';
 import OfficesTimeTracking from './OfficesTimeTracking';
-import { LayoutDashboard, Users, Palette, Clock } from 'lucide-react';
+import OfficesBiblioteca from './OfficesBiblioteca';
+import { OfficesAI } from './OfficesAI';
+import OfficesFinanceiro from './OfficesFinanceiro';
+import { LayoutDashboard, Users, Folder, Palette, Clock, DollarSign } from 'lucide-react';
 
 interface OfficesModuleProps {
   activeView: string;
@@ -17,21 +20,25 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
   userId
 }) => {
   // Mapeamento local de abas para simular o app mobile
-  const [activeTab, setActiveTab] = React.useState<'DASHBOARD' | 'CRM' | 'ESPECIFICADOR' | 'TIMESHEET'>('DASHBOARD');
+  const [activeTab, setActiveTab] = React.useState<'DASHBOARD' | 'CRM' | 'ESPECIFICADOR' | 'BIBLIOTECA' | 'TIMESHEET' | 'FINANCEIRO'>('DASHBOARD');
 
   // Sincroniza a aba baseando-se no activeView que vem do roteador principal
   React.useEffect(() => {
     if (activeView === 'offices-crm') setActiveTab('CRM');
     else if (activeView === 'offices-especificador') setActiveTab('ESPECIFICADOR');
+    else if (activeView === 'offices-biblioteca') setActiveTab('BIBLIOTECA');
     else if (activeView === 'offices-timesheet') setActiveTab('TIMESHEET');
+    else if (activeView === 'offices-financeiro') setActiveTab('FINANCEIRO');
     else setActiveTab('DASHBOARD');
   }, [activeView]);
 
-  const handleTabChange = (tab: 'DASHBOARD' | 'CRM' | 'ESPECIFICADOR' | 'TIMESHEET') => {
+  const handleTabChange = (tab: 'DASHBOARD' | 'CRM' | 'ESPECIFICADOR' | 'BIBLIOTECA' | 'TIMESHEET' | 'FINANCEIRO') => {
     setActiveTab(tab);
     if (tab === 'CRM') onChangeView('offices-crm');
     else if (tab === 'ESPECIFICADOR') onChangeView('offices-especificador');
+    else if (tab === 'BIBLIOTECA') onChangeView('offices-biblioteca');
     else if (tab === 'TIMESHEET') onChangeView('offices-timesheet');
+    else if (tab === 'FINANCEIRO') onChangeView('offices-financeiro');
     else onChangeView('offices-dashboard');
   };
 
@@ -41,14 +48,18 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
         return <OfficesCRM userId={userId} />;
       case 'ESPECIFICADOR':
         return <OfficesEspecificador userId={userId} />;
+      case 'BIBLIOTECA':
+        return <OfficesBiblioteca userId={userId} />;
       case 'TIMESHEET':
         return <OfficesTimeTracking userId={userId} />;
+      case 'FINANCEIRO':
+        return <OfficesFinanceiro />;
       case 'DASHBOARD':
       default:
         return (
           <OfficesDashboard
             userId={userId}
-            onNavigate={(tab) => handleTabChange(tab)}
+            onNavigate={(tab) => handleTabChange(tab as any)}
           />
         );
     }
@@ -85,15 +96,26 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
           <span className="text-[8px] font-black uppercase tracking-widest">Clientes</span>
         </button>
 
-        {/* Especificador Link */}
+        {/* Projetos Link */}
         <button
           onClick={() => handleTabChange('ESPECIFICADOR')}
           className={`flex flex-col items-center gap-1 transition-all ${
             activeTab === 'ESPECIFICADOR' ? 'text-[#D47A55] scale-105' : 'text-slate-500 hover:text-slate-350'
           }`}
         >
-          <Palette className="w-5 h-5" />
+          <Folder className="w-5 h-5" />
           <span className="text-[8px] font-black uppercase tracking-widest">Projetos</span>
+        </button>
+
+        {/* Biblioteca Link */}
+        <button
+          onClick={() => handleTabChange('BIBLIOTECA')}
+          className={`flex flex-col items-center gap-1 transition-all ${
+            activeTab === 'BIBLIOTECA' ? 'text-[#D47A55] scale-105' : 'text-slate-500 hover:text-slate-350'
+          }`}
+        >
+          <Palette className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-widest">Moodboard</span>
         </button>
 
         {/* Timesheet Link */}
@@ -106,7 +128,21 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
           <Clock className="w-5 h-5" />
           <span className="text-[8px] font-black uppercase tracking-widest">Horas</span>
         </button>
+
+        {/* Financeiro Link */}
+        <button
+          onClick={() => handleTabChange('FINANCEIRO')}
+          className={`flex flex-col items-center gap-1 transition-all ${
+            activeTab === 'FINANCEIRO' ? 'text-[#D47A55] scale-105' : 'text-slate-500 hover:text-slate-350'
+          }`}
+        >
+          <DollarSign className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-widest">Financeiro</span>
+        </button>
       </nav>
+
+      {/* Assistente de IA Flutuante (ÒPURA AI) */}
+      <OfficesAI />
     </div>
   );
 };

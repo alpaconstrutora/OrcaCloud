@@ -275,34 +275,40 @@ export const proService = {
   },
 
   // Helper para obter templates padrão por profissão
-  getTemplatesPadrao(profissao: string): { titulo: string; descricao: string; valor: number }[] {
+  getTemplatesPadrao(profissao: string): { titulo: string; descricao: string; valor: number; unidade?: string; quantidade?: number }[] {
     switch (profissao) {
+      case 'PINTOR':
+        return [
+          { titulo: 'Pintura de Parede Interna (m²)', descricao: 'Preparação da parede (lixamento simples, limpeza), aplicação de selador e duas demãos de tinta acrílica premium (tinta não inclusa).', valor: 25, unidade: 'm²', quantidade: 100 },
+          { titulo: 'Aplicação de Massa Corrida (m²)', descricao: 'Lixamento e aplicação de duas demãos de massa corrida em paredes ou tetos, deixando a superfície lisa e selada para a pintura.', valor: 35, unidade: 'm²', quantidade: 100 },
+          { titulo: 'Pintura de Portas de Madeira (un)', descricao: 'Lixamento da folha e aduela de porta, aplicação de fundo preparador e duas demãos de esmalte sintético premium ou verniz marinho.', valor: 180, unidade: 'porta', quantidade: 4 },
+          { titulo: 'Pintura de Fachada Externa (m²)', descricao: 'Lavagem sob pressão para remoção de resíduos, aplicação de selador acrílico de alta ancoragem e duas demãos de tinta emborrachada contra fissuras.', valor: 50, unidade: 'm²', quantidade: 150 },
+          { titulo: 'Aplicação de Textura Projetada (m²)', descricao: 'Aplicação de textura acrílica projetada com compressor profissional, incluindo selador de fundo e acabamento texturizado.', valor: 45, unidade: 'm²', quantidade: 80 }
+        ];
       case 'AR_CONDICIONADO':
         return [
-          { titulo: 'Higienização Completa', descricao: 'Limpeza química da evaporadora e condensadora, aplicação de bactericida e testes de pressão e rendimento.', valor: 180 },
-          { titulo: 'Instalação Padrão Split (Até 12k BTUs)', descricao: 'Instalação de ar-condicionado Split até 12000 BTUs, inclui suporte de fixação, tubulação de cobre isolada até 3 metros, cabo PP e acabamento com espuma expansiva.', valor: 450 },
-          { titulo: 'Carga de Gás R410a / R22', descricao: 'Identificação de vazamento simples, solda (se aplicável), vácuo no sistema e recarga completa de fluido refrigerante.', valor: 250 }
+          { titulo: 'Higienização Completa de Split', descricao: 'Limpeza química profunda da evaporadora e condensadora, aplicação de bactericida e testes completos de pressão de gás e rendimento térmico.', valor: 180, unidade: 'aparelho', quantidade: 2 },
+          { titulo: 'Instalação Padrão Split (Até 12k BTUs)', descricao: 'Instalação física completa, incluindo suporte de fixação externo, tubulação de cobre isolada até 3 metros, fiação elétrica PP e dreno.', valor: 450, unidade: 'instalação', quantidade: 1 },
+          { titulo: 'Carga de Fluido Refrigerante R410a / R22', descricao: 'Teste simples de estanqueidade, eliminação de vazamento simples na flange, vácuo completo no sistema e carga de gás por peso (balança).', valor: 250, unidade: 'carga', quantidade: 1 },
+          { titulo: 'Infraestrutura para Ar-Condicionado (Ponto)', descricao: 'Corte em alvenaria (não incluso reboco/acabamento), passagem de tubulação de cobre de alta qualidade isolada, cabo de sinal e dreno de PVC.', valor: 350, unidade: 'ponto', quantidade: 3 }
         ];
       case 'ELETRICISTA':
         return [
-          { titulo: 'Instalação de Chuveiro Elétrico', descricao: 'Remoção do chuveiro antigo, instalação do novo chuveiro, vedação com fita veda rosca, testes de vazamento e conexões elétricas com conectores apropriados.', valor: 150 },
-          { titulo: 'Revisão de Quadro de Distribuição (QDC)', descricao: 'Reaperto de conexões, testes de DR/disjuntores, identificação e identificação de circuitos e balanceamento de fases.', valor: 350 },
-          { titulo: 'Instalação de Ponto de Tomada (Novo)', descricao: 'Passagem de cabeamento por eletroduto existente, fixação e conexão de nova tomada 10A ou 20A padrão brasileiro.', valor: 120 }
+          { titulo: 'Instalação de Ponto de Tomada / Interruptor', descricao: 'Passagem de cabeamento flexível antichama por eletroduto existente, conexão do módulo de tomada 10A ou 20A e fixação do espelho.', valor: 80, unidade: 'ponto', quantidade: 6 },
+          { titulo: 'Instalação de Luminárias / Spots de LED', descricao: 'Recorte no gesso ou fixação em laje, conexão elétrica com conectores Wago isolados e fixação de spots, painéis ou plafons de LED.', valor: 40, unidade: 'luminária', quantidade: 12 },
+          { titulo: 'Montagem / Revisão de Quadro Elétrico (QDC)', descricao: 'Organização interna do quadro, distribuição balanceada de fases, instalação de disjuntores, barramento de terra/neutro, IDR e DPS.', valor: 450, unidade: 'quadro', quantidade: 1 },
+          { titulo: 'Instalação de Chuveiro Elétrico', descricao: 'Retirada do chuveiro antigo, vedação de rosca, conexão do novo chuveiro com conector cerâmico/blindado de alta segurança e testes de vazão.', valor: 150, unidade: 'chuveiro', quantidade: 2 }
         ];
       case 'ENCANADOR':
         return [
-          { titulo: 'Conserto de Vazamento Simples', descricao: 'Localização e reparo de vazamento em tubulação exposta ou sob pia/lavatório, inclui troca de sifão/vedantes.', valor: 160 },
-          { titulo: 'Limpeza de Caixa d\'Água (Até 1000L)', descricao: 'Esvaziamento, escovação das paredes internas, desinfecção com cloro ativo e testes da boia/registro.', valor: 250 },
-          { titulo: 'Instalação de Vaso Sanitário com Caixa Acoplada', descricao: 'Instalação de bacia sanitária, fixação no piso, anel de vedação, ligação flexível de água e regulagem da descarga.', valor: 300 }
-        ];
-      case 'PINTOR':
-        return [
-          { titulo: 'Pintura de Parede (m²)', descricao: 'Preparação da parede (lixamento simples, limpeza), aplicação de fundo selador e duas demãos de tinta acrílica premium (tinta não inclusa).', valor: 25 },
-          { titulo: 'Aplicação de Massa Corrida (m²)', descricao: 'Aplicação de duas demãos de massa corrida, lixamento completo e aplicação de selador para receber pintura.', valor: 35 }
+          { titulo: 'Conserto de Vazamento de Descarga / Válvula', descricao: 'Substituição de obturador, boia de entrada, vedação de borracha ou mecanismo completo de caixas acopladas e válvulas tipo Hydra.', valor: 180, unidade: 'reparo', quantidade: 2 },
+          { titulo: 'Instalação de Louças Sanitárias (Vaso + Pia)', descricao: 'Fixação física de bacia sanitária e lavatório, anel de vedação, ligação de rabicho flexível, válvula e sifão de saída de esgoto.', valor: 350, unidade: 'conjunto', quantidade: 1 },
+          { titulo: 'Limpeza e Desinfecção de Caixa d\'Água (Até 1000L)', descricao: 'Esvaziamento do reservatório, lavagem e escovação manual das paredes internas, desinfecção com cloro e regulagem de registro de boia.', valor: 250, unidade: 'caixa', quantidade: 1 },
+          { titulo: 'Instalação / Troca de Registro de Pressão ou Gaveta', descricao: 'Corte da tubulação hidráulica de PVC ou cobre, instalação de novas conexões, soldagem/cola do registro de controle e testes sob pressão.', valor: 220, unidade: 'registro', quantidade: 2 }
         ];
       default:
         return [
-          { titulo: 'Serviço Geral de Manutenção', descricao: 'Prestação de serviço geral de manutenção e reparo sob demanda por hora de trabalho ou tarefa.', valor: 150 }
+          { titulo: 'Serviço Geral de Manutenção', descricao: 'Prestação de serviço geral de manutenção e reparo sob demanda por hora de trabalho ou tarefa.', valor: 150, unidade: 'hora', quantidade: 4 }
         ];
     }
   }

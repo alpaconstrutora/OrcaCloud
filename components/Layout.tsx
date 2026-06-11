@@ -351,6 +351,66 @@ const Layout: React.FC<LayoutProps> = ({
     };
   }, [profile.email, profile.group, fetchUnreadCount]);
 
+  // ── Alertas de Tarefas (in-app + browser push) ─────────────────────────────
+  const ALERTED_KEY = 'orca_alerted_tasks'; // IDs já notificados nesta sessão
+  const alertedRef = React.useRef<Set<string>>(
+    new Set(JSON.parse(sessionStorage.getItem(ALERTED_KEY) ?? '[]'))
+  );
+
+  const showTaskAlert = React.useCallback((title: string, body: string) => {
+    // Browser Notification (se permitido)
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(`🔔 ${title}`, { body, icon: '/favicon.ico' });
+    }
+    // Toast in-app (sempre)
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ title: `🔔 ${title}`, message: body });
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 10000);
+  }, []);
+
+  React.useEffect(() => {
+    // Solicita permissão para notificações do browser
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+
+    const checkAlerts = async () => {
+      try {
+        const now = new Date().toISOString();
+        const { data } = await supabase
+          .from('tasks')
+          .select('id, title, description, alert_at, due_date')
+          .lte('alert_at', now)
+          .is('alert_sent_at', null)
+          .neq('status', 'done')
+          .limit(10);
+
+        if (!data) return;
+        for (const task of data) {
+          if (alertedRef.current.has(task.id)) continue;
+          alertedRef.current.add(task.id);
+          sessionStorage.setItem(ALERTED_KEY, JSON.stringify([...alertedRef.current]));
+
+          const alertTime = new Date(task.alert_at).toLocaleString('pt-BR', {
+            day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+          });
+          showTaskAlert(
+            task.title,
+            task.description
+              ? `${task.description.slice(0, 80)}${task.description.length > 80 ? '…' : ''}`
+              : `Alerta agendado para ${alertTime}`,
+          );
+        }
+      } catch {
+        // silencioso — não bloqueia a UI
+      }
+    };
+
+    checkAlerts();
+    const alertInterval = setInterval(checkAlerts, 60_000);
+    return () => clearInterval(alertInterval);
+  }, []); // executa uma vez ao montar; o interval cuida do restante
+
   return (
     <NavContext.Provider value={{ activeView, isCollapsed, t, onChangeView, setIsMobileMenuOpen }}>
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans relative">

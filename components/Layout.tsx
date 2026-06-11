@@ -177,7 +177,17 @@ const Layout: React.FC<LayoutProps> = ({
 
     const roleId = currentMember.customRoleId || currentMember.role;
     const matrix = activeOrg?.settings?.module_visibility || {};
-    const roleConfig = matrix[roleId] || {};
+
+    // Suporte à nova estrutura por produto (platform | pro | offices)
+    // Retrocompatível: se não houver dimensão de produto, trata como 'platform'
+    const productCtx = (currentMember as any).productContext || 'platform';
+    let productMatrix: Record<string, Record<string, boolean>>;
+    if ((matrix as any).platform !== undefined || (matrix as any).pro !== undefined || (matrix as any).offices !== undefined) {
+      productMatrix = ((matrix as any)[productCtx] as Record<string, Record<string, boolean>>) || {};
+    } else {
+      productMatrix = matrix as Record<string, Record<string, boolean>>;
+    }
+    const roleConfig = productMatrix[roleId] || {};
 
     const checkModule = (layoutKey: string, userPermKey: string, matrixKey: string): boolean => {
       // O tipo UserPermissions é estendido com canView*
@@ -190,6 +200,28 @@ const Layout: React.FC<LayoutProps> = ({
       }
       return !!baseMods[layoutKey as keyof typeof baseMods];
     };
+
+    // Para usuários Pro: somente módulo pro habilitado por padrão
+    if (productCtx === 'pro') {
+      return {
+        obras: false, compras: false, rh: false, financeiro: false, fiscal: false,
+        incorporacao: false, crm: false, estoque: false, broker_portal: false,
+        reformas: false, quality: false,
+        offices: false,
+        pro: checkModule('pro', 'canViewPro', 'pro'),
+      };
+    }
+
+    // Para usuários Offices: somente módulos offices e crm de serviços
+    if (productCtx === 'offices') {
+      return {
+        obras: false, compras: false, rh: false, financeiro: false, fiscal: false,
+        incorporacao: false, estoque: false, broker_portal: false, reformas: false,
+        quality: false, pro: false,
+        offices: checkModule('offices', 'canViewOffices', 'offices'),
+        crm: checkModule('crm', 'canViewSales', 'crm'),
+      };
+    }
 
     return {
       obras: checkModule('obras', 'canViewBudget', 'obras'),

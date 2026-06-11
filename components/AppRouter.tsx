@@ -217,7 +217,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     const roleId = currentMember.customRoleId || currentMember.role;
     const matrix = activeOrg?.settings?.module_visibility || {};
-    const roleConfig = matrix[roleId] || {};
+
+    // Suporte ao novo formato por produto — retrocompatível
+    const productCtx = (currentMember as any).productContext || 'platform';
+    let productMatrix: Record<string, Record<string, boolean>>;
+    if ((matrix as any).platform !== undefined || (matrix as any).pro !== undefined || (matrix as any).offices !== undefined) {
+      productMatrix = ((matrix as any)[productCtx] as Record<string, Record<string, boolean>>) || {};
+    } else {
+      productMatrix = matrix as Record<string, Record<string, boolean>>;
+    }
+    const roleConfig = productMatrix[roleId] || {};
 
     const isModuleAllowed = (userPermKey: string, matrixKey: string): boolean => {
       const userPerm = currentMember.permissions ? (currentMember.permissions as any)[userPermKey] : undefined;

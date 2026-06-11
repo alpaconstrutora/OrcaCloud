@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { OrganizationMember, OrganizationRole, UserPermissions, OrganizationCustomRole } from '../types';
-import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send, Save } from 'lucide-react';
+import { OrganizationMember, OrganizationRole, UserPermissions, OrganizationCustomRole, ProductContext, ModuleVisibilityConfig, ProductModuleMap } from '../types';
+import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send, Save, Building2, Palette } from 'lucide-react';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
@@ -68,17 +68,34 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
     }
 };
 
-const AVAILABLE_MODULES = [
-    { key: 'obras', label: 'Engenharia / Obras', description: 'Obras, Orçamentos, Cronogramas e Composições' },
-    { key: 'compras', label: 'Suprimentos / Compras', description: 'Pedidos, Cotações, Recebimento e Contratos' },
-    { key: 'rh', label: 'Mão de Obra / RH', description: 'Colaboradores, Equipes, Ponto, Folha e SST' },
-    { key: 'offices', label: 'ÒPURA Offices', description: 'Projetos e especificações de arquitetura/design' },
-    { key: 'pro', label: 'ÒPURA Pro', description: 'Modelos e estimativas rápidas de orçamento' },
-    { key: 'crm', label: 'Comercial & Vendas', description: 'Espelho de vendas, aluguéis e CRM de serviços' },
-    { key: 'incorporacao', label: 'Viabilidade Imobiliária (Imovib)', description: 'Estudos e simulações financeiras de empreendimentos' },
-    { key: 'fiscal', label: 'Fiscal & NF-e', description: 'Notas fiscais eletrônicas e automação de impostos' },
-    { key: 'quality', label: 'Qualidade & Pós-Obra', description: 'Qualidade de entrega, garantia e SLAs' }
+// Produtos Òpura disponíveis
+const PRODUCTS: { id: ProductContext; label: string; icon: string; color: string; description: string }[] = [
+    { id: 'platform', label: 'Plataforma', icon: '🏗️', color: 'blue', description: 'Construtoras, incorporadoras e engenheiros' },
+    { id: 'pro',      label: 'Òpura Pro',  icon: '⚡', color: 'orange', description: 'Autônomos, prestadores e contratantes' },
+    { id: 'offices',  label: 'Offices',    icon: '🎨', color: 'violet', description: 'Arquitetos e designers de interiores' },
 ];
+
+// Módulos disponíveis por produto
+const MODULES_BY_PRODUCT: Record<ProductContext, { key: string; label: string; description: string }[]> = {
+    platform: [
+        { key: 'obras',      label: 'Engenharia / Obras',               description: 'Obras, Orçamentos, Cronogramas e Composições' },
+        { key: 'compras',    label: 'Suprimentos / Compras',            description: 'Pedidos, Cotações, Recebimento e Contratos' },
+        { key: 'rh',         label: 'Mão de Obra / RH',                 description: 'Colaboradores, Equipes, Ponto, Folha e SST' },
+        { key: 'crm',        label: 'Comercial & Vendas',               description: 'Espelho de vendas, aluguéis e CRM de serviços' },
+        { key: 'incorporacao', label: 'Viabilidade Imobiliária',        description: 'Estudos e simulações financeiras de empreendimentos' },
+        { key: 'fiscal',     label: 'Fiscal & NF-e',                    description: 'Notas fiscais eletrônicas e automação de impostos' },
+        { key: 'quality',    label: 'Qualidade & Pós-Obra',             description: 'Qualidade de entrega, garantia e SLAs' },
+        { key: 'pro',        label: 'ÒPURA Pro (Add-on)',               description: 'Modelos rápidos de orçamento para prestadores' },
+        { key: 'offices',    label: 'ÒPURA Offices (Add-on)',           description: 'Projetos e especificações de arquitetura/design' },
+    ],
+    pro: [
+        { key: 'pro',        label: 'ÒPURA Pro',                        description: 'Modelos e estimativas rápidas de orçamento' },
+    ],
+    offices: [
+        { key: 'offices',    label: 'ÒPURA Offices',                    description: 'Projetos e especificações de arquitetura/design' },
+        { key: 'crm',        label: 'CRM de Serviços',                  description: 'Contratos e gestão de clientes de arquitetura' },
+    ],
+};
 
 const DETAILED_PERMISSIONS = [
     { title: 'Orçamento', view: 'canViewBudget', edit: 'canEditBudget' },
@@ -131,38 +148,60 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const isAdmin = memberSelf?.role === 'admin' || isDeveloper || isDevEmail;
 
     const [activeSubTab, setActiveSubTab] = useState<'members' | 'roles' | 'visibility'>('members');
+    const [activeProductTab, setActiveProductTab] = useState<ProductContext>('platform');
+
+    // Helper: normaliza module_visibility legado (flat) para a nova estrutura por produto
+    const normalizeVisibility = (raw: any): ModuleVisibilityConfig => {
+        if (!raw) return { platform: {}, pro: {}, offices: {} };
+        if (raw.platform !== undefined || raw.pro !== undefined || raw.offices !== undefined) {
+            return { platform: raw.platform || {}, pro: raw.pro || {}, offices: raw.offices || {} };
+        }
+        // Formato legado: tratar como configuração de 'platform'
+        return { platform: raw as ProductModuleMap, pro: {}, offices: {} };
+    };
 
     // Visibilidade de Módulos State
-    const [visibilitySettings, setVisibilitySettings] = useState<Record<string, Record<string, boolean>>>(() => {
-        return currentOrg?.settings?.module_visibility || {};
-    });
+    const [visibilitySettings, setVisibilitySettings] = useState<ModuleVisibilityConfig>(() =>
+        normalizeVisibility(currentOrg?.settings?.module_visibility)
+    );
 
     React.useEffect(() => {
-        if (currentOrg?.settings?.module_visibility) {
-            setVisibilitySettings(currentOrg.settings.module_visibility);
+        if (currentOrg?.settings?.module_visibility !== undefined) {
+            setVisibilitySettings(normalizeVisibility(currentOrg.settings.module_visibility));
         }
     }, [currentOrg]);
 
     const handleToggleVisibility = (roleId: string, moduleKey: string) => {
         setVisibilitySettings(prev => {
-            const roleSettings = prev[roleId] || {
-                obras: true, compras: true, rh: true, offices: true, pro: true, crm: true, incorporacao: true, fiscal: true, quality: true
-            };
+            const productMap: ProductModuleMap = { ...(prev[activeProductTab] || {}) };
+            const defaults: Record<string, boolean> = {};
+            MODULES_BY_PRODUCT[activeProductTab].forEach(m => { defaults[m.key] = true; });
+            const roleSettings = productMap[roleId] || defaults;
             return {
                 ...prev,
-                [roleId]: {
-                    ...roleSettings,
-                    [moduleKey]: roleSettings[moduleKey as keyof typeof roleSettings] === false ? true : false
+                [activeProductTab]: {
+                    ...productMap,
+                    [roleId]: {
+                        ...roleSettings,
+                        [moduleKey]: roleSettings[moduleKey] === false ? true : false
+                    }
                 }
             };
         });
+    };
+
+    const getVisibility = (roleId: string, moduleKey: string): boolean => {
+        const productMap = visibilitySettings[activeProductTab] || {};
+        const roleSettings = productMap[roleId];
+        if (roleSettings && roleSettings[moduleKey] !== undefined) return roleSettings[moduleKey];
+        return true;
     };
 
     const handleSaveVisibility = async () => {
         try {
             const updatedSettings = {
                 ...(currentOrg?.settings || {}),
-                module_visibility: visibilitySettings
+                module_visibility: visibilitySettings as any
             };
             onUpdateAll({ settings: updatedSettings });
             alert('Configurações de visibilidade de módulos atualizadas com sucesso!');
@@ -179,6 +218,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const [newMemberCustomRoleId, setNewMemberCustomRoleId] = useState<string>('');
     const [newMemberName, setNewMemberName] = useState('');
     const [newMemberPermissions, setNewMemberPermissions] = useState<UserPermissions>(getDefaultPermissions('member'));
+    const [newMemberProductContext, setNewMemberProductContext] = useState<ProductContext>('platform');
     const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
     // Edit member state
@@ -186,6 +226,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const [editMemberName, setEditMemberName] = useState('');
     const [editMemberEmail, setEditMemberEmail] = useState('');
     const [editMemberRole, setEditMemberRole] = useState<OrganizationRole>('member');
+    const [editMemberProductContext, setEditMemberProductContext] = useState<ProductContext>('platform');
 
     // Invite loading state
     const [isInviting, setIsInviting] = useState(false);
@@ -235,7 +276,8 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
             role: newMemberRole,
             customRoleId: newMemberCustomRoleId || undefined,
             joinedAt: new Date().toISOString(),
-            permissions: newMemberPermissions
+            permissions: newMemberPermissions,
+            productContext: newMemberProductContext,
         };
 
         let emailError: string | null = null;
@@ -270,12 +312,14 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         setNewMemberCustomRoleId('');
         setNewMemberName('');
         setNewMemberPermissions(getDefaultPermissions('member'));
+        setNewMemberProductContext('platform');
     };
 
     const handleOpenEditMember = (member: OrganizationMember) => {
         setEditMemberName(member.name);
         setEditMemberEmail(member.email);
         setEditMemberRole(member.role);
+        setEditMemberProductContext(member.productContext || 'platform');
         setEditingMember(member);
     };
 
@@ -308,7 +352,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         if (!editingMember) return;
         onUpdateMembers(members.map(m =>
             m.id === editingMember.id
-                ? { ...m, name: editMemberName, email: editMemberEmail.trim().toLowerCase(), role: editMemberRole, permissions: getDefaultPermissions(editMemberRole) }
+                ? { ...m, name: editMemberName, email: editMemberEmail.trim().toLowerCase(), role: editMemberRole, productContext: editMemberProductContext, permissions: getDefaultPermissions(editMemberRole) }
                 : m
         ));
         setEditingMember(null);
@@ -664,21 +708,54 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     )}
                 </div>
             ) : (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm p-6 space-y-6 animate-in fade-in duration-300">
+                // ── Visibilidade de Módulos por Produto ─────────────────────────────
+                <div className="space-y-6 animate-in fade-in duration-300">
+                    {/* Aviso informativo */}
                     <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl text-sm text-indigo-700 flex items-start gap-3">
                         <Shield className="w-5 h-5 mt-0.5 shrink-0 text-indigo-600" />
                         <div>
                             <strong className="block font-bold mb-1">Painel de Controle de Visibilidade</strong>
-                            Nesta matriz você pode escolher quais módulos principais do ecossistema estarão ativos ou ocultos para cada perfil ou cargo. Administradores e Desenvolvedores sempre possuem acesso total aos módulos. Lembre-se de salvar as alterações ao terminar.
+                            Defina quais módulos ficam visíveis para cada cargo em cada produto Òpura. Administradores sempre têm acesso total. Salve ao terminar.
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto border border-gray-100 rounded-lg">
+                    {/* Tabs de produto */}
+                    <div className="flex gap-2 flex-wrap">
+                        {PRODUCTS.map(p => {
+                            const isActive = activeProductTab === p.id;
+                            const colorMap: Record<string, string> = {
+                                blue:   isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'   : 'bg-blue-50 text-blue-600 hover:bg-blue-100',
+                                orange: isActive ? 'bg-orange-500 text-white shadow-lg shadow-orange-200' : 'bg-orange-50 text-orange-600 hover:bg-orange-100',
+                                violet: isActive ? 'bg-violet-600 text-white shadow-lg shadow-violet-200' : 'bg-violet-50 text-violet-600 hover:bg-violet-100',
+                            };
+                            return (
+                                <button
+                                    key={p.id}
+                                    onClick={() => setActiveProductTab(p.id)}
+                                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${ colorMap[p.color] }`}
+                                >
+                                    <span>{p.icon}</span>
+                                    <div className="text-left">
+                                        <div className="font-black text-[11px] uppercase tracking-widest">{p.label}</div>
+                                        {isActive && <div className="text-[9px] font-medium opacity-80">{p.description}</div>}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Matriz para o produto ativo */}
+                    <div className="overflow-x-auto border border-gray-100 rounded-xl">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                     <th className="px-6 py-4 min-w-[280px]">Módulo / Recurso</th>
-                                    <th className="px-6 py-4 text-center">Administrador</th>
+                                    <th className="px-6 py-4 text-center">
+                                        <div className="flex flex-col items-center gap-0.5">
+                                            <span>Administrador</span>
+                                            <span className="text-[9px] text-emerald-500 font-black uppercase">Sempre ativo</span>
+                                        </div>
+                                    </th>
                                     <th className="px-6 py-4 text-center">Membro</th>
                                     <th className="px-6 py-4 text-center">Visualizador</th>
                                     {customRoles.map(role => (
@@ -687,48 +764,46 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
-                                {AVAILABLE_MODULES.map(modItem => (
+                                {MODULES_BY_PRODUCT[activeProductTab].map(modItem => (
                                     <tr key={modItem.key} className="hover:bg-gray-50/40 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="font-bold text-gray-900">{modItem.label}</div>
                                             <div className="text-xs text-gray-400 font-medium">{modItem.description}</div>
                                         </td>
+                                        {/* Admin: sempre habilitado */}
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex justify-center">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={true}
-                                                    disabled={true}
-                                                    className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 opacity-60 cursor-not-allowed"
-                                                />
+                                                <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
+                                                    <Check className="w-3 h-3 text-emerald-600" />
+                                                </div>
                                             </div>
                                         </td>
+                                        {/* Membro */}
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex justify-center">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={(visibilitySettings['member']?.[modItem.key] ?? true) !== false}
+                                                <input type="checkbox"
+                                                    checked={getVisibility('member', modItem.key)}
                                                     onChange={() => handleToggleVisibility('member', modItem.key)}
                                                     className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
                                                 />
                                             </div>
                                         </td>
+                                        {/* Visualizador */}
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex justify-center">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={(visibilitySettings['viewer']?.[modItem.key] ?? true) !== false}
+                                                <input type="checkbox"
+                                                    checked={getVisibility('viewer', modItem.key)}
                                                     onChange={() => handleToggleVisibility('viewer', modItem.key)}
                                                     className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
                                                 />
                                             </div>
                                         </td>
+                                        {/* Cargos customizados */}
                                         {customRoles.map(role => (
                                             <td key={role.id} className="px-6 py-4 text-center">
                                                 <div className="flex justify-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={(visibilitySettings[role.id]?.[modItem.key] ?? true) !== false}
+                                                    <input type="checkbox"
+                                                        checked={getVisibility(role.id, modItem.key)}
                                                         onChange={() => handleToggleVisibility(role.id, modItem.key)}
                                                         className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
                                                     />
@@ -740,7 +815,6 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                             </tbody>
                         </table>
                     </div>
-
                     <div className="flex justify-end pt-4">
                         <button
                             type="button"
@@ -748,11 +822,12 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                             className="flex items-center px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors shadow-lg text-sm font-bold active:scale-95"
                         >
                             <Save className="w-4 h-4 mr-2" />
-                            Salvar Configurações de Visibilidade
+                            Salvar Visibilidade — {PRODUCTS.find(p => p.id === activeProductTab)?.label}
                         </button>
                     </div>
                 </div>
             )}
+
 
             {/* Edit Member Modal */}
             {editingMember && (
@@ -767,35 +842,39 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                         <form onSubmit={handleSaveEditMember} className="p-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={editMemberName}
-                                    onChange={(e) => setEditMemberName(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                                />
+                                <input type="text" required value={editMemberName} onChange={(e) => setEditMemberName(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={editMemberEmail}
-                                    onChange={(e) => setEditMemberEmail(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                                />
+                                <input type="email" required value={editMemberEmail} onChange={(e) => setEditMemberEmail(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>
-                                <select
-                                    value={editMemberRole}
-                                    onChange={(e) => setEditMemberRole(e.target.value as OrganizationRole)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                                >
+                                <select value={editMemberRole} onChange={(e) => setEditMemberRole(e.target.value as OrganizationRole)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
                                     <option value="admin">Administrador</option>
                                     <option value="member">Membro</option>
                                     <option value="viewer">Visualizador</option>
                                 </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Produto Òpura</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {PRODUCTS.map(p => (
+                                        <button key={p.id} type="button"
+                                            onClick={() => setEditMemberProductContext(p.id)}
+                                            className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all text-xs font-bold ${
+                                                editMemberProductContext === p.id
+                                                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                                    : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                                            }`}>
+                                            <span className="text-lg">{p.icon}</span>
+                                            <span>{p.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                             <div className="flex justify-end gap-3 pt-2">
                                 <button type="button" onClick={() => setEditingMember(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
@@ -847,11 +926,8 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Função Base</label>
-                                        <select
-                                            value={newMemberRole}
-                                            onChange={(e) => handleRoleChangeWithDefaults(e.target.value as OrganizationRole)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                                        >
+                                        <select value={newMemberRole} onChange={(e) => handleRoleChangeWithDefaults(e.target.value as OrganizationRole)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
                                             <option value="member">Membro</option>
                                             <option value="admin">Administrador</option>
                                             <option value="viewer">Visualizador</option>
@@ -859,16 +935,33 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Cargo Template (Opcional)</label>
-                                        <select
-                                            value={newMemberCustomRoleId}
-                                            onChange={(e) => handleCustomRoleSelect(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                                        >
+                                        <select value={newMemberCustomRoleId} onChange={(e) => handleCustomRoleSelect(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
                                             <option value="">Nenhum (Usar Permissões Customizadas)</option>
                                             {customRoles.map(role => (
                                                 <option key={role.id} value={role.id}>{role.name}</option>
                                             ))}
                                         </select>
+                                    </div>
+                                </div>
+
+                                {/* Produto Òpura */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Produto Òpura</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {PRODUCTS.map(p => (
+                                            <button key={p.id} type="button"
+                                                onClick={() => setNewMemberProductContext(p.id)}
+                                                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-xs font-bold ${
+                                                    newMemberProductContext === p.id
+                                                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                                        : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                                                }`}>
+                                                <span className="text-xl">{p.icon}</span>
+                                                <span className="font-black text-[10px] uppercase tracking-wide">{p.label}</span>
+                                                <span className="text-[9px] text-gray-400 text-center leading-tight">{p.description}</span>
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
 

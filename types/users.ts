@@ -88,6 +88,19 @@ export interface SupplierCategory {
 
 export type OrganizationRole = 'admin' | 'member' | 'viewer';
 
+/** Produto Òpura que o membro acessa: Plataforma principal, Pro ou Offices */
+export type ProductContext = 'platform' | 'pro' | 'offices';
+
+/** Mapa de visibilidade: roleId -> moduleKey -> habilitado */
+export type ProductModuleMap = Record<string, Record<string, boolean>>;
+
+/** Configuração de visibilidade de módulos por produto */
+export interface ModuleVisibilityConfig {
+    platform?: ProductModuleMap;
+    pro?: ProductModuleMap;
+    offices?: ProductModuleMap;
+}
+
 export enum ProfileGroup {
     USER = 'USUARIO',
     CLIENT = 'CLIENTE',
@@ -166,6 +179,8 @@ export interface OrganizationMember {
     customRoleId?: string;
     joinedAt: string;
     permissions: UserPermissions;
+    /** Produto Òpura que este membro utiliza (default: 'platform') */
+    productContext?: ProductContext;
 }
 
 export interface Organization {
@@ -188,7 +203,8 @@ export interface Organization {
     members?: OrganizationMember[];
     customRoles?: OrganizationCustomRole[];
     settings?: {
-        module_visibility?: Record<string, Record<string, boolean>>;
+        /** Visibilidade de módulos por produto e por cargo. Retrocompatível com formato flat (legacy). */
+        module_visibility?: ModuleVisibilityConfig | Record<string, Record<string, boolean>>;
     };
     resources?: {
         roles: ResourceRole[];

@@ -10,7 +10,7 @@ interface ImovibPremisesFormProps {
 }
 
 const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataChanged }) => {
-    const [activeTab, setActiveTab] = useState<'identificacao' | 'terreno' | 'mercado' | 'blocos' | 'regulatorio'>('identificacao');
+    const [activeTab, setActiveTab] = useState<'identificacao' | 'mercado' | 'blocos' | 'regulatorio'>('identificacao');
     const [addingBlock, setAddingBlock] = useState(false);
     const [newBlockName, setNewBlockName] = useState('');
     const [blockNameError, setBlockNameError] = useState(false);
@@ -161,10 +161,9 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                 <div className="flex flex-wrap gap-2">
                 {[
                     { id: 'identificacao', label: '0. Identificação', icon: <FileText className="w-4 h-4" /> },
-                    { id: 'terreno', label: '1. Terreno & Gerais', icon: <MapPin className="w-4 h-4" /> },
-                    { id: 'mercado', label: '2. Mercado', icon: <PieChart className="w-4 h-4" /> },
-                    { id: 'blocos', label: '3. Blocos & Tipologias', icon: <Building className="w-4 h-4" /> },
-                    { id: 'regulatorio', label: '4. Mapa Regulatório', icon: <Map className="w-4 h-4" /> },
+                    { id: 'mercado', label: '1. Mercado', icon: <PieChart className="w-4 h-4" /> },
+                    { id: 'blocos', label: '2. Blocos & Tipologias', icon: <Building className="w-4 h-4" /> },
+                    { id: 'regulatorio', label: '3. Mapa Regulatório', icon: <Map className="w-4 h-4" /> },
                 ].map((tab) => (
                     <button
                         key={tab.id}
@@ -211,34 +210,6 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                             {renderInput('Modalidade de Desenvolvimento', 'development_modality', 'text', 'Ex: Incorporação / Permuta / BTS')}
                         </div>
 
-                    </div>
-                </div>
-            )}
-
-            {/* TAB: TERRENO E GERAIS */}
-            {activeTab === 'terreno' && (
-                <div className="space-y-6">
-                    <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-8">
-                        <div>
-                            <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                                <MapPin className="w-5 h-5 text-indigo-500" />
-                                Módulo 1 — Entradas Gerais & Terreno
-                            </h2>
-                            <p className="text-slate-500 text-sm mt-1 font-medium">Premissas de lote, eficiência e indexadores.</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {renderInput('Custo de Aquisição (R$)', 'land_cost', 'number')}
-                            {renderInput('Testada do Lote (m)', 'land_frontage', 'number')}
-                            {renderInput('Formato do Lote', 'land_shape_raw', 'text', 'Ex: Retangular, Irregular')}
-                            {renderInput('Eficiência Construtiva', 'efficiency_percent', 'number', '', true)}
-                            {renderInput('Custo de Oportunidade', 'opportunity_cost_percent', 'number', 'Meta min. de retorno', true)}
-                        </div>
-
-                        <div className="pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {renderInput('Índice de Reajuste (Obra)', 'inflation_index_obra', 'text', 'Ex: INCC-M')}
-                            {renderInput('Índice de Reajuste (Vendas/Repasse)', 'inflation_index_vendas', 'text', 'Ex: IGPM, IPCA')}
-                        </div>
                     </div>
                 </div>
             )}

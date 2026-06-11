@@ -24,6 +24,12 @@ serve(async (req: Request) => {
   const resendApiKey    = Deno.env.get('RESEND_API_KEY') ?? '';
   const fromEmail       = Deno.env.get('REPORT_FROM_EMAIL') ?? 'alertas@opura.com.br';
 
+  // Gate: função de cron — só service_role pode invocar (mesmo padrão de process-billing-ruler)
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || authHeader !== `Bearer ${serviceRoleKey}`) {
+    return json({ error: 'Unauthorized' }, 401);
+  }
+
   if (!resendApiKey) {
     return json({ error: 'RESEND_API_KEY não configurada.' }, 503);
   }

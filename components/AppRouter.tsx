@@ -194,6 +194,70 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     prevEditingOrderIdRef.current = editingOrderId;
   }, [editingOrderId]);
 
+  // ── Proteção de Rotas / Redirecionamento de Segurança ──────────────────────
+  const activeOrg = React.useMemo(() => {
+    return organizations.find(o => o.id === activeOrganizationId);
+  }, [organizations, activeOrganizationId]);
+
+  const currentMember = React.useMemo(() => {
+    if (!activeOrg?.members || !session?.user?.email) return null;
+    return activeOrg.members.find(m => m.email.toLowerCase() === session?.user?.email?.toLowerCase()) || null;
+  }, [activeOrg, session?.user?.email]);
+
+  React.useEffect(() => {
+    // Desenvolvedores sempre têm acesso total
+    if (currentProfile.group === 'DESENVOLVEDOR' || !activeOrganizationId) return;
+    
+    // Se não há membro correspondente na organização selecionada, não redireciona (pode estar carregando)
+    if (!currentMember) return;
+    
+    // Admins da organização sempre têm acesso total
+    if (currentMember.role === 'admin') return;
+
+    const roleId = currentMember.customRoleId || currentMember.role;
+    const matrix = activeOrg?.settings?.module_visibility || {};
+    const roleConfig = matrix[roleId] || {};
+
+    const isModuleAllowed = (userPermKey: string, matrixKey: string): boolean => {
+      const userPerm = currentMember.permissions ? (currentMember.permissions as any)[userPermKey] : undefined;
+      if (userPerm !== undefined) {
+        return !!userPerm;
+      }
+      if (roleConfig[matrixKey] !== undefined) {
+        return !!roleConfig[matrixKey];
+      }
+      return true; // Default true
+    };
+
+    // Mapear activeView para suas respectivas permissões
+    let allowed = true;
+    
+    if (activeView.startsWith('labor-') || activeView === 'labor-management') {
+      allowed = isModuleAllowed('canViewLabor', 'rh');
+    } else if (activeView === 'pro-dashboard') {
+      allowed = isModuleAllowed('canViewPro', 'pro');
+    } else if (activeView === 'offices-dashboard') {
+      allowed = isModuleAllowed('canViewOffices', 'offices');
+    } else if (['sales', 'rentals', 'gestao-vendas'].includes(activeView)) {
+      allowed = isModuleAllowed('canViewSales', 'crm');
+    } else if (activeView === 'imovib') {
+      allowed = isModuleAllowed('canViewImovib', 'incorporacao');
+    } else if (activeView === 'fiscal-nfe') {
+      allowed = isModuleAllowed('canViewFiscal', 'fiscal');
+    } else if (['quality', 'pos-obra'].includes(activeView)) {
+      allowed = isModuleAllowed('canViewQuality', 'quality');
+    } else if (['eng-obras', 'eng-orcamentos', 'analytic', 'parametric', 'explorer'].includes(activeView)) {
+      allowed = isModuleAllowed('canViewBudget', 'obras');
+    } else if (activeView.startsWith('supplies-')) {
+      allowed = isModuleAllowed('canViewOrders', 'compras');
+    }
+
+    if (!allowed) {
+      console.warn(`[RouteGuard] Acesso bloqueado para a rota: ${activeView}. Redirecionando para dashboard.`);
+      setActiveView('dashboard');
+    }
+  }, [activeView, currentMember, activeOrg, activeOrganizationId, currentProfile.group, setActiveView]);
+
   // ── Render interno (envolto em Suspense para lazy components) ───────────────
   const renderContent = () => {
   // ── Portais de perfil específico (acesso direto sem switch) ─────────────────

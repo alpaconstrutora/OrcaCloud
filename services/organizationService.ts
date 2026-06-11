@@ -147,6 +147,7 @@ export const organizationService = {
                 ...org,
                 logoUrl: org.logo_url,
                 address: org.address || {},
+                settings: org.settings || {},
                 customRoles: allRoles.filter(r => r.organization_id === org.id).map(r => ({
                     id: r.id,
                     name: r.name,
@@ -207,7 +208,8 @@ export const organizationService = {
                 website: org.website,
                 logo_url: org.logoUrl,
                 address: org.address,
-                resources: org.resources
+                resources: org.resources,
+                settings: org.settings
             })
             .eq('id', id)
             .select()

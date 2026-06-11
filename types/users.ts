@@ -139,6 +139,17 @@ export interface UserPermissions {
     canViewSettings: boolean;
     canEditSettings: boolean;
     canManageUsers: boolean;
+    
+    // Configurações de Visibilidade de Módulos (Feature Flags por Cargo)
+    canViewLabor?: boolean;
+    canViewOffices?: boolean;
+    canViewPro?: boolean;
+    canViewSales?: boolean;
+    canViewImovib?: boolean;
+    canViewFiscal?: boolean;
+    canViewQuality?: boolean;
+    canViewRentals?: boolean;
+    canViewStructural?: boolean;
 }
 
 export interface OrganizationCustomRole {
@@ -176,6 +187,9 @@ export interface Organization {
         };
     members?: OrganizationMember[];
     customRoles?: OrganizationCustomRole[];
+    settings?: {
+        module_visibility?: Record<string, Record<string, boolean>>;
+    };
     resources?: {
         roles: ResourceRole[];
         workers: ResourceWorker[];

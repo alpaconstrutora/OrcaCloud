@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { OrganizationMember, OrganizationRole, UserPermissions, OrganizationCustomRole } from '../types';
-import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send } from 'lucide-react';
+import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send, Save } from 'lucide-react';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { supabase } from '../lib/supabase';
+import { useStore } from '../store/useStore';
 
 interface OrganizationUsersProps {
     organizationId?: string;
@@ -10,7 +11,7 @@ interface OrganizationUsersProps {
     onUpdateMembers: (updatedMembers: OrganizationMember[]) => void;
     customRoles: OrganizationCustomRole[];
     onUpdateCustomRoles: (updatedRoles: OrganizationCustomRole[]) => void;
-    onUpdateAll: (updates: { members?: OrganizationMember[], customRoles?: OrganizationCustomRole[] }) => void;
+    onUpdateAll: (updates: { members?: OrganizationMember[], customRoles?: OrganizationCustomRole[], settings?: any }) => void;
 }
 
 const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
@@ -29,7 +30,17 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
         canViewSupplierPortal: true, canEditSupplierPortal: false,
         canViewBrokerPortal: true, canEditBrokerPortal: false,
         canViewSettings: true, canEditSettings: false,
-        canManageUsers: false
+        canManageUsers: false,
+        
+        canViewLabor: true,
+        canViewOffices: true,
+        canViewPro: true,
+        canViewSales: true,
+        canViewImovib: true,
+        canViewFiscal: true,
+        canViewQuality: true,
+        canViewRentals: true,
+        canViewStructural: true
     };
 
     switch (role) {
@@ -57,6 +68,47 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
     }
 };
 
+const AVAILABLE_MODULES = [
+    { key: 'obras', label: 'Engenharia / Obras', description: 'Obras, Orçamentos, Cronogramas e Composições' },
+    { key: 'compras', label: 'Suprimentos / Compras', description: 'Pedidos, Cotações, Recebimento e Contratos' },
+    { key: 'rh', label: 'Mão de Obra / RH', description: 'Colaboradores, Equipes, Ponto, Folha e SST' },
+    { key: 'offices', label: 'ÒPURA Offices', description: 'Projetos e especificações de arquitetura/design' },
+    { key: 'pro', label: 'ÒPURA Pro', description: 'Modelos e estimativas rápidas de orçamento' },
+    { key: 'crm', label: 'Comercial & Vendas', description: 'Espelho de vendas, aluguéis e CRM de serviços' },
+    { key: 'incorporacao', label: 'Viabilidade Imobiliária (Imovib)', description: 'Estudos e simulações financeiras de empreendimentos' },
+    { key: 'fiscal', label: 'Fiscal & NF-e', description: 'Notas fiscais eletrônicas e automação de impostos' },
+    { key: 'quality', label: 'Qualidade & Pós-Obra', description: 'Qualidade de entrega, garantia e SLAs' }
+];
+
+const DETAILED_PERMISSIONS = [
+    { title: 'Orçamento', view: 'canViewBudget', edit: 'canEditBudget' },
+    { title: 'Composições', view: 'canViewCompositions', edit: 'canEditCompositions' },
+    { title: 'Planejamento', view: 'canViewPlanning', edit: 'canEditPlanning' },
+    { title: 'Diário de Obra', view: 'canViewDiary', edit: 'canEditDiary' },
+    { title: 'Relatórios', view: 'canViewReports', edit: 'canEditReports' },
+    { title: 'Dados Técnicos', view: 'canViewTechnicalData', edit: 'canEditTechnicalData' },
+    { title: 'Pedidos', view: 'canViewOrders', edit: 'canEditOrders' },
+    { title: 'Recebimento', view: 'canViewReceipts', edit: 'canEditReceipts' },
+    { title: 'Financeiro', view: 'canViewFinancial', edit: 'canEditFinancial' },
+    { title: 'Portal do Cliente', view: 'canViewClientPortal', edit: 'canEditClientPortal' },
+    { title: 'Portal do Investidor', view: 'canViewInvestorPortal', edit: 'canEditInvestorPortal' },
+    { title: 'Portal do Fornecedor', view: 'canViewSupplierPortal', edit: 'canEditSupplierPortal' },
+    { title: 'Portal do Corretor', view: 'canViewBrokerPortal', edit: 'canEditBrokerPortal' },
+    { title: 'Configurações', view: 'canViewSettings', edit: 'canEditSettings' },
+    { title: 'Gestão de Team', view: 'canManageUsers' },
+    
+    // Novas flags de visibilidade de módulos
+    { title: 'Módulo de Mão de Obra / RH', view: 'canViewLabor' },
+    { title: 'Módulo ÒPURA Offices', view: 'canViewOffices' },
+    { title: 'Módulo ÒPURA Pro', view: 'canViewPro' },
+    { title: 'Módulo Comercial & Vendas', view: 'canViewSales' },
+    { title: 'Módulo Viabilidade Imobiliária (Imovib)', view: 'canViewImovib' },
+    { title: 'Módulo Fiscal & NF-e', view: 'canViewFiscal' },
+    { title: 'Módulo Qualidade & Pós-Obra', view: 'canViewQuality' },
+    { title: 'Módulo Locações', view: 'canViewRentals' },
+    { title: 'Módulo Estrutural (Aço/Ferragem)', view: 'canViewStructural' }
+];
+
 const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     organizationId,
     members = [],
@@ -65,7 +117,57 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     onUpdateCustomRoles,
     onUpdateAll
 }) => {
-    const [activeSubTab, setActiveSubTab] = useState<'members' | 'roles'>('members');
+    const { currentProfile, session, organizations } = useStore();
+    const currentOrg = organizations.find(o => o.id === organizationId);
+    
+    // O usuário é desenvolvedor?
+    const isDeveloper = currentProfile?.group === 'DESENVOLVEDOR';
+    
+    // O usuário é admin na organização?
+    const memberSelf = members.find(m => m.email.toLowerCase() === session?.user?.email?.toLowerCase());
+    const isAdmin = memberSelf?.role === 'admin' || isDeveloper;
+
+    const [activeSubTab, setActiveSubTab] = useState<'members' | 'roles' | 'visibility'>('members');
+
+    // Visibilidade de Módulos State
+    const [visibilitySettings, setVisibilitySettings] = useState<Record<string, Record<string, boolean>>>(() => {
+        return currentOrg?.settings?.module_visibility || {};
+    });
+
+    React.useEffect(() => {
+        if (currentOrg?.settings?.module_visibility) {
+            setVisibilitySettings(currentOrg.settings.module_visibility);
+        }
+    }, [currentOrg]);
+
+    const handleToggleVisibility = (roleId: string, moduleKey: string) => {
+        setVisibilitySettings(prev => {
+            const roleSettings = prev[roleId] || {
+                obras: true, compras: true, rh: true, offices: true, pro: true, crm: true, incorporacao: true, fiscal: true, quality: true
+            };
+            return {
+                ...prev,
+                [roleId]: {
+                    ...roleSettings,
+                    [moduleKey]: roleSettings[moduleKey as keyof typeof roleSettings] === false ? true : false
+                }
+            };
+        });
+    };
+
+    const handleSaveVisibility = async () => {
+        try {
+            const updatedSettings = {
+                ...(currentOrg?.settings || {}),
+                module_visibility: visibilitySettings
+            };
+            onUpdateAll({ settings: updatedSettings });
+            alert('Configurações de visibilidade de módulos atualizadas com sucesso!');
+        } catch (error) {
+            console.error('Erro ao salvar visibilidade de módulos:', error);
+            alert('Ocorreu um erro ao salvar as configurações.');
+        }
+    };
 
     // Member State
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -327,6 +429,15 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                         <Briefcase className="w-4 h-4 inline mr-2" />
                         Cargos Customizados
                     </button>
+                    {isAdmin && (
+                        <button
+                            onClick={() => setActiveSubTab('visibility')}
+                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeSubTab === 'visibility' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            <Shield className="w-4 h-4 inline mr-2" />
+                            Visibilidade de Módulos
+                        </button>
+                    )}
                 </div>
                 {activeSubTab === 'members' ? (
                     <button
@@ -336,7 +447,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                         <Plus className="w-4 h-4 mr-2" />
                         Convidar Membro
                     </button>
-                ) : (
+                ) : activeSubTab === 'roles' ? (
                     <button
                         onClick={() => {
                             setEditingRoleId(null);
@@ -347,6 +458,14 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     >
                         <Plus className="w-4 h-4 mr-2" />
                         Novo Cargo
+                    </button>
+                ) : (
+                    <button
+                        onClick={handleSaveVisibility}
+                        className="flex items-center px-6 py-2 bg-emerald-600 text-white rounded-[1.2rem] hover:bg-emerald-700 transition-colors shadow-md text-sm font-bold active:scale-95"
+                    >
+                        <Save className="w-4 h-4 mr-2" />
+                        Salvar Configurações
                     </button>
                 )}
             </div>
@@ -453,23 +572,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                             <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Controle de Acesso por Módulo</div>
                                                         </div>
                                                         <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-8 gap-x-12">
-                                                            {[
-                                                                { title: 'Orçamento', view: 'canViewBudget', edit: 'canEditBudget' },
-                                                                { title: 'Composições', view: 'canViewCompositions', edit: 'canEditCompositions' },
-                                                                { title: 'Planejamento', view: 'canViewPlanning', edit: 'canEditPlanning' },
-                                                                { title: 'Diário de Obra', view: 'canViewDiary', edit: 'canEditDiary' },
-                                                                { title: 'Relatórios', view: 'canViewReports', edit: 'canEditReports' },
-                                                                { title: 'Dados Técnicos', view: 'canViewTechnicalData', edit: 'canEditTechnicalData' },
-                                                                { title: 'Pedidos', view: 'canViewOrders', edit: 'canEditOrders' },
-                                                                { title: 'Recebimento', view: 'canViewReceipts', edit: 'canEditReceipts' },
-                                                                { title: 'Financeiro', view: 'canViewFinancial', edit: 'canEditFinancial' },
-                                                                { title: 'Portal do Cliente', view: 'canViewClientPortal', edit: 'canEditClientPortal' },
-                                                                { title: 'Portal do Investidor', view: 'canViewInvestorPortal', edit: 'canEditInvestorPortal' },
-                                                                { title: 'Portal do Fornecedor', view: 'canViewSupplierPortal', edit: 'canEditSupplierPortal' },
-                                                                { title: 'Portal do Corretor', view: 'canViewBrokerPortal', edit: 'canEditBrokerPortal' },
-                                                                { title: 'Configurações', view: 'canViewSettings', edit: 'canEditSettings' },
-                                                                { title: 'Gestão de Team', view: 'canManageUsers' }
-                                                            ].map((module) => (
+                                                            {DETAILED_PERMISSIONS.map((module) => (
                                                                 <div key={module.title} className="space-y-4">
                                                                     <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2">{module.title}</div>
                                                                     <div className="space-y-2">
@@ -501,7 +604,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                         </tbody>
                     </table>
                 </div>
-            ) : (
+            ) : activeSubTab === 'roles' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {customRoles.length === 0 ? (
                         <div className="col-span-full py-12 bg-white rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400">
@@ -556,6 +659,95 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                             </div>
                         ))
                     )}
+                </div>
+            ) : (
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm p-6 space-y-6 animate-in fade-in duration-300">
+                    <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl text-sm text-indigo-700 flex items-start gap-3">
+                        <Shield className="w-5 h-5 mt-0.5 shrink-0 text-indigo-600" />
+                        <div>
+                            <strong className="block font-bold mb-1">Painel de Controle de Visibilidade</strong>
+                            Nesta matriz você pode escolher quais módulos principais do ecossistema estarão ativos ou ocultos para cada perfil ou cargo. Administradores e Desenvolvedores sempre possuem acesso total aos módulos. Lembre-se de salvar as alterações ao terminar.
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto border border-gray-100 rounded-lg">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                    <th className="px-6 py-4 min-w-[280px]">Módulo / Recurso</th>
+                                    <th className="px-6 py-4 text-center">Administrador</th>
+                                    <th className="px-6 py-4 text-center">Membro</th>
+                                    <th className="px-6 py-4 text-center">Visualizador</th>
+                                    {customRoles.map(role => (
+                                        <th key={role.id} className="px-6 py-4 text-center truncate max-w-[150px]">{role.name}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
+                                {AVAILABLE_MODULES.map(modItem => (
+                                    <tr key={modItem.key} className="hover:bg-gray-50/40 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="font-bold text-gray-900">{modItem.label}</div>
+                                            <div className="text-xs text-gray-400 font-medium">{modItem.description}</div>
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <div className="flex justify-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={true}
+                                                    disabled={true}
+                                                    className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 opacity-60 cursor-not-allowed"
+                                                />
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <div className="flex justify-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={(visibilitySettings['member']?.[modItem.key] ?? true) !== false}
+                                                    onChange={() => handleToggleVisibility('member', modItem.key)}
+                                                    className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                                />
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <div className="flex justify-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={(visibilitySettings['viewer']?.[modItem.key] ?? true) !== false}
+                                                    onChange={() => handleToggleVisibility('viewer', modItem.key)}
+                                                    className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                                />
+                                            </div>
+                                        </td>
+                                        {customRoles.map(role => (
+                                            <td key={role.id} className="px-6 py-4 text-center">
+                                                <div className="flex justify-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={(visibilitySettings[role.id]?.[modItem.key] ?? true) !== false}
+                                                        onChange={() => handleToggleVisibility(role.id, modItem.key)}
+                                                        className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                                    />
+                                                </div>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="flex justify-end pt-4">
+                        <button
+                            type="button"
+                            onClick={handleSaveVisibility}
+                            className="flex items-center px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors shadow-lg text-sm font-bold active:scale-95"
+                        >
+                            <Save className="w-4 h-4 mr-2" />
+                            Salvar Configurações de Visibilidade
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -681,23 +873,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     <label className="block text-sm font-medium text-gray-700">Revisão de Permissões</label>
                                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
                                         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-y-8 gap-x-12 max-h-[400px] overflow-y-auto">
-                                            {[
-                                                { title: 'Orçamento', view: 'canViewBudget', edit: 'canEditBudget' },
-                                                { title: 'Composições', view: 'canViewCompositions', edit: 'canEditCompositions' },
-                                                { title: 'Planejamento', view: 'canViewPlanning', edit: 'canEditPlanning' },
-                                                { title: 'Diário de Obra', view: 'canViewDiary', edit: 'canEditDiary' },
-                                                { title: 'Relatórios', view: 'canViewReports', edit: 'canEditReports' },
-                                                { title: 'Dados Técnicos', view: 'canViewTechnicalData', edit: 'canEditTechnicalData' },
-                                                { title: 'Pedidos', view: 'canViewOrders', edit: 'canEditOrders' },
-                                                { title: 'Recebimento', view: 'canViewReceipts', edit: 'canEditReceipts' },
-                                                { title: 'Financeiro', view: 'canViewFinancial', edit: 'canEditFinancial' },
-                                                { title: 'Portal do Cliente', view: 'canViewClientPortal', edit: 'canEditClientPortal' },
-                                                { title: 'Portal do Investidor', view: 'canViewInvestorPortal', edit: 'canEditInvestorPortal' },
-                                                { title: 'Portal do Fornecedor', view: 'canViewSupplierPortal', edit: 'canEditSupplierPortal' },
-                                                { title: 'Portal do Corretor', view: 'canViewBrokerPortal', edit: 'canEditBrokerPortal' },
-                                                { title: 'Configurações', view: 'canViewSettings', edit: 'canEditSettings' },
-                                                { title: 'Gestão de Team', view: 'canManageUsers' }
-                                            ].map((module) => (
+                                            {DETAILED_PERMISSIONS.map((module) => (
                                                 <div key={module.title} className="space-y-4">
                                                     <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">{module.title}</div>
                                                     <div className="space-y-2">
@@ -768,23 +944,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     <label className="block text-sm font-medium text-gray-700">Permissões do Template</label>
                                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
                                         <div className="p-6 grid grid-cols-1 gap-y-8 max-h-[400px] overflow-y-auto">
-                                            {[
-                                                { title: 'Orçamento', view: 'canViewBudget', edit: 'canEditBudget' },
-                                                { title: 'Composições', view: 'canViewCompositions', edit: 'canEditCompositions' },
-                                                { title: 'Planejamento', view: 'canViewPlanning', edit: 'canEditPlanning' },
-                                                { title: 'Diário de Obra', view: 'canViewDiary', edit: 'canEditDiary' },
-                                                { title: 'Relatórios', view: 'canViewReports', edit: 'canEditReports' },
-                                                { title: 'Dados Técnicos', view: 'canViewTechnicalData', edit: 'canEditTechnicalData' },
-                                                { title: 'Pedidos', view: 'canViewOrders', edit: 'canEditOrders' },
-                                                { title: 'Recebimento', view: 'canViewReceipts', edit: 'canEditReceipts' },
-                                                { title: 'Financeiro', view: 'canViewFinancial', edit: 'canEditFinancial' },
-                                                { title: 'Portal do Cliente', view: 'canViewClientPortal', edit: 'canEditClientPortal' },
-                                                { title: 'Portal do Investidor', view: 'canViewInvestorPortal', edit: 'canEditInvestorPortal' },
-                                                { title: 'Portal do Fornecedor', view: 'canViewSupplierPortal', edit: 'canEditSupplierPortal' },
-                                                { title: 'Portal do Corretor', view: 'canViewBrokerPortal', edit: 'canEditBrokerPortal' },
-                                                { title: 'Configurações', view: 'canViewSettings', edit: 'canEditSettings' },
-                                                { title: 'Gestão de Team', view: 'canManageUsers' }
-                                            ].map((module) => (
+                                            {DETAILED_PERMISSIONS.map((module) => (
                                                 <div key={module.title} className="space-y-4">
                                                     <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">{module.title}</div>
                                                     <div className="space-y-2">

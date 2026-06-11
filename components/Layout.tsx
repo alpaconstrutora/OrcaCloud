@@ -144,13 +144,70 @@ const Layout: React.FC<LayoutProps> = ({
   const [isEmpresaDropdownOpen, setIsEmpresaDropdownOpen] = React.useState(false);
   const activeEmpresa = companies.find(c => c.id === activeEmpresaId) ?? null;
 
-  // Módulos habilitados para a empresa ativa.
-  // Fallback: tudo true quando não há empresa selecionada (compatibilidade).
-  const mod = React.useMemo(() => {
-    const m = activeEmpresa?.modulos_habilitados;
-    if (!m) return { obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: false, offices: false, reformas: false };
-    return m;
-  }, [activeEmpresa]);
+  // Obter organização e membros para calcular permissões dinâmicas
+  const { organizations, activeOrganizationId } = useStore();
+  const activeOrg = organizations.find(o => o.id === activeOrganizationId);
+  
+  const currentMember = React.useMemo(() => {
+    if (!activeOrg?.members || !profile.email) return null;
+    return activeOrg.members.find(m => m.email.toLowerCase() === profile.email?.toLowerCase()) || null;
+  }, [activeOrg, profile.email]);
+
+  // Módulos habilitados e visibilidade calculada por cargo/usuário
+  const allowedMods = React.useMemo(() => {
+    const baseMods = activeEmpresa?.modulos_habilitados || {
+      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: false, offices: false, reformas: false
+    };
+
+    if (profile.group === 'DESENVOLVEDOR') {
+      return {
+        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true
+      };
+    }
+
+    if (!currentMember) return baseMods;
+
+    if (currentMember.role === 'admin') {
+      return {
+        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true
+      };
+    }
+
+    const roleId = currentMember.customRoleId || currentMember.role;
+    const matrix = activeOrg?.settings?.module_visibility || {};
+    const roleConfig = matrix[roleId] || {};
+
+    const checkModule = (layoutKey: string, userPermKey: string, matrixKey: string): boolean => {
+      // O tipo UserPermissions é estendido com canView*
+      const userPerm = currentMember.permissions ? (currentMember.permissions as any)[userPermKey] : undefined;
+      if (userPerm !== undefined) {
+        return !!userPerm;
+      }
+      if (roleConfig[matrixKey] !== undefined) {
+        return !!roleConfig[matrixKey];
+      }
+      return !!baseMods[layoutKey as keyof typeof baseMods];
+    };
+
+    return {
+      obras: checkModule('obras', 'canViewBudget', 'obras'),
+      compras: checkModule('compras', 'canViewOrders', 'compras'),
+      rh: checkModule('rh', 'canViewLabor', 'rh'),
+      offices: checkModule('offices', 'canViewOffices', 'offices'),
+      pro: checkModule('pro', 'canViewPro', 'pro'),
+      crm: checkModule('crm', 'canViewSales', 'crm'),
+      incorporacao: checkModule('incorporacao', 'canViewImovib', 'incorporacao'),
+      fiscal: checkModule('fiscal', 'canViewFiscal', 'fiscal'),
+      quality: checkModule('quality', 'canViewQuality', 'quality'),
+      
+      financeiro: baseMods.financeiro !== false,
+      reformas: baseMods.reformas !== false,
+      estoque: baseMods.estoque !== false,
+      broker_portal: baseMods.broker_portal !== false
+    };
+  }, [activeEmpresa, profile.group, currentMember, activeOrg, activeOrganizationId]);
+
+  const mod = allowedMods;
   const isDev = profile.group === 'DESENVOLVEDOR';
   const [isDarkMode, setIsDarkMode] = React.useState<boolean>(() => {
     if (typeof window === 'undefined') return true;

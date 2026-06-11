@@ -163,15 +163,15 @@ const Layout: React.FC<LayoutProps> = ({
 
     if (profile.group === 'DESENVOLVEDOR' || isDevEmail) {
       return {
-        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true
+        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, compliance: true
       };
     }
 
-    if (!currentMember) return baseMods;
+    if (!currentMember) return { ...baseMods, compliance: false };
 
     if (currentMember.role === 'admin') {
       return {
-        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true
+        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, compliance: true
       };
     }
 
@@ -209,6 +209,7 @@ const Layout: React.FC<LayoutProps> = ({
         reformas: false, quality: false,
         offices: false,
         pro: checkModule('pro', 'canViewPro', 'pro'),
+        compliance: false,
       };
     }
 
@@ -220,6 +221,7 @@ const Layout: React.FC<LayoutProps> = ({
         quality: false, pro: false,
         offices: checkModule('offices', 'canViewOffices', 'offices'),
         crm: checkModule('crm', 'canViewSales', 'crm'),
+        compliance: false,
       };
     }
 
@@ -233,6 +235,7 @@ const Layout: React.FC<LayoutProps> = ({
       incorporacao: checkModule('incorporacao', 'canViewImovib', 'incorporacao'),
       fiscal: checkModule('fiscal', 'canViewFiscal', 'fiscal'),
       quality: checkModule('quality', 'canViewQuality', 'quality'),
+      compliance: checkModule('compliance', 'canViewCompliance', 'compliance'),
       
       financeiro: baseMods.financeiro !== false,
       reformas: baseMods.reformas !== false,
@@ -495,6 +498,7 @@ const Layout: React.FC<LayoutProps> = ({
               {(mod.pro       || isDev) && <NavItem id="pro-dashboard"      icon={Briefcase} label="ÒPURA Pro"      />}
               {(mod.offices   || isDev) && <NavItem id="offices-dashboard"  icon={Palette}   label="ÒPURA Offices"  />}
               {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" />}
+              <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
@@ -565,6 +569,7 @@ const Layout: React.FC<LayoutProps> = ({
                 <>
                   <NavItem id="eng-obras" icon={Building2} label="Obras" />
                   <NavItem id="eng-orcamentos" icon={FolderOpen} label="Orçamentos" />
+                  <NavItem id="measure-ai" icon={Calculator} label="Medição Inteligente" />
                   <NavItem id="operacional" icon={ClipboardList} label="Controle Operacional" />
                   <NavItem id="estrutural" icon={Layers} label="Ferragem & Aço" />
                   <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" />
@@ -663,6 +668,11 @@ const Layout: React.FC<LayoutProps> = ({
                 <>
                   <NavItem id="fiscal-nfe" icon={Receipt} label="Fiscal & NF-e" />
                   <NavItem id="automation" icon={Zap} label="Automação" />
+                </>
+              )}
+              {(mod.compliance || isDev) && (
+                <>
+                  <NavItem id="compliance-dashboard" icon={Shield} label="ÒPURA Compliance" />
                 </>
               )}
 
@@ -852,6 +862,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="pro-dashboard" icon={Briefcase} label="ÒPURA Pro" forceFull />
               <NavItem id="offices-dashboard" icon={Palette} label="ÒPURA Offices" forceFull />
               <NavItem id="reformas-dashboard" icon={Hammer} label="ÒPURA Reformas" forceFull />
+              <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" forceFull />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
                 <div className="space-y-1 mb-4">

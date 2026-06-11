@@ -73,6 +73,7 @@ const PRODUCTS: { id: ProductContext; label: string; icon: string; color: string
     { id: 'platform', label: 'Plataforma', icon: '🏗️', color: 'blue', description: 'Construtoras, incorporadoras e engenheiros' },
     { id: 'pro',      label: 'Òpura Pro',  icon: '⚡', color: 'orange', description: 'Autônomos, prestadores e contratantes' },
     { id: 'offices',  label: 'Offices',    icon: '🎨', color: 'violet', description: 'Arquitetos e designers de interiores' },
+    { id: 'compliance', label: 'Compliance', icon: '🛡️', color: 'blue', description: 'Governança operacional e controle do regime TTS' },
 ];
 
 // Módulos disponíveis por produto
@@ -87,6 +88,7 @@ const MODULES_BY_PRODUCT: Record<ProductContext, { key: string; label: string; d
         { key: 'quality',    label: 'Qualidade & Pós-Obra',             description: 'Qualidade de entrega, garantia e SLAs' },
         { key: 'pro',        label: 'ÒPURA Pro (Add-on)',               description: 'Modelos rápidos de orçamento para prestadores' },
         { key: 'offices',    label: 'ÒPURA Offices (Add-on)',           description: 'Projetos e especificações de arquitetura/design' },
+        { key: 'compliance', label: 'ÒPURA Compliance (Add-on)',        description: 'Governança operacional e conformidade TTS' },
     ],
     pro: [
         { key: 'pro',        label: 'ÒPURA Pro',                        description: 'Modelos e estimativas rápidas de orçamento' },
@@ -94,6 +96,9 @@ const MODULES_BY_PRODUCT: Record<ProductContext, { key: string; label: string; d
     offices: [
         { key: 'offices',    label: 'ÒPURA Offices',                    description: 'Projetos e especificações de arquitetura/design' },
         { key: 'crm',        label: 'CRM de Serviços',                  description: 'Contratos e gestão de clientes de arquitetura' },
+    ],
+    compliance: [
+        { key: 'compliance', label: 'ÒPURA Compliance',                 description: 'Dashboard de conformidade, mapa físico e checklists' },
     ],
 };
 
@@ -123,7 +128,8 @@ const DETAILED_PERMISSIONS = [
     { title: 'Módulo Fiscal & NF-e', view: 'canViewFiscal' },
     { title: 'Módulo Qualidade & Pós-Obra', view: 'canViewQuality' },
     { title: 'Módulo Locações', view: 'canViewRentals' },
-    { title: 'Módulo Estrutural (Aço/Ferragem)', view: 'canViewStructural' }
+    { title: 'Módulo Estrutural (Aço/Ferragem)', view: 'canViewStructural' },
+    { title: 'Módulo de Compliance / TTS', view: 'canViewCompliance', edit: 'canEditCompliance' }
 ];
 
 const OrganizationUsers: React.FC<OrganizationUsersProps> = ({

@@ -70,6 +70,12 @@ const MasterDataBrowser     = React.lazy(() => import('./MasterDataBrowser'));
 const ProModule             = React.lazy(() => import('./ProModule'));
 const OfficesModule         = React.lazy(() => import('./OfficesModule'));
 const ReformasModule        = React.lazy(() => import('./ReformasModule'));
+const MeasureAIModule       = React.lazy(() => import('./MeasureAIModule'));
+const ComplianceDashboard   = React.lazy(() => import('./ComplianceDashboard'));
+const CompliancePhysicalMap = React.lazy(() => import('./CompliancePhysicalMap'));
+const ComplianceChecklists  = React.lazy(() => import('./ComplianceChecklists'));
+const OpuraDocsModule       = React.lazy(() => import('./OpuraDocsModule'));
+
 
 // Suspense fallback
 const Spinner = () => (
@@ -260,6 +266,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewBudget', 'obras');
     } else if (activeView.startsWith('supplies-')) {
       allowed = isModuleAllowed('canViewOrders', 'compras');
+    } else if (activeView === 'opura-docs') {
+      allowed = true;
     }
 
     if (!allowed) {
@@ -312,6 +320,49 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
   // ── Roteamento principal ─────────────────────────────────────────────────────
   switch (activeView) {
+    case 'opura-docs':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <OpuraDocsModule
+            activeOrganizationId={activeOrganizationId}
+            projects={typedProjects}
+            currentProfile={currentProfile}
+            onChangeView={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    case 'compliance-dashboard':
+      return (
+        <ComplianceDashboard
+          organizationId={activeOrganizationId || ''}
+          onNavigate={setActiveView}
+        />
+      );
+
+    case 'compliance-physical-map':
+      return (
+        <CompliancePhysicalMap
+          organizationId={activeOrganizationId || ''}
+          onBack={() => setActiveView('compliance-dashboard')}
+        />
+      );
+
+    case 'compliance-checklists':
+      return (
+        <ComplianceChecklists
+          organizationId={activeOrganizationId || ''}
+          onBack={() => setActiveView('compliance-dashboard')}
+        />
+      );
+
+    case 'measure-ai':
+      return (
+        <MeasureAIModule
+          userId={session?.user?.id || ''}
+        />
+      );
+
     case 'pro-dashboard':
     case 'pro-orcamento-form':
     case 'pro-servico-detalhe':

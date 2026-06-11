@@ -88,8 +88,8 @@ export interface SupplierCategory {
 
 export type OrganizationRole = 'admin' | 'member' | 'viewer';
 
-/** Produto Òpura que o membro acessa: Plataforma principal, Pro ou Offices */
-export type ProductContext = 'platform' | 'pro' | 'offices';
+/** Produto Òpura que o membro acessa: Plataforma principal, Pro, Offices ou Compliance */
+export type ProductContext = 'platform' | 'pro' | 'offices' | 'compliance';
 
 /** Mapa de visibilidade: roleId -> moduleKey -> habilitado */
 export type ProductModuleMap = Record<string, Record<string, boolean>>;
@@ -99,6 +99,7 @@ export interface ModuleVisibilityConfig {
     platform?: ProductModuleMap;
     pro?: ProductModuleMap;
     offices?: ProductModuleMap;
+    compliance?: ProductModuleMap;
 }
 
 export enum ProfileGroup {
@@ -153,6 +154,11 @@ export interface UserPermissions {
     canEditSettings: boolean;
     canManageUsers: boolean;
     
+    // Permissões de Compliance
+    canViewCompliance?: boolean;
+    canEditCompliance?: boolean;
+    canManageComplianceRules?: boolean;
+    
     // Configurações de Visibilidade de Módulos (Feature Flags por Cargo)
     canViewLabor?: boolean;
     canViewOffices?: boolean;
@@ -163,6 +169,7 @@ export interface UserPermissions {
     canViewQuality?: boolean;
     canViewRentals?: boolean;
     canViewStructural?: boolean;
+    canViewComplianceModule?: boolean;
 }
 
 export interface OrganizationCustomRole {

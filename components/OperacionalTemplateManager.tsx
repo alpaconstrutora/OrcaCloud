@@ -636,87 +636,121 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
   }
 
   // ── Importar a partir de Excel (.xlsx / .xls) ────────────────────────────
-  // Formato esperado: colunas nome_template | tipo_servico | descricao | gate |
-  //                   obrigatorio | foto | severidade | categoria
-  // Linhas com o mesmo nome_template são agrupadas em um template.
-  // Aceita uma ou múltiplas abas; cada aba vira um template separado se tiver
-  // cabeçalho "descricao". Se a planilha tiver a coluna "nome_template",
-  // agrupa dinamicamente; caso contrário, usa o nome da aba.
+  // Formato: colunas Grupo | Subgrupo | Item  (células mescladas OK — carry-forward)
+  // Grupo   → nome do template (um template por grupo único)
+  // Subgrupo → categoria do item; gate inferido do nome:
+  //            contém "antes"/"before"/"início"  → pre_start
+  //            contém "após"/"depois"/"after"     → pre_completion
+  //            demais                             → free
+  // Item    → descrição do item de checklist
+  // Colunas extras opcionais: obrigatorio | foto | severidade
   const handleImportExcel = async (file: File) => {
     setImporting(true)
     setError(null)
     try {
       const buffer = await file.arrayBuffer()
-      const wb = XLSX.read(buffer, { type: 'array' })
+      // cellDates:false evita conversão automática; raw:false converte tudo para string
+      const wb = XLSX.read(buffer, { type: 'array', cellDates: false, raw: false })
 
-      // Normaliza cabeçalho: remove acentos, espaços → underscore, lowercase
-      const norm = (s: string) =>
-        s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, '_')
+      // Remove acentos, lowercase, espaços → underscore
+      const norm = (s: unknown) =>
+        String(s ?? '').trim().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, '_')
 
-      type RawRow = Record<string, string | undefined>
-
-      // Coleta templates de todas as abas
-      const templateMap = new Map<string, { service_type: string | null; items: RawRow[] }>()
-
-      for (const sheetName of wb.SheetNames) {
-        const rows: RawRow[] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' })
-        if (rows.length === 0) continue
-
-        // Normalizar chaves das linhas
-        const normalized: RawRow[] = rows.map(r =>
-          Object.fromEntries(Object.entries(r).map(([k, v]) => [norm(k), String(v ?? '').trim()]))
-        )
-
-        for (const row of normalized) {
-          if (!row['descricao'] && !row['description']) continue // linha sem item
-
-          const tmplName = row['nome_template'] || row['template'] || sheetName
-          const svcType = row['tipo_servico'] || row['service_type'] || null
-
-          if (!templateMap.has(tmplName)) {
-            templateMap.set(tmplName, { service_type: svcType || null, items: [] })
-          }
-          templateMap.get(tmplName)!.items.push(row)
-        }
-      }
-
-      if (templateMap.size === 0) {
-        setError('Nenhum dado encontrado. Verifique se a planilha tem a coluna "descricao".')
-        return
-      }
-
-      const parseGate = (v: string): TemplateItem['gate'] => {
-        const g = norm(v)
-        if (g.includes('inicio') || g.includes('start') || g === 'pre_start') return 'pre_start'
-        if (g.includes('conclus') || g.includes('completion') || g === 'pre_completion') return 'pre_completion'
+      // Infere gate a partir do nome do subgrupo
+      const gateFromSubgrupo = (sub: string): TemplateItem['gate'] => {
+        const n = norm(sub)
+        if (n.includes('antes') || n.includes('inicio') || n.includes('before') || n.includes('start')) return 'pre_start'
+        if (n.includes('apos') || n.includes('depois') || n.includes('after') || n.includes('conclus') || n.includes('completion')) return 'pre_completion'
         return 'free'
       }
       const parseSeverity = (v: string): TemplateItem['severity'] => {
         const s = norm(v)
-        if (s.includes('grave') || s.includes('major') || s === 'major') return 'major'
-        if (s.includes('leve') || s.includes('minor') || s === 'minor') return 'minor'
+        if (s.includes('grave') || s.includes('major')) return 'major'
+        if (s.includes('leve') || s.includes('minor')) return 'minor'
         return 'moderate'
       }
       const parseBool = (v: string) => ['sim','yes','true','1','x','✓'].includes(norm(v))
 
-      for (const [name, { service_type, items }] of templateMap) {
+      // Mapa: grupoName → lista de itens já enriquecidos
+      type ParsedItem = {
+        description: string
+        category: string | null
+        gate: TemplateItem['gate']
+        required: boolean
+        requires_photo: boolean
+        severity: TemplateItem['severity']
+      }
+      const templateMap = new Map<string, ParsedItem[]>()
+
+      for (const sheetName of wb.SheetNames) {
+        // sheet_to_json com header:1 devolve arrays (preserva ordem e células mescladas vazias)
+        const rawRows: unknown[][] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' })
+        if (rawRows.length < 2) continue
+
+        // Descobre índices das colunas pelo cabeçalho da linha 0
+        const header = rawRows[0].map(h => norm(h))
+        const col = (aliases: string[]) => aliases.findIndex(a => header.includes(a)) < 0
+          ? header.findIndex(h => aliases.some(a => h.includes(a)))
+          : aliases.findIndex(a => header.findIndex(h => h.includes(a)) >= 0) >= 0
+            ? header.findIndex(h => aliases.some(a => h.includes(a)))
+            : -1
+
+        const iGrupo    = col(['grupo', 'group', 'template'])
+        const iSubgrupo = col(['subgrupo', 'subgroup', 'categoria', 'category', 'secao', 'section'])
+        const iItem     = col(['item', 'descricao', 'description', 'titulo'])
+        const iObrg     = col(['obrigatorio', 'required', 'obrig'])
+        const iFoto     = col(['foto', 'photo', 'requires_photo'])
+        const iSev      = col(['severidade', 'severity'])
+
+        if (iItem < 0) continue // planilha sem coluna de item — pula
+
+        let lastGrupo    = sheetName  // fallback: nome da aba
+        let lastSubgrupo = ''
+
+        for (let r = 1; r < rawRows.length; r++) {
+          const row = rawRows[r]
+          const rawItem = String(row[iItem] ?? '').trim()
+          if (!rawItem) continue // linha em branco
+
+          // Carry-forward para células mescladas
+          if (iGrupo >= 0 && String(row[iGrupo] ?? '').trim()) lastGrupo = String(row[iGrupo]).trim()
+          if (iSubgrupo >= 0 && String(row[iSubgrupo] ?? '').trim()) lastSubgrupo = String(row[iSubgrupo]).trim()
+
+          if (!templateMap.has(lastGrupo)) templateMap.set(lastGrupo, [])
+          templateMap.get(lastGrupo)!.push({
+            description:    rawItem,
+            category:       lastSubgrupo || null,
+            gate:           gateFromSubgrupo(lastSubgrupo),
+            required:       iObrg >= 0 ? parseBool(String(row[iObrg] ?? '')) : true,
+            requires_photo: iFoto >= 0 ? parseBool(String(row[iFoto] ?? '')) : false,
+            severity:       iSev >= 0  ? parseSeverity(String(row[iSev] ?? '')) : 'moderate',
+          })
+        }
+      }
+
+      if (templateMap.size === 0) {
+        setError('Nenhum dado encontrado. Verifique se a planilha tem as colunas Grupo | Subgrupo | Item.')
+        return
+      }
+
+      for (const [name, items] of templateMap) {
         const { data: newTmpl, error: insErr } = await supabase
           .from('oe_checklist_templates')
-          .insert({ org_id: orgId, name, service_type, active: false })
+          .insert({ org_id: orgId, name, service_type: null, active: false })
           .select()
           .single()
         if (insErr || !newTmpl) continue
 
         await supabase.from('oe_checklist_items').insert(
-          items.map((row, idx) => ({
-            template_id: newTmpl.id,
-            description: row['descricao'] || row['description'] || '',
-            gate: parseGate(row['gate'] || ''),
-            required: parseBool(row['obrigatorio'] || row['required'] || ''),
-            requires_photo: parseBool(row['foto'] || row['requires_photo'] || ''),
-            severity: parseSeverity(row['severidade'] || row['severity'] || ''),
-            category: row['categoria'] || row['category'] || null,
-            sort_order: idx,
+          items.map((item, idx) => ({
+            template_id:    newTmpl.id,
+            description:    item.description,
+            gate:           item.gate,
+            required:       item.required,
+            requires_photo: item.requires_photo,
+            severity:       item.severity,
+            category:       item.category,
+            sort_order:     idx,
           }))
         )
       }

@@ -12,8 +12,9 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
   const [clientes, setClientes] = React.useState<ProCliente[]>([]);
   const [orcamentos, setOrcamentos] = React.useState<any[]>([]);
 
-  // Estados de criação de cliente
+  // Estados de criação/edição de cliente
   const [mostrarForm, setMostrarForm] = React.useState(false);
+  const [editingClienteId, setEditingClienteId] = React.useState<string | null>(null);
   const [nome, setNome] = React.useState('');
   const [telefone, setTelefone] = React.useState('');
   const [endereco, setEndereco] = React.useState('');
@@ -42,7 +43,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
     fetchClientes();
   }, [fetchClientes]);
 
-  const handleCreate = async () => {
+  const handleSubmit = async () => {
     if (!nome || !telefone) {
       alert('Nome e telefone são campos obrigatórios.');
       return;
@@ -50,28 +51,61 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
 
     try {
       setLoading(true);
-      await proService.saveCliente({
-        user_id: userId,
-        nome,
-        telefone,
-        endereco: endereco || undefined,
-        observacoes: observacoes || undefined
-      });
+      if (editingClienteId) {
+        await proService.saveCliente({
+          id: editingClienteId,
+          user_id: userId,
+          nome,
+          telefone,
+          endereco: endereco || undefined,
+          observacoes: observacoes || undefined
+        });
+        alert('Cliente atualizado com sucesso!');
+      } else {
+        await proService.saveCliente({
+          user_id: userId,
+          nome,
+          telefone,
+          endereco: endereco || undefined,
+          observacoes: observacoes || undefined
+        });
+      }
 
       // Reset form
       setNome('');
       setTelefone('');
       setEndereco('');
       setObservacoes('');
+      setEditingClienteId(null);
       setMostrarForm(false);
 
       // Refresh list
       await fetchClientes();
     } catch (error) {
-      console.error('Erro ao cadastrar cliente:', error);
+      console.error('Erro ao salvar cliente:', error);
       alert('Erro ao salvar o cliente.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string, nomeCliente: string) => {
+    const confirmMsg = `ATENÇÃO: Tem certeza de que deseja excluir o cliente "${nomeCliente}"?\n\nDevido à exclusão em cascata, TODOS OS ORÇAMENTOS E SERVIÇOS/OS associados a este cliente serão excluídos permanentemente do banco de dados!`;
+    if (window.confirm(confirmMsg)) {
+      try {
+        setLoading(true);
+        await proService.deleteCliente(id);
+        alert('Cliente e todo seu histórico foram excluídos com sucesso.');
+        if (clienteExpandidoId === id) {
+          setClienteExpandidoId(null);
+        }
+        await fetchClientes();
+      } catch (error) {
+        console.error('Erro ao excluir cliente:', error);
+        alert('Não foi possível excluir o cliente.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -95,7 +129,16 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
           <h1 className="text-lg font-black text-slate-800">Meus Clientes</h1>
         </div>
         <button
-          onClick={() => setMostrarForm(!mostrarForm)}
+          onClick={() => {
+            if (mostrarForm) {
+              setNome('');
+              setTelefone('');
+              setEndereco('');
+              setObservacoes('');
+              setEditingClienteId(null);
+            }
+            setMostrarForm(!mostrarForm);
+          }}
           className="text-xs font-black uppercase tracking-widest text-teal-600 hover:text-teal-500"
         >
           {mostrarForm ? 'Cancelar' : '+ Cadastrar'}
@@ -105,7 +148,9 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
       {/* Formulário Novo Cliente */}
       {mostrarForm && (
         <div className="bg-white border border-slate-200/50 p-4 rounded-[24px] space-y-3 animate-in slide-in-from-top-3 duration-250 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-          <span className="block text-[10px] font-black uppercase tracking-widest text-teal-600">Novo Cadastro</span>
+          <span className="block text-[10px] font-black uppercase tracking-widest text-teal-600">
+            {editingClienteId ? '✏️ Editar Cadastro' : '✨ Novo Cadastro'}
+          </span>
           <div className="space-y-2.5">
             <input
               type="text"
@@ -137,10 +182,10 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
             />
           </div>
           <button
-            onClick={handleCreate}
+            onClick={handleSubmit}
             className="w-full py-2.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white text-xs font-black uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 active:scale-95"
           >
-            Confirmar Cadastro
+            {editingClienteId ? 'Salvar Alterações' : 'Confirmar Cadastro'}
           </button>
         </div>
       )}
@@ -226,18 +271,47 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
                       )}
                     </div>
 
-                    {/* Botão de Ação Rápida WhatsApp */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const cleanPhone = c.telefone.replace(/\D/g, '');
-                        const targetPhone = cleanPhone.length === 10 || cleanPhone.length === 11 ? `55${cleanPhone}` : cleanPhone;
-                        window.open(`https://wa.me/${targetPhone}`, '_blank');
-                      }}
-                      className="w-full py-2 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200/50 text-emerald-600 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all text-center shadow-sm"
-                    >
-                      💬 Chamar no WhatsApp
-                    </button>
+                    {/* Painel de Ações */}
+                    <div className="space-y-2 pt-2 border-t border-slate-100">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const cleanPhone = c.telefone.replace(/\D/g, '');
+                          const targetPhone = cleanPhone.length === 10 || cleanPhone.length === 11 ? `55${cleanPhone}` : cleanPhone;
+                          window.open(`https://wa.me/${targetPhone}`, '_blank');
+                        }}
+                        className="w-full py-2 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200/50 text-emerald-600 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all text-center shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        💬 Chamar no WhatsApp
+                      </button>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingClienteId(c.id);
+                            setNome(c.nome);
+                            setTelefone(c.telefone);
+                            setEndereco(c.endereco || '');
+                            setObservacoes(c.observacoes || '');
+                            setMostrarForm(true);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="py-2 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all text-center flex items-center justify-center gap-1"
+                        >
+                          ✏️ Editar
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(c.id, c.nome);
+                          }}
+                          className="py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-650 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all text-center flex items-center justify-center gap-1"
+                        >
+                          🗑️ Excluir
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

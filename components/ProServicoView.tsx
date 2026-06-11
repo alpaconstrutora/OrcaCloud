@@ -3,6 +3,88 @@ import { proService } from '../services/proService';
 import { ProServico, ProOSChecklistItem } from '../types';
 import jsPDF from 'jspdf';
 
+// Função auxiliar para calcular o CRC16 de validação do PIX (Polinômio 0x1021)
+const calculateCRC16 = (str: string): string => {
+  let crc = 0xFFFF;
+  const polynomial = 0x1021;
+
+  for (let i = 0; i < str.length; i++) {
+    const charCode = str.charCodeAt(i);
+    for (let j = 0; j < 8; j++) {
+      const bit = ((charCode >> (7 - j)) & 1) === 1;
+      const c15 = ((crc >> 15) & 1) === 1;
+      crc <<= 1;
+      if (c15 !== bit) {
+        crc ^= polynomial;
+      }
+    }
+  }
+
+  crc &= 0xFFFF;
+  let crcStr = crc.toString(16).toUpperCase();
+  while (crcStr.length < 4) {
+    crcStr = '0' + crcStr;
+  }
+  return crcStr;
+};
+
+// Gerador de Payload oficial do Pix Copia e Cola no padrão EMV do BC
+const generatePixCopiaECola = (chave: string, valor: number, prestadorNome: string) => {
+  if (!chave) return '';
+
+  let chaveFormatada = chave.trim();
+  const apenasDigitos = chaveFormatada.replace(/\D/g, '');
+  if (apenasDigitos.length === 11 && (chaveFormatada.includes('(') || chaveFormatada.includes('-') || chaveFormatada.startsWith('9') || chaveFormatada.startsWith('8'))) {
+    chaveFormatada = `+55${apenasDigitos}`;
+  } else if (apenasDigitos.length === 11) {
+    chaveFormatada = apenasDigitos;
+  } else if (apenasDigitos.length === 14) {
+    chaveFormatada = apenasDigitos;
+  }
+
+  const formatTag = (id: string, value: string): string => {
+    const len = value.length.toString().padStart(2, '0');
+    return `${id}${len}${value}`;
+  };
+
+  const removeAccents = (str: string): string => {
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9\s]/g, '');
+  };
+
+  let nomeLimpo = removeAccents(prestadorNome || 'OPURA PRO').toUpperCase().trim();
+  if (nomeLimpo.length > 25) {
+    nomeLimpo = nomeLimpo.substring(0, 25);
+  } else if (nomeLimpo.length === 0) {
+    nomeLimpo = 'PRESTADOR AUTONOMO';
+  }
+
+  const tag00 = formatTag('00', '01');
+  const subTag00 = formatTag('00', 'br.gov.bcb.pix');
+  const subTag01 = formatTag('01', chaveFormatada);
+  const tag26 = formatTag('26', `${subTag00}${subTag01}`);
+
+  const tag52 = formatTag('52', '0000');
+  const tag53 = formatTag('53', '986');
+  
+  const valorFormatado = valor.toFixed(2);
+  const tag54 = formatTag('54', valorFormatado);
+
+  const tag58 = formatTag('58', 'BR');
+  const tag59 = formatTag('59', nomeLimpo);
+  const tag60 = formatTag('60', 'BRASILIA');
+
+  const subTag62_05 = formatTag('05', '***');
+  const tag62 = formatTag('62', subTag62_05);
+
+  const rawPayload = `${tag00}${tag26}${tag52}${tag53}${tag54}${tag58}${tag59}${tag60}${tag62}6304`;
+  const crc = calculateCRC16(rawPayload);
+  
+  return `${rawPayload}${crc}`;
+};
+
 interface ProServicoViewProps {
   userId: string;
   servicoId: string | null;
@@ -317,6 +399,84 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
     doc.setFontSize(13);
     doc.text(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orcObj?.valor || 0), 190, currentY + 5, { align: 'right' });
 
+    // Registro Fotográfico na segunda página (se houver fotos)
+    if (antesFoto || depoisFoto) {
+      doc.addPage();
+      
+      // Cabeçalho da página 2
+      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.rect(0, 0, 210, 20, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text('REGISTRO FOTOGRÁFICO DO SERVIÇO', 15, 13);
+      
+      // Resetar cor do texto
+      doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+      
+      let photoY = 35;
+      
+      const getImageFormat = (base64Str: string): 'JPEG' | 'PNG' => {
+        if (base64Str.startsWith('data:image/png')) return 'PNG';
+        return 'JPEG';
+      };
+
+      if (antesFoto && depoisFoto) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text('FOTO ANTES DA EXECUÇÃO', 15, photoY);
+        doc.text('FOTO DEPOIS DA EXECUÇÃO', 110, photoY);
+        
+        photoY += 5;
+        try {
+          doc.addImage(antesFoto, getImageFormat(antesFoto), 15, photoY, 85, 60);
+        } catch (e) {
+          console.error('Erro ao adicionar foto antes no PDF:', e);
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(9);
+          doc.text('[Erro ao carregar imagem]', 15, photoY + 20);
+        }
+
+        try {
+          doc.addImage(depoisFoto, getImageFormat(depoisFoto), 110, photoY, 85, 60);
+        } catch (e) {
+          console.error('Erro ao adicionar foto depois no PDF:', e);
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(9);
+          doc.text('[Erro ao carregar imagem]', 110, photoY + 20);
+        }
+      } else if (antesFoto) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text('FOTO ANTES DA EXECUÇÃO', 15, photoY);
+        
+        photoY += 5;
+        try {
+          doc.addImage(antesFoto, getImageFormat(antesFoto), 15, photoY, 120, 90);
+        } catch (e) {
+          console.error('Erro ao adicionar foto antes no PDF:', e);
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(9);
+          doc.text('[Erro ao carregar imagem]', 15, photoY + 20);
+        }
+      } else if (depoisFoto) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text('FOTO DEPOIS DA EXECUÇÃO', 15, photoY);
+        
+        photoY += 5;
+        try {
+          doc.addImage(depoisFoto, getImageFormat(depoisFoto), 15, photoY, 120, 90);
+        } catch (e) {
+          console.error('Erro ao adicionar foto depois no PDF:', e);
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(9);
+          doc.text('[Erro ao carregar imagem]', 15, photoY + 20);
+        }
+      }
+    }
+
     // Rodapé
     doc.setTextColor(148, 163, 184);
     doc.setFontSize(8);
@@ -360,11 +520,15 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
   const orc = servico.pro_orcamentos;
   const cli = orc?.pro_clientes;
 
-  // Gerador de Pix Copia e Cola Simplificado
-  const pixKey = config?.pix_key || 'Chave PIX não cadastrada nas configurações.';
+  // Gerador de Pix Copia e Cola Real (Padrão EMV BR Code)
+  const prestadorNome = config?.template_header || 'OPURA PRO';
   const valor = orc?.valor || 0;
-  const qrCodeUrl = config?.pix_key
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`key=${pixKey}&amount=${valor}`)}`
+  const pixCopiaECola = config?.pix_key
+    ? generatePixCopiaECola(config.pix_key, valor, prestadorNome)
+    : '';
+
+  const qrCodeUrl = pixCopiaECola
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCopiaECola)}`
     : '';
 
   return (
@@ -523,27 +687,35 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
         <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Cobrança PIX</h2>
         <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col items-center text-center gap-3">
           <span className="text-[10px] font-black uppercase tracking-widest text-teal-600">Receber Pagamento</span>
-          {qrCodeUrl ? (
+          {pixCopiaECola ? (
             <>
               <img src={qrCodeUrl} alt="QR Code PIX" className="w-40 h-40 bg-white p-2 rounded-xl border border-slate-100" />
-              <div className="space-y-1">
-                <span className="block text-[10px] text-slate-400">Chave PIX: {pixKey}</span>
+              <div className="space-y-1 w-full px-2">
+                <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Valor a Receber</span>
                 <span className="block font-black text-slate-800 text-base">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)}
                 </span>
+                
+                <div className="pt-2">
+                  <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400 text-left mb-1">Pix Copia e Cola</span>
+                  <div className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-[9px] font-mono text-slate-600 text-left break-all select-all max-h-12 overflow-y-auto">
+                    {pixCopiaECola}
+                  </div>
+                </div>
               </div>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(pixKey);
-                  alert('Chave PIX copiada para a área de transferência.');
+                  navigator.clipboard.writeText(pixCopiaECola);
+                  alert('Código Pix Copia e Cola copiado com sucesso!');
                 }}
-                className="px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold rounded-xl transition-colors active:scale-95 shadow-sm"
+                className="w-full py-2.5 bg-teal-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-teal-600 transition-colors shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
               >
-                📋 Copiar Chave PIX
+                📋 Copiar Pix Copia e Cola
               </button>
+              <span className="text-[8px] text-slate-400">Chave cadastrada: {config.pix_key} ({config.pix_key_type})</span>
             </>
           ) : (
-            <span className="text-xs text-slate-400 italic">Configure sua chave Pix no seu cadastro para gerar cobranças.</span>
+            <span className="text-xs text-slate-400 italic">Configure sua chave Pix nas configurações do perfil para gerar o código Copia e Cola e o QR Code.</span>
           )}
         </div>
       </div>

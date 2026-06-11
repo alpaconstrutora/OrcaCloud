@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { proService } from '../services/proService';
 import { ProConfig, ProPixKeyType } from '../types';
-import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft } from 'lucide-react';
+import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft, Plus, Trash2, Edit, X } from 'lucide-react';
 
 interface ProConfigFormProps {
   userId: string;
@@ -19,6 +19,13 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
   const [pixKey, setPixKey] = useState('');
   const [templateFooter, setTemplateFooter] = useState('');
 
+  // Estados para templates customizados
+  const [templatesCustom, setTemplatesCustom] = useState<{ id: string; titulo: string; descricao: string; valor: number }[]>([]);
+  const [tempId, setTempId] = useState<string | null>(null);
+  const [tempTitulo, setTempTitulo] = useState('');
+  const [tempDescricao, setTempDescricao] = useState('');
+  const [tempValor, setTempValor] = useState('');
+
   // Carrega as configurações existentes no mount
   useEffect(() => {
     const loadConfig = async () => {
@@ -31,6 +38,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           setPixKeyType(data.pix_key_type || 'CPF');
           setPixKey(data.pix_key || '');
           setTemplateFooter(data.template_footer || '');
+          setTemplatesCustom(data.templates_custom || []);
         }
       } catch (err) {
         console.error('Erro ao buscar configurações:', err);
@@ -55,6 +63,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
         pix_key_type: pixKeyType,
         pix_key: pixKey.trim(),
         template_footer: templateFooter.trim(),
+        templates_custom: templatesCustom,
         created_at: new Date().toISOString()
       });
       alert('Configurações salvas com sucesso!');
@@ -65,6 +74,67 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleAddOrUpdateTemplate = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!tempTitulo.trim() || !tempDescricao.trim()) {
+      alert('Por favor, preencha o título e a descrição do modelo.');
+      return;
+    }
+
+    const valorNum = parseFloat(tempValor.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+
+    if (tempId) {
+      // Editar existente
+      setTemplatesCustom(prev =>
+        prev.map(t => (t.id === tempId ? { ...t, titulo: tempTitulo.trim(), descricao: tempDescricao.trim(), valor: valorNum } : t))
+      );
+      setTempId(null);
+    } else {
+      // Adicionar novo
+      const newTemplate = {
+        id: Math.random().toString(36).substring(2, 9),
+        titulo: tempTitulo.trim(),
+        descricao: tempDescricao.trim(),
+        valor: valorNum
+      };
+      setTemplatesCustom(prev => [...prev, newTemplate]);
+    }
+
+    // Limpar campos
+    setTempTitulo('');
+    setTempDescricao('');
+    setTempValor('');
+  };
+
+  const handleEditTemplate = (e: React.MouseEvent, t: { id: string; titulo: string; descricao: string; valor: number }) => {
+    e.preventDefault();
+    setTempId(t.id);
+    setTempTitulo(t.titulo);
+    setTempDescricao(t.descricao);
+    setTempValor(t.valor.toString());
+  };
+
+  const handleDeleteTemplate = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    if (window.confirm('Tem certeza que deseja excluir este modelo?')) {
+      setTemplatesCustom(prev => prev.filter(t => t.id !== id));
+      if (tempId === id) {
+        setTempId(null);
+        setTempTitulo('');
+        setTempDescricao('');
+        setTempValor('');
+      }
+    }
+  };
+
+  const handleCancelEdit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setTempId(null);
+    setTempTitulo('');
+    setTempDescricao('');
+    setTempValor('');
   };
 
   if (loading) {
@@ -182,6 +252,113 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none font-medium"
             />
           </div>
+        </div>
+
+        {/* Bloco: Modelos Customizados */}
+        <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
+          <span className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            Modelos de Orçamentos Customizados
+          </span>
+
+          {/* Form inline para cadastrar/editar template */}
+          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/50 space-y-2.5">
+            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-500">
+              {tempId ? 'Editar Modelo' : 'Adicionar Novo Modelo Rápido'}
+            </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Título do Modelo</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Instalação de Ar-condicionado de Janela"
+                  value={tempTitulo}
+                  onChange={(e) => setTempTitulo(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Valor Estimado (R$)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 350,00"
+                  value={tempValor}
+                  onChange={(e) => setTempValor(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Descrição Detalhada do Serviço</label>
+              <textarea
+                rows={2}
+                placeholder="Descreva o que está incluso no serviço..."
+                value={tempDescricao}
+                onChange={(e) => setTempDescricao(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 resize-none font-medium"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              {tempId && (
+                <button
+                  onClick={handleCancelEdit}
+                  className="px-3 py-1.5 border border-slate-200 text-slate-500 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" />
+                  Cancelar
+                </button>
+              )}
+              <button
+                onClick={handleAddOrUpdateTemplate}
+                className="px-3 py-1.5 bg-teal-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-teal-600 transition-colors flex items-center gap-1"
+              >
+                {tempId ? <Sparkles className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                {tempId ? 'Salvar Modelo' : 'Adicionar'}
+              </button>
+            </div>
+          </div>
+
+          {/* Lista de templates cadastrados */}
+          {templatesCustom.length === 0 ? (
+            <div className="text-center py-6 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+              <p className="text-[10px] font-medium text-slate-400">Nenhum modelo customizado cadastrado ainda.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Seus Modelos ({templatesCustom.length})</label>
+              <div className="divide-y divide-slate-100 bg-slate-50/30 rounded-2xl border border-slate-200/40 overflow-hidden animate-fadeIn">
+                {templatesCustom.map((t) => (
+                  <div key={t.id} className="p-3 flex items-start justify-between gap-3 hover:bg-slate-50/80 transition-colors">
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-700">{t.titulo}</span>
+                        <span className="text-[10px] font-black text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor)}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 font-medium line-clamp-2">{t.descricao}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => handleEditTemplate(e, t)}
+                        className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                        title="Editar modelo"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteTemplate(e, t.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Excluir modelo"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Ações */}

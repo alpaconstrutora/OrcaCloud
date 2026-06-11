@@ -38,6 +38,18 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
   const [isListening, setIsListening] = React.useState(false);
   const [selectedTemplateIndex, setSelectedTemplateIndex] = React.useState('');
 
+  const getTodosTemplates = () => {
+    const padrao = proService.getTemplatesPadrao(config?.profissao || 'AR_CONDICIONADO').map(t => ({
+      ...t,
+      tipo: 'PADRAO' as const
+    }));
+    const custom = (config?.templates_custom || []).map((t: any) => ({
+      ...t,
+      tipo: 'CUSTOM' as const
+    }));
+    return [...padrao, ...custom];
+  };
+
   // Lógica de Reconhecimento de Voz (Web Speech API)
   const handleVoiceInput = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -400,7 +412,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                 const idx = e.target.value;
                 setSelectedTemplateIndex(idx);
                 if (idx !== '') {
-                  const templates = proService.getTemplatesPadrao(config?.profissao || 'AR_CONDICIONADO');
+                  const templates = getTodosTemplates();
                   const t = templates[Number(idx)];
                   if (t) {
                     setDescricao(t.descricao);
@@ -410,9 +422,11 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
               }}
               className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
             >
-              <option value="">Selecione um modelo padrão...</option>
-              {proService.getTemplatesPadrao(config?.profissao || 'AR_CONDICIONADO').map((t, index) => (
-                <option key={index} value={index}>{t.titulo} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor)})</option>
+              <option value="">Selecione um modelo...</option>
+              {getTodosTemplates().map((t, index) => (
+                <option key={index} value={index}>
+                  {t.tipo === 'CUSTOM' ? '✨ [Personalizado] ' : ''}{t.titulo} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor)})
+                </option>
               ))}
             </select>
           </div>

@@ -94,8 +94,8 @@ serve(async (req: Request) => {
               📅 <strong>Prazo:</strong> ${new Date(task.due_date).toLocaleDateString('pt-BR')}
             </div>` : ''}
             <div style="border-top: 1px solid #e2e8f0; padding-top: 20px; text-align: center;">
-              <a href="${supabaseUrl.replace('.supabase.co', '')}.vercel.app" style="display: inline-block; background: #f97316; color: white; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.03em;">
-                Abrir no ORÇACLOUD
+              <a href="https://orcacloud.vercel.app" style="display: inline-block; background: #f97316; color: white; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.03em;">
+                Abrir no Òpura
               </a>
             </div>
           </div>

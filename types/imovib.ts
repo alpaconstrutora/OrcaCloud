@@ -164,6 +164,24 @@ export interface ImovibCapexItem {
 
 export type ImovibCapexItemInsert = Omit<ImovibCapexItem, 'id' | 'created_at' | 'updated_at'>;
 
+export interface ImovibRegulatoryZone {
+    id: string;
+    study_id: string;
+    macroarea?: string;
+    zona?: string;
+    ca_minimo?: string;
+    ca_basico?: string;
+    ca_maximo?: string;
+    taxa_ocupacao_maxima?: string;
+    taxa_permeabilidade_minima?: string;
+    gabarito_altura_maxima?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export type ImovibRegulatoryZoneInsert = Omit<ImovibRegulatoryZone, 'id' | 'created_at' | 'updated_at'>;
+export type ImovibRegulatoryZoneUpdate = Partial<ImovibRegulatoryZoneInsert>;
+
 export interface ImovibStudy {
     id: string;
     organization_id: string;

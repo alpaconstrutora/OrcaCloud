@@ -2,7 +2,8 @@ import { supabase } from '../lib/supabase';
 import {
     ImovibStudy, ImovibStudyInsert, ImovibStudyUpdate,
     ImovibBlock, ImovibBlockInsert, ImovibBlockUpdate,
-    ImovibUnit, ImovibUnitInsert, ImovibUnitUpdate
+    ImovibUnit, ImovibUnitInsert, ImovibUnitUpdate,
+    ImovibRegulatoryZone, ImovibRegulatoryZoneInsert, ImovibRegulatoryZoneUpdate
 } from '../types';
 
 export const imovibService = {
@@ -222,6 +223,44 @@ export const imovibService = {
             console.error(`Error deleting CAPEX item ${id}:`, error);
             throw new Error(`Failed to delete CAPEX item: ${error.message}`);
         }
-    }
+    },
+
+    // ── Regulatory Zones ──────────────────────────────────────────────────────
+
+    async getRegulatoryZones(studyId: string): Promise<ImovibRegulatoryZone[]> {
+        const { data, error } = await supabase
+            .from('imovib_regulatory_zones')
+            .select('*')
+            .eq('study_id', studyId)
+            .order('created_at', { ascending: true });
+        if (error) throw new Error(`Failed to fetch regulatory zones: ${error.message}`);
+        return data || [];
+    },
+
+    async createRegulatoryZone(zone: ImovibRegulatoryZoneInsert): Promise<ImovibRegulatoryZone> {
+        const { data, error } = await supabase
+            .from('imovib_regulatory_zones')
+            .insert(zone)
+            .select()
+            .single();
+        if (error) throw new Error(`Failed to create regulatory zone: ${error.message}`);
+        return data;
+    },
+
+    async updateRegulatoryZone(id: string, updates: ImovibRegulatoryZoneUpdate): Promise<void> {
+        const { error } = await supabase
+            .from('imovib_regulatory_zones')
+            .update(updates)
+            .eq('id', id);
+        if (error) throw new Error(`Failed to update regulatory zone: ${error.message}`);
+    },
+
+    async deleteRegulatoryZone(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('imovib_regulatory_zones')
+            .delete()
+            .eq('id', id);
+        if (error) throw new Error(`Failed to delete regulatory zone: ${error.message}`);
+    },
 
 };

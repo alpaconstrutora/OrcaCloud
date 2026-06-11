@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibStudy, ImovibBlock, ImovibUnit } from '../types';
 import { imovibService } from '../services/imovibService';
-import { Plus, Trash2, MapPin, Building, Calculator, FileText, PieChart, Users, ChevronRight, Activity, Save, Loader2 } from 'lucide-react';
+import { Plus, Trash2, MapPin, Building, Calculator, FileText, PieChart, Users, ChevronRight, Activity, Save, Loader2, Map } from 'lucide-react';
+import ImovibRegulatoryMapTab from './ImovibRegulatoryMapTab';
 
 interface ImovibPremisesFormProps {
     study: ImovibStudy;
@@ -9,7 +10,7 @@ interface ImovibPremisesFormProps {
 }
 
 const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataChanged }) => {
-    const [activeTab, setActiveTab] = useState<'identificacao' | 'terreno' | 'mercado' | 'blocos'>('identificacao');
+    const [activeTab, setActiveTab] = useState<'identificacao' | 'terreno' | 'mercado' | 'blocos' | 'regulatorio'>('identificacao');
     const [addingBlock, setAddingBlock] = useState(false);
     const [newBlockName, setNewBlockName] = useState('');
     const [blockNameError, setBlockNameError] = useState(false);
@@ -162,7 +163,8 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                     { id: 'identificacao', label: '0. Identificação', icon: <FileText className="w-4 h-4" /> },
                     { id: 'terreno', label: '1. Terreno & Gerais', icon: <MapPin className="w-4 h-4" /> },
                     { id: 'mercado', label: '2. Mercado', icon: <PieChart className="w-4 h-4" /> },
-                    { id: 'blocos', label: '3. Blocos & Tipologias', icon: <Building className="w-4 h-4" /> }
+                    { id: 'blocos', label: '3. Blocos & Tipologias', icon: <Building className="w-4 h-4" /> },
+                    { id: 'regulatorio', label: '4. Mapa Regulatório', icon: <Map className="w-4 h-4" /> },
                 ].map((tab) => (
                     <button
                         key={tab.id}
@@ -177,7 +179,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                     </button>
                 ))}
                 </div>
-                {activeTab !== 'blocos' && (
+                {activeTab !== 'blocos' && activeTab !== 'regulatorio' && (
                     <button
                         onClick={handleSaveAllForm}
                         disabled={isSaving}
@@ -452,6 +454,11 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* TAB: MAPA REGULATÓRIO */}
+            {activeTab === 'regulatorio' && (
+                <ImovibRegulatoryMapTab studyId={study.id} />
             )}
 
         </div>

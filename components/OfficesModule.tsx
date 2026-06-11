@@ -3,6 +3,7 @@ import OfficesDashboard from './OfficesDashboard';
 import OfficesCRM from './OfficesCRM';
 import OfficesEspecificador from './OfficesEspecificador';
 import OfficesTimeTracking from './OfficesTimeTracking';
+import { LayoutDashboard, Users, Palette, Clock } from 'lucide-react';
 
 interface OfficesModuleProps {
   activeView: string;
@@ -54,56 +55,56 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-slate-100 min-h-[calc(100vh-4rem)] relative pb-16">
+    <div className="flex flex-col h-full bg-[#121315] text-slate-100 min-h-[calc(100vh-4rem)] relative pb-20">
       {/* Conteúdo Principal */}
       <div className="flex-1 overflow-y-auto">
         {renderContent()}
       </div>
 
-      {/* Bottom Bar para Navegação Móvel (Stripe/Glassmorphic Style) */}
-      <nav className="fixed bottom-0 left-0 right-0 md:absolute md:bottom-0 bg-slate-950/80 backdrop-blur-md border-t border-slate-800/80 px-6 py-2.5 flex justify-between items-center z-40 max-w-full">
+      {/* Bottom Bar para Navegação Móvel (Notion/Premium Glassmorphic Style) */}
+      <nav className="fixed bottom-0 left-0 right-0 md:absolute md:bottom-0 bg-[#17181A]/90 backdrop-blur-lg border-t border-white/5 px-6 py-3 flex justify-between items-center z-40 max-w-full">
         {/* Dashboard Link */}
         <button
           onClick={() => handleTabChange('DASHBOARD')}
           className={`flex flex-col items-center gap-1 transition-all ${
-            activeTab === 'DASHBOARD' ? 'text-orange-500 scale-105' : 'text-slate-400 hover:text-white'
+            activeTab === 'DASHBOARD' ? 'text-[#D47A55] scale-105' : 'text-slate-500 hover:text-slate-350'
           }`}
         >
-          <span className="text-lg">📊</span>
-          <span className="text-[9px] font-black uppercase tracking-wider">Painel</span>
+          <LayoutDashboard className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-widest">Painel</span>
         </button>
 
         {/* CRM Link */}
         <button
           onClick={() => handleTabChange('CRM')}
           className={`flex flex-col items-center gap-1 transition-all ${
-            activeTab === 'CRM' ? 'text-orange-500 scale-105' : 'text-slate-400 hover:text-white'
+            activeTab === 'CRM' ? 'text-[#D47A55] scale-105' : 'text-slate-500 hover:text-slate-350'
           }`}
         >
-          <span className="text-lg">🤝</span>
-          <span className="text-[9px] font-black uppercase tracking-wider">CRM</span>
+          <Users className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-widest">Clientes</span>
         </button>
 
         {/* Especificador Link */}
         <button
           onClick={() => handleTabChange('ESPECIFICADOR')}
           className={`flex flex-col items-center gap-1 transition-all ${
-            activeTab === 'ESPECIFICADOR' ? 'text-orange-500 scale-105' : 'text-slate-400 hover:text-white'
+            activeTab === 'ESPECIFICADOR' ? 'text-[#D47A55] scale-105' : 'text-slate-500 hover:text-slate-350'
           }`}
         >
-          <span className="text-lg">🎨</span>
-          <span className="text-[9px] font-black uppercase tracking-wider">Design</span>
+          <Palette className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-widest">Projetos</span>
         </button>
 
         {/* Timesheet Link */}
         <button
           onClick={() => handleTabChange('TIMESHEET')}
           className={`flex flex-col items-center gap-1 transition-all ${
-            activeTab === 'TIMESHEET' ? 'text-orange-500 scale-105' : 'text-slate-400 hover:text-white'
+            activeTab === 'TIMESHEET' ? 'text-[#D47A55] scale-105' : 'text-slate-500 hover:text-slate-350'
           }`}
         >
-          <span className="text-lg">⏱️</span>
-          <span className="text-[9px] font-black uppercase tracking-wider">Horas</span>
+          <Clock className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-widest">Horas</span>
         </button>
       </nav>
     </div>

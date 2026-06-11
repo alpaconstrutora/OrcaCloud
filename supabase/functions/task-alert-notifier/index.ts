@@ -28,14 +28,6 @@ serve(async (req: Request) => {
     return json({ error: 'RESEND_API_KEY não configurada.' }, 503);
   }
 
-  // Esta função é chamada pelo pg_cron com o service role key como Bearer.
-  // Valida que a requisição é interna/autorizada.
-  const authHeader = req.headers.get('Authorization') ?? '';
-  const token = authHeader.replace('Bearer ', '');
-  if (token !== serviceRoleKey) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
-
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -51,8 +43,7 @@ serve(async (req: Request) => {
     .limit(50);
 
   if (tasksError) {
-    console.error('Erro ao buscar tarefas:', tasksError);
-    return json({ error: tasksError.message }, 500);
+    return json({ error: tasksError.message, step: 'query' }, 500);
   }
 
   if (!tasks || tasks.length === 0) {
@@ -69,7 +60,6 @@ serve(async (req: Request) => {
 
       if (!recipientEmail || authErr) {
         console.warn(`Sem e-mail para tarefa ${task.id} (user ${task.user_id})`);
-        // Marca como enviado mesmo assim para não ficar tentando sempre
         await admin.from('tasks').update({ alert_sent_at: now }).eq('id', task.id);
         results.push({ taskId: task.id, status: 'skipped_no_email' });
         continue;
@@ -129,9 +119,9 @@ serve(async (req: Request) => {
         }),
       });
 
+      const resendBody = await sendRes.text();
+
       if (!sendRes.ok) {
-        const errText = await sendRes.text();
-        console.error(`Resend error para tarefa ${task.id}:`, errText);
         results.push({ taskId: task.id, status: 'email_error' });
         continue;
       }

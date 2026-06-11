@@ -12,6 +12,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     const [activeTab, setActiveTab] = useState<'identificacao' | 'terreno' | 'mercado' | 'blocos'>('identificacao');
     const [addingBlock, setAddingBlock] = useState(false);
     const [newBlockName, setNewBlockName] = useState('');
+    const [blockNameError, setBlockNameError] = useState(false);
     
     const [formData, setFormData] = useState<Partial<ImovibStudy>>(study);
     const [isSaving, setIsSaving] = useState(false);
@@ -41,9 +42,14 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     };
 
     const handleAddBlock = async () => {
-        if (!newBlockName.trim()) return;
+        if (!newBlockName.trim()) {
+            setBlockNameError(true);
+            setTimeout(() => setBlockNameError(false), 2000);
+            return;
+        }
         try {
             setAddingBlock(true);
+            setBlockNameError(false);
             await imovibService.createBlock({
                 study_id: study.id,
                 name: newBlockName,
@@ -281,22 +287,27 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                             <Building className="w-5 h-5 text-indigo-500" />
                             Blocos e Tipologias
                         </h2>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="text"
-                                placeholder="Nome do Bloco/Fase"
-                                value={newBlockName}
-                                onChange={(e) => setNewBlockName(e.target.value)}
-                                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none text-sm font-medium"
-                                onKeyDown={(e) => e.key === 'Enter' && handleAddBlock()}
-                            />
-                            <button
-                                onClick={handleAddBlock}
-                                disabled={addingBlock || !newBlockName.trim()}
-                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50 flex items-center gap-1"
-                            >
-                                <Plus className="w-4 h-4" /> Add Bloco
-                            </button>
+                        <div className="flex flex-col items-end gap-1">
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Nome do Bloco/Fase"
+                                    value={newBlockName}
+                                    onChange={(e) => { setNewBlockName(e.target.value); setBlockNameError(false); }}
+                                    className={`px-4 py-2 bg-slate-50 border rounded-xl focus:border-indigo-500 outline-none text-sm font-medium transition-colors ${blockNameError ? 'border-red-400 bg-red-50' : 'border-slate-200'}`}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleAddBlock()}
+                                />
+                                <button
+                                    onClick={handleAddBlock}
+                                    disabled={addingBlock}
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50 flex items-center gap-1"
+                                >
+                                    <Plus className="w-4 h-4" /> Add Bloco
+                                </button>
+                            </div>
+                            {blockNameError && (
+                                <p className="text-xs text-red-500 font-medium">Digite um nome para o bloco</p>
+                            )}
                         </div>
                     </div>
 

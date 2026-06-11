@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { ImovibStudy, ImovibBlock, ImovibUnit } from '../types';
+import { ImovibStudy, ImovibBlock, ImovibUnit, ImovibRegulatoryZone } from '../types';
 import { imovibService } from '../services/imovibService';
 import { Plus, Trash2, MapPin, Building, Calculator, FileText, PieChart, Users, ChevronRight, Activity, Save, Loader2, Map } from 'lucide-react';
 import ImovibRegulatoryMapTab from './ImovibRegulatoryMapTab';
+
+const parseRegVal = (v: string | undefined): number | null => {
+    if (!v || v === 'N.A.' || v.trim() === '') return null;
+    return parseFloat(v.replace(',', '.')) || null;
+};
 
 interface ImovibPremisesFormProps {
     study: ImovibStudy;
@@ -11,6 +16,7 @@ interface ImovibPremisesFormProps {
 
 const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataChanged }) => {
     const [activeTab, setActiveTab] = useState<'identificacao' | 'mercado' | 'blocos' | 'regulatorio'>('identificacao');
+    const [regulatoryZones, setRegulatoryZones] = useState<ImovibRegulatoryZone[]>([]);
     const [addingBlock, setAddingBlock] = useState(false);
     const [newBlockName, setNewBlockName] = useState('');
     const [blockNameError, setBlockNameError] = useState(false);
@@ -21,6 +27,12 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     useEffect(() => {
         setFormData(study);
     }, [study]);
+
+    useEffect(() => {
+        if (activeTab === 'blocos') {
+            imovibService.getRegulatoryZones(study.id).then(setRegulatoryZones).catch(console.error);
+        }
+    }, [activeTab, study.id]);
 
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -162,7 +174,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                 {[
                     { id: 'identificacao', label: '0. Identificação', icon: <FileText className="w-4 h-4" /> },
                     { id: 'mercado', label: '1. Mercado', icon: <PieChart className="w-4 h-4" /> },
-                    { id: 'blocos', label: '2. Blocos & Tipologias', icon: <Building className="w-4 h-4" /> },
+                    { id: 'blocos', label: '2. Blocos e Tipologia', icon: <Building className="w-4 h-4" /> },
                     { id: 'regulatorio', label: '3. Mapa Regulatório', icon: <Map className="w-4 h-4" /> },
                 ].map((tab) => (
                     <button
@@ -272,6 +284,62 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                 </div>
                             ))}
                         </div>
+
+                        {/* ── Potencial Construtivo (Mapa Regulatório) ── */}
+                        {(() => {
+                            const area = (formData as any).terreno_area as number | null;
+                            if (!regulatoryZones.length) return (
+                                <div className="mt-6 pt-6 border-t border-slate-100">
+                                    <p className="text-xs text-slate-400 font-medium">
+                                        Preencha o <strong>3. Mapa Regulatório</strong> para visualizar o potencial construtivo.
+                                    </p>
+                                </div>
+                            );
+                            const zone = regulatoryZones[0];
+                            const fmtArea = (v: number | null) =>
+                                v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' m²';
+                            const calc = (raw: string | undefined) => {
+                                const n = parseRegVal(raw);
+                                if (n == null) return 'N.A.';
+                                if (!area) return '— (sem área)';
+                                return fmtArea(n * area);
+                            };
+                            const CALCS = [
+                                { label: 'C.A. Mínimo', raw: zone.ca_minimo,              suffix: zone.ca_minimo !== 'N.A.' ? ` (×${zone.ca_minimo})` : '' },
+                                { label: 'C.A. Básico', raw: zone.ca_basico,              suffix: zone.ca_basico !== 'N.A.' ? ` (×${zone.ca_basico})` : '' },
+                                { label: 'C.A. Máximo', raw: zone.ca_maximo,              suffix: zone.ca_maximo !== 'N.A.' ? ` (×${zone.ca_maximo})` : '' },
+                                { label: 'T.O. Máx.',   raw: zone.taxa_ocupacao_maxima,   suffix: zone.taxa_ocupacao_maxima !== 'N.A.' ? ` (×${zone.taxa_ocupacao_maxima})` : '' },
+                                { label: 'T.Perm. Mín.',raw: zone.taxa_permeabilidade_minima, suffix: zone.taxa_permeabilidade_minima !== 'N.A.' ? ` (×${zone.taxa_permeabilidade_minima})` : '' },
+                                { label: 'Gabarito',    raw: zone.gabarito_altura_maxima,  isGabarito: true },
+                            ];
+                            return (
+                                <div className="mt-6 pt-6 border-t border-slate-100">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+                                            Potencial Construtivo — {zone.zona || 'Zona'}{regulatoryZones.length > 1 ? ` (+${regulatoryZones.length - 1})` : ''}
+                                        </h3>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                        {CALCS.map(({ label, raw, suffix, isGabarito }) => {
+                                            const display = isGabarito
+                                                ? (raw && raw !== 'N.A.' ? raw + ' m' : 'N.A.')
+                                                : calc(raw);
+                                            const isNA = display === 'N.A.' || display.startsWith('—');
+                                            return (
+                                                <div key={label} className={`rounded-2xl p-4 border ${isNA ? 'bg-slate-50 border-slate-200' : 'bg-indigo-50 border-indigo-100'}`}>
+                                                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                                                        {label}{suffix}
+                                                    </p>
+                                                    <p className={`text-base font-black ${isNA ? 'text-slate-400' : 'text-indigo-700'}`}>
+                                                        {display}
+                                                    </p>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {/* ── Blocos e Tipologias ── */}

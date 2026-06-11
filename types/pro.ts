@@ -58,6 +58,6 @@ export interface ProConfig {
   template_header?: string;
   template_footer?: string;
   profissao?: string;
-  templates_custom?: { id: string; titulo: string; descricao: string; valor: number }[];
+  templates_custom?: { id: string; titulo: string; descricao: string; valor: number; unidade?: string; quantidade?: number }[];
   created_at: string;
 }

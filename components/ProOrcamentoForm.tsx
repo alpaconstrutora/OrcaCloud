@@ -32,6 +32,10 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
   const [garantiaDias, setGarantiaDias] = React.useState('90');
   const [observacoes, setObservacoes] = React.useState('');
 
+  const [unidade, setUnidade] = React.useState('');
+  const [quantidade, setQuantidade] = React.useState('');
+  const [valorUnitario, setValorUnitario] = React.useState('');
+
   const [config, setConfig] = React.useState<any>(null);
 
   // Estados da Fase 2 (Voz & Templates)
@@ -233,9 +237,23 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
     const splitDesc = doc.splitTextToSize(descricao, 180);
     doc.text(splitDesc, 15, 97);
 
-    // Ajustar Y baseado no tamanho da descrição
+    // Ajustar Y baseado no tamanho da descrição e medições
     const descHeight = splitDesc.length * 5;
-    let currentY = 97 + descHeight + 15;
+    let currentY = 97 + descHeight;
+
+    if (unidade && quantidade && valorUnitario) {
+      currentY += 8;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(13, 148, 136); // Teal 600
+      const formattedUnitVal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(valorUnitario));
+      const formattedTotal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(valor));
+      doc.text(`Medição: ${quantidade} ${unidade} x ${formattedUnitVal} = Total de ${formattedTotal}`, 15, currentY);
+      doc.setTextColor(textColor[0], textColor[1], textColor[2]); // Restaurar cor do texto
+      currentY += 7;
+    }
+
+    currentY += 15;
 
     // Resumo de Prazos e Garantias
     doc.setFillColor(248, 250, 252);
@@ -413,19 +431,29 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                 setSelectedTemplateIndex(idx);
                 if (idx !== '') {
                   const templates = getTodosTemplates();
-                  const t = templates[Number(idx)];
+                  const t = templates[Number(idx)] as any;
                   if (t) {
                     setDescricao(t.descricao);
-                    setValor(t.valor.toString());
+                    if (t.unidade && t.quantidade) {
+                      setUnidade(t.unidade);
+                      setQuantidade(t.quantidade.toString());
+                      setValorUnitario(t.valor.toString());
+                      setValor((t.valor * t.quantidade).toFixed(2));
+                    } else {
+                      setUnidade('');
+                      setQuantidade('');
+                      setValorUnitario('');
+                      setValor(t.valor.toString());
+                    }
                   }
                 }
               }}
               className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
             >
               <option value="">Selecione um modelo...</option>
-              {getTodosTemplates().map((t, index) => (
+              {getTodosTemplates().map((t: any, index) => (
                 <option key={index} value={index}>
-                  {t.tipo === 'CUSTOM' ? '✨ [Personalizado] ' : ''}{t.titulo} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor)})
+                  {t.tipo === 'CUSTOM' ? '✨ ' : ''}{t.titulo} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor)}{t.unidade ? `/${t.unidade}` : ''})
                 </option>
               ))}
             </select>
@@ -508,6 +536,69 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
               onChange={(e) => setDescricao(e.target.value)}
               className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none shadow-sm font-medium"
             />
+          </div>
+
+          {/* Cálculo por Unidade (Opcional) */}
+          <div className="bg-slate-50 border border-slate-200/60 p-3.5 rounded-2xl space-y-2.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.01)]">
+            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-500">
+              Cálculo por Unidade de Medida (Opcional)
+            </span>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Unidade</label>
+                <input
+                  type="text"
+                  placeholder="Ex: m², un, h"
+                  value={unidade}
+                  onChange={(e) => setUnidade(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Qtd</label>
+                <input
+                  type="number"
+                  placeholder="Ex: 100"
+                  value={quantidade}
+                  onChange={(e) => {
+                    const q = e.target.value;
+                    setQuantidade(q);
+                    const qNum = parseFloat(q);
+                    const uNum = parseFloat(valorUnitario);
+                    if (!isNaN(qNum) && !isNaN(uNum)) {
+                      setValor((qNum * uNum).toFixed(2));
+                    }
+                  }}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Unitário (R$)</label>
+                <input
+                  type="number"
+                  placeholder="Ex: 200"
+                  value={valorUnitario}
+                  onChange={(e) => {
+                    const u = e.target.value;
+                    setValorUnitario(u);
+                    const qNum = parseFloat(quantidade);
+                    const uNum = parseFloat(u);
+                    if (!isNaN(qNum) && !isNaN(uNum)) {
+                      setValor((qNum * uNum).toFixed(2));
+                    }
+                  }}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                />
+              </div>
+            </div>
+            {quantidade && valorUnitario && !isNaN(parseFloat(quantidade)) && !isNaN(parseFloat(valorUnitario)) && (
+              <div className="bg-white p-2.5 rounded-xl border border-slate-200/50 flex justify-between items-center text-[10px] font-bold text-slate-500 animate-fadeIn">
+                <span>Cálculo do Total:</span>
+                <span className="text-teal-600 font-black">
+                  {quantidade} x R$ {parseFloat(valorUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} = R$ {((parseFloat(quantidade) || 0) * (parseFloat(valorUnitario) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Valor */}

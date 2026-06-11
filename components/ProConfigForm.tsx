@@ -20,11 +20,13 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
   const [templateFooter, setTemplateFooter] = useState('');
 
   // Estados para templates customizados
-  const [templatesCustom, setTemplatesCustom] = useState<{ id: string; titulo: string; descricao: string; valor: number }[]>([]);
+  const [templatesCustom, setTemplatesCustom] = useState<{ id: string; titulo: string; descricao: string; valor: number; unidade?: string; quantidade?: number }[]>([]);
   const [tempId, setTempId] = useState<string | null>(null);
   const [tempTitulo, setTempTitulo] = useState('');
   const [tempDescricao, setTempDescricao] = useState('');
   const [tempValor, setTempValor] = useState('');
+  const [tempUnidade, setTempUnidade] = useState('');
+  const [tempQuantidade, setTempQuantidade] = useState('');
 
   // Carrega as configurações existentes no mount
   useEffect(() => {
@@ -84,11 +86,20 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
     }
 
     const valorNum = parseFloat(tempValor.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+    const qtdNum = tempQuantidade ? parseFloat(tempQuantidade) : undefined;
+    const unidadeStr = tempUnidade.trim() || undefined;
 
     if (tempId) {
       // Editar existente
       setTemplatesCustom(prev =>
-        prev.map(t => (t.id === tempId ? { ...t, titulo: tempTitulo.trim(), descricao: tempDescricao.trim(), valor: valorNum } : t))
+        prev.map(t => (t.id === tempId ? { 
+          ...t, 
+          titulo: tempTitulo.trim(), 
+          descricao: tempDescricao.trim(), 
+          valor: valorNum,
+          unidade: unidadeStr,
+          quantidade: qtdNum
+        } : t))
       );
       setTempId(null);
     } else {
@@ -97,7 +108,9 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
         id: Math.random().toString(36).substring(2, 9),
         titulo: tempTitulo.trim(),
         descricao: tempDescricao.trim(),
-        valor: valorNum
+        valor: valorNum,
+        unidade: unidadeStr,
+        quantidade: qtdNum
       };
       setTemplatesCustom(prev => [...prev, newTemplate]);
     }
@@ -106,14 +119,18 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
     setTempTitulo('');
     setTempDescricao('');
     setTempValor('');
+    setTempUnidade('');
+    setTempQuantidade('');
   };
 
-  const handleEditTemplate = (e: React.MouseEvent, t: { id: string; titulo: string; descricao: string; valor: number }) => {
+  const handleEditTemplate = (e: React.MouseEvent, t: { id: string; titulo: string; descricao: string; valor: number; unidade?: string; quantidade?: number }) => {
     e.preventDefault();
     setTempId(t.id);
     setTempTitulo(t.titulo);
     setTempDescricao(t.descricao);
     setTempValor(t.valor.toString());
+    setTempUnidade(t.unidade || '');
+    setTempQuantidade(t.quantidade ? t.quantidade.toString() : '');
   };
 
   const handleDeleteTemplate = (e: React.MouseEvent, id: string) => {
@@ -125,6 +142,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
         setTempTitulo('');
         setTempDescricao('');
         setTempValor('');
+        setTempUnidade('');
+        setTempQuantidade('');
       }
     }
   };
@@ -135,6 +154,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
     setTempTitulo('');
     setTempDescricao('');
     setTempValor('');
+    setTempUnidade('');
+    setTempQuantidade('');
   };
 
   if (loading) {
@@ -278,7 +299,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Valor Estimado (R$)</label>
+                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Valor Unitário / Estimado (R$)</label>
                 <input
                   type="text"
                   placeholder="Ex: 350,00"
@@ -288,6 +309,41 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 />
               </div>
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Unidade de Medida</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Área (m2), metro, unidade"
+                  value={tempUnidade}
+                  onChange={(e) => setTempUnidade(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Quantidade Padrão</label>
+                <input
+                  type="number"
+                  placeholder="Ex: 100"
+                  value={tempQuantidade}
+                  onChange={(e) => setTempQuantidade(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                />
+              </div>
+            </div>
+
+            {/* Cálculo do Total Estimado */}
+            {tempValor && tempQuantidade && (
+              <div className="bg-white p-2.5 rounded-xl border border-slate-200/50 flex justify-between items-center text-[10px] font-bold text-slate-500">
+                <span>Cálculo do Total Estimado:</span>
+                <span className="text-teal-600 font-black">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    (parseFloat(tempValor.replace(/[^\d.,]/g, '').replace(',', '.')) || 0) * (parseFloat(tempQuantidade) || 0)
+                  )}
+                </span>
+              </div>
+            )}
+
             <div className="space-y-1">
               <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Descrição Detalhada do Serviço</label>
               <textarea
@@ -327,35 +383,45 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             <div className="space-y-2">
               <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Seus Modelos ({templatesCustom.length})</label>
               <div className="divide-y divide-slate-100 bg-slate-50/30 rounded-2xl border border-slate-200/40 overflow-hidden animate-fadeIn">
-                {templatesCustom.map((t) => (
-                  <div key={t.id} className="p-3 flex items-start justify-between gap-3 hover:bg-slate-50/80 transition-colors">
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-700">{t.titulo}</span>
-                        <span className="text-[10px] font-black text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor)}
-                        </span>
+                {templatesCustom.map((t) => {
+                  const hasUnitInfo = t.unidade && t.quantidade;
+                  const totalCalculated = hasUnitInfo ? t.valor * (t.quantidade || 0) : t.valor;
+                  return (
+                    <div key={t.id} className="p-3 flex items-start justify-between gap-3 hover:bg-slate-50/80 transition-colors">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-slate-700">{t.titulo}</span>
+                          <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200/40">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor)}
+                            {t.unidade ? ` / ${t.unidade}` : ''}
+                          </span>
+                          {hasUnitInfo && (
+                            <span className="text-[9px] font-black text-teal-600 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-150">
+                              Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCalculated)} ({t.quantidade} un)
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-medium line-clamp-2">{t.descricao}</p>
                       </div>
-                      <p className="text-[10px] text-slate-500 font-medium line-clamp-2">{t.descricao}</p>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => handleEditTemplate(e, t)}
+                          className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                          title="Editar modelo"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteTemplate(e, t.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Excluir modelo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => handleEditTemplate(e, t)}
-                        className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
-                        title="Editar modelo"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => handleDeleteTemplate(e, t.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Excluir modelo"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

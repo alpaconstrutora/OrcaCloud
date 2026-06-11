@@ -179,7 +179,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                     </button>
                 ))}
                 </div>
-                {activeTab !== 'blocos' && activeTab !== 'regulatorio' && (
+                {activeTab !== 'regulatorio' && (
                     <button
                         onClick={handleSaveAllForm}
                         disabled={isSaving}
@@ -275,6 +275,35 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             {/* TAB: BLOCOS & TIPOLOGIAS */}
             {activeTab === 'blocos' && (
                 <div className="space-y-6">
+                    {/* ── Dados do Terreno ── */}
+                    <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2 mb-6">
+                            <MapPin className="w-5 h-5 text-indigo-500" />
+                            Dados do Terreno
+                        </h2>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                            {[
+                                { label: 'Frente (m)', key: 'terreno_frente' },
+                                { label: 'Fundos (m)', key: 'terreno_fundos' },
+                                { label: 'Lateral Direita (m)', key: 'terreno_lateral_direita' },
+                                { label: 'Lateral Esquerda (m)', key: 'terreno_lateral_esquerda' },
+                                { label: 'Área do Terreno (m²)', key: 'terreno_area' },
+                            ].map(({ label, key }) => (
+                                <div key={key}>
+                                    <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">{label}</label>
+                                    <input
+                                        type="number"
+                                        value={(formData as any)[key] ?? ''}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, [key]: parseFloat(e.target.value) || null }))}
+                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none text-sm font-medium transition-all"
+                                        placeholder="0"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* ── Blocos e Tipologias ── */}
                     <div className="flex items-center justify-between mb-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
                         <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                             <Building className="w-5 h-5 text-indigo-500" />

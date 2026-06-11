@@ -240,6 +240,11 @@ export interface ImovibStudy {
     capex_mode?: 'simplified' | 'detailed';
     capex_simplified_cost_sqm?: number;
     capex_simplified_area_sqm?: number;
+    terreno_frente?: number;
+    terreno_fundos?: number;
+    terreno_lateral_direita?: number;
+    terreno_lateral_esquerda?: number;
+    terreno_area?: number;
     duration_months?: number;
     construction_duration_months?: number;
     sales_duration_months?: number;

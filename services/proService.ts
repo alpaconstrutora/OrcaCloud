@@ -191,7 +191,8 @@ export const proService = {
           assinatura_imagem: servico.assinatura_imagem,
           status: servico.status,
           recorrencia_meses: servico.recorrencia_meses || null,
-          proximo_agendamento: proximoAgendamento || null
+          proximo_agendamento: proximoAgendamento || null,
+          data_agendamento: servico.data_agendamento || null
         })
         .eq('id', servico.id)
         .select()
@@ -212,7 +213,8 @@ export const proService = {
           assinatura_imagem: servico.assinatura_imagem,
           status: servico.status,
           recorrencia_meses: servico.recorrencia_meses || null,
-          proximo_agendamento: proximoAgendamento || null
+          proximo_agendamento: proximoAgendamento || null,
+          data_agendamento: servico.data_agendamento || null
         })
         .select()
         .single();

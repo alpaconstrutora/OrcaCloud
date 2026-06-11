@@ -108,6 +108,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
   const [antesFoto, setAntesFoto] = React.useState<string>('');
   const [depoisFoto, setDepoisFoto] = React.useState<string>('');
   const [recorrenciaMeses, setRecorrenciaMeses] = React.useState<string>('');
+  const [dataAgendamento, setDataAgendamento] = React.useState<string>('');
 
   // Estados de Assinatura
   const [assinaturaNome, setAssinaturaNome] = React.useState('');
@@ -117,6 +118,18 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
   // Referência do Canvas
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const drawingRef = React.useRef(false);
+
+  // Converte data ISO UTC para local formatado para datetime-local input (YYYY-MM-DDTHH:mm)
+  const formatISOToLocalDatetime = (isoStr?: string) => {
+    if (!isoStr) return '';
+    try {
+      const date = new Date(isoStr);
+      const tzOffset = date.getTimezoneOffset() * 60000;
+      return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+    } catch {
+      return '';
+    }
+  };
 
   React.useEffect(() => {
     const loadData = async () => {
@@ -140,6 +153,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
           setAssinaturaNome(servData.assinatura_nome || '');
           setAssinaturaImagem(servData.assinatura_imagem || '');
           setRecorrenciaMeses(servData.recorrencia_meses?.toString() || '');
+          setDataAgendamento(formatISOToLocalDatetime(servData.data_agendamento));
         }
         setConfig(configData);
       } catch (error) {
@@ -278,7 +292,8 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
         assinatura_data: assinaturaImagem ? new Date().toISOString() : undefined,
         assinatura_imagem: assinaturaImagem || undefined,
         status: nextStatus,
-        recorrencia_meses: recorrenciaMeses ? Number(recorrenciaMeses) : undefined
+        recorrencia_meses: recorrenciaMeses ? Number(recorrenciaMeses) : undefined,
+        data_agendamento: dataAgendamento ? new Date(dataAgendamento).toISOString() : undefined
       });
 
       setStatus(nextStatus);
@@ -552,6 +567,27 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
         <div className="pt-2 border-t border-slate-100 mt-2">
           <span className="block text-[9px] font-black uppercase tracking-widest text-slate-450">Descrição do Trabalho</span>
           <p className="text-xs text-slate-650 mt-1 font-medium">{orc?.descricao}</p>
+        </div>
+      </div>
+
+      {/* Agendamento */}
+      <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-2">
+        <span className="block text-[9px] font-black uppercase tracking-widest text-teal-600">Data e Hora do Serviço</span>
+        <div className="flex gap-2 items-center">
+          <div className="flex-1">
+            <input
+              type="datetime-local"
+              value={dataAgendamento}
+              onChange={(e) => setDataAgendamento(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500"
+            />
+          </div>
+          <button
+            onClick={() => handleUpdate()}
+            className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm"
+          >
+            Salvar
+          </button>
         </div>
       </div>
 

@@ -46,6 +46,7 @@ export interface ProServico {
   status: ProServicoStatus;
   recorrencia_meses?: number;
   proximo_agendamento?: string;
+  data_agendamento?: string;
   created_at: string;
 }
 

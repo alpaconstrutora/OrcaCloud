@@ -131,13 +131,15 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
   const hoje = new Date().toDateString();
   const servicosHoje = servicos.filter(s => {
     if (s.status === 'CONCLUIDO') return false;
-    const sDate = s.pro_orcamentos?.created_at ? new Date(s.pro_orcamentos.created_at).toDateString() : '';
+    const targetDate = s.data_agendamento || s.pro_orcamentos?.created_at;
+    const sDate = targetDate ? new Date(targetDate).toDateString() : '';
     return sDate === hoje || s.status === 'EM_ANDAMENTO';
   });
 
   const proximosServicos = servicos.filter(s => {
     if (s.status === 'CONCLUIDO') return false;
-    const sDate = s.pro_orcamentos?.created_at ? new Date(s.pro_orcamentos.created_at).toDateString() : '';
+    const targetDate = s.data_agendamento || s.pro_orcamentos?.created_at;
+    const sDate = targetDate ? new Date(targetDate).toDateString() : '';
     return sDate !== hoje && s.status !== 'EM_ANDAMENTO';
   });
 
@@ -205,6 +207,11 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
                     <span className="block font-black text-sm text-slate-800 truncate">
                       {s.pro_orcamentos?.pro_clientes?.nome || 'Cliente sem nome'}
                     </span>
+                    {s.data_agendamento && (
+                      <span className="block text-[10px] font-black uppercase text-teal-600 flex items-center gap-1">
+                        🕒 {new Date(s.data_agendamento).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                      </span>
+                    )}
                     <span className="block text-xs text-slate-500 truncate font-medium">
                       {s.pro_orcamentos?.descricao}
                     </span>
@@ -362,6 +369,11 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
                     <span className="block font-black text-sm text-slate-800 truncate">
                       {s.pro_orcamentos?.pro_clientes?.nome}
                     </span>
+                    {s.data_agendamento && (
+                      <span className="block text-[10px] font-black uppercase text-teal-600 flex items-center gap-1">
+                        🕒 {new Date(s.data_agendamento).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                      </span>
+                    )}
                     <span className="block text-xs text-slate-500 truncate font-medium">
                       {s.pro_orcamentos?.descricao}
                     </span>

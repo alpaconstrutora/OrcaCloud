@@ -211,15 +211,6 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                             {renderInput('Modalidade de Desenvolvimento', 'development_modality', 'text', 'Ex: Incorporação / Permuta / BTS')}
                         </div>
 
-                        <div className="pt-6 border-t border-slate-100">
-                            <h3 className="text-sm font-black text-slate-800 tracking-wider uppercase mb-6">Mapa Regulatório</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                                {renderInput('CA Básico', 'ca_basic', 'number')}
-                                {renderInput('CA Máximo', 'ca_max', 'number')}
-                                {renderInput('Taxa de Ocupação Máx', 'occupancy_rate_max', 'number', '', true)}
-                            </div>
-                            {renderTextarea('Zoneamento e Compatibilidade', 'zoning_info', 'Detalhes sobre zoneamento, ZEIS, outorga onerosa, etc.')}
-                        </div>
                     </div>
                 </div>
             )}

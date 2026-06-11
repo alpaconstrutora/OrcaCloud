@@ -17,7 +17,7 @@ interface CostCenter {
 interface ChartOfAccount {
     id: string;
     name: string;
-    code: string;
+    code?: string;
     type?: string;
 }
 

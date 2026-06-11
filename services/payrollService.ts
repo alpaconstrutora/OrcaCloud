@@ -1307,15 +1307,14 @@ export const payrollService = {
         return (data || []) as { id: string; name: string; code?: string }[];
     },
 
-    /** Lista plano de contas (chart of accounts) da organização */
-    async listChartOfAccounts(orgId: string) {
+    /** Lista categorias financeiras (substitui chart_of_accounts — aposentado jun/2026) */
+    async listChartOfAccounts(_orgId: string) {
         const { data, error } = await supabase
-            .from('chart_of_accounts')
-            .select('id, name, code, type')
-            .eq('organization_id', orgId)
-            .order('code');
+            .from('financial_categories')
+            .select('id, name, sort_order')
+            .order('sort_order', { ascending: true, nullsFirst: false });
         if (error) throw error;
-        return (data || []) as { id: string; name: string; code: string; type?: string }[];
+        return (data || []) as { id: string; name: string; code?: string; type?: string }[];
     },
 
     /**

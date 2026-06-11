@@ -127,50 +127,51 @@ export const financialRegistryService = {
         return { created, updated };
     },
 
-    // Chart of Accounts
-    async listChartOfAccounts(organizationId?: string, empresaId?: string): Promise<ChartOfAccount[]> {
-        let query = supabase
-            .from('chart_of_accounts')
-            .select('id, organization_id, empresa_id, name, code, type, parent_id');
-
-        if (empresaId) {
-            query = query.eq('empresa_id', empresaId);
-        } else if (organizationId) {
-            query = query.eq('organization_id', organizationId);
-        }
-
-        const { data, error } = await query.order('code');
+    // Categorias Financeiras (substitui chart_of_accounts — aposentado em jun/2026)
+    // Os parâmetros organizationId/empresaId são ignorados; financial_categories é global.
+    async listChartOfAccounts(_organizationId?: string, _empresaId?: string): Promise<ChartOfAccount[]> {
+        const { data, error } = await supabase
+            .from('financial_categories')
+            .select('id, name, parent_id, dre_group, nature, sort_order')
+            .order('sort_order', { ascending: true, nullsFirst: false });
 
         if (error) throw error;
-        return data || [];
+        return (data || []) as ChartOfAccount[];
     },
 
     async createChartOfAccount(account: Omit<ChartOfAccount, 'id' | 'created_at'>): Promise<ChartOfAccount> {
         const { data, error } = await supabase
-            .from('chart_of_accounts')
-            .insert(account)
-            .select()
+            .from('financial_categories')
+            .insert({ name: account.name, parent_id: account.parent_id ?? null })
+            .select('id, name, parent_id, dre_group, nature, sort_order')
             .single();
 
         if (error) throw error;
-        return data;
+        return data as ChartOfAccount;
     },
 
     async updateChartOfAccount(id: string, account: Partial<ChartOfAccount>): Promise<ChartOfAccount> {
+        const payload: Record<string, unknown> = {};
+        if (account.name       !== undefined) payload.name       = account.name;
+        if (account.parent_id  !== undefined) payload.parent_id  = account.parent_id;
+        if (account.dre_group  !== undefined) payload.dre_group  = account.dre_group;
+        if (account.nature     !== undefined) payload.nature     = account.nature;
+        if (account.sort_order !== undefined) payload.sort_order = account.sort_order;
+
         const { data, error } = await supabase
-            .from('chart_of_accounts')
-            .update(account)
+            .from('financial_categories')
+            .update(payload)
             .eq('id', id)
-            .select()
+            .select('id, name, parent_id, dre_group, nature, sort_order')
             .single();
 
         if (error) throw error;
-        return data;
+        return data as ChartOfAccount;
     },
 
     async deleteChartOfAccount(id: string): Promise<void> {
         const { error } = await supabase
-            .from('chart_of_accounts')
+            .from('financial_categories')
             .delete()
             .eq('id', id);
 

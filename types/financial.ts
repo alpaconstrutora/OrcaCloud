@@ -115,14 +115,20 @@ export interface CostCenter {
     created_at?: string;
 }
 
+// Aposentado: mapeado agora para financial_categories (global, hierárquico, com dre_group).
+// Os campos organization_id, empresa_id, code e type são mantidos opcionais para
+// compatibilidade com dados históricos e callers existentes.
 export interface ChartOfAccount {
     id: string;
-    organization_id: string;
+    organization_id?: string;
     empresa_id?: string;
     name: string;
-    code: string;
+    code?: string;
     type?: string;
     parent_id?: string;
+    dre_group?: string;
+    nature?: string;
+    sort_order?: number;
     created_at?: string;
 }
 

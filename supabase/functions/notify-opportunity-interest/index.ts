@@ -52,17 +52,21 @@ serve(async (req: Request) => {
 
     const admin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Busca dados da oportunidade, do interesse e dos admins em paralelo
+    // Busca dados da oportunidade, do interesse e dos admins em paralelo.
+    // Os filtros cruzados (organization_id e opportunity_id) evitam que IDs arbitrários
+    // de outros tenants sejam usados para disparar notificações indevidas.
     const [oppRes, interestRes, membersRes] = await Promise.all([
         admin
             .from('investor_opportunities')
             .select('title, subtitle, status, location_city, location_state')
             .eq('id', opportunityId)
+            .eq('organization_id', organizationId)
             .single(),
         admin
             .from('opportunity_interests')
             .select('contact_name, contact_email, contact_phone, role, message, created_at')
             .eq('id', interestId)
+            .eq('opportunity_id', opportunityId)
             .single(),
         admin
             .from('organization_members')

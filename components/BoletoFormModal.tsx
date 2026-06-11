@@ -11,7 +11,7 @@ import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { extractFromPdfFile } from '../utils/boletoParser';
 import { onlyDigits } from '../utils/febrabanRules';
-import type { Boleto, BoletoExtractionResult, Supplier, CostCenter, ChartOfAccount } from '../types';
+import type { Boleto, BoletoExtractionResult, Supplier, CostCenter } from '../types';
 
 interface BoletoFormModalProps {
     organizationId: string;
@@ -43,7 +43,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const [linhaManual, setLinhaManual] = useState('');
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
-    const [charts, setCharts] = useState<ChartOfAccount[]>([]);
+    const [charts] = useState<{ id: string; name: string }[]>([]); // aposentado — chart_of_accounts_id não é mais populado
     const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
     const [documentoBlobUrl, setDocumentoBlobUrl] = useState<string | null>(null);
 
@@ -54,7 +54,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     // Form fields
     const [supplierId, setSupplierId] = useState<string>(initial?.supplier_id ?? '');
     const [costCenterId, setCostCenterId] = useState<string>(initial?.cost_center_id ?? '');
-    const [chartId, setChartId] = useState<string>(initial?.chart_of_accounts_id ?? '');
+    const [chartId] = useState<string>(''); // aposentado — não popula chart_of_accounts_id em novos boletos
     const [selectedProjectId, setSelectedProjectId] = useState<string>(initial?.project_id ?? projectId ?? '');
     const [observacoes, setObservacoes] = useState<string>(initial?.observacoes ?? '');
     const [valor, setValor] = useState<string>(initial?.valor != null ? String(initial.valor) : '');
@@ -79,12 +79,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         Promise.all([
             supplierService.listSuppliers(organizationId),
             financialRegistryService.listCostCenters(organizationId),
-            financialRegistryService.listChartOfAccounts(organizationId),
             projectService.listProjects().catch(() => []),
-        ]).then(([sup, cc, ch, projs]) => {
+        ]).then(([sup, cc, projs]) => {
             setSuppliers(sup || []);
             setCostCenters(cc || []);
-            setCharts(ch || []);
             type ProjectRow = { id: string; name: string; settings?: { classification?: string } };
             setProjects(((projs || []) as ProjectRow[])
                 .filter((p) =>
@@ -195,7 +193,6 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             const updated = await boletoService.associar(result.boleto.id, organizationId, {
                 supplier_id:          supplierId || undefined,
                 cost_center_id:       costCenterId || undefined,
-                chart_of_accounts_id: chartId || undefined,
                 project_id:           selectedProjectId || projectId || undefined,
                 observacoes:          observacoes || undefined,
                 valor:                valor ? Number(valor) : undefined,
@@ -262,7 +259,6 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             const updated = await boletoService.associar(boleto.id, organizationId, {
                 supplier_id: supplierId || undefined,
                 cost_center_id: costCenterId || undefined,
-                chart_of_accounts_id: chartId || undefined,
                 project_id: selectedProjectId || projectId || boleto.project_id,
                 observacoes: observacoes || undefined,
                 valor: valor ? Number(valor) : undefined,
@@ -543,22 +539,13 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </select>
                                 </FormField>
 
-                                <div className="grid grid-cols-2 gap-3">
-                                    <FormField label="Centro de Custo">
-                                        <select value={costCenterId} onChange={e => setCostCenterId(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
-                                            <option value="">—</option>
-                                            {costCenters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                        </select>
-                                    </FormField>
-                                    <FormField label="Plano de Contas">
-                                        <select value={chartId} onChange={e => setChartId(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
-                                            <option value="">—</option>
-                                            {charts.map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
-                                        </select>
-                                    </FormField>
-                                </div>
+                                <FormField label="Centro de Custo">
+                                    <select value={costCenterId} onChange={e => setCostCenterId(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                                        <option value="">—</option>
+                                        {costCenters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </FormField>
 
                                 <FormField label="Observações">
                                     <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)}
@@ -907,28 +894,16 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </select>
                                 </FormField>
 
-                                <div className="grid grid-cols-2 gap-3">
-                                    <FormField label="Centro de Custo">
-                                        <HierarchicalSelect
-                                            items={costCenters}
-                                            value={costCenterId}
-                                            onChange={setCostCenterId}
-                                            valueField="id"
-                                            placeholder="—"
-                                            hoverCls="hover:bg-blue-50"
-                                        />
-                                    </FormField>
-                                    <FormField label="Plano de Contas">
-                                        <HierarchicalSelect
-                                            items={charts}
-                                            value={chartId}
-                                            onChange={setChartId}
-                                            valueField="id"
-                                            placeholder="—"
-                                            hoverCls="hover:bg-blue-50"
-                                        />
-                                    </FormField>
-                                </div>
+                                <FormField label="Centro de Custo">
+                                    <HierarchicalSelect
+                                        items={costCenters}
+                                        value={costCenterId}
+                                        onChange={setCostCenterId}
+                                        valueField="id"
+                                        placeholder="—"
+                                        hoverCls="hover:bg-blue-50"
+                                    />
+                                </FormField>
 
                                 <FormField label="Observações">
                                     <textarea

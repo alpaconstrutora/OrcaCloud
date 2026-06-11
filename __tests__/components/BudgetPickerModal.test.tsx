@@ -84,13 +84,17 @@ const makeCompositionEntry = (): BudgetEntry => ({
 
 // ─── Testes ───────────────────────────────────────────────────────────────────
 
+// Helper: enters search mode so items appear in a flat list (tree requires manual expansion)
+const enterSearchMode = (term: string) =>
+    fireEvent.change(screen.getByPlaceholderText(/filtrar/i), { target: { value: term } });
+
 describe('BudgetPickerModal — seleção de insumo simples (INPUT)', () => {
     beforeEach(() => {
         capturedMaterialOnSelect = null;
         vi.clearAllMocks();
     });
 
-    it('renderiza itens do orçamento', () => {
+    it('renderiza itens do orçamento via busca', () => {
         render(
             <BudgetPickerModal
                 isOpen
@@ -99,6 +103,7 @@ describe('BudgetPickerModal — seleção de insumo simples (INPUT)', () => {
                 budget={[makeInputEntry()]}
             />
         );
+        enterSearchMode('cimento');
         expect(screen.getByText(/Cimento Portland/i)).toBeDefined();
     });
 
@@ -113,9 +118,10 @@ describe('BudgetPickerModal — seleção de insumo simples (INPUT)', () => {
             />
         );
 
+        enterSearchMode('cimento');
         fireEvent.click(screen.getByText(/Cimento Portland/i).closest('button')!);
         expect(onSelect).toHaveBeenCalledTimes(1);
-        const received: BudgetEntry = onSelect.mock.calls[0][0];
+        const received: BudgetEntry = onSelect.mock.calls[0][0][0];
         expect(received.id).toBe('entry-input');
         expect(received.sinapiItem.code).toBe('INS-100');
     });
@@ -149,6 +155,7 @@ describe('BudgetPickerModal — seleção de insumo de COMPOSIÇÃO', () => {
             />
         );
 
+        enterSearchMode('alvenaria');
         fireEvent.click(screen.getByText(/Alvenaria de Tijolo/i).closest('button')!);
         await waitFor(() => expect(screen.queryByTestId('material-modal')).not.toBeNull());
     });
@@ -166,12 +173,13 @@ describe('BudgetPickerModal — seleção de insumo de COMPOSIÇÃO', () => {
             />
         );
 
+        enterSearchMode('alvenaria');
         fireEvent.click(screen.getByText(/Alvenaria de Tijolo/i).closest('button')!);
         await waitFor(() => screen.getByTestId('material-select-btn'));
         fireEvent.click(screen.getByTestId('material-select-btn'));
 
         expect(onSelect).toHaveBeenCalled();
-        const received: any = onSelect.mock.calls[0][0];
+        const received: any = onSelect.mock.calls[0][0][0];
 
         expect(received.sinapiItem).not.toHaveProperty('is_custom');
     });
@@ -187,11 +195,12 @@ describe('BudgetPickerModal — seleção de insumo de COMPOSIÇÃO', () => {
             />
         );
 
+        enterSearchMode('alvenaria');
         fireEvent.click(screen.getByText(/Alvenaria de Tijolo/i).closest('button')!);
         await waitFor(() => screen.getByTestId('material-select-btn'));
         fireEvent.click(screen.getByTestId('material-select-btn'));
 
-        const received: BudgetEntry = onSelect.mock.calls[0][0];
+        const received: BudgetEntry = onSelect.mock.calls[0][0][0];
         expect(received.sinapiItem.source).toBe('Própria');
         expect(received.sinapiItem.isOverride).toBe(true);
     });
@@ -207,11 +216,12 @@ describe('BudgetPickerModal — seleção de insumo de COMPOSIÇÃO', () => {
             />
         );
 
+        enterSearchMode('alvenaria');
         fireEvent.click(screen.getByText(/Alvenaria de Tijolo/i).closest('button')!);
         await waitFor(() => screen.getByTestId('material-select-btn'));
         fireEvent.click(screen.getByTestId('material-select-btn'));
 
-        const received: any = onSelect.mock.calls[0][0];
+        const received: any = onSelect.mock.calls[0][0][0];
         expect(received).not.toHaveProperty('unitCost');
         expect(received).not.toHaveProperty('totalCost');
     });
@@ -227,11 +237,12 @@ describe('BudgetPickerModal — seleção de insumo de COMPOSIÇÃO', () => {
             />
         );
 
+        enterSearchMode('alvenaria');
         fireEvent.click(screen.getByText(/Alvenaria de Tijolo/i).closest('button')!);
         await waitFor(() => screen.getByTestId('material-select-btn'));
         fireEvent.click(screen.getByTestId('material-select-btn'));
 
-        const received: BudgetEntry = onSelect.mock.calls[0][0];
+        const received: BudgetEntry = onSelect.mock.calls[0][0][0];
 
         // Campos obrigatórios da interface BudgetEntry
         expect(received).toHaveProperty('id');
@@ -260,11 +271,12 @@ describe('BudgetPickerModal — seleção de insumo de COMPOSIÇÃO', () => {
             />
         );
 
+        enterSearchMode('alvenaria');
         fireEvent.click(screen.getByText(/Alvenaria de Tijolo/i).closest('button')!);
         await waitFor(() => screen.getByTestId('material-select-btn'));
         fireEvent.click(screen.getByTestId('material-select-btn'));
 
-        const received: BudgetEntry = onSelect.mock.calls[0][0];
+        const received: BudgetEntry = onSelect.mock.calls[0][0][0];
         expect(received.sinapiItem.price).toBe(12.5);
     });
 
@@ -279,6 +291,7 @@ describe('BudgetPickerModal — seleção de insumo de COMPOSIÇÃO', () => {
             />
         );
 
+        enterSearchMode('alvenaria');
         fireEvent.click(screen.getByText(/Alvenaria de Tijolo/i).closest('button')!);
         await waitFor(() => screen.getByTestId('material-select-btn'));
         fireEvent.click(screen.getByTestId('material-select-btn'));
@@ -298,7 +311,7 @@ describe('BudgetPickerModal — filtro de busca', () => {
             />
         );
 
-        const searchInput = screen.getByPlaceholderText(/buscar/i);
+        const searchInput = screen.getByPlaceholderText(/filtrar/i);
         fireEvent.change(searchInput, { target: { value: 'cimento' } });
 
         expect(screen.getByText(/Cimento Portland/i)).toBeDefined();
@@ -315,7 +328,7 @@ describe('BudgetPickerModal — filtro de busca', () => {
             />
         );
 
-        fireEvent.change(screen.getByPlaceholderText(/buscar/i), {
+        fireEvent.change(screen.getByPlaceholderText(/filtrar/i), {
             target: { value: 'xyzxyz' },
         });
 

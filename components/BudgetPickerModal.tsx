@@ -28,8 +28,8 @@ const BudgetPickerModal: React.FC<BudgetPickerModalProps> = ({
 }) => {
     const [searchTerm, setSearchTerm] = React.useState('');
     const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(() => {
-        // Open first group by default
-        const first = wbs?.[0]?.name;
+        // Open first group by default — fall back to budget[0].group when wbs is absent
+        const first = wbs?.[0]?.name ?? budget?.[0]?.group;
         return first ? new Set([first]) : new Set();
     });
     const [expandedPhases, setExpandedPhases] = React.useState<Set<string>>(new Set());

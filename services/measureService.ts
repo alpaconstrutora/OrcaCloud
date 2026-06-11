@@ -61,11 +61,17 @@ export const measureService = {
       throw error;
     }
 
-    // Ao criar um projeto de medição, criamos as camadas padrão
+    // Ao criar um projeto de medição, criamos as camadas padrão e itens padrão de medição
     try {
       await this.createDefaultLayers(data.id);
     } catch (layerErr) {
       console.error('[MeasureService] Erro ao criar camadas padrão:', layerErr);
+    }
+
+    try {
+      await this.createDefaultLibraryItems(data.id);
+    } catch (libErr) {
+      console.error('[MeasureService] Erro ao criar itens padrão da biblioteca:', libErr);
     }
 
     return data;
@@ -331,6 +337,25 @@ export const measureService = {
     }
   },
 
+  async createDefaultLibraryItems(projectId: string): Promise<MeasureLibraryItem[]> {
+    const defaults = [
+      { project_id: projectId, nome: 'Medição de Área', categoria: 'Geral', unidade: 'M2', valor_unitario: 0 },
+      { project_id: projectId, nome: 'Medição Linear', categoria: 'Geral', unidade: 'M', valor_unitario: 0 },
+      { project_id: projectId, nome: 'Contagem de Pontos', categoria: 'Geral', unidade: 'UN', valor_unitario: 0 }
+    ];
+
+    const { data, error } = await supabase
+      .from('measure_library_items')
+      .insert(defaults)
+      .select();
+
+    if (error) {
+      console.error('[MeasureService] Erro ao criar itens padrão da biblioteca:', error);
+      throw error;
+    }
+    return data || [];
+  },
+
   // ==========================================
   // DESENHOS / FORMAS (SHAPES)
   // ==========================================
@@ -420,5 +445,17 @@ export const measureService = {
       .from('measure-plants')
       .getPublicUrl(path);
     return data.publicUrl;
+  },
+
+  async downloadPlantFile(path: string): Promise<Blob> {
+    const { data, error } = await supabase.storage
+      .from('measure-plants')
+      .download(path);
+
+    if (error) {
+      console.error('[MeasureService] Erro ao baixar arquivo de planta:', error);
+      throw error;
+    }
+    return data;
   }
 };

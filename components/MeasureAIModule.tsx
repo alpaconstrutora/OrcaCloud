@@ -16,8 +16,9 @@ import {
 } from '../types';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configurando Worker do PDF.js usando CDN público para compatibilidade no build do Vite
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 interface MeasureAIModuleProps {
   userId: string;
@@ -82,8 +83,9 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
       if (data.length > 0 && !activeProject) {
         selectProject(data[0]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(`Erro ao carregar projetos de medição: ${err.message || JSON.stringify(err)}`);
     }
   };
 
@@ -91,7 +93,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
     try {
       const data = await proService.listOrcamentos(userId);
       setOrcamentos(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
     }
   };
@@ -103,18 +105,36 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
       const filesData = await measureService.listFiles(project.id);
       setFiles(filesData);
       
-      // Carregar camadas
-      const layersData = await measureService.listLayers(project.id);
+      // Carregar camadas (auto-cria se não existirem)
+      let layersData = await measureService.listLayers(project.id);
+      if (layersData.length === 0) {
+        try {
+          layersData = await measureService.createDefaultLayers(project.id);
+        } catch (layerErr) {
+          console.error('Erro ao auto-criar camadas padrão:', layerErr);
+        }
+      }
       setLayers(layersData);
       if (layersData.length > 0) {
         setActiveLayer(layersData[0]);
+      } else {
+        setActiveLayer(null);
       }
 
-      // Carregar biblioteca
-      const libData = await measureService.listLibraryItems(project.id);
+      // Carregar biblioteca (auto-cria se não existir)
+      let libData = await measureService.listLibraryItems(project.id);
+      if (libData.length === 0) {
+        try {
+          libData = await measureService.createDefaultLibraryItems(project.id);
+        } catch (libErr) {
+          console.error('Erro ao auto-criar itens padrão da biblioteca:', libErr);
+        }
+      }
       setLibraryItems(libData);
       if (libData.length > 0) {
         setActiveLibraryItem(libData[0]);
+      } else {
+        setActiveLibraryItem(null);
       }
 
       // Resetar arquivo ativo se mudar de projeto
@@ -135,14 +155,27 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
     setImageObj(null);
     setShapes([]);
     
-    // Obter url pública do arquivo
-    const url = measureService.getPlantPublicUrl(file.storage_path);
+    setPdfRendering(true);
+    let url = '';
+    let fileBlob: Blob;
+    try {
+      fileBlob = await measureService.downloadPlantFile(file.storage_path);
+      url = URL.createObjectURL(fileBlob);
+    } catch (err: any) {
+      console.error('Erro ao baixar arquivo da planta:', err);
+      alert(`Erro ao baixar a planta do storage: ${err.message || JSON.stringify(err)}. Verifique as políticas do bucket.`);
+      setPdfRendering(false);
+      return;
+    }
     
     if (file.nome.toLowerCase().endsWith('.pdf')) {
-      setPdfRendering(true);
       try {
-        // Renderizar PDF com PDF.js para data URL
-        const loadingTask = pdfjsLib.getDocument(url);
+        // Converte o blob em ArrayBuffer para ler na memória e evitar a violação de CSP (connect-src blob:)
+        const arrayBuffer = await fileBlob.arrayBuffer();
+        const pdfData = new Uint8Array(arrayBuffer);
+        
+        // Renderizar PDF com PDF.js passando os bytes em memória
+        const loadingTask = pdfjsLib.getDocument({ data: pdfData });
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(file.current_page || 1);
         
@@ -163,9 +196,15 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
             setImageObj(img);
             setPdfRendering(false);
           };
+          img.onerror = (imageErr) => {
+            console.error('Erro ao processar imagem renderizada do PDF:', imageErr);
+            alert('Erro ao processar a renderização do PDF no visualizador.');
+            setPdfRendering(false);
+          };
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Erro ao renderizar PDF:', err);
+        alert(`Erro ao processar o PDF: ${err.message || JSON.stringify(err)}`);
         setPdfRendering(false);
       }
     } else {
@@ -175,6 +214,12 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         setImageObj(img);
+        setPdfRendering(false);
+      };
+      img.onerror = (imageErr) => {
+        console.error('Erro ao processar imagem da planta:', imageErr);
+        alert('Erro ao carregar a imagem da planta no visualizador.');
+        setPdfRendering(false);
       };
     }
 
@@ -204,8 +249,9 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
       setIsCreatingProject(false);
       loadProjects();
       selectProject(proj);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(`Erro ao criar projeto de medição: ${err.message || JSON.stringify(err)}`);
     }
   };
 
@@ -219,13 +265,18 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
         setImageObj(null);
       }
       loadProjects();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(`Erro ao excluir projeto: ${err.message || JSON.stringify(err)}`);
     }
   };
 
   // --- Upload de Arquivo ---
   const handleUploadClick = () => {
+    if (!activeProject) {
+      alert('Por favor, crie ou selecione um projeto de medição no topo da barra lateral antes de fazer o upload de uma planta.');
+      return;
+    }
     fileInputRef.current?.click();
   };
 
@@ -258,9 +309,10 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
       const filesData = await measureService.listFiles(activeProject.id);
       setFiles(filesData);
       selectFile(newFile);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Erro ao carregar o arquivo.');
+      const errMsg = err?.message || err?.error_description || JSON.stringify(err);
+      alert(`Erro ao carregar o arquivo: ${errMsg}`);
     } finally {
       setIsUploading(false);
     }
@@ -384,6 +436,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
 
     // 1. Calibração de Escala
     if (tool === 'SCALE') {
+      if (e.evt.button !== 0) return; // Apenas clique esquerdo
       const newPoints = [...calibrationPoints, clickPos];
       setCalibrationPoints(newPoints);
       
@@ -393,12 +446,17 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
       return;
     }
 
+    // Validação geral para ferramentas de desenho
+    if (!activeFile || !activeLayer || !activeLibraryItem) {
+      alert('Selecione uma planta, uma camada e um item na biblioteca (na barra lateral direita) antes de desenhar.');
+      setTool('PAN');
+      setTempPoints([]);
+      return;
+    }
+
     // 2. Desenho de Ponto de Contagem
     if (tool === 'POINT') {
-      if (!activeFile || !activeLayer || !activeLibraryItem) {
-        alert('Selecione uma camada e um item da biblioteca primeiro.');
-        return;
-      }
+      if (e.evt.button !== 0) return; // Apenas clique esquerdo
       saveNewShape([clickPos], 'POINT', 1);
       return;
     }
@@ -408,20 +466,15 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
       Math.hypot(clickPos.x - tempPoints[0].x, clickPos.y - tempPoints[0].y) < (15 / stageScale);
 
     if (tool === 'POLYGON' && isCloseToFirstPoint && tempPoints.length >= 3) {
+      if (e.evt.button !== 0) return; // Apenas clique esquerdo fecha clicando no primeiro ponto
       // Fechar polígono
-      const scaleVal = activeFile?.scale || 100;
-      const calculatedArea = calculateShoelaceArea(tempPoints, scaleVal);
-      saveNewShape(tempPoints, 'POLYGON', calculatedArea);
-      setTempPoints([]);
+      finishDrawing(tempPoints, 'POLYGON');
     } else if (tool === 'LINE' && tempPoints.length > 0 && e.evt.button === 2) {
       // Botão direito do mouse fecha linha
       e.evt.preventDefault();
-      const scaleVal = activeFile?.scale || 100;
-      const calculatedLength = calculateLineLength(tempPoints, scaleVal);
-      saveNewShape(tempPoints, 'LINE', calculatedLength);
-      setTempPoints([]);
-    } else {
-      // Adicionar novo vértice
+      finishDrawing(tempPoints, 'LINE');
+    } else if (e.evt.button === 0) {
+      // Adicionar novo vértice (apenas botão esquerdo)
       setTempPoints([...tempPoints, clickPos]);
     }
   };
@@ -449,16 +502,71 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
         valor_calculado: value
       });
 
-      setShapes([...shapes, newShape]);
+      setShapes(prev => [...prev, newShape]);
     } catch (err) {
       console.error('Erro ao salvar desenho:', err);
     }
   };
 
+  // Concluir e salvar o desenho atual (Área ou Linha)
+  const finishDrawing = (pointsToSave: Point2D[], activeTool: 'POLYGON' | 'LINE' | 'PAN' | 'SCALE' | 'POINT') => {
+    if (!activeFile) {
+      alert('Selecione uma planta antes de concluir.');
+      return;
+    }
+    if (!activeLayer) {
+      alert('Selecione uma camada ativa antes de concluir.');
+      return;
+    }
+    if (!activeLibraryItem) {
+      alert('Crie ou selecione um item na biblioteca (na barra lateral direita) antes de concluir.');
+      return;
+    }
+    const scaleVal = activeFile.scale || 100;
+    
+    if (activeTool === 'POLYGON') {
+      if (pointsToSave.length < 3) {
+        alert('Um polígono de área necessita de pelo menos 3 pontos.');
+        return;
+      }
+      const calculatedArea = calculateShoelaceArea(pointsToSave, scaleVal);
+      saveNewShape(pointsToSave, 'POLYGON', calculatedArea);
+      setTempPoints([]);
+    } else if (activeTool === 'LINE') {
+      if (pointsToSave.length < 2) {
+        alert('Uma medição linear necessita de pelo menos 2 pontos.');
+        return;
+      }
+      const calculatedLength = calculateLineLength(pointsToSave, scaleVal);
+      saveNewShape(pointsToSave, 'LINE', calculatedLength);
+      setTempPoints([]);
+    }
+  };
+
+  // Escuta atalhos de teclado para cancelar (Esc) ou concluir (Enter) a medição ativa
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setTempPoints([]);
+        setCalibrationPoints([]);
+        if (tool === 'SCALE') setTool('PAN');
+      } else if (e.key === 'Enter') {
+        if (tempPoints.length > 0) {
+          finishDrawing(tempPoints, tool);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [tempPoints, tool, activeFile, activeLayer, activeLibraryItem]);
+
   const handleDeleteShape = async (id: string) => {
     try {
       await measureService.deleteShape(id);
-      setShapes(shapes.filter(s => s.id !== id));
+      setShapes(prev => prev.filter(s => s.id !== id));
     } catch (err) {
       console.error(err);
     }
@@ -747,8 +855,8 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               <span>Plantas & Desenhos</span>
               <button
                 onClick={handleUploadClick}
-                disabled={!activeProject || isUploading}
-                className="flex items-center gap-1.5 text-blue-500 hover:text-blue-400 disabled:opacity-50"
+                disabled={isUploading}
+                className="flex items-center gap-1.5 text-blue-500 hover:text-blue-400 cursor-pointer"
               >
                 <Upload className="w-3.5 h-3.5" />
                 <span>Upload</span>
@@ -764,18 +872,20 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
 
             <div className="space-y-1.5">
               {files.map(f => (
-                <button
+                <div
                   key={f.id}
-                  onClick={() => selectFile(f)}
-                  className={`w-full text-left p-2.5 rounded-xl border text-xs flex items-center justify-between group transition-all duration-200
+                  className={`w-full p-1 rounded-xl border text-xs flex items-center justify-between group transition-all duration-200
                     ${activeFile?.id === f.id
                       ? 'bg-blue-600/10 border-blue-500 text-white font-bold'
                       : 'bg-slate-900 border-slate-800/60 hover:bg-slate-850 hover:border-slate-700 text-slate-300'}`}
                 >
-                  <div className="flex items-center gap-2 truncate">
-                    <FileText className="w-4 h-4 text-slate-400" />
+                  <button
+                    onClick={() => selectFile(f)}
+                    className="flex-1 text-left p-1.5 flex items-center gap-2 truncate cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4 text-slate-400 shrink-0" />
                     <span className="truncate">{f.nome}</span>
-                  </div>
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -783,11 +893,11 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                         if (activeProject) selectProject(activeProject);
                       });
                     }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded"
+                    className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                </button>
+                </div>
               ))}
               {files.length === 0 && (
                 <p className="text-slate-500 text-xs italic text-center py-4">Faça upload de uma planta em PDF ou imagem para começar.</p>
@@ -985,6 +1095,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               onWheel={handleWheel}
               onMouseDown={handleStageMouseDown}
               onMouseMove={handleStageMouseMove}
+              onContextMenu={(e) => e.evt.preventDefault()}
               className="bg-slate-950"
             >
               <Layer>
@@ -1009,7 +1120,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                         x={p.x}
                         y={p.y}
                         radius={6 / stageScale}
-                        fill="#white"
+                        fill="#ffffff"
                         stroke={activeLayer?.cor_hex || '#3B82F6'}
                         strokeWidth={2 / stageScale}
                       />
@@ -1047,13 +1158,48 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
             </div>
           )}
 
+          {/* Controle flutuante para concluir/cancelar desenho ativo */}
+          {tempPoints.length > 0 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-950/95 border border-blue-500/30 px-4 py-3 rounded-2xl flex items-center gap-3 z-20 shadow-2xl shadow-blue-500/10 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-200">
+                  {tool === 'POLYGON' ? 'Desenhando Área' : 'Desenhando Linha'}
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {tempPoints.length} {tempPoints.length === 1 ? 'ponto' : 'pontos'} inseridos
+                </span>
+              </div>
+              <div className="h-6 w-px bg-slate-800" />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setTempPoints([]);
+                  }}
+                  className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-bold rounded-lg text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                >
+                  Cancelar (Esc)
+                </button>
+                <button
+                  onClick={() => {
+                    finishDrawing(tempPoints, tool);
+                  }}
+                  disabled={(tool === 'POLYGON' && tempPoints.length < 3) || (tool === 'LINE' && tempPoints.length < 2)}
+                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-[10px] font-bold rounded-lg text-white transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Concluir (Enter)</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Dica flutuante do Canvas */}
           {activeFile && (
             <div className="absolute bottom-4 left-4 bg-slate-950/90 border border-slate-800 px-3 py-2 rounded-xl text-[10px] text-slate-400 font-medium z-10 pointer-events-none max-w-xs shadow-xl">
               {tool === 'PAN' && '💡 Arraste a tela para navegar. Use o scroll do mouse para Zoom.'}
               {tool === 'SCALE' && '💡 Clique em dois pontos com distância conhecida para configurar a escala real da planta.'}
-              {tool === 'POLYGON' && '💡 Clique nos vértices para desenhar. Clique no primeiro ponto para fechar a área.'}
-              {tool === 'LINE' && '💡 Clique para formar os pontos da linha. Clique com botão direito para concluir.'}
+              {tool === 'POLYGON' && '💡 Clique nos vértices para desenhar. Feche clicando no primeiro ponto, pressionando Enter ou no botão flutuante.'}
+              {tool === 'LINE' && '💡 Clique para formar os pontos da linha. Clique com botão direito, pressione Enter ou use o botão flutuante para concluir.'}
               {tool === 'POINT' && '💡 Clique em qualquer lugar para contar elementos (ex: tomadas, luminárias).'}
             </div>
           )}

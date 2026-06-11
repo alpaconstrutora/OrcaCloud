@@ -78,6 +78,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   
   // Controle de vinculação opcional a outras tabelas
   const [newDocCompanyId, setNewDocCompanyId] = React.useState('');
+  const [newDocProjectId, setNewDocProjectId] = React.useState('');
   const [newDocContractId, setNewDocContractId] = React.useState('');
   const [newDocSupplierId, setNewDocSupplierId] = React.useState('');
   const [newDocClientId, setNewDocClientId] = React.useState('');
@@ -207,7 +208,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           data_validade: newDocValidade || undefined,
           alerta_dias_antecedencia: newDocAlertaDias,
           tags,
-          project_id: selectedProjectId !== 'all' ? selectedProjectId : (newDocCategory === 'engenharia' ? projects[0]?.id : undefined),
+          project_id: selectedProjectId !== 'all' ? selectedProjectId : (newDocProjectId || undefined),
           company_id: newDocCompanyId || undefined,
           contract_id: newDocContractId || undefined,
           supplier_id: newDocSupplierId || undefined,
@@ -227,6 +228,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       setNewDocTagsInput('');
       setNewDocFile(null);
       setNewDocCompanyId('');
+      setNewDocProjectId('');
       setNewDocContractId('');
       setNewDocSupplierId('');
       setNewDocClientId('');
@@ -676,7 +678,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </div>
 
               {/* Tags e Vínculos adicionais */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Tags (Separadas por vírgula)</label>
                   <input
@@ -687,7 +689,25 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
                 </div>
-                
+
+                {/* Vínculo de Obra/Empreendimento (Opcional) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Obra/Empreendimento (Opcional)</label>
+                  <select
+                    value={selectedProjectId !== 'all' ? selectedProjectId : newDocProjectId}
+                    onChange={(e) => setNewDocProjectId(e.target.value)}
+                    disabled={selectedProjectId !== 'all'}
+                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-60"
+                  >
+                    <option value="">Nenhum (Geral)</option>
+                    {obras.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Vínculo de Empresa (Sócio/Filial/Holding) */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Empresa Vinculada (Opcional)</label>

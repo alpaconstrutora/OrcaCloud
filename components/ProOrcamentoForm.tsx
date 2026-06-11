@@ -434,15 +434,29 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   const t = templates[Number(idx)] as any;
                   if (t) {
                     setDescricao(t.descricao);
-                    if (t.unidade && t.quantidade) {
-                      setUnidade(t.unidade);
-                      setQuantidade(t.quantidade.toString());
-                      setValorUnitario(t.valor.toString());
-                      setValor((t.valor * t.quantidade).toFixed(2));
+                    
+                    let detectedUnidade = t.unidade || '';
+                    let detectedQuantidade = t.quantidade !== undefined && t.quantidade !== null ? t.quantidade.toString() : '';
+                    let detectedValorUnitario = '';
+
+                    // Autodetecta unidade do título do template (ex: se contiver m²)
+                    if (!detectedUnidade && t.titulo && t.titulo.toLowerCase().includes('(m²)')) {
+                      detectedUnidade = 'm²';
+                    }
+
+                    // Preenche o valor unitário se houver medição ativa
+                    if (detectedUnidade || detectedQuantidade) {
+                      detectedValorUnitario = t.valor.toString();
+                    }
+
+                    setUnidade(detectedUnidade);
+                    setQuantidade(detectedQuantidade);
+                    setValorUnitario(detectedValorUnitario);
+
+                    // Calcula o valor total
+                    if (detectedQuantidade && detectedValorUnitario) {
+                      setValor((parseFloat(detectedValorUnitario) * parseFloat(detectedQuantidade)).toFixed(2));
                     } else {
-                      setUnidade('');
-                      setQuantidade('');
-                      setValorUnitario('');
                       setValor(t.valor.toString());
                     }
                   }

@@ -126,6 +126,17 @@ serve(async (req: Request) => {
         continue;
       }
 
+      // Cria notificação in-app
+      await admin.from('notifications').insert({
+        recipient_email: recipientEmail,
+        title: `🔔 Lembrete: ${task.title}`,
+        message: task.description
+          ? task.description.slice(0, 120)
+          : `Alerta agendado para ${alertDate}`,
+        type: 'task_alert',
+        is_read: false,
+      });
+
       // Marca como enviado
       await admin.from('tasks').update({ alert_sent_at: now }).eq('id', task.id);
       results.push({ taskId: task.id, status: 'sent' });

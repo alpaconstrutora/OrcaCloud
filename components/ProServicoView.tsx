@@ -38,7 +38,10 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
   React.useEffect(() => {
     const loadData = async () => {
-      if (!servicoId) return;
+      if (!servicoId) {
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         const [servData, configData] = await Promise.all([

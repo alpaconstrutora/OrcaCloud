@@ -32,6 +32,12 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
     onChangeView('pro-servico-detalhe');
   };
 
+  React.useEffect(() => {
+    if (activeView === 'pro-servico-detalhe' && !selectedServicoId) {
+      onChangeView('pro-dashboard');
+    }
+  }, [activeView, selectedServicoId, onChangeView]);
+
   return (
     <div className="min-h-full bg-[#F3F7F9] text-slate-800 flex flex-col md:max-w-md md:mx-auto md:shadow-2xl md:border md:border-slate-200 md:rounded-[32px] md:my-4 md:overflow-hidden relative pb-16">
       {/* Container Principal */}

@@ -2,7 +2,7 @@ import React from 'react';
 import { TrendingUp, TrendingDown, Download, ChevronDown, ChevronRight, Building2 } from 'lucide-react';
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
-import type { DRESummary, DRELine, DREGroup, DREProjectSummary } from '../types/financial';
+import type { DRESummary, DRELine, DREGroup, DREProjectSummary, RegimeContabil } from '../types/financial';
 
 // ── Labels e ordem dos grupos ─────────────────────────────────────────────────
 
@@ -225,6 +225,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
     const [projects, setProjects] = React.useState<DREProjectSummary[]>([]);
     const [obras, setObras] = React.useState<{ project_id: string; project_name: string; code: string | null }[]>([]);
     const [projectId, setProjectId] = React.useState<string>('');   // '' = todas as obras
+    const [regime, setRegime]       = React.useState<RegimeContabil>('CAIXA');
     const [loading, setLoading] = React.useState(false);
     const [viewMode, setViewMode] = React.useState<'resumo' | 'detalhe' | 'por_obra'>('resumo');
 
@@ -233,7 +234,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
         setLoading(true);
         try {
             const [s, p] = await Promise.all([
-                financialReportService.getDRESummary(organizationId, dateFrom, dateTo, projectId || undefined),
+                financialReportService.getDRESummary(organizationId, dateFrom, dateTo, projectId || undefined, regime),
                 financialReportService.getDREByProject(organizationId, dateFrom, dateTo),
             ]);
             setSummary(s);
@@ -244,7 +245,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
         } finally {
             setLoading(false);
         }
-    }, [organizationId, dateFrom, dateTo, projectId, showToast]);
+    }, [organizationId, dateFrom, dateTo, projectId, regime, showToast]);
 
     // Lista de obras para o filtro (independe do período) — todas as obras
     React.useEffect(() => {
@@ -295,6 +296,11 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                             ))}
                         </select>
                     </div>
+                    <select value={regime} onChange={e => setRegime(e.target.value as RegimeContabil)}
+                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white">
+                        <option value="CAIXA">Caixa</option>
+                        <option value="COMPETENCIA">Competência</option>
+                    </select>
                     <button onClick={load}
                         className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all">
                         Atualizar
@@ -384,10 +390,12 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
 
                     {/* Nota de rodapé */}
                     <p className="text-xs text-gray-400 text-center">
-                        Realizado = transações conciliadas · Previsto = transações pendentes · Período: {
+                        {regime === 'CAIXA'
+                            ? 'Realizado = transações conciliadas · Previsto = transações pendentes'
+                            : 'Regime de Competência: realizado = todos os lançamentos incorridos/auferidos no período (pela data de competência)'
+                        } · Período: {
                             new Date(dateFrom + 'T00:00:00').toLocaleDateString('pt-BR')
                         } a {new Date(dateTo + 'T00:00:00').toLocaleDateString('pt-BR')}
-                        {viewMode === 'por_obra' && ' · Resultado por obra em regime de caixa (entradas/saídas conciliadas), não competência'}
                     </p>
                 </>
             )}

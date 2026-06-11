@@ -1,5 +1,5 @@
 import React, { Suspense, useState } from 'react'
-import { BarChart3, TrendingUp, TrendingDown, Receipt, Layers, FileText, BookOpen } from 'lucide-react'
+import { BarChart3, TrendingUp, TrendingDown, Receipt, Layers, FileText, BookOpen, Construction, Building2 } from 'lucide-react'
 import type { Organization } from '../types'
 
 const DREReport                  = React.lazy(() => import('./DREReport'))
@@ -9,6 +9,8 @@ const ContasPagarManager         = React.lazy(() => import('./ContasPagarManager
 const BankReconciliation         = React.lazy(() => import('./BankReconciliation'))
 const FinancialCategoriesManager = React.lazy(() => import('./FinancialCategoriesManager'))
 const BalanceteReport            = React.lazy(() => import('./BalanceteReport'))
+const WIPReport                  = React.lazy(() => import('./WIPReport'))
+const DRESPEReport               = React.lazy(() => import('./DRESPEReport'))
 
 export type { ControladoriaTab } from '../constants/controladoríaTabs'
 export { VIEW_TO_CONTROLADORIA_TAB } from '../constants/controladoríaTabs'
@@ -24,6 +26,8 @@ interface Props {
 
 const TABS: Array<{ id: ControladoriaTab; label: string; icon: React.ElementType }> = [
   { id: 'dre',          label: 'DRE',                 icon: BarChart3    },
+  { id: 'dre_spe',      label: 'DRE por SPE',         icon: Building2    },
+  { id: 'wip',          label: 'WIP',                 icon: Construction },
   { id: 'balancete',    label: 'Balancete',            icon: BookOpen     },
   { id: 'fluxo',        label: 'Fluxo de Caixa',      icon: TrendingUp   },
   { id: 'boletos',      label: 'Boletos',              icon: FileText     },
@@ -96,6 +100,12 @@ const ControladoriaModule: React.FC<Props> = ({
           )}
           {activeTab === 'conciliacao' && (
             <BankReconciliation organizationId={orgId} />
+          )}
+          {activeTab === 'wip' && (
+            <WIPReport organizationId={orgId} />
+          )}
+          {activeTab === 'dre_spe' && (
+            <DRESPEReport organizationId={orgId} />
           )}
           {activeTab === 'categorias' && (
             <FinancialCategoriesManager />

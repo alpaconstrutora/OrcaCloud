@@ -1,6 +1,6 @@
 import React from 'react'
 import { financialReportService } from '../services/financialReportService'
-import type { BalanceteLine, DREGroup } from '../types/financial'
+import type { BalanceteLine, DREGroup, RegimeContabil } from '../types/financial'
 import { useToast } from '../hooks/useToast'
 
 // ── Labels ────────────────────────────────────────────────────────────────────
@@ -55,6 +55,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
     const now = new Date()
     const [dateFrom, setDateFrom] = React.useState(`${now.getFullYear()}-01-01`)
     const [dateTo,   setDateTo]   = React.useState(`${now.getFullYear()}-12-31`)
+    const [regime,   setRegime]   = React.useState<RegimeContabil>('CAIXA')
     const [lines, setLines] = React.useState<BalanceteLine[]>([])
     const [loading, setLoading] = React.useState(false)
     const [expanded, setExpanded] = React.useState<Set<DREGroup>>(new Set(GROUP_ORDER))
@@ -63,7 +64,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
         if (!organizationId) return
         setLoading(true)
         try {
-            const data = await financialReportService.getBalancete(organizationId, dateFrom, dateTo)
+            const data = await financialReportService.getBalancete(organizationId, dateFrom, dateTo, undefined, regime)
             setLines(data)
         } catch (e: unknown) {
             showToast('Erro ao carregar balancete', 'error')
@@ -71,7 +72,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
         } finally {
             setLoading(false)
         }
-    }, [organizationId, dateFrom, dateTo, showToast])
+    }, [organizationId, dateFrom, dateTo, regime, showToast])
 
     React.useEffect(() => { load() }, [load])
 
@@ -136,6 +137,17 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                         onChange={e => setDateTo(e.target.value)}
                         className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                </div>
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Regime</label>
+                    <select
+                        value={regime}
+                        onChange={e => setRegime(e.target.value as RegimeContabil)}
+                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="CAIXA">Caixa</option>
+                        <option value="COMPETENCIA">Competência</option>
+                    </select>
                 </div>
                 <button
                     onClick={load}

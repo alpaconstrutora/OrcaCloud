@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type {
     DRELine, DRESummary, DRESummaryLine, CashFlowPoint, CashFlowSummary, CashFlowGranularity,
-    FinancialCategory, DREProjectSummary, BalanceteLine,
+    FinancialCategory, DREProjectSummary, BalanceteLine, DRESPELine, WIPLine, RegimeContabil,
 } from '../types/financial';
 
 export const financialReportService = {
@@ -34,6 +34,7 @@ export const financialReportService = {
         dateTo: string,
         empresaId?: string,
         projectId?: string,
+        regime: RegimeContabil = 'CAIXA',
     ): Promise<DRELine[]> {
         const { data, error } = await supabase.rpc('fn_dre', {
             p_organization_id: organizationId,
@@ -41,6 +42,7 @@ export const financialReportService = {
             p_date_to:         dateTo,
             p_empresa_id:      empresaId ?? null,
             p_project_id:      projectId ?? null,
+            p_regime:          regime,
         });
         if (error) throw error;
         return (data || []) as DRELine[];
@@ -51,6 +53,7 @@ export const financialReportService = {
         dateFrom: string,
         dateTo: string,
         projectId?: string,
+        regime: RegimeContabil = 'CAIXA',
     ): Promise<DRESummary> {
         const [summaryRes, detailRes] = await Promise.all([
             supabase.rpc('fn_dre_summary', {
@@ -58,6 +61,7 @@ export const financialReportService = {
                 p_date_from:       dateFrom,
                 p_date_to:         dateTo,
                 p_project_id:      projectId ?? null,
+                p_regime:          regime,
             }),
             supabase.rpc('fn_dre', {
                 p_organization_id: organizationId,
@@ -65,6 +69,7 @@ export const financialReportService = {
                 p_date_to:         dateTo,
                 p_empresa_id:      null,
                 p_project_id:      projectId ?? null,
+                p_regime:          regime,
             }),
         ]);
 
@@ -135,15 +140,69 @@ export const financialReportService = {
         dateFrom: string,
         dateTo: string,
         projectId?: string,
+        regime: RegimeContabil = 'CAIXA',
     ): Promise<BalanceteLine[]> {
         const { data, error } = await supabase.rpc('fn_balancete', {
             p_organization_id: organizationId,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
             p_project_id:      projectId ?? null,
+            p_regime:          regime,
         });
         if (error) throw error;
         return (data || []) as BalanceteLine[];
+    },
+
+    // ── DRE por SPE ───────────────────────────────────────────
+    async getDRESPESummary(
+        organizationId: string,
+        dateFrom: string,
+        dateTo: string,
+        regime: RegimeContabil = 'CAIXA',
+    ): Promise<DRESPELine[]> {
+        const { data, error } = await supabase.rpc('fn_dre_spe_summary', {
+            p_organization_id: organizationId,
+            p_date_from:       dateFrom,
+            p_date_to:         dateTo,
+            p_regime:          regime,
+        });
+        if (error) throw error;
+        return ((data || []) as Omit<DRESPELine, 'margem_bruta_pct' | 'margem_ebitda_pct' | 'margem_liquida_pct'>[])
+            .map(r => ({
+                ...r,
+                margem_bruta_pct:   r.receita_bruta  ? (r.lucro_bruto       / r.receita_bruta  * 100) : null,
+                margem_ebitda_pct:  r.receita_bruta  ? (r.ebitda            / r.receita_bruta  * 100) : null,
+                margem_liquida_pct: r.receita_liquida ? (r.resultado_liquido / r.receita_liquida * 100) : null,
+            }));
+    },
+
+    // ── WIP — Work In Progress ────────────────────────────────
+    async getProjectWIP(
+        organizationId: string,
+        dateTo?: string,
+    ): Promise<WIPLine[]> {
+        const { data, error } = await supabase.rpc('fn_project_wip', {
+            p_organization_id: organizationId,
+            p_date_to:         dateTo ?? new Date().toISOString().slice(0, 10),
+        });
+        if (error) throw error;
+        return (data || []) as WIPLine[];
+    },
+
+    // ── Empresas da org (para filtro SPE) ────────────────────
+    async listEmpresas(
+        organizationId: string,
+    ): Promise<{ id: string; nome: string }[]> {
+        const { data, error } = await supabase
+            .from('companies')
+            .select('id, nome_fantasia, razao_social')
+            .eq('org_id', organizationId)
+            .order('razao_social');
+        if (error) throw error;
+        return (data || []).map(c => ({
+            id:   c.id as string,
+            nome: (c.nome_fantasia || c.razao_social || c.id) as string,
+        }));
     },
 
     // ── Fluxo de Caixa ────────────────────────────────────────

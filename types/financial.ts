@@ -318,6 +318,55 @@ export interface BalanceteLine {
 }
 
 // ────────────────────────────────────────────────────────────
+// Regime contábil
+// ────────────────────────────────────────────────────────────
+
+export type RegimeContabil = 'CAIXA' | 'COMPETENCIA';
+
+// ────────────────────────────────────────────────────────────
+// DRE por SPE/Empresa
+// ────────────────────────────────────────────────────────────
+
+export interface DRESPELine {
+    empresa_id:             string;
+    empresa_nome:           string;
+    receita_bruta:          number;
+    deducoes:               number;
+    receita_liquida:        number;
+    custos_diretos:         number;
+    lucro_bruto:            number;
+    despesas_operacionais:  number;
+    ebitda:                 number;
+    resultado_financeiro:   number;
+    impostos:               number;
+    resultado_liquido:      number;
+    n_transacoes:           number;
+    margem_bruta_pct:       number | null;
+    margem_ebitda_pct:      number | null;
+    margem_liquida_pct:     number | null;
+}
+
+// ────────────────────────────────────────────────────────────
+// WIP — Work In Progress
+// ────────────────────────────────────────────────────────────
+
+export interface WIPLine {
+    project_id:           string;
+    project_name:         string;
+    project_code:         string | null;
+    empresa_id:           string | null;
+    empresa_nome:         string | null;
+    contrato_valor:       number;
+    custo_incorrido:      number;
+    receita_reconhecida:  number;
+    custos_pendentes:     number;
+    receitas_pendentes:   number;
+    saldo_contrato:       number;
+    margem_bruta:         number;
+    margem_pct:           number | null;
+}
+
+// ────────────────────────────────────────────────────────────
 // Fluxo de Caixa
 // ────────────────────────────────────────────────────────────
 

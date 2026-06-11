@@ -267,5 +267,82 @@ export const officesService = {
     }
 
     return data;
+  },
+
+  async createProjectFromLead(leadId: string, leadName: string, valorEstimado: number, userId: string): Promise<any> {
+    const cronogramaPadrao = [
+      { id: '1', fase: 'Estudo Preliminar', item: 'Briefing inicial com cliente', completed: true, responsavel: 'Altair' },
+      { id: '2', fase: 'Estudo Preliminar', item: 'Levantamento métrico in-loco', completed: true, responsavel: 'Altair' },
+      { id: '3', fase: 'Estudo Preliminar', item: 'Apresentação de Moodboards conceituais', completed: false, responsavel: 'Altair' },
+      { id: '4', fase: 'Anteprojeto', item: 'Modelagem 3D & Estudo de Volumetria', completed: false, responsavel: 'Altair' },
+      { id: '5', fase: 'Anteprojeto', item: 'Renders fotorrealistas aprovados', completed: false, responsavel: 'Altair' },
+      { id: '6', fase: 'Projeto Legal', item: 'Desenho de pranchas para prefeitura', completed: false, responsavel: 'Altair' },
+      { id: '7', fase: 'Projeto Executivo', item: 'Detalhamento de marcenaria e pedra', completed: false, responsavel: 'Altair' },
+      { id: '8', fase: 'Projeto Executivo', item: 'Caderno de especificações técnicas', completed: false, responsavel: 'Altair' },
+      { id: '9', fase: 'Obra', item: 'Marcação hidráulica e elétrica', completed: false, responsavel: 'Altair' },
+      { id: '10', fase: 'Obra', item: 'Acompanhamento de pintura e acabamentos', completed: false, responsavel: 'Altair' }
+    ];
+
+    const parcelaValor = Math.round(Number(valorEstimado || 15000) / 3);
+    const financeiroPadrao = [
+      {
+        id: `finst-1`,
+        projectName: leadName,
+        parcela: '1/3',
+        valor: parcelaValor,
+        vencimento: new Date(new Date().getFullYear(), new Date().getMonth(), 10).toISOString().split('T')[0],
+        status: 'PENDENTE'
+      },
+      {
+        id: `finst-2`,
+        projectName: leadName,
+        parcela: '2/3',
+        valor: parcelaValor,
+        vencimento: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 10).toISOString().split('T')[0],
+        status: 'PENDENTE'
+      },
+      {
+        id: `finst-3`,
+        projectName: leadName,
+        parcela: '3/3',
+        valor: parcelaValor,
+        vencimento: new Date(new Date().getFullYear(), new Date().getMonth() + 2, 10).toISOString().split('T')[0],
+        status: 'PENDENTE'
+      }
+    ];
+
+    const settings = {
+      etapas: cronogramaPadrao,
+      arquivos: [],
+      rdos: [],
+      moodboard: [],
+      financeiro: financeiroPadrao
+    };
+
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({
+        name: leadName,
+        settings: settings,
+        budget: []
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[officesService] Erro ao criar projeto a partir do lead:', error);
+      throw new Error(`Erro ao criar projeto: ${error.message}`);
+    }
+
+    const { error: leadErr } = await supabase
+       .from('offices_leads')
+       .update({ briefing: `${leadName} (Projeto Gerado)` })
+       .eq('id', leadId);
+
+    if (leadErr) {
+       console.warn('[officesService] Erro ao marcar lead com projeto gerado:', leadErr);
+    }
+
+    return data;
   }
 };

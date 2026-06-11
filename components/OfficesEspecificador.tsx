@@ -18,7 +18,10 @@ import {
   HardHat, 
   Calendar,
   CheckCircle2,
-  ExternalLink
+  ExternalLink,
+  DollarSign,
+  AlertTriangle,
+  TrendingUp
 } from 'lucide-react';
 
 interface OfficesEspecificadorProps {
@@ -52,7 +55,20 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
   const [projetos, setProjetos] = useState<any[]>([]);
   const [selectedProjeto, setSelectedProjeto] = useState<any | null>(null);
   const [especificacoes, setEspecificacoes] = useState<OfficesEspecificacao[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'CRONOGRAMA' | 'ESPECIFICACOES' | 'ARQUIVOS' | 'RDO'>('CRONOGRAMA');
+  const [activeSubTab, setActiveSubTab] = useState<'CRONOGRAMA' | 'ESPECIFICACOES' | 'ARQUIVOS' | 'RDO' | 'FINANCEIRO'>('CRONOGRAMA');
+
+  // Estados para nova tarefa do Cronograma
+  const [cronogramaFase, setCronogramaFase] = useState('Estudo Preliminar');
+  const [cronogramaItem, setCronogramaItem] = useState('');
+  const [cronogramaResponsavel, setCronogramaResponsavel] = useState('Altair');
+  const [isAddCronogramaOpen, setIsAddCronogramaOpen] = useState(false);
+
+  // Estados para nova parcela do Financeiro
+  const [financeiroParcela, setFinanceiroParcela] = useState('1/3');
+  const [financeiroValor, setFinanceiroValor] = useState('0');
+  const [financeiroVencimento, setFinanceiroVencimento] = useState(new Date().toISOString().split('T')[0]);
+  const [financeiroStatus, setFinanceiroStatus] = useState<'PAGO' | 'PENDENTE' | 'ATRASADO'>('PENDENTE');
+  const [isAddFinanceiroOpen, setIsAddFinanceiroOpen] = useState(false);
 
   // Estados dos Modais
   const [isSpecModalOpen, setIsSpecModalOpen] = useState(false);
@@ -170,6 +186,116 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
     );
     const settings = selectedProjeto?.settings || {};
     settings.etapas = updated;
+    await updateProjectSettings(settings);
+  };
+
+  const handleAddCronogramaItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cronogramaItem.trim()) {
+      alert('Por favor, informe a descrição da atividade.');
+      return;
+    }
+
+    const newItem = {
+      id: `task-${Math.random().toString(36).substring(2, 9)}`,
+      fase: cronogramaFase,
+      item: cronogramaItem.trim(),
+      completed: false,
+      responsavel: cronogramaResponsavel
+    };
+
+    const settings = selectedProjeto?.settings || {};
+    const etapas = settings.etapas || CRONOGRAMA_PADRAO;
+    settings.etapas = [...etapas, newItem];
+
+    await updateProjectSettings(settings);
+
+    setCronogramaItem('');
+    setIsAddCronogramaOpen(false);
+  };
+
+  const handleDeleteCronogramaItem = async (itemId: string) => {
+    if (!confirm('Deseja realmente remover esta atividade do cronograma?')) return;
+    
+    const settings = selectedProjeto?.settings || {};
+    const etapas = settings.etapas || CRONOGRAMA_PADRAO;
+    settings.etapas = etapas.filter((item: any) => item.id !== itemId);
+
+    await updateProjectSettings(settings);
+  };
+
+  // ==========================================
+  // LOGICA: FINANCEIRO DO PROJETO
+  // ==========================================
+  const financeiroItens = useMemo(() => {
+    return selectedProjeto?.settings?.financeiro || [];
+  }, [selectedProjeto]);
+
+  const financeiroConsolidado = useMemo(() => {
+    let pago = 0;
+    let pendente = 0;
+    let atrasado = 0;
+
+    financeiroItens.forEach((item: any) => {
+      const val = Number(item.valor || 0);
+      if (item.status === 'PAGO') pago += val;
+      else if (item.status === 'PENDENTE') pendente += val;
+      else if (item.status === 'ATRASADO') atrasado += val;
+    });
+
+    return { pago, pendente, atrasado };
+  }, [financeiroItens]);
+
+  const handleAddFinanceiroItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (Number(financeiroValor) <= 0) {
+      alert('Por favor, informe um valor maior que zero.');
+      return;
+    }
+
+    const newItem = {
+      id: `finst-${Math.random().toString(36).substring(2, 9)}`,
+      projectName: selectedProjeto.name,
+      parcela: financeiroParcela,
+      valor: Number(financeiroValor),
+      vencimento: financeiroVencimento,
+      status: financeiroStatus
+    };
+
+    const settings = selectedProjeto?.settings || {};
+    const current = settings.financeiro || [];
+    settings.financeiro = [...current, newItem];
+
+    await updateProjectSettings(settings);
+
+    setFinanceiroValor('0');
+    setIsAddFinanceiroOpen(false);
+  };
+
+  const handleDeleteFinanceiroItem = async (itemId: string) => {
+    if (!confirm('Deseja remover esta parcela?')) return;
+
+    const settings = selectedProjeto?.settings || {};
+    const current = settings.financeiro || [];
+    settings.financeiro = current.filter((item: any) => item.id !== itemId);
+
+    await updateProjectSettings(settings);
+  };
+
+  const handleToggleFinanceiroStatus = async (itemId: string, currentStatus: string) => {
+    const nextStatusMap: Record<string, 'PAGO' | 'PENDENTE' | 'ATRASADO'> = {
+      'PENDENTE': 'PAGO',
+      'PAGO': 'ATRASADO',
+      'ATRASADO': 'PENDENTE'
+    };
+    const nextStatus = nextStatusMap[currentStatus] || 'PENDENTE';
+
+    const settings = selectedProjeto?.settings || {};
+    const current = settings.financeiro || [];
+    settings.financeiro = current.map((item: any) =>
+      item.id === itemId ? { ...item, status: nextStatus } : item
+    );
+
     await updateProjectSettings(settings);
   };
 
@@ -505,7 +631,8 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
           { id: 'CRONOGRAMA', label: 'Cronograma', icon: CheckSquare },
           { id: 'ESPECIFICACOES', label: 'Especificador', icon: Folder },
           { id: 'ARQUIVOS', label: 'Arquivos', icon: FileText },
-          { id: 'RDO', label: 'Diário Obra', icon: HardHat }
+          { id: 'RDO', label: 'Diário Obra', icon: HardHat },
+          { id: 'FINANCEIRO', label: 'Financeiro', icon: DollarSign }
         ].map((subTab) => {
           const Icon = subTab.icon;
           return (
@@ -532,7 +659,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
             ABA 1: CRONOGRAMA & VISÃO GERAL
             ========================================== */}
         {activeSubTab === 'CRONOGRAMA' && (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-200">
             <div className="bg-[#1E2022] border border-white/5 p-4 rounded-[24px] shadow-lg space-y-3">
               <div className="flex justify-between items-center">
                 <div>
@@ -547,30 +674,239 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
             </div>
 
             <div className="space-y-2 bg-[#1E2022] border border-white/5 p-4 rounded-[28px] shadow-lg">
-              <span className="block text-[8px] font-black uppercase tracking-widest text-[#D47A55] mb-3">Etapas do Projeto</span>
+              <div className="flex justify-between items-center mb-3">
+                <span className="block text-[8px] font-black uppercase tracking-widest text-[#D47A55]">Etapas do Projeto</span>
+                <button
+                  onClick={() => setIsAddCronogramaOpen(!isAddCronogramaOpen)}
+                  className="px-2.5 py-1 bg-slate-900 border border-white/5 text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-white rounded-lg transition-all"
+                >
+                  {isAddCronogramaOpen ? 'Fechar' : '+ Nova Tarefa'}
+                </button>
+              </div>
+
+              {isAddCronogramaOpen && (
+                <form onSubmit={handleAddCronogramaItem} className="p-3.5 bg-slate-900/60 border border-white/5 rounded-2xl space-y-3 mb-4">
+                  <span className="block text-[8px] font-black uppercase tracking-widest text-[#D47A55]">Adicionar Tarefa</span>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Nome da atividade (ex: Detalhamento de Banheiro)"
+                      value={cronogramaItem}
+                      onChange={(e) => setCronogramaItem(e.target.value)}
+                      className="w-full bg-[#121315] border border-white/5 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#D47A55] font-medium"
+                      required
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={cronogramaFase}
+                        onChange={(e) => setCronogramaFase(e.target.value)}
+                        className="bg-[#121315] border border-white/5 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#D47A55] font-medium"
+                      >
+                        <option value="Estudo Preliminar">Estudo Preliminar</option>
+                        <option value="Anteprojeto">Anteprojeto</option>
+                        <option value="Projeto Legal">Projeto Legal</option>
+                        <option value="Projeto Executivo">Projeto Executivo</option>
+                        <option value="Obra">Obra</option>
+                      </select>
+                      <select
+                        value={cronogramaResponsavel}
+                        onChange={(e) => setCronogramaResponsavel(e.target.value)}
+                        className="bg-[#121315] border border-white/5 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#D47A55] font-medium"
+                      >
+                        <option value="Altair">Altair</option>
+                        <option value="Colaborador">Colaborador</option>
+                        <option value="Engenheiro">Engenheiro</option>
+                        <option value="Cliente">Cliente</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-1.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-[9px] uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95"
+                  >
+                    Gravar Atividade
+                  </button>
+                </form>
+              )}
+
               <div className="space-y-3">
                 {cronogramaItens.map((item: any) => (
                   <div 
                     key={item.id}
-                    onClick={() => toggleCronogramaItem(item.id)}
-                    className="flex items-start gap-3 py-1 cursor-pointer select-none group"
+                    className="flex items-center justify-between py-1.5 hover:bg-white/5 px-2 rounded-xl transition-all group"
                   >
-                    <div className={`w-4 h-4 rounded mt-0.5 border flex items-center justify-center transition-colors ${
-                      item.completed ? 'bg-[#D47A55] border-[#C8643C] text-white' : 'border-white/10 bg-slate-900'
-                    }`}>
-                      {item.completed && '✓'}
+                    <div
+                      onClick={() => toggleCronogramaItem(item.id)}
+                      className="flex items-start gap-3 cursor-pointer select-none flex-1"
+                    >
+                      <div className={`w-4 h-4 rounded mt-0.5 border flex items-center justify-center transition-colors ${
+                        item.completed ? 'bg-[#D47A55] border-[#C8643C] text-white' : 'border-white/10 bg-slate-900'
+                      }`}>
+                        {item.completed && '✓'}
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className={`block text-xs font-semibold ${item.completed ? 'line-through text-slate-500' : 'text-white'}`}>
+                          {item.item}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="block text-[8px] font-black uppercase text-[#D47A55] tracking-widest">
+                            {item.fase}
+                          </span>
+                          {item.responsavel && (
+                            <>
+                              <span className="text-slate-600 text-[8px]">•</span>
+                              <span className="block text-[8px] font-black uppercase text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-white/5 tracking-wider">
+                                👤 {item.responsavel}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-0.5">
-                      <span className={`block text-xs font-semibold ${item.completed ? 'line-through text-slate-500' : 'text-white'}`}>
-                        {item.item}
-                      </span>
-                      <span className="block text-[8px] font-black uppercase text-[#D47A55] tracking-widest">
-                        {item.fase}
-                      </span>
-                    </div>
+
+                    <button
+                      onClick={() => handleDeleteCronogramaItem(item.id)}
+                      className="p-1.5 text-slate-500 hover:text-red-400 rounded transition-all opacity-0 group-hover:opacity-100"
+                      title="Excluir Atividade"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==========================================
+            ABA 5: FINANCEIRO DO PROJETO
+            ========================================== */}
+        {activeSubTab === 'FINANCEIRO' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* KPIs Financeiros Locais */}
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="bg-[#1E2022] border border-white/5 p-3 rounded-2xl shadow space-y-1">
+                <span className="block text-[7px] font-black uppercase tracking-widest text-slate-500">Recebido</span>
+                <span className="block text-xs font-black text-white truncate">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(financeiroConsolidado.pago)}
+                </span>
+              </div>
+              <div className="bg-[#1E2022] border border-white/5 p-3 rounded-2xl shadow space-y-1">
+                <span className="block text-[7px] font-black uppercase tracking-widest text-slate-500">A Receber</span>
+                <span className="block text-xs font-black text-[#D47A55] truncate">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(financeiroConsolidado.pendente)}
+                </span>
+              </div>
+              <div className="bg-[#1E2022] border border-white/5 p-3 rounded-2xl shadow space-y-1">
+                <span className="block text-[7px] font-black uppercase tracking-widest text-slate-500">Atrasado</span>
+                <span className={`block text-xs font-black truncate ${financeiroConsolidado.atrasado > 0 ? 'text-red-400' : 'text-white'}`}>
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(financeiroConsolidado.atrasado)}
+                </span>
+              </div>
+            </div>
+
+            {/* Cabeçalho da Lista + Adicionar Parcela */}
+            <div className="bg-[#1E2022] border border-white/5 p-4 rounded-[28px] shadow-lg space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="block text-[8px] font-black uppercase tracking-widest text-[#D47A55]">Fluxo de Medições</span>
+                <button
+                  onClick={() => setIsAddFinanceiroOpen(!isAddFinanceiroOpen)}
+                  className="px-2.5 py-1 bg-slate-900 border border-white/5 text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-white rounded-lg transition-all"
+                >
+                  {isAddFinanceiroOpen ? 'Fechar' : '+ Nova Parcela'}
+                </button>
+              </div>
+
+              {/* Formulário Nova Parcela */}
+              {isAddFinanceiroOpen && (
+                <form onSubmit={handleAddFinanceiroItem} className="p-3.5 bg-slate-900/60 border border-white/5 rounded-2xl space-y-3">
+                  <span className="block text-[8px] font-black uppercase tracking-widest text-[#D47A55]">Cadastrar Parcela</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1 col-span-2">
+                      <label className="block text-[7px] font-bold text-slate-500 uppercase">Identificação / Parcela (ex: Parcela 2/3)</label>
+                      <input
+                        type="text"
+                        value={financeiroParcela}
+                        onChange={(e) => setFinanceiroParcela(e.target.value)}
+                        className="w-full bg-[#121315] border border-white/5 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-[#D47A55] font-medium"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[7px] font-bold text-slate-500 uppercase">Valor (R$)</label>
+                      <input
+                        type="number"
+                        value={financeiroValor}
+                        onChange={(e) => setFinanceiroValor(e.target.value)}
+                        className="w-full bg-[#121315] border border-white/5 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-[#D47A55] font-medium"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[7px] font-bold text-slate-500 uppercase">Vencimento</label>
+                      <input
+                        type="date"
+                        value={financeiroVencimento}
+                        onChange={(e) => setFinanceiroVencimento(e.target.value)}
+                        className="w-full bg-[#121315] border border-white/5 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-[#D47A55] font-medium"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-2 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-[9px] uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95"
+                  >
+                    Gravar Medição
+                  </button>
+                </form>
+              )}
+
+              {/* Tabela/Lista de Parcelas */}
+              {financeiroItens.length === 0 ? (
+                <div className="text-center py-6 text-xs text-slate-500">
+                  Nenhuma parcela ou medição registrada para este projeto.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {financeiroItens.map((item: any) => (
+                    <div 
+                      key={item.id}
+                      className="bg-slate-900/40 border border-white/5 p-3 rounded-2xl flex items-center justify-between hover:bg-slate-900/60 transition-all group"
+                    >
+                      <div className="space-y-0.5">
+                        <span className="block text-xs font-black text-white">{item.parcela}</span>
+                        <span className="block text-[8px] text-slate-500 font-bold uppercase">
+                          Vence: {new Date(item.vencimento).toLocaleDateString('pt-BR')} • {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.valor)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Status Toggle Badge */}
+                        <button
+                          onClick={() => handleToggleFinanceiroStatus(item.id, item.status)}
+                          className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border transition-all ${
+                            item.status === 'PAGO' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/10' :
+                            item.status === 'ATRASADO' ? 'bg-red-500/20 text-red-400 border-red-500/10 animate-pulse' :
+                            'bg-slate-800 text-slate-400 border-white/5 hover:text-white'
+                          }`}
+                          title="Clique para alternar o status de pagamento"
+                        >
+                          {item.status}
+                        </button>
+
+                        {/* Excluir Parcela */}
+                        <button
+                          onClick={() => handleDeleteFinanceiroItem(item.id)}
+                          className="p-1 text-slate-550 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

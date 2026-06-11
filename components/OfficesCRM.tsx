@@ -44,6 +44,27 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
     loadLeads();
   }, [loadLeads]);
 
+  const handleCriarProjeto = async (lead: OfficesLead) => {
+    if (!confirm(`Deseja criar um novo projeto no escritório para "${lead.nome_cliente}"?`)) return;
+
+    try {
+      setLoading(true);
+      await officesService.createProjectFromLead(
+        lead.id,
+        lead.nome_cliente,
+        lead.valor_estimado,
+        userId
+      );
+      alert('Projeto criado com sucesso! O cronograma inicial e o fluxo financeiro foram atrelados ao projeto. Você pode visualizá-lo na aba "Projetos".');
+      loadLeads();
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro ao criar projeto: ' + (err.message || err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleOpenNew = () => {
     setEditingLead(null);
     setNomeCliente('');
@@ -172,6 +193,25 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
                         <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500">
                           <Phone className="w-3 h-3 text-[#D47A55]" />
                           <span>{l.contato}</span>
+                        </div>
+                      )}
+                      {l.status === 'CONTRATADO' && (
+                        <div className="pt-2 border-t border-white/5 flex justify-end">
+                          {l.briefing?.includes('(Projeto Gerado)') ? (
+                            <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/15 px-2.5 py-1 rounded-full">
+                              Projeto Ativo
+                            </span>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCriarProjeto(l);
+                              }}
+                              className="px-2.5 py-1.5 bg-[#D47A55] text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-[#C8643C] transition-all flex items-center gap-1 shadow-md active:scale-95"
+                            >
+                              <Briefcase className="w-3 h-3" /> Criar Projeto
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

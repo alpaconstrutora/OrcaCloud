@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ImovibStudy, ImovibCapexItem, ImovibCapexItemInsert } from '../types';
 import { imovibService } from '../services/imovibService';
-import { Calculator, ChevronDown, ChevronRight, Save, PieChart, Activity, Leaf, Trash2, Plus, Edit2 } from 'lucide-react';
+import { Calculator, ChevronRight, Activity, Leaf, Trash2, Plus, LayoutList, Zap } from 'lucide-react';
 import { useImovibMath } from '../hooks/useImovibMath';
 
 interface ImovibCapexFormProps {
@@ -23,23 +23,21 @@ const DEFAULT_CAPEX_TEMPLATE = [
     { category: '2. Projetos e Consultorias', name: 'Projeto Legal/Aprovação', value_type: 'currency', value: 0 },
     { category: '2. Projetos e Consultorias', name: 'Pesquisa de Mercado', value_type: 'currency', value: 10000 },
 
-    // 3. Construção Direta (Calculated implicitly or overridden here?) 
-    // Usually, construction is derived from Blocks. but some lines are fixed. 
-    // We will leave an explicit entry if they want to pad it, but mainly we use the block's cost.
+    // 3. Construção (Adicional)
     { category: '3. Construção (Adicional)', name: 'Fundações Especiais', value_type: 'currency', value: 0 },
     { category: '3. Construção (Adicional)', name: 'Paisagismo e Áreas Comuns', value_type: 'currency', value: 0 },
 
-    // 4. Construção Indireta & Canteiro (BDI)
+    // 4. Construção Indireta & Canteiro
     { category: '4. Construção Indireta', name: 'Instalação de Canteiro', value_type: 'currency', value: 0 },
-    { category: '4. Construção Indireta', name: 'Administração Local', value_type: 'percent', value: 4 }, // % do custo de obra
+    { category: '4. Construção Indireta', name: 'Administração Local', value_type: 'percent', value: 4 },
     { category: '4. Construção Indireta', name: 'Equipamentos (Grua, Elevador)', value_type: 'currency', value: 0 },
 
     // 5. Marketing e Vendas
     { category: '5. Marketing e Vendas', name: 'Stand de Vendas', value_type: 'currency', value: 0 },
     { category: '5. Marketing e Vendas', name: 'Apto Decorado', value_type: 'currency', value: 0 },
-    { category: '5. Marketing e Vendas', name: 'Verba de Lançamento (Mídia)', value_type: 'percent', value: 1.5 }, // % do VGV
-    { category: '5. Marketing e Vendas', name: 'Comissão de Corretores', value_type: 'percent', value: 5 }, // % do VGV
-    { category: '5. Marketing e Vendas', name: 'Gestão Comercial / House', value_type: 'percent', value: 1 }, // % do VGV
+    { category: '5. Marketing e Vendas', name: 'Verba de Lançamento (Mídia)', value_type: 'percent', value: 1.5 },
+    { category: '5. Marketing e Vendas', name: 'Comissão de Corretores', value_type: 'percent', value: 5 },
+    { category: '5. Marketing e Vendas', name: 'Gestão Comercial / House', value_type: 'percent', value: 1 },
 
     // 6. Despesas Legais e Incorporação
     { category: '6. Legais e Incorporação', name: 'Registro de Incorporação (RI)', value_type: 'currency', value: 15000 },
@@ -48,25 +46,47 @@ const DEFAULT_CAPEX_TEMPLATE = [
     { category: '6. Legais e Incorporação', name: 'Outorga Onerosa', value_type: 'currency', value: 0 },
 
     // 7. Impostos Consolidados
-    { category: '7. Impostos', name: 'RET (Regime Especial)', value_type: 'percent', value: 4 }, // % do VGV Recebido
+    { category: '7. Impostos', name: 'RET (Regime Especial)', value_type: 'percent', value: 4 },
     { category: '7. Impostos', name: 'PIS/COFINS/IRPJ/CSLL (Normal)', value_type: 'percent', value: 6.73 },
 
     // 8. Despesas Financeiras
-    { category: '8. Financeiras', name: 'Taxas de Estruturação (Plano Empresário)', value_type: 'percent', value: 1.5 }, // % do Financiamento
+    { category: '8. Financeiras', name: 'Taxas de Estruturação (Plano Empresário)', value_type: 'percent', value: 1.5 },
     { category: '8. Financeiras', name: 'Juros SFH / Construção', value_type: 'percent', value: 0 },
 
     // 9. Contingência
-    { category: '9. Contingência', name: 'Fundo de Reserva', value_type: 'percent', value: 2 }, // % da Receita ou Custo
+    { category: '9. Contingência', name: 'Fundo de Reserva', value_type: 'percent', value: 2 },
 ];
+
+const fmt = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 
 const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged }) => {
     const [items, setItems] = useState<ImovibCapexItem[]>([]);
     const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [initializing, setInitializing] = useState(true);
+
+    // Simplified mode local state
+    const [capexMode, setCapexMode] = useState<'simplified' | 'detailed'>(study.capex_mode || 'detailed');
+    const [simplifiedCostSqm, setSimplifiedCostSqm] = useState<number>(study.capex_simplified_cost_sqm || 0);
+    const [simplifiedAreaSqm, setSimplifiedAreaSqm] = useState<number>(study.capex_simplified_area_sqm || 0);
+
     const math = useImovibMath(study);
 
-    // Group items by category
+    // Total area from blocks for pre-filling
+    const totalBlockArea = useMemo(() => {
+        let area = 0;
+        study.blocks?.forEach(block => {
+            block.units?.forEach(u => {
+                area += (u.quantity || 0) * ((u.private_area || 0) + (u.common_area || 0));
+            });
+        });
+        return area;
+    }, [study.blocks]);
+
+    const effectiveArea = simplifiedAreaSqm > 0 ? simplifiedAreaSqm : totalBlockArea;
+    const simplifiedTotal = effectiveArea * simplifiedCostSqm;
+
     const groupedItems = useMemo(() => {
         const groups: Record<string, ImovibCapexItem[]> = {};
         items.forEach(item => {
@@ -82,7 +102,6 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
         const fetchOrSeed = async () => {
             setInitializing(true);
             try {
-                // Sempre busca do banco para evitar duplicatas por race condition
                 const { data: existing, error } = await (await import('../lib/supabase')).supabase
                     .from('imovib_capex_items')
                     .select('id, study_id, category, subcategory, name, value_type, value, created_at, updated_at')
@@ -92,12 +111,10 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 if (error) throw error;
 
                 if (existing && existing.length > 0) {
-                    // Já tem itens — só exibe
                     setItems(existing);
                     const uniqueCats = Array.from(new Set(existing.map((i: any) => i.category))).sort() as string[];
                     setExpandedCategories(uniqueCats.slice(0, 2));
                 } else {
-                    // Banco vazio para este estudo — seed inicial
                     const toInsert: ImovibCapexItemInsert[] = DEFAULT_CAPEX_TEMPLATE.map(t => ({
                         study_id: study.id,
                         category: t.category,
@@ -114,14 +131,35 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                     onDataChanged();
                 }
             } catch (e) {
-                console.error("Failed to seed capex", e);
+                console.error('Failed to seed capex', e);
             } finally {
                 setInitializing(false);
             }
         };
-
         fetchOrSeed();
-    }, [study.id]); // re-run only if study changes
+    }, [study.id]);
+
+    const saveMode = async (newMode: 'simplified' | 'detailed') => {
+        setCapexMode(newMode);
+        try {
+            await imovibService.updateStudy(study.id, { capex_mode: newMode });
+            onDataChanged();
+        } catch (e) {
+            console.error('Failed to save capex_mode', e);
+        }
+    };
+
+    const saveSimplifiedFields = async (costSqm: number, areaSqm: number) => {
+        try {
+            await imovibService.updateStudy(study.id, {
+                capex_simplified_cost_sqm: costSqm,
+                capex_simplified_area_sqm: areaSqm || null,
+            } as any);
+            onDataChanged();
+        } catch (e) {
+            console.error('Failed to save simplified capex', e);
+        }
+    };
 
     const toggleCategory = (cat: string) => {
         setExpandedCategories(prev =>
@@ -130,18 +168,16 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     };
 
     const handleUpdateItem = async (id: string, updates: Partial<ImovibCapexItem>) => {
-        // Optimistic UI update
         const origItems = [...items];
         setItems(items.map(i => i.id === id ? { ...i, ...updates } : i));
-
         try {
             setIsSaving(true);
             await imovibService.updateCapexItem(id, updates);
             onDataChanged();
         } catch (e) {
-            console.error("Failed to update item", e);
+            console.error('Failed to update item', e);
             alert('Erro ao salvar item CAPEX.');
-            setItems(origItems); // revert
+            setItems(origItems);
         } finally {
             setIsSaving(false);
         }
@@ -149,14 +185,13 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
 
     const handleDeleteItem = async (id: string) => {
         if (!window.confirm('Excluir este item do orçamento?')) return;
-        
         try {
             setIsSaving(true);
             await imovibService.deleteCapexItem(id);
             setItems(items.filter(i => i.id !== id));
             onDataChanged();
         } catch (e) {
-            console.error("Failed to delete item", e);
+            console.error('Failed to delete item', e);
             alert('Erro ao excluir item.');
         } finally {
             setIsSaving(false);
@@ -166,22 +201,14 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const handleAddItem = async (category: string) => {
         const name = window.prompt('Nome do novo item:');
         if (!name) return;
-
-        const newItem: ImovibCapexItemInsert = {
-            study_id: study.id,
-            category,
-            name,
-            value_type: 'currency',
-            value: 0
-        };
-
+        const newItem: ImovibCapexItemInsert = { study_id: study.id, category, name, value_type: 'currency', value: 0 };
         try {
             setIsSaving(true);
             const inserted = await imovibService.upsertCapexItems([newItem]);
             setItems([...items, ...inserted]);
             onDataChanged();
         } catch (e) {
-            console.error("Failed to add item", e);
+            console.error('Failed to add item', e);
             alert('Erro ao adicionar item.');
         } finally {
             setIsSaving(false);
@@ -205,154 +232,255 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     return (
         <div className="space-y-6 pb-10">
             <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
-                <div className="flex items-center justify-between mb-8">
+                {/* Header + mode toggle */}
+                <div className="flex items-start justify-between mb-8 gap-4">
                     <div>
                         <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                             <Calculator className="w-6 h-6 text-indigo-500" />
                             Orçamento Mestre (CAPEX)
                         </h2>
                         <p className="text-slate-500 text-sm mt-1 font-medium max-w-xl">
-                            Gerencie as premissas de custos indiretos, marketing, comissões, legais e financeiras.
-                            Os valores monetários (R$) são custos fixos, e os percentuais (%) incidem sobre a Base (VGV, Custo de Obra, etc) na hora de simular.
+                            {capexMode === 'simplified'
+                                ? 'Modo simplificado: custo total calculado por área × preço/m².'
+                                : 'Gerencie as premissas de custos indiretos, marketing, comissões, legais e financeiras.'}
                         </p>
                     </div>
-                    <div className="flex gap-2">
-                        <button onClick={expandAll} className="px-3 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Expandir Tudo</button>
-                        <button onClick={collapseAll} className="px-3 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Recolher Tudo</button>
+                    {/* Mode toggle */}
+                    <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-1 shrink-0">
+                        <button
+                            onClick={() => saveMode('simplified')}
+                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                capexMode === 'simplified'
+                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <Zap className="w-3.5 h-3.5" />
+                            Simplificado
+                        </button>
+                        <button
+                            onClick={() => saveMode('detailed')}
+                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                capexMode === 'detailed'
+                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <LayoutList className="w-3.5 h-3.5" />
+                            Completo
+                        </button>
                     </div>
                 </div>
 
-                {math.esgCostTotal > 0 && (
-                    <div className="mb-6 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
-                                <Leaf className="w-5 h-5" />
+                {/* ── SIMPLIFIED MODE ── */}
+                {capexMode === 'simplified' && (
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Área */}
+                            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
+                                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">
+                                    Área Total (m²)
+                                </label>
+                                {totalBlockArea > 0 && simplifiedAreaSqm === 0 && (
+                                    <p className="text-xs text-indigo-500 font-medium mb-2">
+                                        Calculado dos blocos: {totalBlockArea.toLocaleString('pt-BR')} m²
+                                    </p>
+                                )}
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        placeholder={totalBlockArea > 0 ? String(Math.round(totalBlockArea)) : '0'}
+                                        value={simplifiedAreaSqm || ''}
+                                        onChange={(e) => setSimplifiedAreaSqm(parseFloat(e.target.value) || 0)}
+                                        onBlur={() => saveSimplifiedFields(simplifiedCostSqm, simplifiedAreaSqm)}
+                                        className="w-full bg-white border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-xl py-3 px-4 font-bold text-slate-800 transition-all text-lg pr-14"
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">m²</span>
+                                </div>
+                                {totalBlockArea > 0 && (
+                                    <button
+                                        onClick={() => {
+                                            setSimplifiedAreaSqm(0);
+                                            saveSimplifiedFields(simplifiedCostSqm, 0);
+                                        }}
+                                        className="mt-2 text-xs text-indigo-500 hover:text-indigo-700 font-medium underline"
+                                    >
+                                        Usar área dos blocos ({Math.round(totalBlockArea).toLocaleString('pt-BR')} m²)
+                                    </button>
+                                )}
                             </div>
-                            <div>
-                                <h4 className="text-sm font-bold text-emerald-900 tracking-tight">Custo Provisionado: Medidas ESG</h4>
-                                <p className="text-xs text-emerald-700 font-medium">Investimento calculado automaticamente com base nas Iniciativas Sustentáveis (Aba Parecer).</p>
+
+                            {/* Custo por m² */}
+                            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
+                                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">
+                                    Custo Total por m²
+                                </label>
+                                <p className="text-xs text-slate-400 font-medium mb-2">
+                                    All-in: construção + soft costs + overhead
+                                </p>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">R$</span>
+                                    <input
+                                        type="number"
+                                        placeholder="0"
+                                        value={simplifiedCostSqm || ''}
+                                        onChange={(e) => setSimplifiedCostSqm(parseFloat(e.target.value) || 0)}
+                                        onBlur={() => saveSimplifiedFields(simplifiedCostSqm, simplifiedAreaSqm)}
+                                        className="w-full bg-white border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-xl py-3 pl-10 pr-4 font-bold text-slate-800 transition-all text-lg"
+                                    />
+                                </div>
                             </div>
                         </div>
-                        <div className="text-right">
-                            <span className="block text-lg font-black text-emerald-700">
-                                + {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(math.esgCostTotal)}
-                            </span>
+
+                        {/* Total result */}
+                        <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100 flex items-center justify-between">
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-wider text-indigo-400 mb-1">Custo Total (CAPEX)</p>
+                                <p className="text-sm text-indigo-600 font-medium">
+                                    {effectiveArea > 0
+                                        ? `${Math.round(effectiveArea).toLocaleString('pt-BR')} m² × ${fmt(simplifiedCostSqm)}/m²`
+                                        : 'Informe a área e o custo/m²'}
+                                </p>
+                            </div>
+                            <div className="text-right">
+                                <span className="text-3xl font-black text-indigo-700">{fmt(simplifiedTotal)}</span>
+                            </div>
                         </div>
                     </div>
                 )}
 
-                <div className="space-y-4">
-                    {categories.map(category => (
-                        <div key={category} className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm transition-all">
-                            {/* Accordion Header */}
-                            <button
-                                onClick={() => toggleCategory(category)}
-                                className="w-full px-6 py-4 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors"
-                            >
+                {/* ── DETAILED MODE ── */}
+                {capexMode === 'detailed' && (
+                    <>
+                        {math.esgCostTotal > 0 && (
+                            <div className="mb-6 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className={`p-1 rounded-md transition-transform ${expandedCategories.includes(category) ? 'rotate-90 bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>
-                                        <ChevronRight className="w-4 h-4" />
+                                    <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
+                                        <Leaf className="w-5 h-5" />
                                     </div>
-                                    <h3 className="font-bold text-slate-800 tracking-tight">{category}</h3>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-emerald-900 tracking-tight">Custo Provisionado: Medidas ESG</h4>
+                                        <p className="text-xs text-emerald-700 font-medium">Calculado automaticamente com base nas Iniciativas Sustentáveis (Aba Parecer).</p>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded-md border border-slate-200">
-                                        {groupedItems[category].length} itens
-                                    </span>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleAddItem(category); }}
-                                        className="p-1 px-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider bg-white hover:bg-slate-200 text-indigo-600 border border-slate-200 rounded-md transition-all active:scale-95"
-                                    >
-                                        <Plus className="w-3 h-3" />
-                                        Novo
-                                    </button>
-                                </div>
-                            </button>
+                                <span className="text-lg font-black text-emerald-700">
+                                    + {fmt(math.esgCostTotal)}
+                                </span>
+                            </div>
+                        )}
 
-                            {/* Accordion Body */}
-                            {expandedCategories.includes(category) && (
-                                <div className="p-0 border-t border-slate-200">
-                                    <table className="w-full text-left bg-white">
-                                        <thead>
-                                            <tr className="bg-slate-50/50 text-[10px] font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">
-                                                <th className="px-6 py-3 w-1/2">Rubrica / Linha de Custo</th>
-                                                <th className="px-6 py-3 w-1/4">Tipo</th>
-                                                <th className="px-6 py-3 w-1/4">Valor</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-50">
-                                            {groupedItems[category].map(item => (
-                                                <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
-                                                    <td className="px-6 py-3">
-                                                        <div className="flex items-center gap-2 group/name">
-                                                            <input
-                                                                type="text"
-                                                                defaultValue={item.name}
-                                                                onBlur={(e) => {
-                                                                    if (e.target.value !== item.name && e.target.value.trim()) {
-                                                                        handleUpdateItem(item.id, { name: e.target.value });
-                                                                    }
-                                                                }}
-                                                                className="bg-transparent border-none focus:ring-0 font-bold text-sm text-slate-700 w-full p-0 py-0.5 hover:bg-slate-100/50 rounded transition-colors focus:bg-white focus:px-2"
-                                                            />
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-3">
-                                                        <span className={`inline-flex items-center px-2 py-1 text-[10px] font-black tracking-wider uppercase rounded-md ${item.value_type === 'percent'
-                                                            ? 'bg-amber-100 text-amber-700'
-                                                            : 'bg-emerald-100 text-emerald-700'
-                                                            }`}>
-                                                            {item.value_type === 'percent' ? 'Percentual (%)' : 'Moeda (R$)'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-3">
-                                                        <div className="relative flex items-center">
-                                                            {item.value_type === 'currency' && (
-                                                                <span className="absolute left-3 text-slate-400 font-bold text-sm">R$</span>
-                                                            )}
-                                                            <input
-                                                                type="number"
-                                                                defaultValue={item.value}
-                                                                step={item.value_type === 'percent' ? "0.01" : "1"}
-                                                                onBlur={(e) => {
-                                                                    const val = parseFloat(e.target.value) || 0;
-                                                                    if (val !== item.value) {
-                                                                        handleUpdateItem(item.id, { value: val });
-                                                                    }
-                                                                }}
-                                                                className={`w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-xl py-2 px-3 font-bold text-slate-800 transition-all ${item.value_type === 'currency' ? 'pl-9' : 'pr-8 text-right'
-                                                                    }`}
-                                                            />
-                                                            {item.value_type === 'percent' && (
-                                                                <span className="absolute right-3 text-slate-400 font-bold text-sm">%</span>
-                                                            )}
-
-                                                            {/* Saving indicator overlay */}
-                                                            {isSaving && (
-                                                                <div className="absolute right-3 opacity-0 group-focus-within:opacity-100 transition-opacity">
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping"></div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-3 text-right">
-                                                        <button 
-                                                            onClick={() => handleDeleteItem(item.id)}
-                                                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                                            title="Excluir item"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
+                        <div className="flex justify-end gap-2 mb-4">
+                            <button onClick={expandAll} className="px-3 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Expandir Tudo</button>
+                            <button onClick={collapseAll} className="px-3 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Recolher Tudo</button>
                         </div>
-                    ))}
-                </div>
+
+                        <div className="space-y-4">
+                            {categories.map(category => (
+                                <div key={category} className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm transition-all">
+                                    <button
+                                        onClick={() => toggleCategory(category)}
+                                        className="w-full px-6 py-4 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-1 rounded-md transition-transform ${expandedCategories.includes(category) ? 'rotate-90 bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>
+                                                <ChevronRight className="w-4 h-4" />
+                                            </div>
+                                            <h3 className="font-bold text-slate-800 tracking-tight">{category}</h3>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded-md border border-slate-200">
+                                                {groupedItems[category].length} itens
+                                            </span>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleAddItem(category); }}
+                                                className="p-1 px-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider bg-white hover:bg-slate-200 text-indigo-600 border border-slate-200 rounded-md transition-all active:scale-95"
+                                            >
+                                                <Plus className="w-3 h-3" />
+                                                Novo
+                                            </button>
+                                        </div>
+                                    </button>
+
+                                    {expandedCategories.includes(category) && (
+                                        <div className="p-0 border-t border-slate-200">
+                                            <table className="w-full text-left bg-white">
+                                                <thead>
+                                                    <tr className="bg-slate-50/50 text-[10px] font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">
+                                                        <th className="px-6 py-3 w-1/2">Rubrica / Linha de Custo</th>
+                                                        <th className="px-6 py-3 w-1/4">Tipo</th>
+                                                        <th className="px-6 py-3 w-1/4">Valor</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-50">
+                                                    {groupedItems[category].map(item => (
+                                                        <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
+                                                            <td className="px-6 py-3">
+                                                                <input
+                                                                    type="text"
+                                                                    defaultValue={item.name}
+                                                                    onBlur={(e) => {
+                                                                        if (e.target.value !== item.name && e.target.value.trim()) {
+                                                                            handleUpdateItem(item.id, { name: e.target.value });
+                                                                        }
+                                                                    }}
+                                                                    className="bg-transparent border-none focus:ring-0 font-bold text-sm text-slate-700 w-full p-0 py-0.5 hover:bg-slate-100/50 rounded transition-colors focus:bg-white focus:px-2"
+                                                                />
+                                                            </td>
+                                                            <td className="px-6 py-3">
+                                                                <span className={`inline-flex items-center px-2 py-1 text-[10px] font-black tracking-wider uppercase rounded-md ${item.value_type === 'percent'
+                                                                    ? 'bg-amber-100 text-amber-700'
+                                                                    : 'bg-emerald-100 text-emerald-700'
+                                                                    }`}>
+                                                                    {item.value_type === 'percent' ? 'Percentual (%)' : 'Moeda (R$)'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-3">
+                                                                <div className="relative flex items-center">
+                                                                    {item.value_type === 'currency' && (
+                                                                        <span className="absolute left-3 text-slate-400 font-bold text-sm">R$</span>
+                                                                    )}
+                                                                    <input
+                                                                        type="number"
+                                                                        defaultValue={item.value}
+                                                                        step={item.value_type === 'percent' ? '0.01' : '1'}
+                                                                        onBlur={(e) => {
+                                                                            const val = parseFloat(e.target.value) || 0;
+                                                                            if (val !== item.value) {
+                                                                                handleUpdateItem(item.id, { value: val });
+                                                                            }
+                                                                        }}
+                                                                        className={`w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-xl py-2 px-3 font-bold text-slate-800 transition-all ${item.value_type === 'currency' ? 'pl-9' : 'pr-8 text-right'}`}
+                                                                    />
+                                                                    {item.value_type === 'percent' && (
+                                                                        <span className="absolute right-3 text-slate-400 font-bold text-sm">%</span>
+                                                                    )}
+                                                                    {isSaving && (
+                                                                        <div className="absolute right-3 opacity-0 group-focus-within:opacity-100 transition-opacity">
+                                                                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping"></div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-3 text-right">
+                                                                <button
+                                                                    onClick={() => handleDeleteItem(item.id)}
+                                                                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                                                    title="Excluir item"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

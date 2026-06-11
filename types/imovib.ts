@@ -219,6 +219,9 @@ export interface ImovibStudy {
     esg_notes?: string;
     committee_decision?: string;
     committee_notes?: string;
+    capex_mode?: 'simplified' | 'detailed';
+    capex_simplified_cost_sqm?: number;
+    capex_simplified_area_sqm?: number;
     duration_months?: number;
     construction_duration_months?: number;
     sales_duration_months?: number;

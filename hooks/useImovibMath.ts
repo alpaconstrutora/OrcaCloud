@@ -136,6 +136,7 @@ export const useImovibMath = (study: ImovibStudy | null | undefined, options?: I
         // 1. Calculate base totals from blocks
         let baseVgvTotal = 0;
         let baseConstCostTotal = 0;
+        let totalBlockArea = 0;
 
         study.blocks?.forEach(block => {
             let blockPrivateArea = 0;
@@ -146,6 +147,7 @@ export const useImovibMath = (study: ImovibStudy | null | undefined, options?: I
             });
             baseVgvTotal += blockPrivateArea * (block.sales_price_sqm || 0);
             baseConstCostTotal += (blockPrivateArea + blockCommonArea) * (block.construction_cost_sqm || 0);
+            totalBlockArea += blockPrivateArea + blockCommonArea;
         });
 
         // Apply Sensitivity Deltas & ESG Premiums
@@ -153,8 +155,16 @@ export const useImovibMath = (study: ImovibStudy | null | undefined, options?: I
         const costDeltaMultiplier = 1 + (options?.costDelta || 0) / 100;
 
         const vgvTotal = baseVgvTotal * (vgvDeltaMultiplier + esgVgvPremium);
-        const esgVgvPremiumValue = baseVgvTotal * esgVgvPremium; // Calculado explicitamente para a UI
-        const constCostTotal = (baseConstCostTotal + esgCostTotal) * costDeltaMultiplier;
+        const esgVgvPremiumValue = baseVgvTotal * esgVgvPremium;
+
+        // Simplified CAPEX mode: single area × cost/m² replaces block costs + CAPEX items
+        let constCostTotal: number;
+        if (study.capex_mode === 'simplified' && study.capex_simplified_cost_sqm) {
+            const effectiveArea = study.capex_simplified_area_sqm || totalBlockArea;
+            constCostTotal = effectiveArea * study.capex_simplified_cost_sqm * costDeltaMultiplier;
+        } else {
+            constCostTotal = (baseConstCostTotal + esgCostTotal) * costDeltaMultiplier;
+        }
 
         // Apply Swap Physical (reduces marketed VGV)
         const swapPhysical = (study.swap_physical_percent || 0) / 100;

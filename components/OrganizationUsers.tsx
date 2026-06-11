@@ -120,12 +120,15 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const { currentProfile, session, organizations } = useStore();
     const currentOrg = organizations.find(o => o.id === organizationId);
     
+    const userEmail = session?.user?.email?.toLowerCase() || '';
+    const isDevEmail = userEmail === 'altair.rosa@alpaconstrutora.com.br';
+    
     // O usuário é desenvolvedor?
-    const isDeveloper = currentProfile?.group === 'DESENVOLVEDOR';
+    const isDeveloper = currentProfile?.group === 'DESENVOLVEDOR' || isDevEmail;
     
     // O usuário é admin na organização?
-    const memberSelf = members.find(m => m.email.toLowerCase() === session?.user?.email?.toLowerCase());
-    const isAdmin = memberSelf?.role === 'admin' || isDeveloper;
+    const memberSelf = members.find(m => m.email.toLowerCase() === userEmail);
+    const isAdmin = memberSelf?.role === 'admin' || isDeveloper || isDevEmail;
 
     const [activeSubTab, setActiveSubTab] = useState<'members' | 'roles' | 'visibility'>('members');
 
@@ -396,7 +399,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         description
     }: {
         label: string;
-        checked: boolean;
+        checked: boolean | undefined;
         onChange: () => void;
         description: string;
     }) => (
@@ -578,14 +581,14 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                                     <div className="space-y-2">
                                                                         <PermissionCheckbox
                                                                             label="Visualizar"
-                                                                            checked={member.permissions?.[module.view as keyof UserPermissions] ?? getDefaultPermissions(member.role)[module.view as keyof UserPermissions]}
+                                                                            checked={!!(member.permissions?.[module.view as keyof UserPermissions] ?? getDefaultPermissions(member.role)[module.view as keyof UserPermissions])}
                                                                             onChange={() => handleToggleMemberPermission(member.id, module.view as keyof UserPermissions)}
                                                                             description={`Permite ver o módulo ${module.title}.`}
                                                                         />
                                                                         {module.edit && (
                                                                             <PermissionCheckbox
                                                                                 label="Editar"
-                                                                                checked={member.permissions?.[module.edit as keyof UserPermissions] ?? getDefaultPermissions(member.role)[module.edit as keyof UserPermissions]}
+                                                                                checked={!!(member.permissions?.[module.edit as keyof UserPermissions] ?? getDefaultPermissions(member.role)[module.edit as keyof UserPermissions])}
                                                                                 onChange={() => handleToggleMemberPermission(member.id, module.edit as keyof UserPermissions)}
                                                                                 description={`Permite salvar alterações no módulo ${module.title}.`}
                                                                             />
@@ -879,14 +882,14 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     <div className="space-y-2">
                                                         <PermissionCheckbox
                                                             label="Visualizar"
-                                                            checked={newMemberPermissions[module.view as keyof UserPermissions]}
+                                                            checked={!!newMemberPermissions[module.view as keyof UserPermissions]}
                                                             onChange={() => togglePermission(module.view as keyof UserPermissions)}
                                                             description=""
                                                         />
                                                         {module.edit && (
                                                             <PermissionCheckbox
                                                                 label="Editar"
-                                                                checked={newMemberPermissions[module.edit as keyof UserPermissions]}
+                                                                checked={!!newMemberPermissions[module.edit as keyof UserPermissions]}
                                                                 onChange={() => togglePermission(module.edit as keyof UserPermissions)}
                                                                 description=""
                                                             />
@@ -950,7 +953,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     <div className="space-y-2">
                                                         <PermissionCheckbox
                                                             label="Visualizar"
-                                                            checked={roleFormData.permissions[module.view as keyof UserPermissions]}
+                                                            checked={!!roleFormData.permissions[module.view as keyof UserPermissions]}
                                                             onChange={() => setRoleFormData(prev => ({
                                                                 ...prev,
                                                                 permissions: { ...prev.permissions, [module.view as keyof UserPermissions]: !prev.permissions[module.view as keyof UserPermissions] }
@@ -960,7 +963,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                         {module.edit && (
                                                             <PermissionCheckbox
                                                                 label="Editar"
-                                                                checked={roleFormData.permissions[module.edit as keyof UserPermissions]}
+                                                                checked={!!roleFormData.permissions[module.edit as keyof UserPermissions]}
                                                                 onChange={() => setRoleFormData(prev => ({
                                                                     ...prev,
                                                                     permissions: { ...prev.permissions, [module.edit as keyof UserPermissions]: !prev.permissions[module.edit as keyof UserPermissions] }

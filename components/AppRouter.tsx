@@ -205,8 +205,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   }, [activeOrg, session?.user?.email]);
 
   React.useEffect(() => {
+    const isDevEmail = session?.user?.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br';
     // Desenvolvedores sempre têm acesso total
-    if (currentProfile.group === 'DESENVOLVEDOR' || !activeOrganizationId) return;
+    if (currentProfile.group === 'DESENVOLVEDOR' || isDevEmail || !activeOrganizationId) return;
     
     // Se não há membro correspondente na organização selecionada, não redireciona (pode estar carregando)
     if (!currentMember) return;

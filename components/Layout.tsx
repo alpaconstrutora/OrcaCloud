@@ -159,7 +159,9 @@ const Layout: React.FC<LayoutProps> = ({
       obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: false, offices: false, reformas: false
     };
 
-    if (profile.group === 'DESENVOLVEDOR') {
+    const isDevEmail = profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br';
+
+    if (profile.group === 'DESENVOLVEDOR' || isDevEmail) {
       return {
         obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true
       };
@@ -208,7 +210,8 @@ const Layout: React.FC<LayoutProps> = ({
   }, [activeEmpresa, profile.group, currentMember, activeOrg, activeOrganizationId]);
 
   const mod = allowedMods;
-  const isDev = profile.group === 'DESENVOLVEDOR';
+  const isDevEmail = profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br';
+  const isDev = profile.group === 'DESENVOLVEDOR' || isDevEmail;
   const [isDarkMode, setIsDarkMode] = React.useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const stored = localStorage.getItem('sidebar_theme');
@@ -295,8 +298,7 @@ const Layout: React.FC<LayoutProps> = ({
   }, [activeView]);
 
   const fetchUnreadCount = React.useCallback(async () => {
-    if (!profile.email && profile.group !== 'DESENVOLVEDOR') return;
-    const isDev = profile.group === 'DESENVOLVEDOR';
+    if (!profile.email && !isDev) return;
     const emailToFilter = isDev ? undefined : profile.email;
 
     try {
@@ -306,10 +308,10 @@ const Layout: React.FC<LayoutProps> = ({
     } catch (err) {
       console.error("Failed to fetch unread count:", err);
     }
-  }, [profile.email, profile.group]);
+  }, [profile.email, isDev]);
 
   React.useEffect(() => {
-    if (!profile.email && profile.group !== 'DESENVOLVEDOR') return;
+    if (!profile.email && !isDev) return;
 
     fetchUnreadCount();
 
@@ -324,7 +326,6 @@ const Layout: React.FC<LayoutProps> = ({
       fetchUnreadCount();
     }, 60000);
 
-    const isDev = profile.group === 'DESENVOLVEDOR';
     const emailToFilter = isDev ? undefined : profile.email;
 
     // Subscribe to changes (Supabase Realtime)
@@ -396,7 +397,7 @@ const Layout: React.FC<LayoutProps> = ({
 
         {/* Navigation */}
         <nav ref={navRef} onScroll={handleNavScroll} className={`flex-1 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-3'} py-2`}>
-          {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR') && (
+          {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br')) && (
             <>
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
               {(mod.pro       || isDev) && <NavItem id="pro-dashboard"      icon={Briefcase} label="ÒPURA Pro"      />}
@@ -760,7 +761,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="offices-dashboard" icon={Palette} label="ÒPURA Offices" forceFull />
               <NavItem id="reformas-dashboard" icon={Hammer} label="ÒPURA Reformas" forceFull />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
-              {profile.group === 'DESENVOLVEDOR' ? (
+              {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
                 <div className="space-y-1 mb-4">
                   <div className="px-4 py-2 text-[10px] font-black text-gray-500 uppercase tracking-widest">Portais</div>
                   <NavItem id="client-properties" icon={Building2} label="Meus Imóveis" forceFull />

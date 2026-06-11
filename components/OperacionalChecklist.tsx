@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   CheckSquare, Loader2, AlertCircle, ChevronDown, ChevronRight, Wand2,
-  CheckCircle2, XCircle, MinusCircle, Ban, Camera,
+  CheckCircle2, XCircle, MinusCircle, Ban, Camera, ClipboardList, RefreshCw,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { TipoObra, ProjectTypeTemplate } from '../types/project'
@@ -29,6 +29,13 @@ interface ChecklistResponse {
   evidence_id: string | null
   nc_id: string | null
   completed_at: string | null
+}
+
+interface AvailableTemplate {
+  id: string
+  name: string
+  service_type: string | null
+  item_count?: number
 }
 
 interface Props {
@@ -123,18 +130,33 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
   const [template, setTemplate] = useState<ProjectTypeTemplate | null>(null)
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
+  // Template selector state
+  const [availableTemplates, setAvailableTemplates] = useState<AvailableTemplate[]>([])
+  const [currentTemplateId, setCurrentTemplateId] = useState<string | null>(null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
+  const [applyingTemplate, setApplyingTemplate] = useState(false)
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false)
+
   useEffect(() => { loadData() }, [workOrderId])
 
   const loadData = async () => {
     setLoading(true)
     setError(null)
     try {
-      const { data: wo, error: woErr } = await supabase
-        .from('work_orders')
-        .select('checklist_template_id, project_id')
-        .eq('id', workOrderId)
-        .single()
-      if (woErr) throw woErr
+      // Load available active templates for this org in parallel with work order
+      const [woRes, tmplsRes] = await Promise.all([
+        supabase.from('work_orders').select('checklist_template_id, project_id').eq('id', workOrderId).single(),
+        orgId
+          ? supabase.from('oe_checklist_templates').select('id, name, service_type').eq('org_id', orgId).eq('active', true).order('name')
+          : Promise.resolve({ data: [], error: null }),
+      ])
+
+      if (woRes.error) throw woRes.error
+      const wo = woRes.data
+
+      setAvailableTemplates(tmplsRes.data ?? [])
+      setCurrentTemplateId(wo.checklist_template_id ?? null)
+      setSelectedTemplateId(wo.checklist_template_id ?? '')
 
       if (!wo.checklist_template_id) {
         setItems([])
@@ -180,6 +202,32 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
       setError(e instanceof Error ? e.message : 'Erro ao carregar checklist')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleApplyTemplate = async () => {
+    if (!selectedTemplateId) return
+    const hasResponses = Object.keys(responses).length > 0
+    if (hasResponses && selectedTemplateId !== currentTemplateId) {
+      if (!window.confirm('Trocar o template irá remover as respostas já registradas nesta OE. Confirmar?')) return
+    }
+    setApplyingTemplate(true)
+    setError(null)
+    try {
+      if (hasResponses && selectedTemplateId !== currentTemplateId) {
+        await supabase.from('oe_checklist_responses').delete().eq('work_order_id', workOrderId)
+      }
+      const { error: woErr } = await supabase
+        .from('work_orders')
+        .update({ checklist_template_id: selectedTemplateId || null })
+        .eq('id', workOrderId)
+      if (woErr) throw woErr
+      setShowTemplateSelector(false)
+      await loadData()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erro ao aplicar template')
+    } finally {
+      setApplyingTemplate(false)
     }
   }
 
@@ -393,8 +441,33 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
         <CheckSquare className="w-10 h-10 mb-2" />
         <div className="text-center">
           <p className="text-sm font-bold text-slate-400">Nenhum checklist vinculado</p>
-          <p className="text-xs mt-1 text-slate-400">Vincule um modelo ao criar a OE ou use o template do tipo de obra</p>
+          <p className="text-xs mt-1 text-slate-400">Selecione um template abaixo ou use o padrão do tipo de obra</p>
         </div>
+
+        {/* Template selector no empty state */}
+        {availableTemplates.length > 0 && (
+          <div className="flex items-center gap-2 w-full max-w-sm">
+            <select
+              value={selectedTemplateId}
+              onChange={e => setSelectedTemplateId(e.target.value)}
+              className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:border-blue-400"
+            >
+              <option value="">Selecione um template...</option>
+              {availableTemplates.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleApplyTemplate}
+              disabled={!selectedTemplateId || applyingTemplate}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 disabled:opacity-40 transition-colors"
+            >
+              {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
+              Aplicar
+            </button>
+          </div>
+        )}
+
         {tipoObra && template && template.checklist_template.length > 0 && orgId && (
           <button
             onClick={handleSeedFromTemplate}
@@ -428,6 +501,48 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
         <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {error}
+        </div>
+      )}
+
+      {/* Template selector inline */}
+      {availableTemplates.length > 0 && (
+        <div className="flex items-center gap-2">
+          {showTemplateSelector ? (
+            <>
+              <select
+                value={selectedTemplateId}
+                onChange={e => setSelectedTemplateId(e.target.value)}
+                className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:border-blue-400"
+              >
+                <option value="">Sem checklist</option>
+                {availableTemplates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleApplyTemplate}
+                disabled={applyingTemplate}
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 disabled:opacity-40 transition-colors"
+              >
+                {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
+                Aplicar
+              </button>
+              <button
+                onClick={() => { setShowTemplateSelector(false); setSelectedTemplateId(currentTemplateId ?? '') }}
+                className="px-3 py-2 text-slate-500 hover:bg-slate-100 rounded-xl text-xs font-bold"
+              >
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setShowTemplateSelector(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Trocar template
+            </button>
+          )}
         </div>
       )}
 

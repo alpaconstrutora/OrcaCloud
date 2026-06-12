@@ -18,6 +18,7 @@ export interface Client {
     document?: string;
     type: 'PF' | 'PJ';
     address?: string;
+    address_number?: string;
     neighborhood?: string;
     city?: string;
     state?: string;

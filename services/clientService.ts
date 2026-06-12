@@ -12,7 +12,8 @@ const mapToFrontendClient = (dbClient: DbClientRow): Client => {
         diaryEntries: (dbClient.diary_entries || []) as Client['diaryEntries'],
         scheduleInfo: (dbClient.schedule_info || {}) as Client['scheduleInfo'],
         aiInsight: (dbClient.ai_insight || {}) as Client['aiInsight'],
-        visualGallery: (dbClient.visual_gallery || []) as Client['visualGallery']
+        visualGallery: (dbClient.visual_gallery || []) as Client['visualGallery'],
+        zipCode: dbClient.zip_code as string | undefined,
     } as Client;
 };
 
@@ -43,6 +44,10 @@ const mapToDbClient = (client: Partial<Client>): DbClientRow => {
     if ('visualGallery' in client) {
         dbClient.visual_gallery = client.visualGallery;
         delete dbClient.visualGallery;
+    }
+    if ('zipCode' in dbClient) {
+        if (!dbClient.zip_code) dbClient.zip_code = dbClient.zipCode;
+        delete dbClient.zipCode;
     }
 
     // Remove computed/join fields that don't exist as DB columns

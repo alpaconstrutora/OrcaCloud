@@ -459,7 +459,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                             <tbody className="divide-y divide-slate-50">
                                                 {block.units?.map(unit => {
                                                     const areaLivre = toBase != null
-                                                        ? toBase - ((unit.private_area || 0) + (unit.common_area || 0))
+                                                        ? toBase - (((unit.private_area || 0) * (unit.quantity || 0)) + (unit.common_area || 0))
                                                         : null;
                                                     const livreFmt = areaLivre == null
                                                         ? '—'

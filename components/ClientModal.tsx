@@ -197,15 +197,15 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                     </div>
 
                     <CityStateSelect
-                        cep={(formData as any).zipCode}
+                        cep={formData.zip_code}
                         stateCode={formData.state}
                         cityName={formData.city}
                         onChange={({ cep, stateCode, cityName }) => setFormData({
                             ...formData,
-                            zipCode: cep,
+                            zip_code: cep,
                             state: stateCode || '',
                             city: cityName || '',
-                        } as Partial<Client>)}
+                        })}
                         labelCls="block text-sm font-medium text-gray-700 mb-1"
                         inputCls="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                     />

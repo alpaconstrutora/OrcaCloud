@@ -21,7 +21,6 @@ export interface Client {
     address_number?: string;
     neighborhood?: string;
     zip_code?: string;
-    zipCode?: string;
     city?: string;
     state?: string;
     category?: 'Vendas' | 'Locação' | 'Serviços';

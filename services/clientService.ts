@@ -13,7 +13,6 @@ const mapToFrontendClient = (dbClient: DbClientRow): Client => {
         scheduleInfo: (dbClient.schedule_info || {}) as Client['scheduleInfo'],
         aiInsight: (dbClient.ai_insight || {}) as Client['aiInsight'],
         visualGallery: (dbClient.visual_gallery || []) as Client['visualGallery'],
-        zipCode: dbClient.zip_code as string | undefined,
     } as Client;
 };
 
@@ -45,11 +44,6 @@ const mapToDbClient = (client: Partial<Client>): DbClientRow => {
         dbClient.visual_gallery = client.visualGallery;
         delete dbClient.visualGallery;
     }
-    if ('zipCode' in dbClient) {
-        if (!dbClient.zip_code) dbClient.zip_code = dbClient.zipCode;
-        delete dbClient.zipCode;
-    }
-
     // Remove computed/join fields that don't exist as DB columns
     delete dbClient.organization_name;
     delete dbClient.organizations;
@@ -61,7 +55,7 @@ export const clientService = {
     async listClients(organizationId?: string) {
         let query = supabase
             .from('clients')
-            .select('id, name, email, phone, document, type, category, address, neighborhood, city, state, created_at, organization_id, organizations:organization_id(name)');
+            .select('id, name, email, phone, document, type, category, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
 
         if (organizationId) {
             query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);

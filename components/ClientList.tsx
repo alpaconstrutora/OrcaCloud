@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, LayoutDashboard, Table2, Building2 } from 'lucide-react';
 import { Client } from '../types';
 import ClientModal from './ClientModal';
+import { useServicesToast } from './services/useServicestoast';
+import ServicesToast from './services/ServicesToast';
 
 interface ClientListProps {
     onClientsChange?: () => void;
@@ -20,6 +22,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const [selectedClient, setSelectedClient] = React.useState<Client | undefined>(undefined);
     const [viewMode, setViewMode] = React.useState<'list' | 'grid'>('list');
     const [categoryFilter, setCategoryFilter] = React.useState<string>('all');
+    const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
 
     React.useEffect(() => {
         loadData();
@@ -49,9 +52,10 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 await clientService.deleteClient(id);
                 setClients(clients.filter(c => c.id !== id));
                 if (onClientsChange) onClientsChange();
+                showToast('Cliente excluído com sucesso.', 'success');
             } catch (error) {
                 console.error("Erro ao excluir cliente:", error);
-                alert("Erro ao excluir o cliente.");
+                showToast('Erro ao excluir o cliente.', 'error');
             }
         }
     };
@@ -67,9 +71,10 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             setIsModalOpen(false);
             loadClients();
             if (onClientsChange) onClientsChange();
+            showToast('Cliente salvo com sucesso!', 'success');
         } catch (error) {
             console.error("Erro ao salvar cliente:", error);
-            alert("Erro ao salvar o cliente.");
+            showToast('Erro ao salvar o cliente.', 'error');
         }
     };
 
@@ -435,6 +440,8 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 onSubmit={handleSubmit}
                 initialData={selectedClient}
             />
+
+            <ServicesToast toasts={toasts} onDismiss={dismissToast} />
         </div >
     );
 };

@@ -56,7 +56,7 @@ export const clientService = {
     async listClients(organizationId?: string) {
         let query = supabase
             .from('clients')
-            .select('*, organizations:organization_id(name)');
+            .select('id, name, email, phone, document, type, category, created_at, organization_id, organizations:organization_id(name)');
 
         if (organizationId) {
             query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
@@ -67,7 +67,7 @@ export const clientService = {
         // Fallback se a coluna organization_id ainda não existir no banco
         if (error && error.code === '42703' && organizationId) {
             console.warn("[CLIENT SERVICE] organization_id column missing, falling back to global list.");
-            const retry = await supabase.from('clients').select('*').order('name', { ascending: true });
+            const retry = await supabase.from('clients').select('id, name, email, phone, document, type, category, created_at, organization_id').order('name', { ascending: true });
             data = retry.data;
             error = retry.error;
         }

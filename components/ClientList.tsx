@@ -1,6 +1,6 @@
 import React from 'react';
 import { clientService } from '../services/clientService';
-import { projectService } from '../services/projectService';
+import { supabase } from '../lib/supabase';
 import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, LayoutDashboard, Table2, Building2 } from 'lucide-react';
 import { Client } from '../types';
 import ClientModal from './ClientModal';
@@ -28,12 +28,12 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [clientsData, projectsData] = await Promise.all([
+            const [clientsData, { data: projectsData }] = await Promise.all([
                 clientService.listClients(organizationId),
-                projectService.listProjects()
+                supabase.from('projects').select('id, name, settings').eq('settings->>classification', 'OBRA')
             ]);
             setClients(clientsData);
-            setProjects(projectsData || []);
+            setProjects(projectsData ?? []);
         } catch (error) {
             console.error("Erro ao listar dados:", error);
         } finally {

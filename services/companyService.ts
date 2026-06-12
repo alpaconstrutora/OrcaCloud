@@ -16,7 +16,7 @@ export const companyService = {
     async list(orgId: string): Promise<Company[]> {
         const { data, error } = await supabase
             .from('companies')
-            .select('*')
+            .select('id, org_id, razao_social, nome_fantasia, cnpj, status, tipo, is_headquarters, cor_sistema, logo_url, modulos_habilitados, created_at, updated_at')
             .eq('org_id', orgId)
             .order('is_headquarters', { ascending: false })
             .order('razao_social');

@@ -307,6 +307,15 @@ const Layout: React.FC<LayoutProps> = ({
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const engViews = ['eng-obras','eng-orcamentos','measure-ai','operacional','estrutural','quality','pos-obra','explorer','eng-planejamento','project-diary','reports','project-settings'];
+  const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
+  React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
+  const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts'];
+  const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
+  React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
+  const financeiroViews = ['project-financial','controladoria','fiscal-nfe','automation','compliance-dashboard','opura-cno'];
+  const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
+  React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
   React.useEffect(() => { if (activeView.startsWith('labor-')) setIsLaborOpen(true); }, [activeView]);
 
@@ -503,6 +512,7 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavGroup label="Inteligência de Negócios" />
               <NavItem id="bi-executivo" icon={BarChart3} label="BI Executivo" />
+              <NavItem id="opura-market" icon={Search} label="ÒPURA Market" />
 
               <NavGroup label="Corporativo" />
 
@@ -564,28 +574,37 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="organization" icon={Building2} label="Minha Organização" />
               <NavItem id="org-type-templates" icon={Layers} label="Templates de Obra" />
 
-              {(mod.obras || isDev) && <NavGroup label="Engenharia" />}
               {(mod.obras || isDev) && (
                 <>
-                  <NavItem id="eng-obras" icon={Building2} label="Obras" />
-                  <NavItem id="eng-orcamentos" icon={FolderOpen} label="Orçamentos" />
-                  <NavItem id="measure-ai" icon={Calculator} label="Medição Inteligente" />
-                  <NavItem id="operacional" icon={ClipboardList} label="Controle Operacional" />
-                  <NavItem id="estrutural" icon={Layers} label="Ferragem & Aço" />
-                  <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" />
-                  <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" />
-                  <NavItem id="explorer" icon={BookOpen} label="Composições" />
-                  <NavItem id="eng-planejamento" icon={Calendar} label="Planejamento" />
-                  <NavItem id="project-diary" icon={BookOpen} label="Diário de Obra" />
-                  <NavItem id="reports" icon={FileText} label="Relatórios" />
-                  <NavItem id="project-settings" icon={Calculator} label="Dados Técnicos" />
+                  <NavDropdown
+                    label="Engenharia"
+                    icon={Hammer}
+                    isOpen={isEngenhariaOpen}
+                    onToggle={() => {
+                      if (isCollapsed) { onChangeView('eng-obras'); }
+                      else { setIsEngenhariaOpen(o => !o); }
+                    }}
+                    hasActiveChild={engViews.includes(activeView) || activeView.startsWith('eng-')}
+                  >
+                    <DropdownItem id="eng-obras" label="Obras" icon={Building2} />
+                    <DropdownItem id="eng-orcamentos" label="Orçamentos" icon={FolderOpen} />
+                    <DropdownItem id="measure-ai" label="Medição Inteligente" icon={Calculator} />
+                    <DropdownItem id="operacional" label="Controle Operacional" icon={ClipboardList} />
+                    <DropdownItem id="estrutural" label="Ferragem & Aço" icon={Layers} />
+                    <DropdownItem id="quality" label="Qualidade & Entrega" icon={Activity} />
+                    <DropdownItem id="pos-obra" label="Pós-Obra & Garantia" icon={Shield} />
+                    <DropdownItem id="explorer" label="Composições" icon={BookOpen} />
+                    <DropdownItem id="eng-planejamento" label="Planejamento" icon={Calendar} />
+                    <DropdownItem id="project-diary" label="Diário de Obra" icon={BookOpen} />
+                    <DropdownItem id="reports" label="Relatórios" icon={FileText} />
+                    <DropdownItem id="project-settings" label="Dados Técnicos" icon={Calculator} />
+                  </NavDropdown>
                 </>
               )}
 
-              {(mod.rh || isDev) && <NavGroup label="RH" />}
               {(mod.rh || isDev) && (
                 <NavDropdown
-                  label="Gestão de Mão de Obra"
+                  label="Recursos Humanos"
                   icon={Users}
                   isOpen={isLaborOpen}
                   onToggle={() => {
@@ -640,48 +659,62 @@ const Layout: React.FC<LayoutProps> = ({
 
               {(mod.compras || isDev) && (
                 <>
-                  <NavGroup label="Suprimentos" />
-                  <NavItem id="supplies-contracts" icon={FileText} label="Contratos" />
-                  <NavItem id="supplies-quotations" icon={FileText} label="Cotações" />
-                  <NavItem id="supplies-orders" icon={Package} label="Pedidos" />
-                  <NavItem id="supplies-receipts" icon={Truck} label="Recebimento" />
+                  <NavDropdown
+                    label="Suprimentos"
+                    icon={Truck}
+                    isOpen={isSuprimentosOpen}
+                    onToggle={() => {
+                      if (isCollapsed) { onChangeView('supplies-contracts'); }
+                      else { setIsSuprimentosOpen(o => !o); }
+                    }}
+                    hasActiveChild={suprimentosViews.includes(activeView)}
+                  >
+                    <DropdownItem id="supplies-contracts" label="Contratos" icon={FileText} />
+                    <DropdownItem id="supplies-quotations" label="Cotações" icon={FileText} />
+                    <DropdownItem id="supplies-orders" label="Pedidos" icon={Package} />
+                    <DropdownItem id="supplies-receipts" label="Recebimento" icon={Truck} />
+                  </NavDropdown>
                 </>
               )}
 
-              {(mod.financeiro || mod.fiscal || isDev) && <NavGroup label="Financeiro" />}
-              {(mod.financeiro || isDev) && (
+              {(mod.financeiro || mod.fiscal || mod.compliance || isDev) && (
                 <>
-                  <NavItem
-                    id="project-financial"
-                    icon={DollarSign}
+                  <NavDropdown
                     label="Financeiro"
-                    onClickOverride={() => {
-                      const { setProjectId } = useStore.getState();
-                      setProjectId(null);
-                      onChangeView('project-financial');
+                    icon={DollarSign}
+                    isOpen={isFinanceiroOpen}
+                    onToggle={() => {
+                      if (isCollapsed) { onChangeView('project-financial'); }
+                      else { setIsFinanceiroOpen(o => !o); }
                     }}
-                  />
-                  <NavItem id="controladoria"        icon={BarChart3}    label="Controladoria" />
-                </>
-              )}
-              {(mod.fiscal || isDev) && (
-                <>
-                  <NavItem id="fiscal-nfe" icon={Receipt} label="Fiscal & NF-e" />
-                  <NavItem id="automation" icon={Zap} label="Automação" />
-                </>
-              )}
-              {(mod.compliance || isDev) && (
-                <>
-                  <NavItem id="compliance-dashboard" icon={Shield} label="ÒPURA Compliance" />
-                  <NavItem id="opura-cno" icon={Calculator} label="CNO & Previdência" />
+                    hasActiveChild={financeiroViews.includes(activeView)}
+                  >
+                    {(mod.financeiro || isDev) && (
+                      <>
+                        <DropdownItem id="project-financial" label="Financeiro" icon={DollarSign} />
+                        <DropdownItem id="controladoria" label="Controladoria" icon={BarChart3} />
+                      </>
+                    )}
+                    {(mod.fiscal || isDev) && (
+                      <>
+                        <DropdownItem id="fiscal-nfe" label="Fiscal & NF-e" icon={Receipt} />
+                        <DropdownItem id="automation" label="Automação" icon={Zap} />
+                      </>
+                    )}
+                    {(mod.compliance || isDev) && (
+                      <>
+                        <DropdownItem id="compliance-dashboard" label="ÒPURA Compliance" icon={Shield} />
+                        <DropdownItem id="opura-cno" label="CNO & Previdência" icon={Calculator} />
+                      </>
+                    )}
+                  </NavDropdown>
                 </>
               )}
 
               {(mod.crm || mod.incorporacao || mod.broker_portal || isDev) && (
                 <>
-                  <NavGroup label="Gestão de Vendas" />
                   <NavDropdown
-                    label="Gestão de Vendas"
+                    label="Comercial"
                     icon={TrendingUp}
                     isOpen={isVendasOpen}
                     onToggle={() => setIsVendasOpen(!isVendasOpen)}
@@ -705,7 +738,6 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
-              <NavGroup label="Portais" />
               {isDev ? (
                 <NavDropdown
                   label="Portais"
@@ -879,6 +911,7 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavGroup label="Inteligência de Negócios" />
               <NavItem id="imovib" icon={TrendingUp} label="Estudos de Viabilidade" forceFull />
+              <NavItem id="opura-market" icon={Search} label="ÒPURA Market" forceFull />
 
               <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" forceFull />
 

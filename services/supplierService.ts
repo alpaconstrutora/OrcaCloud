@@ -5,10 +5,7 @@ export const supplierService = {
     listSuppliers: async (organizationId?: string): Promise<(Supplier & { organization_name?: string })[]> => {
         let query = supabase
             .from('suppliers')
-            .select(`
-                *,
-                organizations:organization_id(name)
-            `)
+            .select('id, name, contact_name, email, phone, document, type, category, city, state, organization_id, created_at, organizations:organization_id(name)')
             .order('name', { ascending: true });
 
         if (organizationId) {

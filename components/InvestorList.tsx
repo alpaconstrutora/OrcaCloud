@@ -1,6 +1,6 @@
 import React from 'react';
 import { investorService, Investor } from '../services/investorService';
-import { projectService } from '../services/projectService';
+import { supabase } from '../lib/supabase';
 import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, TrendingUp, LayoutDashboard, Table2, Building2 } from 'lucide-react';
 import InvestorModal from './InvestorModal';
 
@@ -25,12 +25,19 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [investorsData, projectsData] = await Promise.all([
+            let projectsQuery = supabase
+                .from('projects')
+                .select('id, name, investor_id, settings')
+                .filter('settings->>classification', 'eq', 'OBRA');
+            if (organizationId) {
+                projectsQuery = projectsQuery.filter('settings->>organizationId', 'eq', organizationId);
+            }
+            const [investorsData, { data: projectsData }] = await Promise.all([
                 investorService.listInvestors(organizationId),
-                projectService.listProjects()
+                projectsQuery
             ]);
             setInvestors(investorsData);
-            setProjects(projectsData || []);
+            setProjects(projectsData ?? []);
         } catch (error) {
             console.error("Erro ao listar dados:", error);
         } finally {

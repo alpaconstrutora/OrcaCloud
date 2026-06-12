@@ -673,6 +673,7 @@ const Layout: React.FC<LayoutProps> = ({
               {(mod.compliance || isDev) && (
                 <>
                   <NavItem id="compliance-dashboard" icon={Shield} label="ÒPURA Compliance" />
+                  <NavItem id="opura-cno" icon={Calculator} label="CNO & Previdência" />
                 </>
               )}
 
@@ -880,6 +881,10 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="imovib" icon={TrendingUp} label="Estudos de Viabilidade" forceFull />
 
               <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" forceFull />
+
+              {(mod.compliance || isDev) && (
+                <NavItem id="opura-cno" icon={Calculator} label="CNO & Previdência" forceFull />
+              )}
 
               <NavGroup label="Suprimentos" />
               <NavItem id="supplies-orders" icon={Package} label="Pedidos" forceFull />

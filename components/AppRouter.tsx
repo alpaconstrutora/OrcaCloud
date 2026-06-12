@@ -75,6 +75,7 @@ const ComplianceDashboard   = React.lazy(() => import('./ComplianceDashboard'));
 const CompliancePhysicalMap = React.lazy(() => import('./CompliancePhysicalMap'));
 const ComplianceChecklists  = React.lazy(() => import('./ComplianceChecklists'));
 const OpuraDocsModule       = React.lazy(() => import('./OpuraDocsModule'));
+const OpuraCnoModule        = React.lazy(() => import('./OpuraCnoModule'));
 
 
 // Suspense fallback
@@ -327,6 +328,17 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             activeOrganizationId={activeOrganizationId}
             projects={typedProjects}
             currentProfile={currentProfile}
+            onChangeView={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    case 'opura-cno':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <OpuraCnoModule
+            activeOrganizationId={activeOrganizationId}
+            projectId={projectId}
             onChangeView={setActiveView}
           />
         </React.Suspense>

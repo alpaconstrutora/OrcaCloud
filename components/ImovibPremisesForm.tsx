@@ -440,6 +440,11 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
 
                                     {/* Units List */}
                                     <div className="p-0 overflow-x-auto">
+                                        {(() => {
+                                            const terrArea = (formData as any).terreno_area as number | null;
+                                            const toVal = regulatoryZones.length ? parseRegVal(regulatoryZones[0].taxa_ocupacao_maxima) : null;
+                                            const toBase = (terrArea && toVal != null) ? toVal * terrArea : null;
+                                            return (
                                         <table className="w-full text-left">
                                             <thead>
                                                 <tr className="bg-white border-b border-slate-100 text-[10px] font-black tracking-widest uppercase text-slate-400">
@@ -447,11 +452,20 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                     <th className="px-6 py-4 w-24 text-center">Unds.</th>
                                                     <th className="px-6 py-4 w-32 text-right">Área Priv. (m²)</th>
                                                     <th className="px-6 py-4 w-32 text-right">Área Com. (m²)</th>
+                                                    <th className="px-6 py-4 w-36 text-right">Área Livre (m²)</th>
                                                     <th className="px-6 py-4 w-16"></th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-50">
-                                                {block.units?.map(unit => (
+                                                {block.units?.map(unit => {
+                                                    const areaLivre = toBase != null
+                                                        ? toBase - ((unit.private_area || 0) + (unit.common_area || 0))
+                                                        : null;
+                                                    const livreFmt = areaLivre == null
+                                                        ? '—'
+                                                        : areaLivre.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' m²';
+                                                    const livreNeg = areaLivre != null && areaLivre < 0;
+                                                    return (
                                                     <tr key={unit.id} className="hover:bg-slate-50 transition-colors group">
                                                         <td className="px-6 py-3">
                                                             <input
@@ -485,6 +499,11 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                                 className="w-full bg-slate-100/50 border border-slate-200 p-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg text-right font-medium text-slate-800"
                                                             />
                                                         </td>
+                                                        <td className="px-6 py-3 text-right">
+                                                            <span className={`text-sm font-bold ${areaLivre == null ? 'text-slate-300' : livreNeg ? 'text-red-500' : 'text-emerald-600'}`}>
+                                                                {livreFmt}
+                                                            </span>
+                                                        </td>
                                                         <td className="px-6 py-3">
                                                             <button
                                                                 onClick={() => handleDeleteUnit(unit.id)}
@@ -494,9 +513,10 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                             </button>
                                                         </td>
                                                     </tr>
-                                                ))}
+                                                    );
+                                                })}
                                                 <tr>
-                                                    <td colSpan={5} className="px-6 py-4 bg-slate-50/50">
+                                                    <td colSpan={6} className="px-6 py-4 bg-slate-50/50">
                                                         <button
                                                             onClick={() => handleAddUnit(block.id)}
                                                             className="text-xs font-black tracking-widest uppercase text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 transition-colors"
@@ -507,6 +527,8 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                 </tr>
                                             </tbody>
                                         </table>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             ))

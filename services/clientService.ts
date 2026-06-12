@@ -68,7 +68,7 @@ export const clientService = {
         if (error && error.code === '42703' && organizationId) {
             console.warn("[CLIENT SERVICE] organization_id column missing, falling back to global list.");
             const retry = await supabase.from('clients').select('id, name, email, phone, document, type, category, created_at, organization_id').order('name', { ascending: true });
-            data = retry.data;
+            data = retry.data as any;
             error = retry.error;
         }
 

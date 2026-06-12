@@ -19,6 +19,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
         document: '',
         type: 'PF',
         address: '',
+        address_number: '',
         neighborhood: '',
         city: '',
         state: '',
@@ -36,6 +37,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                 document: '',
                 type: 'PF',
                 address: '',
+                address_number: '',
                 neighborhood: '',
                 city: '',
                 state: '',
@@ -171,15 +173,27 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
-                        <input
-                            type="text"
-                            placeholder="Nome do bairro"
-                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                            value={formData.neighborhood}
-                            onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
-                        />
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
+                            <input
+                                type="text"
+                                placeholder="Nome do bairro"
+                                className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={formData.neighborhood}
+                                onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
+                            <input
+                                type="text"
+                                placeholder="Nº"
+                                className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={formData.address_number ?? ''}
+                                onChange={(e) => setFormData({ ...formData, address_number: e.target.value })}
+                            />
+                        </div>
                     </div>
 
                     <CityStateSelect

@@ -56,7 +56,7 @@ export const clientService = {
     async listClients(organizationId?: string) {
         let query = supabase
             .from('clients')
-            .select('id, name, email, phone, document, type, category, created_at, organization_id, organizations:organization_id(name)');
+            .select('id, name, email, phone, document, type, category, address, address_number, neighborhood, city, state, created_at, organization_id, organizations:organization_id(name)');
 
         if (organizationId) {
             query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);

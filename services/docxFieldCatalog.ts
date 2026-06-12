@@ -1,8 +1,9 @@
 import { Contract } from '../types/contracts';
 import { Client, Organization } from '../types/users';
+import { ProjectSettings } from '../types/project';
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────────
-export type FieldSource = 'organization' | 'client' | 'contract' | 'special';
+export type FieldSource = 'organization' | 'client' | 'contract' | 'project' | 'special';
 
 /** Mapeamento de um marcador {NNN} para uma origem de dado (ou texto fixo). */
 export interface TokenMapping {
@@ -19,6 +20,7 @@ export interface ResolveContext {
     organization?: Organization | null;
     client?: Client | null;
     contract?: Contract | null;
+    project?: ProjectSettings | null;
 }
 
 interface FieldDef {
@@ -141,16 +143,20 @@ export const FIELD_GROUPS: FieldGroup[] = [
             { field: 'type',         label: 'Tipo (PF/PJ)',    get: c => c.client?.type ?? '' },
             { field: 'email',        label: 'E-mail',          get: c => c.client?.email ?? '' },
             { field: 'phone',        label: 'Telefone',        get: c => c.client?.phone ?? '' },
-            { field: 'address',      label: 'Endereço',        get: c => c.client?.address ?? '' },
-            { field: 'neighborhood', label: 'Bairro',          get: c => c.client?.neighborhood ?? '' },
-            { field: 'city',         label: 'Cidade',          get: c => c.client?.city ?? '' },
-            { field: 'state',        label: 'Estado (UF)',     get: c => c.client?.state ?? '' },
-            { field: 'category',     label: 'Categoria',       get: c => c.client?.category ?? '' },
-            { field: 'address_full', label: 'Endereço completo', get: c => {
+            { field: 'address',        label: 'Logradouro',      get: c => c.client?.address ?? '' },
+            { field: 'address_number', label: 'Número',           get: c => c.client?.address_number ?? '' },
+            { field: 'neighborhood',   label: 'Bairro',           get: c => c.client?.neighborhood ?? '' },
+            { field: 'city',           label: 'Cidade',           get: c => c.client?.city ?? '' },
+            { field: 'state',          label: 'Estado (UF)',      get: c => c.client?.state ?? '' },
+            { field: 'category',       label: 'Categoria',        get: c => c.client?.category ?? '' },
+            { field: 'address_full',   label: 'Endereço completo', get: c => {
                 const cl = c.client;
                 if (!cl) return '';
-                return [cl.address, cl.neighborhood, cl.city && cl.state ? `${cl.city}/${cl.state}` : (cl.city || cl.state)]
-                    .filter(Boolean).join(' - ');
+                return [
+                    [cl.address, cl.address_number].filter(Boolean).join(', '),
+                    cl.neighborhood,
+                    cl.city && cl.state ? `${cl.city}/${cl.state}` : (cl.city || cl.state),
+                ].filter(Boolean).join(' - ');
             } },
         ],
     },
@@ -180,6 +186,53 @@ export const FIELD_GROUPS: FieldGroup[] = [
             { field: 'materials_value',   label: 'Valor materiais (R$)',    get: c => fmtCurrency(c.contract?.materials_value) },
             { field: 'services_included', label: 'Serviços incluídos',      get: c => c.contract?.services_included ?? '' },
             { field: 'services_excluded', label: 'Serviços excluídos',      get: c => c.contract?.services_excluded ?? '' },
+        ],
+    },
+    {
+        source: 'project',
+        label: 'Engenharia – Obra',
+        fields: [
+            { field: 'name',             label: 'Nome da obra',             get: c => c.project?.name ?? '' },
+            { field: 'code',             label: 'Código',                   get: c => c.project?.code ?? '' },
+            { field: 'client',           label: 'Cliente (obra)',            get: c => c.project?.client ?? '' },
+            { field: 'location',         label: 'Localização',              get: c => c.project?.location ?? '' },
+            { field: 'street',           label: 'Logradouro',               get: c => c.project?.street ?? '' },
+            { field: 'number',           label: 'Número',                   get: c => c.project?.number ?? '' },
+            { field: 'complement',       label: 'Complemento',              get: c => c.project?.complement ?? '' },
+            { field: 'neighborhood',     label: 'Bairro',                   get: c => c.project?.neighborhood ?? '' },
+            { field: 'city',             label: 'Cidade',                   get: c => c.project?.city ?? '' },
+            { field: 'state',            label: 'Estado (UF)',              get: c => c.project?.state ?? '' },
+            { field: 'zipCode',          label: 'CEP',                      get: c => c.project?.zipCode ?? '' },
+            { field: 'address_full',     label: 'Endereço completo',        get: c => {
+                const p = c.project;
+                if (!p) return '';
+                return [
+                    [p.street, p.number].filter(Boolean).join(', '),
+                    p.complement,
+                    p.neighborhood,
+                    p.city && p.state ? `${p.city}/${p.state}` : (p.city || p.state),
+                    p.zipCode ? `CEP ${p.zipCode}` : '',
+                ].filter(Boolean).join(' - ');
+            } },
+            { field: 'area',             label: 'Área (m²)',                get: c => c.project?.area != null ? String(c.project.area) : '' },
+            { field: 'tipoObra',         label: 'Tipo de obra',             get: c => c.project?.tipoObra ?? '' },
+            { field: 'regimeObra',       label: 'Regime da obra',           get: c => c.project?.regimeObra ?? '' },
+            { field: 'status',           label: 'Status',                   get: c => c.project?.status ?? '' },
+            { field: 'obraStatus',       label: 'Status da obra',           get: c => c.project?.obraStatus ?? '' },
+            { field: 'startDate',        label: 'Data de início (planejada)', get: c => fmtDate(c.project?.startDate) },
+            { field: 'endDate',          label: 'Data de término (planejada)', get: c => fmtDate(c.project?.endDate) },
+            { field: 'startDateReal',    label: 'Data de início (real)',     get: c => fmtDate(c.project?.startDateReal) },
+            { field: 'endDateReal',      label: 'Data de término (real)',    get: c => fmtDate(c.project?.endDateReal) },
+            { field: 'valorEstimado',    label: 'Valor estimado (R$)',       get: c => fmtCurrency(c.project?.valorEstimado) },
+            { field: 'valorContratado',  label: 'Valor contratado (R$)',     get: c => fmtCurrency(c.project?.valorContratado) },
+            { field: 'mestreObras',      label: 'Mestre de obras',          get: c => c.project?.mestreObras ?? '' },
+            { field: 'encarregado',      label: 'Encarregado',              get: c => c.project?.encarregado ?? '' },
+            { field: 'tecnicoSeguranca', label: 'Técnico de segurança',     get: c => c.project?.tecnicoSeguranca ?? '' },
+            { field: 'almoxarife',       label: 'Almoxarife',               get: c => c.project?.almoxarife ?? '' },
+            { field: 'responsibleTeam',  label: 'Equipe responsável',       get: c => c.project?.responsibleTeam ?? '' },
+            { field: 'artRrt',           label: 'ART / RRT',                get: c => c.project?.artRrt ?? '' },
+            { field: 'alvara',           label: 'Alvará',                   get: c => c.project?.alvara ?? '' },
+            { field: 'matriculaCNO',     label: 'Matrícula CNO',            get: c => c.project?.matriculaCNO ?? '' },
         ],
     },
     {

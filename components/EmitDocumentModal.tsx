@@ -4,10 +4,12 @@ import { saveAs } from 'file-saver';
 import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
+import { projectService } from '../services/projectService';
 import { fillDocx, docxBlobToPdf } from '../services/docxRenderService';
 import { resolveFields, describeMapping } from '../services/docxFieldCatalog';
 import { Contract } from '../types/contracts';
 import { Client, Organization } from '../types/users';
+import { ProjectSettings } from '../types/project';
 
 interface Props {
     organizationId: string;
@@ -27,6 +29,7 @@ const EmitDocumentModal: React.FC<Props> = ({
     const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [organization, setOrganization] = useState<Organization | null>(organizationProp);
+    const [project, setProject] = useState<ProjectSettings | null>(null);
     const [loading, setLoading] = useState(true);
     const [templateId, setTemplateId] = useState<string>('');
     const [clientId, setClientId] = useState<string>(contract.client_id ?? '');
@@ -61,14 +64,21 @@ const EmitDocumentModal: React.FC<Props> = ({
                 .then(setClients)
                 .catch(() => {});
         }
-    }, [organizationId, organizationProp]);
+
+        // Obra vinculada ao contrato
+        if (contract.project_id) {
+            projectService.loadProject(contract.project_id)
+                .then(data => { if (data) setProject((data as any).settings as ProjectSettings ?? null); })
+                .catch(() => {});
+        }
+    }, [organizationId, organizationProp, contract.project_id]);
 
     const template = useMemo(() => templates.find(t => t.id === templateId) ?? null, [templates, templateId]);
     const client = useMemo(() => clients.find(c => c.id === clientId) ?? null, [clients, clientId]);
 
     const resolved = useMemo(() => {
         if (!template) return {};
-        return resolveFields(template.token_map ?? {}, { organization, client, contract });
+        return resolveFields(template.token_map ?? {}, { organization, client, contract, project });
     }, [template, organization, client, contract]);
 
     const mappedTokens = template ? template.detected_tokens.filter(tk => template.token_map?.[tk]) : [];

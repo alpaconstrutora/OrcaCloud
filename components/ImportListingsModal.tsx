@@ -115,7 +115,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
           setMappings(autoMappings);
         } catch (err: any) {
           console.error(err);
-          alert('Erro ao processar planilha. Verifique se o formato está correto.');
+          alert(`Erro ao processar planilha: ${err.message || 'Verifique se o formato está correto.'}`);
         }
       }
     };

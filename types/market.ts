@@ -120,3 +120,20 @@ export interface OpuraMarketNeighborhoodHistory {
   competitorsCount: number;
   createdAt?: string;
 }
+
+export interface OpuraMarketRule {
+  standard: 'Econômico' | 'Médio' | 'Médio-Alto' | 'Alto Padrão' | 'Luxo';
+  minPrice: number;
+  maxPrice: number | null;
+  tipologias: Array<{ tipo: string; area: number; mix: number }>;
+}
+
+export interface OpuraMarketCityConfig {
+  id?: string;
+  organizationId: string;
+  cityId: string;
+  rules: OpuraMarketRule[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+

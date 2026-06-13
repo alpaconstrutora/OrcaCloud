@@ -9,9 +9,11 @@ import {
   OpuraMarketNeighborhood,
   OpuraMarketTerrainStudy,
   OpuraMarketListing,
-  OpuraMarketNeighborhoodHistory
+  OpuraMarketNeighborhoodHistory,
+  OpuraMarketCityConfig
 } from '../types';
 import { ImportListingsModal } from './ImportListingsModal';
+import { CityRulesModal } from './CityRulesModal';
 
 interface OpuraMarketModuleProps {
   organizationId: string;
@@ -46,6 +48,28 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   // Estado para o histórico do bairro
   const [neighHistory, setNeighHistory] = React.useState<OpuraMarketNeighborhoodHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = React.useState(false);
+
+  // Configurações e regras personalizadas da praça/cidade
+  const [cityConfig, setCityConfig] = React.useState<OpuraMarketCityConfig | null>(null);
+  const [loadingCityConfig, setLoadingCityConfig] = React.useState(false);
+  const [isRulesModalOpen, setIsRulesModalOpen] = React.useState(false);
+
+  // Carrega configurações da praça selecionada
+  const loadCityRules = React.useCallback(async (cityId: string) => {
+    if (!cityId || !organizationId) {
+      setCityConfig(null);
+      return;
+    }
+    try {
+      setLoadingCityConfig(true);
+      const config = await opuraMarketService.getCityConfig(organizationId, cityId);
+      setCityConfig(config);
+    } catch (err) {
+      console.error('Erro ao buscar configurações da cidade:', err);
+    } finally {
+      setLoadingCityConfig(false);
+    }
+  }, [organizationId]);
 
   // Carrega anúncios da cidade selecionada
   const loadListings = async (cityId: string) => {
@@ -104,13 +128,14 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         setSelectedCityId(defaultCity.id);
         await loadNeighborhoods(defaultCity.id);
         await loadListings(defaultCity.id);
+        await loadCityRules(defaultCity.id);
       }
     } catch (err) {
       console.error('Erro ao carregar cidades do ÒPURA Market:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadCityRules]);
 
   // Carrega bairros da cidade selecionada
   const loadNeighborhoods = async (cityId: string) => {
@@ -354,33 +379,88 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       const avgPricePerM2 = stats.pricePerM2Avg;
       const areaTerreno = parseFloat(terrainArea);
 
-      if (avgPricePerM2 < 3200) {
-        recStandard = 'Econômico';
-        productMix = {
-          tipologias: [
-            { tipo: '2 Dorms (Minha Casa Minha Vida)', area: 52, mix: 75 },
-            { tipo: '1 Dorm / Studio', area: 38, mix: 25 }
-          ],
-          ticketSugerido: avgPricePerM2 * 52
-        };
-      } else if (avgPricePerM2 >= 3200 && avgPricePerM2 < 4300) {
-        recStandard = 'Médio';
-        productMix = {
-          tipologias: [
-            { tipo: '2 Dorms c/ Suíte', area: 65, mix: 60 },
-            { tipo: '3 Dorms c/ Suíte', area: 80, mix: 40 }
-          ],
-          ticketSugerido: avgPricePerM2 * 68
-        };
+      if (cityConfig && cityConfig.rules && cityConfig.rules.length > 0) {
+        // Encontra a regra que engloba avgPricePerM2
+        const matchedRule = cityConfig.rules.find(r => {
+          const min = r.minPrice;
+          const max = r.maxPrice ?? Infinity;
+          return avgPricePerM2 >= min && avgPricePerM2 < max;
+        });
+
+        if (matchedRule) {
+          recStandard = matchedRule.standard;
+          productMix = {
+            tipologias: matchedRule.tipologias.map(t => ({
+              tipo: t.tipo,
+              area: t.area,
+              mix: t.mix
+            })),
+            ticketSugerido: 0
+          };
+
+          // Calcula ticketSugerido com base na metragem média ponderada das tipologias
+          let totalMix = 0;
+          let weightedArea = 0;
+          matchedRule.tipologias.forEach(t => {
+            weightedArea += t.area * (t.mix / 100);
+            totalMix += t.mix;
+          });
+          const avgArea = totalMix > 0 ? weightedArea : 50;
+          productMix.ticketSugerido = avgPricePerM2 * avgArea;
+        } else {
+          useDefaultRules();
+        }
       } else {
-        recStandard = 'Alto Padrão';
-        productMix = {
-          tipologias: [
-            { tipo: '3 Suítes Premium', area: 120, mix: 70 },
-            { tipo: '4 Suítes Duplex', area: 180, mix: 30 }
-          ],
-          ticketSugerido: avgPricePerM2 * 130
-        };
+        useDefaultRules();
+      }
+
+      function useDefaultRules() {
+        if (avgPricePerM2 < 3200) {
+          recStandard = 'Econômico';
+          productMix = {
+            tipologias: [
+              { tipo: '2 Dorms (Minha Casa Minha Vida)', area: 52, mix: 75 },
+              { tipo: '1 Dorm / Studio', area: 38, mix: 25 }
+            ],
+            ticketSugerido: avgPricePerM2 * 52
+          };
+        } else if (avgPricePerM2 >= 3200 && avgPricePerM2 < 4300) {
+          recStandard = 'Médio';
+          productMix = {
+            tipologias: [
+              { tipo: '2 Dorms c/ Suíte', area: 65, mix: 60 },
+              { tipo: '3 Dorms c/ Suíte', area: 80, mix: 40 }
+            ],
+            ticketSugerido: avgPricePerM2 * 68
+          };
+        } else if (avgPricePerM2 >= 4300 && avgPricePerM2 < 5500) {
+          recStandard = 'Médio-Alto';
+          productMix = {
+            tipologias: [
+              { tipo: '2 Dorms c/ Varanda Gourmet', area: 70, mix: 50 },
+              { tipo: '3 Dorms c/ Varanda Gourmet', area: 90, mix: 50 }
+            ],
+            ticketSugerido: avgPricePerM2 * 80
+          };
+        } else if (avgPricePerM2 >= 5500 && avgPricePerM2 < 7500) {
+          recStandard = 'Alto Padrão';
+          productMix = {
+            tipologias: [
+              { tipo: '3 Suítes Premium', area: 120, mix: 70 },
+              { tipo: '4 Suítes Duplex', area: 180, mix: 30 }
+            ],
+            ticketSugerido: avgPricePerM2 * 138
+          };
+        } else {
+          recStandard = 'Luxo';
+          productMix = {
+            tipologias: [
+              { tipo: '4 Suítes Mansão Suspensa', area: 250, mix: 80 },
+              { tipo: 'Cobertura Linear', area: 380, mix: 20 }
+            ],
+            ticketSugerido: avgPricePerM2 * 276
+          };
+        }
       }
 
       const coefAproveitamento = 4; 
@@ -802,9 +882,36 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           </div>
         </div>
 
-        {/* Piloto Cambuí */}
-        <div className="flex items-center gap-2 bg-slate-900 text-white px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm">
-          📍 Cambuí - MG <span className="opacity-60 text-[10px] font-semibold">(Cidade Piloto MVP)</span>
+        <div className="flex items-center gap-3">
+          {/* Seletor Dinâmico de Cidades */}
+          {cities.length > 0 && (
+            <select
+              value={selectedCityId}
+              onChange={async (e) => {
+                const cityId = e.target.value;
+                setSelectedCityId(cityId);
+                await loadNeighborhoods(cityId);
+                await loadListings(cityId);
+                await loadCityRules(cityId);
+              }}
+              className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider shadow-xs focus:outline-none focus:ring-1 focus:ring-slate-500 cursor-pointer"
+            >
+              {cities.map((city) => (
+                <option key={city.id} value={city.id}>
+                  📍 {city.name} - {city.state}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Botão de regras */}
+          <button
+            onClick={() => setIsRulesModalOpen(true)}
+            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-black uppercase tracking-wider shadow-xs transition-all flex items-center gap-1.5"
+            title="Configurar regras de padrão construtivo e tipologias da praça ativa"
+          >
+            ⚙️ Regras da Praça
+          </button>
         </div>
       </div>
 
@@ -1325,6 +1432,26 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           cityName={cities.find(c => c.id === selectedCityId)?.name || 'Cambuí'}
           neighborhoods={neighborhoods}
           organizationId={organizationId}
+        />
+      )}
+      {isRulesModalOpen && (
+        <CityRulesModal
+          isOpen={isRulesModalOpen}
+          onClose={() => setIsRulesModalOpen(false)}
+          onSave={async (config) => {
+            try {
+              const saved = await opuraMarketService.saveCityConfig(config);
+              setCityConfig(saved);
+              alert('Configurações da praça salvas com sucesso!');
+            } catch (err: any) {
+              console.error(err);
+              alert('Erro ao salvar configurações da praça: ' + err.message);
+            }
+          }}
+          organizationId={organizationId}
+          cityId={selectedCityId}
+          cityName={cities.find(c => c.id === selectedCityId)?.name || 'Cambuí'}
+          initialConfig={cityConfig}
         />
       )}
     </div>

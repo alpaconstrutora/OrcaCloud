@@ -6,7 +6,8 @@ import {
   OpuraMarketDevelopment,
   OpuraMarketTerrainStudy,
   OpuraMarketMonitoredCompetitor,
-  OpuraMarketNeighborhoodHistory
+  OpuraMarketNeighborhoodHistory,
+  OpuraMarketCityConfig
 } from '../types';
 
 export const opuraMarketService = {
@@ -421,5 +422,64 @@ export const opuraMarketService = {
       competitorsCount: h.competitors_count,
       createdAt: h.created_at
     }));
+  },
+
+  // Configurações de Praça (City Configs)
+  async getCityConfig(organizationId?: string, cityId?: string): Promise<OpuraMarketCityConfig | null> {
+    if (!organizationId || !cityId) return null;
+    const { data, error } = await supabase
+      .from('opura_market_city_configs')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('city_id', cityId)
+      .maybeSingle();
+
+    if (error) {
+      console.error(`Error fetching city config for org ${organizationId} and city ${cityId}:`, error);
+      throw new Error(`Falha ao carregar configurações da praça: ${error.message}`);
+    }
+
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      organizationId: data.organization_id,
+      cityId: data.city_id,
+      rules: data.rules,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
+  },
+
+  async saveCityConfig(config: OpuraMarketCityConfig): Promise<OpuraMarketCityConfig> {
+    const dbPayload = {
+      organization_id: config.organizationId,
+      city_id: config.cityId,
+      rules: config.rules,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('opura_market_city_configs')
+      .upsert(
+        dbPayload, 
+        { onConflict: 'organization_id,city_id' }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error saving city config:', error);
+      throw new Error(`Falha ao salvar configurações da praça: ${error.message}`);
+    }
+
+    return {
+      id: data.id,
+      organizationId: data.organization_id,
+      cityId: data.city_id,
+      rules: data.rules,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
   }
 };

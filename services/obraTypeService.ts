@@ -11,6 +11,8 @@ export interface ObraType {
   active: boolean;
   sort_order: number;
   created_at: string;
+  // campo calculado — não vem do banco
+  is_override?: boolean;
 }
 
 export type ObraTypeInsert = Pick<ObraType, 'name' | 'slug' | 'color' | 'description' | 'sort_order'> & {
@@ -34,18 +36,39 @@ export function colorClasses(colorKey: string): string {
 }
 
 export const obraTypeService = {
+  /**
+   * Retorna tipos mesclados: para cada slug, a versão da org tem prioridade
+   * sobre a versão do sistema. Marca is_override=true quando é customização
+   * de um tipo do sistema.
+   */
   async list(organizationId: string): Promise<ObraType[]> {
     const { data, error } = await supabase
       .from('obra_types')
       .select('id, organization_id, name, slug, color, description, is_system, active, sort_order, created_at')
       .or(`organization_id.is.null,organization_id.eq.${organizationId}`)
       .eq('active', true)
-      .order('is_system', { ascending: false })
       .order('sort_order')
       .order('name');
 
     if (error) throw error;
-    return data ?? [];
+
+    const rows = data ?? [];
+    const systemSlugs = new Set(rows.filter(r => r.is_system).map(r => r.slug));
+
+    // Por slug: preferir org sobre sistema
+    const bySlug = new Map<string, ObraType>();
+    for (const row of rows) {
+      const existing = bySlug.get(row.slug);
+      // org-specific substitui o sistema
+      if (!existing || row.organization_id !== null) {
+        bySlug.set(row.slug, {
+          ...row,
+          is_override: row.organization_id !== null && systemSlugs.has(row.slug),
+        });
+      }
+    }
+
+    return [...bySlug.values()].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
   },
 
   async create(payload: ObraTypeInsert): Promise<ObraType> {
@@ -70,6 +93,51 @@ export const obraTypeService = {
 
     if (error) throw error;
     return data;
+  },
+
+  /**
+   * Editar um tipo do sistema cria (ou atualiza) uma cópia personalizada
+   * para a organização — sem alterar o registro global do sistema.
+   */
+  async upsertOverride(
+    slug: string,
+    organizationId: string,
+    updates: Pick<ObraType, 'name' | 'color' | 'description'>,
+    sortOrder = 0,
+  ): Promise<ObraType> {
+    const { data, error } = await supabase
+      .from('obra_types')
+      .upsert(
+        {
+          organization_id: organizationId,
+          slug,
+          is_system: false,
+          active: true,
+          sort_order: sortOrder,
+          ...updates,
+        },
+        { onConflict: 'organization_id,slug' },
+      )
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { ...data, is_override: true };
+  },
+
+  /**
+   * Remove a customização da org para um tipo do sistema,
+   * restaurando o padrão global.
+   */
+  async restoreSystemDefault(slug: string, organizationId: string): Promise<void> {
+    const { error } = await supabase
+      .from('obra_types')
+      .delete()
+      .eq('slug', slug)
+      .eq('organization_id', organizationId)
+      .eq('is_system', false);
+
+    if (error) throw error;
   },
 
   async remove(id: string): Promise<void> {

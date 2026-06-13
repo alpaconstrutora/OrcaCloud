@@ -437,33 +437,42 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     }, []);
 
     const loadAccounts = async () => {
-        if (!organizationId) return; // sem org definida, nada a carregar
+        if (!organizationId) return;
         setAccountsLoading(true);
         try {
-            // Busca empresa_ids vinculados a este tenant para cobrir contas ligadas por empresa_id
-            const { data: companies } = await supabase
-                .from('companies')
-                .select('id')
-                .eq('org_id', organizationId);
-            const empresaIds = (companies || []).map((c: { id: string }) => c.id);
-
-            let query = supabase
+            const { data, error } = await supabase
                 .from('payment_accounts')
                 .select('id, organization_id, empresa_id, bank, branch, account_number, name, description')
+                .eq('organization_id', organizationId)
                 .order('name');
 
-            if (empresaIds.length > 0) {
-                query = query.or(`organization_id.eq.${organizationId},empresa_id.in.(${empresaIds.join(',')})`);
-            } else {
-                query = query.eq('organization_id', organizationId);
-            }
-
-            const { data, error } = await query;
             if (error) throw error;
 
-            setAccounts(data || []);
-            if (data && data.length > 0 && (!selectedAccountId || selectedAccountId === 'mock-acc-1')) {
-                setSelectedAccountId(data[0].id);
+            // Se a query simples retornou menos contas, tentar também por empresa_id
+            let finalData = data || [];
+            if (finalData.length < 2) {
+                const { data: companiesData } = await supabase
+                    .from('companies')
+                    .select('id')
+                    .eq('org_id', organizationId);
+                const empresaIds = (companiesData || []).map((c: { id: string }) => c.id);
+                if (empresaIds.length > 0) {
+                    const { data: extraData } = await supabase
+                        .from('payment_accounts')
+                        .select('id, organization_id, empresa_id, bank, branch, account_number, name, description')
+                        .in('empresa_id', empresaIds)
+                        .order('name');
+                    if (extraData) {
+                        const existingIds = new Set(finalData.map(a => a.id));
+                        const merged = [...finalData, ...extraData.filter(a => !existingIds.has(a.id))];
+                        finalData = merged.sort((a, b) => a.name.localeCompare(b.name));
+                    }
+                }
+            }
+
+            setAccounts(finalData);
+            if (finalData.length > 0 && (!selectedAccountId || selectedAccountId === 'mock-acc-1')) {
+                setSelectedAccountId(finalData[0].id);
             }
         } catch (error) {
             console.error('Error loading bank accounts:', error);

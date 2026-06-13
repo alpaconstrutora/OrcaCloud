@@ -455,6 +455,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                     <th className="px-6 py-4 w-36 text-right">Área Livre (m²)</th>
                                                     <th className="px-6 py-4 w-28 text-center">Pavimentos</th>
                                                     <th className="px-6 py-4 w-32 text-center">Unidades Totais</th>
+                                                    <th className="px-6 py-4 w-40 text-right">Área Privativa Total (m²)</th>
                                                     <th className="px-6 py-4 w-36 text-right">Área Total (m²)</th>
                                                     <th className="px-6 py-4 w-16"></th>
                                                 </tr>
@@ -522,6 +523,12 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                             </span>
                                                         </td>
                                                         <td className="px-6 py-3 text-right">
+                                                            <span className="text-sm font-bold text-violet-700">
+                                                                {((unit.private_area || 0) * (unit.quantity || 0) * (unit.pavimentos ?? 1))
+                                                                    .toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m²
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-3 text-right">
                                                             {(() => {
                                                                 const pav = unit.pavimentos ?? 1;
                                                                 // T.O. × Área do Terreno × Pavimentos
@@ -549,7 +556,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                 {/* Linha de totalização */}
                                                 {toBase != null && block.units && block.units.length > 0 && (
                                                     <tr className="bg-indigo-50/60 border-t-2 border-indigo-100">
-                                                        <td colSpan={7} className="px-6 py-3 text-right">
+                                                        <td colSpan={8} className="px-6 py-3 text-right">
                                                             <span className="text-[10px] font-black tracking-widest uppercase text-indigo-400">Total Área</span>
                                                         </td>
                                                         <td className="px-6 py-3 text-right">
@@ -562,7 +569,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                     </tr>
                                                 )}
                                                 <tr>
-                                                    <td colSpan={9} className="px-6 py-4 bg-slate-50/50">
+                                                    <td colSpan={10} className="px-6 py-4 bg-slate-50/50">
                                                         <button
                                                             onClick={() => handleAddUnit(block.id)}
                                                             className="text-xs font-black tracking-widest uppercase text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 transition-colors"

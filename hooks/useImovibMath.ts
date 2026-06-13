@@ -142,8 +142,9 @@ export const useImovibMath = (study: ImovibStudy | null | undefined, options?: I
             let blockPrivateArea = 0;
             let blockCommonArea = 0;
             block.units?.forEach(u => {
-                blockPrivateArea += (u.quantity || 0) * (u.private_area || 0);
-                blockCommonArea += (u.quantity || 0) * (u.common_area || 0);
+                const pav = (u as any).pavimentos || 1;
+                blockPrivateArea += (u.quantity || 0) * pav * (u.private_area || 0);
+                blockCommonArea += (u.quantity || 0) * pav * (u.common_area || 0);
             });
             baseVgvTotal += blockPrivateArea * (block.sales_price_sqm || 0);
             baseConstCostTotal += (blockPrivateArea + blockCommonArea) * (block.construction_cost_sqm || 0);

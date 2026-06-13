@@ -748,7 +748,6 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownItem id="client-properties" label="Portal do Cliente" icon={Building2} />
                   <DropdownItem id="investor-area" label="Área do Investidor" icon={TrendingUp} />
                   <DropdownItem id="supplier-area" label="Portal do Fornecedor" icon={Truck} />
-                  <DropdownItem id="broker-area" label="Portal do Corretor" icon={Briefcase} />
                 </NavDropdown>
               ) : (
                 <>

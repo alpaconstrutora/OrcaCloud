@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     Target, Building2, Users, Plus, Trash2,
-    Save, Loader2, AlertCircle, CheckCircle2, ChevronRight, Calendar, Copy, DollarSign, ArrowRightCircle, Banknote, Search, X
+    Save, Loader2, AlertCircle, CheckCircle2, ChevronRight, Calendar, Copy, DollarSign, ArrowRightCircle, Banknote, Search, X, FileText
 } from 'lucide-react';
 import { payrollService, Worksite, EmployeeAllocation } from '../services/payrollService';
 import { Employee } from '../services/laborService';
 import { getCodeLevelStyle, sortByCode } from '../utils/codeHierarchy';
+import PaystubModal from './PaystubModal';
 
 // ── Local types ────────────────────────────────────────────────────────────────
 interface CostCenter {
@@ -47,7 +48,8 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
     const [copying, setCopying] = useState(false);
 
     // Novos estados para Lançamento Financeiro
-    const [closedResult, setClosedResult] = useState<ClosedPayrollResult | null>(null);
+    const [closedResults, setClosedResults] = useState<ClosedPayrollResult[]>([]);
+    const [paystubRunId, setPaystubRunId] = useState<string | null>(null);
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
     const [chartOfAccounts, setChartOfAccounts] = useState<ChartOfAccount[]>([]);
     const [selectedCostCenter, setSelectedCostCenter] = useState('');
@@ -165,13 +167,14 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                 allocation_percent: d.allocation_percent
             })));
 
-            // 2. Carregar resultado da última folha fechada para esse período
-            const result = await payrollService.getLatestClosedResultForEmployee(orgId, empId, period);
-            setClosedResult(result);
+            // 2. Carregar todas as folhas fechadas do período (mensal + adiantamento)
+            const results = await payrollService.getClosedResultsForEmployee(orgId, empId, period);
+            setClosedResults(results);
 
-            // 3. Carregar itens de rubrica individualizada (ex: ADIANTAMENTO)
-            if (result?.run_id) {
-                const items = await payrollService.listIndividualizadoItemsForEmployee(result.run_id, empId);
+            // 3. Carregar itens individualizados da folha mensal (ex: ADIANTAMENTO)
+            const mensalResult = results.find(r => r.run_type === 'mensal') ?? results[0];
+            if (mensalResult?.run_id) {
+                const items = await payrollService.listIndividualizadoItemsForEmployee(mensalResult.run_id, empId);
                 setIndividualizadoItems(items || []);
             } else {
                 setIndividualizadoItems([]);
@@ -266,6 +269,8 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
             setSaving(null);
         }
     };
+
+    const closedResult = closedResults.find(r => r.run_type === 'mensal') ?? closedResults[0] ?? null;
 
     const handleLaunchFinance = async () => {
         if (!selectedEmployee || !closedResult) return;
@@ -532,7 +537,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                 </div>
                             ) : (
                                 <div className="space-y-6 animate-in slide-in-from-top-2 duration-300">
-                                    {/* Resumo do Custo */}
+                                    {/* Resumo do Custo + Botões Holerite */}
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                         <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
                                             <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1">Custo Total (Patronal)</p>
@@ -552,6 +557,20 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(closedResult.net || 0)}
                                             </p>
                                         </div>
+                                    </div>
+
+                                    {/* Holerites disponíveis */}
+                                    <div className="flex flex-wrap gap-2">
+                                        {closedResults.map(r => (
+                                            <button
+                                                key={r.run_id}
+                                                onClick={() => setPaystubRunId(r.run_id)}
+                                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 transition-colors shadow-sm"
+                                            >
+                                                <FileText className="w-4 h-4 text-blue-500" />
+                                                Holerite — {r.run_type === 'adiantamento' ? 'Adiantamento' : 'Folha Completa'}
+                                            </button>
+                                        ))}
                                     </div>
 
                                     {/* Form de Classificação Financeira — Salários */}
@@ -1105,6 +1124,15 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                 )}
             </div>
         </div>
+
+        {paystubRunId && selectedEmployee && (
+            <PaystubModal
+                orgId={orgId}
+                runId={paystubRunId}
+                employeeId={selectedEmployee.id}
+                onClose={() => setPaystubRunId(null)}
+            />
+        )}
     );
 };
 

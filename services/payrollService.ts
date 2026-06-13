@@ -1254,12 +1254,17 @@ export const payrollService = {
      * Usado na tela de Alocações para lançar custos reais após o fechamento.
      */
     async getLatestClosedResultForEmployee(orgId: string, employeeId: string, period?: string) {
-        // 1. Buscar a última folha FECHADA da org (opcionalmente filtrando por período YYYY-MM)
+        const results = await this.getClosedResultsForEmployee(orgId, employeeId, period);
+        return results.find(r => r.run_type === 'mensal') ?? results[0] ?? null;
+    },
+
+    async getClosedResultsForEmployee(orgId: string, employeeId: string, period?: string) {
         let runsQuery = supabase
             .from('payroll_runs')
             .select('id, start_date, end_date, type')
             .eq('org_id', orgId)
             .eq('status', 'FECHADO')
+            .in('type', ['mensal', 'adiantamento'])
             .order('end_date', { ascending: false });
 
         if (period) {
@@ -1269,31 +1274,35 @@ export const payrollService = {
             runsQuery = runsQuery.gte('start_date', firstDay).lte('end_date', lastDay);
         }
 
-        const { data: runs, error: runErr } = await runsQuery.limit(1);
+        const { data: runs, error: runErr } = await runsQuery;
         if (runErr) throw runErr;
-        if (!runs || runs.length === 0) return null;
+        if (!runs || runs.length === 0) return [];
 
-        const run = runs[0];
+        const results = await Promise.all(
+            runs.map(async run => {
+                const { data: result } = await supabase
+                    .from('payroll_results')
+                    .select('gross, discounts, net, employer_cost')
+                    .eq('payroll_run_id', run.id)
+                    .eq('employee_id', employeeId)
+                    .maybeSingle();
+                if (!result) return null;
+                return {
+                    run_id: run.id,
+                    run_period: run.start_date.slice(0, 7),
+                    run_type: run.type as string,
+                    gross: result.gross as number,
+                    discounts: result.discounts as number,
+                    net: result.net as number,
+                    employer_cost: result.employer_cost as number,
+                };
+            })
+        );
 
-        // 2. Buscar resultado do funcionário nessa folha
-        const { data: result, error: resErr } = await supabase
-            .from('payroll_results')
-            .select('id, payroll_run_id, employee_id, gross, discounts, net, employer_cost, base_inss, base_fgts, base_irrf')
-            .eq('payroll_run_id', run.id)
-            .eq('employee_id', employeeId)
-            .single();
-
-        if (resErr || !result) return null;
-
-        return {
-            run_id: run.id,
-            run_period: run.start_date.slice(0, 7),
-            run_type: run.type,
-            gross: result.gross as number,
-            discounts: result.discounts as number,
-            net: result.net as number,
-            employer_cost: result.employer_cost as number,
-        };
+        return results.filter(Boolean) as {
+            run_id: string; run_period: string; run_type: string;
+            gross: number; discounts: number; net: number; employer_cost: number;
+        }[];
     },
 
     /** Lista centros de custo da organização */

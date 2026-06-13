@@ -53,6 +53,13 @@ export interface Contract {
     client_id?: string;
     direction?: 'OUTGOING' | 'INCOMING';
     execution_address?: string;
+    execution_street?: string;
+    execution_number?: string;
+    execution_neighborhood?: string;
+    execution_city?: string;
+    execution_state?: string;
+    execution_zip?: string;
+    payment_account_id?: string;
     client_responsible?: string;
     internal_responsible?: string;
     sla_days?: number;

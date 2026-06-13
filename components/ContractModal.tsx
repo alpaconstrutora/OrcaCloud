@@ -2,6 +2,7 @@ import React from 'react';
 import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
 import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature } from '../types';
+import { PaymentAccount } from '../types/financial';
 import { supplierService } from '../services/supplierService';
 import { clientService as crmClientService } from '../services/clientService';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -87,6 +88,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
     const [employees, setEmployees] = React.useState<{ id: string; name: string; role?: string }[]>([]);
     const [chartOfAccounts, setChartOfAccounts] = React.useState<ChartOfAccount[]>([]);
+    const [paymentAccounts, setPaymentAccounts] = React.useState<PaymentAccount[]>([]);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [scopePickerOpen, setScopePickerOpen] = React.useState(false);
     const [scopeManagerOpen, setScopeManagerOpen] = React.useState(false);
@@ -140,6 +142,24 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         }
         prevTermType.current = formData.payment_term_type;
     }, [formData.payment_term_type]);
+
+    // Auto-fill execution address from selected obra location
+    React.useEffect(() => {
+        if (!formData.project_id || initialData?.id) return;
+        const obra = projects.find(p => p.id === formData.project_id);
+        if (!obra) return;
+        const s = obra.settings as any;
+        if (!s) return;
+        setFormData(prev => ({
+            ...prev,
+            execution_street:       s.street        || prev.execution_street,
+            execution_number:       s.number        || prev.execution_number,
+            execution_neighborhood: s.neighborhood  || prev.execution_neighborhood,
+            execution_city:         s.city          || prev.execution_city,
+            execution_state:        s.state         || prev.execution_state,
+            execution_zip:          s.zipCode       || prev.execution_zip,
+        }));
+    }, [formData.project_id, projects]);
 
     // Auto-fetch next sequential number for new contracts — sequence separada por direction
     const contractDirection = direction ?? (initialData?.direction as string | undefined);
@@ -200,13 +220,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const loadDependencies = async () => {
         setIsSubmitting(true);
         try {
-            const [s, cl, cc, ca, p, emps] = await Promise.all([
+            const [s, cl, cc, ca, p, emps, pa] = await Promise.all([
                 supplierService.listSuppliers(organizationId),
                 crmClientService.listClients(organizationId),
                 financialRegistryService.listCostCenters(organizationId),
                 financialRegistryService.listChartOfAccounts(organizationId),
                 projectService.listProjects(undefined, organizationId, true),
-                laborService.listEmployees(organizationId).catch(() => [] as { id: string; name: string; role?: string }[])
+                laborService.listEmployees(organizationId).catch(() => [] as { id: string; name: string; role?: string }[]),
+                financialRegistryService.listPaymentAccounts(organizationId).catch(() => [] as PaymentAccount[])
             ]);
             setSuppliers(s);
             setCrmClients((cl as any[]).map(c => ({ id: c.id, name: c.name, document: c.document })));
@@ -214,6 +235,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             setChartOfAccounts(ca);
             setProjects(p);
             setEmployees((emps as any[]).filter(e => e.status !== 'DEMITIDO').map(e => ({ id: e.id, name: e.name, role: e.role })));
+            setPaymentAccounts(pa);
         } catch (error) {
             console.error("Erro ao carregar dependências do contrato:", error);
         } finally {
@@ -736,16 +758,57 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                         />
                                     </div>
-                                    <div className="col-span-2 space-y-2">
-                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Endereço de Execução</label>
-                                        <div className="relative group">
-                                            <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                    <div className="col-span-2 space-y-3">
+                                        <div className="flex items-center gap-2 ml-1">
+                                            <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                                            <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Endereço de Execução</label>
+                                        </div>
+                                        <div className="grid grid-cols-[1fr_120px] gap-3">
                                             <input
                                                 type="text"
-                                                placeholder="Endereço onde os serviços serão prestados"
-                                                value={formData.execution_address || ''}
-                                                onChange={(e) => setFormData({ ...formData, execution_address: e.target.value })}
-                                                className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                placeholder="Logradouro (rua, avenida…)"
+                                                value={formData.execution_street || ''}
+                                                onChange={(e) => setFormData({ ...formData, execution_street: e.target.value })}
+                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Número"
+                                                value={formData.execution_number || ''}
+                                                onChange={(e) => setFormData({ ...formData, execution_number: e.target.value })}
+                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-[1fr_1fr_80px_100px] gap-3">
+                                            <input
+                                                type="text"
+                                                placeholder="Bairro"
+                                                value={formData.execution_neighborhood || ''}
+                                                onChange={(e) => setFormData({ ...formData, execution_neighborhood: e.target.value })}
+                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Cidade"
+                                                value={formData.execution_city || ''}
+                                                onChange={(e) => setFormData({ ...formData, execution_city: e.target.value })}
+                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="UF"
+                                                maxLength={2}
+                                                value={formData.execution_state || ''}
+                                                onChange={(e) => setFormData({ ...formData, execution_state: e.target.value.toUpperCase() })}
+                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium uppercase focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="CEP"
+                                                maxLength={9}
+                                                value={formData.execution_zip || ''}
+                                                onChange={(e) => setFormData({ ...formData, execution_zip: e.target.value })}
+                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                             />
                                         </div>
                                     </div>
@@ -978,6 +1041,25 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         <option value="Dinheiro">Dinheiro</option>
                                     </select>
                                 </div>
+                                {isOutgoing && (
+                                    <div className="space-y-2">
+                                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Conta de Recebimento</label>
+                                        <div className="relative group">
+                                            <select
+                                                value={formData.payment_account_id || ''}
+                                                onChange={(e) => setFormData({ ...formData, payment_account_id: e.target.value || undefined })}
+                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                            >
+                                                <option value="">Selecione a conta da organização</option>
+                                                {paymentAccounts.map(acc => (
+                                                    <option key={acc.id} value={acc.id}>
+                                                        {acc.name}{acc.bank ? ` — ${acc.bank}` : ''}{acc.account_number ? ` (${acc.account_number})` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="space-y-2">
                                     <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Condição de Pagamento</label>
                                     <div className="flex bg-gray-50 rounded-2xl p-1 border border-gray-100">

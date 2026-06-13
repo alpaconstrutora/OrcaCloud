@@ -76,6 +76,8 @@ const CompliancePhysicalMap = React.lazy(() => import('./CompliancePhysicalMap')
 const ComplianceChecklists  = React.lazy(() => import('./ComplianceChecklists'));
 const OpuraDocsModule       = React.lazy(() => import('./OpuraDocsModule'));
 const OpuraCnoModule        = React.lazy(() => import('./OpuraCnoModule'));
+const OpuraMarketModule     = React.lazy(() => import('./OpuraMarketModule'));
+const ObraTypesManager      = React.lazy(() => import('./ObraTypesManager'));
 
 
 // Suspense fallback
@@ -269,6 +271,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewOrders', 'compras');
     } else if (activeView === 'opura-docs') {
       allowed = true;
+    } else if (activeView === 'opura-market') {
+      allowed = true;
     }
 
     if (!allowed) {
@@ -321,6 +325,17 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
   // ── Roteamento principal ─────────────────────────────────────────────────────
   switch (activeView) {
+    case 'opura-market':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <OpuraMarketModule
+            organizationId={activeOrganizationId || ''}
+            onBack={() => setActiveView('dashboard')}
+            setActiveView={setActiveView}
+          />
+        </React.Suspense>
+      );
+
     case 'opura-docs':
       return (
         <React.Suspense fallback={<Spinner />}>
@@ -868,6 +883,13 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'org-type-templates':
       return (
         <ProjectTypeTemplateEditor orgId={activeOrganizationId || ''} />
+      );
+
+    case 'eng-obra-types':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <ObraTypesManager organizationId={activeOrganizationId || ''} />
+        </React.Suspense>
       );
 
     case 'quality':

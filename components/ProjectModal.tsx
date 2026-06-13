@@ -5,6 +5,7 @@ import { BASE_CUB_RATES, CUB_STANDARDS_DATA } from '../constants';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
 import { investorService } from '../services/investorService';
+import { obraTypeService, ObraType } from '../services/obraTypeService';
 import { laborService, Employee } from '../services/laborService';
 import { Client, Investor } from '../types';
 import { supabase } from '../lib/supabase';
@@ -230,6 +231,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     empresaId ?? activeEmpresaId ?? undefined
   );
 
+  const [obraTypes, setObraTypes] = React.useState<ObraType[]>([]);
   const [projects, setProjects] = React.useState<any[]>([]);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [projectCode, setProjectCode] = React.useState('');
@@ -294,6 +296,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
       investorService.listInvestors().then(setInvestors).catch(console.error);
       const empOrgId = selectedEmpresaId ? undefined : (organizationId || selectedOrgId);
       laborService.listEmployees(empOrgId, selectedEmpresaId).then(setEmployees).catch(console.error);
+      const orgId = organizationId || selectedOrgId;
+      if (orgId) obraTypeService.list(orgId).then(setObraTypes).catch(console.error);
     }
   }, [isOpen]);
 
@@ -971,9 +975,14 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       }}
                     >
                       <option value="">Selecione o tipo de obra...</option>
-                      {(Object.keys(TIPO_OBRA_LABELS) as TipoObra[]).map(k => (
-                        <option key={k} value={k}>{TIPO_OBRA_LABELS[k]}</option>
-                      ))}
+                      {obraTypes.length > 0
+                        ? obraTypes.map(t => (
+                            <option key={t.slug} value={t.slug}>{t.name}</option>
+                          ))
+                        : (Object.keys(TIPO_OBRA_LABELS) as TipoObra[]).map(k => (
+                            <option key={k} value={k}>{TIPO_OBRA_LABELS[k]}</option>
+                          ))
+                      }
                     </select>
                   </div>
                   <div>
@@ -1009,7 +1018,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   <div className="border border-blue-100 rounded-xl bg-blue-50/30 p-5 space-y-4">
                     <h3 className="text-xs font-bold text-blue-600 uppercase tracking-widest flex items-center gap-2">
                       <Settings2 className="w-4 h-4" />
-                      Dados Técnicos — {TIPO_OBRA_LABELS[formData.tipoObra]}
+                      Dados Técnicos — {obraTypes.find(t => t.slug === formData.tipoObra)?.name ?? TIPO_OBRA_LABELS[formData.tipoObra as TipoObra]}
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
 
@@ -1410,13 +1419,13 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </div>
 
                   {/* Documentos obrigatórios pelo tipo de obra */}
-                  {formData.tipoObra && (
+                  {formData.tipoObra && REQUIRED_DOCS_BY_TYPE[formData.tipoObra as TipoObra] && (
                     <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-4">
                       <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-3">
-                        Documentação exigida — {TIPO_OBRA_LABELS[formData.tipoObra]}
+                        Documentação exigida — {obraTypes.find(t => t.slug === formData.tipoObra)?.name ?? TIPO_OBRA_LABELS[formData.tipoObra as TipoObra]}
                       </p>
                       <div className="grid grid-cols-1 gap-1.5">
-                        {REQUIRED_DOCS_BY_TYPE[formData.tipoObra].map((doc) => (
+                        {REQUIRED_DOCS_BY_TYPE[formData.tipoObra as TipoObra].map((doc) => (
                           <div key={doc.name} className="flex items-center gap-2 text-sm">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${doc.required ? 'bg-red-500' : 'bg-gray-400'}`} />
                             <span className={doc.required ? 'text-gray-800 font-medium' : 'text-gray-500'}>

@@ -307,7 +307,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','operacional','estrutural','quality','pos-obra','explorer','eng-planejamento','project-diary','reports','project-settings'];
+  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','operacional','estrutural','quality','pos-obra','explorer','eng-planejamento','project-diary','reports','project-settings','eng-obra-types'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
   const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts'];
@@ -598,6 +598,7 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="project-diary" label="Diário de Obra" icon={BookOpen} />
                     <DropdownItem id="reports" label="Relatórios" icon={FileText} />
                     <DropdownItem id="project-settings" label="Dados Técnicos" icon={Calculator} />
+                    <DropdownItem id="eng-obra-types" label="Tipos de Obra" icon={Layers} />
                   </NavDropdown>
                 </>
               )}

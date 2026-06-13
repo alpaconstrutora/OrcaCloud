@@ -117,19 +117,29 @@ const SalesManagementModule: React.FC<Props> = ({
             />
           )}
 
-          {activeTab === 'crm' && (
+          {activeTab === 'crm' && organizationId && (
             <ServicesCommercialModule
-              organizationId={organizationId || ''}
+              organizationId={organizationId}
               onGoToProject={onGoToProject ? (id) => onGoToProject(id, 'analytic') : () => {}}
             />
           )}
+          {activeTab === 'crm' && !organizationId && (
+            <div className="flex items-center justify-center py-20 text-sm text-gray-400">
+              Selecione uma organização para acessar o CRM de Serviços.
+            </div>
+          )}
 
-          {activeTab === 'contratos' && (
+          {activeTab === 'contratos' && organizationId && (
             <ServiceContractsModule
-              organizationId={organizationId || ''}
+              organizationId={organizationId}
               budget={budget}
               onGoToProject={onGoToProject ? (id) => onGoToProject(id, 'analytic') : () => {}}
             />
+          )}
+          {activeTab === 'contratos' && !organizationId && (
+            <div className="flex items-center justify-center py-20 text-sm text-gray-400">
+              Selecione uma organização para acessar os Contratos de Serviço.
+            </div>
           )}
 
           {activeTab === 'viabilidade' && (

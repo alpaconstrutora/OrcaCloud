@@ -193,6 +193,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
   const [filterPriority, setFilterPriority] = useState<'all' | 'high' | 'medium' | 'low'>('all');
 
   const load = useCallback(() => {
+    if (!organizationId) return;
     setLoading(true);
     servicesCommercialService.listOpportunities(organizationId)
       .then(setOpportunities)

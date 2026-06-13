@@ -364,28 +364,43 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
     return (
         <>
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-            <div className="bg-gray-50 w-full max-w-5xl h-[90vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden border border-white/20">
+        <div className="fixed inset-0 z-[100]">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
+            <div className="absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-5xl overflow-hidden border-l border-gray-200 animate-in slide-in-from-right duration-300">
                 {/* Header */}
-                <div className="bg-[#0B1727] p-8 text-white relative shrink-0">
-                    <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-blue-600/20 to-transparent" />
-                    <div className="flex justify-between items-start relative z-10">
-                        <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                                <FileText className="w-8 h-8 text-white" />
+                <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-8 py-6">
+                    <div className="flex items-start gap-5 flex-1 min-w-0">
+                        <div className="flex flex-col items-center gap-2 shrink-0">
+                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
+                                <FileText className="w-6 h-6" />
                             </div>
-                            <div>
-                                <h2 className="text-2xl font-medium tracking-tight">{initialData?.id ? 'Ajustar Contrato' : isOutgoing ? 'Novo Contrato de Serviço' : 'Novo Contrato'}</h2>
-                                <p className="text-blue-400 text-[12px] font-medium uppercase tracking-[0.2em] mt-1">{isOutgoing ? 'Contratos de Serviço ao Cliente' : 'Gestão Estratégica de Suprimentos'}</p>
+                            <div className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
+                                {initialData?.id ? 'EDIT' : 'NOVO'}
                             </div>
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl transition-all hover:rotate-90 duration-300"
-                        >
-                            <X className="w-6 h-6" />
-                        </button>
+                        <div className="flex-1 min-w-0 flex flex-col gap-1">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">
+                                    {initialData?.id ? 'Ajustar Contrato' : isOutgoing ? 'Novo Contrato de Serviço' : 'Novo Contrato'}
+                                </h2>
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
+                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Módulo:</span>
+                                    <span className="text-[10px] font-bold text-gray-600 uppercase">
+                                        {isOutgoing ? 'Contratos de Serviço ao Cliente' : 'Gestão Estratégica de Suprimentos'}
+                                    </span>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-500 font-medium leading-tight">
+                                {initialData?.id ? 'Atualize as informações do contrato selecionado.' : 'Preencha os dados para criar um novo contrato.'}
+                            </p>
+                        </div>
                     </div>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
                 </div>
 
                 {/* Form Body - 2:1 Layout */}

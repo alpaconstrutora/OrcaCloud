@@ -10,7 +10,7 @@ export const commercialService = {
         console.log('[commercialService] API Call: listProperties', { organizationId, projectId, purpose });
         let query = supabase
             .from('commercial_properties')
-            .select('id, organization_id, project_id, name, type, purpose, address, street, number, complement, neighborhood, city, state, zip_code, area, private_area, common_area, total_area, price, initial_price, table_price, current_price, price_index, price_base_date, status, specs, block, floor, typology, availability_date, image_url, images, video_url, tour_url, notes, created_at, updated_at')
+            .select('id, organization_id, project_id, parent_id, client_id, name, type, purpose, address, street, number, complement, neighborhood, city, state, zip_code, area, private_area, common_area, total_area, price, initial_price, table_price, current_price, price_index, price_base_date, status, specs, block, floor, typology, position_type, sun_orientation, availability_date, image_url, images, video_url, tour_url, notes, created_at, updated_at')
             .order('name', { ascending: true });
 
         if (organizationId) {

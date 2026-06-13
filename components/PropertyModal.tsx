@@ -162,10 +162,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         if (isOpen) {
             clientService.listClients().then(setClients).catch(console.error);
             setActiveTab('dados');
-            const id = requestAnimationFrame(() => setSheetOpen(true));
-            return () => { cancelAnimationFrame(id); setSheetOpen(false); };
         }
-        setSheetOpen(false);
 
         if (initialData) {
             setFormData(initialData);
@@ -203,6 +200,15 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
             });
         }
     }, [initialData, isOpen, defaultPurpose]);
+
+    // Animação do drawer — efeito separado para não interferir no setFormData
+    useEffect(() => {
+        if (isOpen) {
+            const id = requestAnimationFrame(() => setSheetOpen(true));
+            return () => { cancelAnimationFrame(id); setSheetOpen(false); };
+        }
+        setSheetOpen(false);
+    }, [isOpen]);
 
     if (!isOpen) return null;
 

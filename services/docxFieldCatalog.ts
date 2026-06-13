@@ -138,24 +138,27 @@ export const FIELD_GROUPS: FieldGroup[] = [
         source: 'client',
         label: 'Cliente',
         fields: [
-            { field: 'name',         label: 'Nome',            get: c => c.client?.name ?? '' },
-            { field: 'document',     label: 'CPF / CNPJ',      get: c => c.client?.document ?? '' },
-            { field: 'type',         label: 'Tipo (PF/PJ)',    get: c => c.client?.type ?? '' },
-            { field: 'email',        label: 'E-mail',          get: c => c.client?.email ?? '' },
-            { field: 'phone',        label: 'Telefone',        get: c => c.client?.phone ?? '' },
-            { field: 'address',        label: 'Logradouro',      get: c => c.client?.address ?? '' },
-            { field: 'address_number', label: 'Número',           get: c => c.client?.address_number ?? '' },
-            { field: 'neighborhood',   label: 'Bairro',           get: c => c.client?.neighborhood ?? '' },
-            { field: 'city',           label: 'Cidade',           get: c => c.client?.city ?? '' },
-            { field: 'state',          label: 'Estado (UF)',      get: c => c.client?.state ?? '' },
-            { field: 'category',       label: 'Categoria',        get: c => c.client?.category ?? '' },
-            { field: 'address_full',   label: 'Endereço completo', get: c => {
+            { field: 'name',            label: 'Nome / Razão social', get: c => c.client?.name ?? '' },
+            { field: 'document',        label: 'CPF / CNPJ',          get: c => c.client?.document ?? '' },
+            { field: 'type',            label: 'Tipo (PF/PJ)',         get: c => c.client?.type ?? '' },
+            { field: 'organization_name', label: 'Empresa (PJ)',       get: c => c.client?.organization_name ?? '' },
+            { field: 'email',           label: 'E-mail',               get: c => c.client?.email ?? '' },
+            { field: 'phone',           label: 'Telefone',             get: c => c.client?.phone ?? '' },
+            { field: 'address',         label: 'Logradouro',           get: c => c.client?.address ?? '' },
+            { field: 'address_number',  label: 'Número',               get: c => c.client?.address_number ?? '' },
+            { field: 'neighborhood',    label: 'Bairro',               get: c => c.client?.neighborhood ?? '' },
+            { field: 'zip_code',        label: 'CEP',                  get: c => c.client?.zip_code ?? '' },
+            { field: 'city',            label: 'Cidade',               get: c => c.client?.city ?? '' },
+            { field: 'state',           label: 'Estado (UF)',          get: c => c.client?.state ?? '' },
+            { field: 'category',        label: 'Categoria',            get: c => c.client?.category ?? '' },
+            { field: 'address_full',    label: 'Endereço completo',    get: c => {
                 const cl = c.client;
                 if (!cl) return '';
                 return [
                     [cl.address, cl.address_number].filter(Boolean).join(', '),
                     cl.neighborhood,
                     cl.city && cl.state ? `${cl.city}/${cl.state}` : (cl.city || cl.state),
+                    cl.zip_code ? `CEP ${cl.zip_code}` : '',
                 ].filter(Boolean).join(' - ');
             } },
         ],
@@ -184,8 +187,26 @@ export const FIELD_GROUPS: FieldGroup[] = [
             { field: 'warranty_months',   label: 'Garantia (meses)',        get: c => c.contract?.warranty_months != null ? String(c.contract.warranty_months) : '' },
             { field: 'labor_value',       label: 'Valor mão de obra (R$)',  get: c => fmtCurrency(c.contract?.labor_value) },
             { field: 'materials_value',   label: 'Valor materiais (R$)',    get: c => fmtCurrency(c.contract?.materials_value) },
-            { field: 'services_included', label: 'Serviços incluídos',      get: c => c.contract?.services_included ?? '' },
-            { field: 'services_excluded', label: 'Serviços excluídos',      get: c => c.contract?.services_excluded ?? '' },
+            { field: 'services_included',   label: 'Serviços incluídos',         get: c => c.contract?.services_included ?? '' },
+            { field: 'services_excluded',   label: 'Serviços excluídos',         get: c => c.contract?.services_excluded ?? '' },
+            { field: 'status',              label: 'Status do contrato',          get: c => c.contract?.status ?? '' },
+            { field: 'responsible_email',   label: 'E-mail do responsável',       get: c => c.contract?.responsible_email ?? '' },
+            { field: 'is_recurring',        label: 'Recorrente (Sim/Não)',        get: c => c.contract?.is_recurring ? 'Sim' : 'Não' },
+            { field: 'billing_cycle',       label: 'Ciclo de cobrança',           get: c => c.contract?.billing_cycle ?? '' },
+            { field: 'due_day',             label: 'Dia de vencimento',           get: c => c.contract?.due_day != null ? String(c.contract.due_day) : '' },
+            { field: 'billing_mode',        label: 'Modo de faturamento',         get: c => c.contract?.billing_mode ?? '' },
+            { field: 'payment_term_type',   label: 'Condição de pagamento',       get: c => c.contract?.payment_term_type ?? '' },
+            { field: 'payment_days',        label: 'Prazo de pagamento (dias)',   get: c => c.contract?.payment_days != null ? String(c.contract.payment_days) : '' },
+            { field: 'payment_installments',label: 'Número de parcelas',          get: c => c.contract?.payment_installments != null ? String(c.contract.payment_installments) : '' },
+            { field: 'reajuste_index',      label: 'Índice de reajuste',          get: c => c.contract?.reajuste_index ?? '' },
+            { field: 'reajuste_data_base',  label: 'Data base do reajuste',       get: c => fmtDate(c.contract?.reajuste_data_base) },
+            { field: 'reajuste_proximo',    label: 'Próximo reajuste',            get: c => fmtDate(c.contract?.reajuste_proximo) },
+            { field: 'signature_status',    label: 'Status de assinatura',        get: c => {
+                const map: Record<string, string> = { PENDING: 'Pendente', SENT: 'Enviado', SIGNED: 'Assinado', EXPIRED: 'Expirado', CANCELLED: 'Cancelado' };
+                return map[c.contract?.signature_status ?? ''] ?? (c.contract?.signature_status ?? '');
+            } },
+            { field: 'signature_completed_at', label: 'Data de assinatura',      get: c => fmtDate(c.contract?.signature_completed_at) },
+            { field: 'created_at',          label: 'Data de criação do contrato', get: c => fmtDate(c.contract?.created_at) },
         ],
     },
     {
@@ -239,8 +260,11 @@ export const FIELD_GROUPS: FieldGroup[] = [
         source: 'special',
         label: 'Especiais',
         fields: [
-            { field: 'today',      label: 'Data de hoje',            get: () => new Date().toLocaleDateString('pt-BR') },
-            { field: 'today_long', label: 'Data por extenso',        get: () => new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) },
+            { field: 'today',        label: 'Data de hoje',             get: () => new Date().toLocaleDateString('pt-BR') },
+            { field: 'today_long',   label: 'Data por extenso',         get: () => new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) },
+            { field: 'current_year', label: 'Ano atual',                get: () => String(new Date().getFullYear()) },
+            { field: 'current_month',label: 'Mês atual (número)',       get: () => String(new Date().getMonth() + 1).padStart(2, '0') },
+            { field: 'current_month_name', label: 'Mês atual por extenso', get: () => new Date().toLocaleDateString('pt-BR', { month: 'long' }) },
         ],
     },
 ];

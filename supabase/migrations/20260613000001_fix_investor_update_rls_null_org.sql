@@ -1,26 +1,51 @@
--- Fix UPDATE RLS for investors with legacy null organization_id
--- Previously, NULL IN (SELECT ...) = false in SQL, blocking all updates on legacy rows.
--- Now the USING clause also allows rows with null org_id (so they can be migrated by admins),
--- while WITH CHECK still enforces that the saved row has a valid org_id.
+-- Fix all investor RLS policies to use user_id = auth.uid() (correct pattern for this project).
+-- Previous policies used email = auth.jwt()->>'email' which doesn't match all users.
+-- Also allows USING on null org_id rows so legacy investors can be migrated on save.
 
-DROP POLICY IF EXISTS "Admins can update their org investors" ON public.investors;
+DROP POLICY IF EXISTS "Members can read their org investors"    ON public.investors;
+DROP POLICY IF EXISTS "Admins can create investors"            ON public.investors;
+DROP POLICY IF EXISTS "Admins can update their org investors"  ON public.investors;
+DROP POLICY IF EXISTS "Owners can delete their org investors"  ON public.investors;
+-- names from original migration (20260210000000)
+DROP POLICY IF EXISTS "Allow authenticated users to read investors"   ON public.investors;
+DROP POLICY IF EXISTS "Allow authenticated users to manage investors" ON public.investors;
 
-CREATE POLICY "Admins can update their org investors" ON public.investors
-    FOR UPDATE TO authenticated
-    USING (
-        -- Allow updating legacy rows with null org_id (so the frontend can set org_id on save)
-        organization_id IS NULL
-        OR organization_id IN (
-            SELECT organization_id FROM organization_members
-            WHERE email = auth.jwt()->>'email'
-              AND role IN ('owner', 'admin')
-        )
+CREATE POLICY "investors_select" ON public.investors
+  FOR SELECT TO authenticated USING (
+    organization_id IS NULL
+    OR organization_id IN (
+      SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
     )
-    WITH CHECK (
-        -- After update, org_id must belong to an org where user is admin/owner
-        organization_id IN (
-            SELECT organization_id FROM organization_members
-            WHERE email = auth.jwt()->>'email'
-              AND role IN ('owner', 'admin')
-        )
-    );
+  );
+
+CREATE POLICY "investors_insert" ON public.investors
+  FOR INSERT TO authenticated WITH CHECK (
+    organization_id IN (
+      SELECT organization_id FROM organization_members
+      WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
+    )
+  );
+
+CREATE POLICY "investors_update" ON public.investors
+  FOR UPDATE TO authenticated
+  USING (
+    organization_id IS NULL
+    OR organization_id IN (
+      SELECT organization_id FROM organization_members
+      WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
+    )
+  )
+  WITH CHECK (
+    organization_id IN (
+      SELECT organization_id FROM organization_members
+      WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
+    )
+  );
+
+CREATE POLICY "investors_delete" ON public.investors
+  FOR DELETE TO authenticated USING (
+    organization_id IN (
+      SELECT organization_id FROM organization_members
+      WHERE user_id = auth.uid() AND role = 'owner'
+    )
+  );

@@ -87,7 +87,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
             return;
           }
 
-          const fileHeaders = (json[0] || []).map(h => String(h).trim());
+          const fileHeaders = Array.from(json[0] || []).map(h => (h !== undefined && h !== null) ? String(h).trim() : '');
           const fileRows = json.slice(1).filter(row => row.length > 0);
 
           setHeaders(fileHeaders);
@@ -100,6 +100,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
             const fieldLabel = field.label.toLowerCase();
             
             const match = fileHeaders.find(h => {
+              if (!h) return false;
               const headerLower = h.toLowerCase();
               return headerLower === fieldKey ||
                      headerLower.includes(fieldKey) ||

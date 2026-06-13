@@ -1,6 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Organization } from '../types';
-import { Building2, Save, Upload, Trash2, Globe, Mail, Phone, MapPin } from 'lucide-react';
+import { PaymentAccount } from '../types/financial';
+import { financialRegistryService } from '../services/financialRegistryService';
+import { Building2, Save, Upload, Trash2, Globe, Mail, Phone, MapPin, Landmark, Plus, X } from 'lucide-react';
 
 interface OrganizationPageProps {
     organization: Organization | null;
@@ -18,6 +20,53 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
     });
     const [logoPreview, setLogoPreview] = useState<string | null>(organization?.logoUrl || null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
+    const [accountsLoading, setAccountsLoading] = useState(false);
+    const [showAccountForm, setShowAccountForm] = useState(false);
+    const [accountForm, setAccountForm] = useState({ name: '', bank: '', branch: '', account_number: '', description: '' });
+    const [accountSaving, setAccountSaving] = useState(false);
+
+    useEffect(() => {
+        if (!organization?.id) return;
+        setAccountsLoading(true);
+        financialRegistryService.listPaymentAccounts(organization.id)
+            .then(setAccounts)
+            .catch(console.error)
+            .finally(() => setAccountsLoading(false));
+    }, [organization?.id]);
+
+    const handleAddAccount = async () => {
+        if (!accountForm.name.trim() || !organization?.id) return;
+        setAccountSaving(true);
+        try {
+            const created = await financialRegistryService.createPaymentAccount({
+                organization_id: organization.id,
+                name: accountForm.name.trim(),
+                bank: accountForm.bank.trim() || undefined,
+                branch: accountForm.branch.trim() || undefined,
+                account_number: accountForm.account_number.trim() || undefined,
+                description: accountForm.description.trim() || undefined,
+            });
+            setAccounts(prev => [...prev, created]);
+            setAccountForm({ name: '', bank: '', branch: '', account_number: '', description: '' });
+            setShowAccountForm(false);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setAccountSaving(false);
+        }
+    };
+
+    const handleDeleteAccount = async (id: string) => {
+        if (!confirm('Remover esta conta?')) return;
+        try {
+            await financialRegistryService.deletePaymentAccount(id);
+            setAccounts(prev => prev.filter(a => a.id !== id));
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -295,6 +344,124 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                        {/* Bank Accounts */}
+                        {organization?.id && (
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                                        <Landmark className="w-5 h-5 text-blue-600" />
+                                        Contas Bancárias
+                                    </h3>
+                                    <button
+                                        onClick={() => setShowAccountForm(v => !v)}
+                                        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        Vincular conta
+                                    </button>
+                                </div>
+
+                                {showAccountForm && (
+                                    <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-100 space-y-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div className="md:col-span-2">
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">Nome da conta *</label>
+                                                <input
+                                                    type="text"
+                                                    value={accountForm.name}
+                                                    onChange={e => setAccountForm(p => ({ ...p, name: e.target.value }))}
+                                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="Ex: Conta Corrente Principal"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">Banco</label>
+                                                <input
+                                                    type="text"
+                                                    value={accountForm.bank}
+                                                    onChange={e => setAccountForm(p => ({ ...p, bank: e.target.value }))}
+                                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="Ex: Itaú, Bradesco, Nubank"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">Agência</label>
+                                                <input
+                                                    type="text"
+                                                    value={accountForm.branch}
+                                                    onChange={e => setAccountForm(p => ({ ...p, branch: e.target.value }))}
+                                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="0000"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">Número da conta</label>
+                                                <input
+                                                    type="text"
+                                                    value={accountForm.account_number}
+                                                    onChange={e => setAccountForm(p => ({ ...p, account_number: e.target.value }))}
+                                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="00000-0"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">Descrição</label>
+                                                <input
+                                                    type="text"
+                                                    value={accountForm.description}
+                                                    onChange={e => setAccountForm(p => ({ ...p, description: e.target.value }))}
+                                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="Opcional"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 justify-end">
+                                            <button
+                                                onClick={() => { setShowAccountForm(false); setAccountForm({ name: '', bank: '', branch: '', account_number: '', description: '' }); }}
+                                                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                onClick={handleAddAccount}
+                                                disabled={accountSaving || !accountForm.name.trim()}
+                                                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                                            >
+                                                {accountSaving ? 'Salvando…' : 'Salvar conta'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {accountsLoading ? (
+                                    <p className="text-sm text-gray-400 text-center py-4">Carregando contas…</p>
+                                ) : accounts.length === 0 ? (
+                                    <p className="text-sm text-gray-400 text-center py-4">Nenhuma conta vinculada ainda.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {accounts.map(acc => (
+                                            <div key={acc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-medium text-gray-800 truncate">{acc.name}</p>
+                                                    <p className="text-xs text-gray-500 truncate">
+                                                        {[acc.bank, acc.branch && `Ag. ${acc.branch}`, acc.account_number && `Cc. ${acc.account_number}`].filter(Boolean).join(' · ') || acc.description || '—'}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleDeleteAccount(acc.id)}
+                                                    className="ml-3 p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 flex-shrink-0"
+                                                    title="Remover conta"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
         </div>

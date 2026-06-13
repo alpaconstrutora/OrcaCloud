@@ -621,7 +621,6 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownGroupLabel label="Pessoas" />
                   <DropdownItem id="labor-employees" label="Colaboradores" icon={Users} />
                   <DropdownItem id="labor-teams" label="Equipes" icon={Shield} />
-                  <DropdownItem id="labor-allocations" label="Alocações" icon={Target} />
                   <DropdownItem id="labor-ats" label="Recrutamento" icon={Briefcase} />
                   <DropdownItem id="labor-termination" label="Desligamentos" icon={TrendingDown} />
 
@@ -640,6 +639,7 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownGroupLabel label="Financeiro" />
                   <DropdownItem id="labor-costs" label="Custos" icon={DollarSign} />
                   <DropdownItem id="labor-payroll" label="Folha" icon={Calculator} />
+                  <DropdownItem id="labor-allocations" label="Alocações" icon={Target} />
                   <DropdownItem id="labor-rubrics" label="Rubricas" icon={Shield} />
                   <DropdownItem id="labor-encargos" label="Encargos Sociais" icon={Percent} />
                   <DropdownItem id="labor-vale-refeicao" label="Vale Refeição" icon={UtensilsCrossed} />

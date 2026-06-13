@@ -90,7 +90,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [matches, setMatches] = useState<ReconciliationMatch[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [accountsLoading, setAccountsLoading] = useState(false);
-    const accountsLoadRef = useRef<string | null>(null); // guard contra cargas concorrentes
     const [activeView, setActiveView] = useState<'pending' | 'conciliated' | 'rules' | 'categories'>(
         (localStorage.getItem('reconciliation_active_tab') as 'pending' | 'conciliated' | 'rules' | 'categories') || 'rules'
     );
@@ -438,9 +437,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     }, []);
 
     const loadAccounts = async () => {
-        if (!organizationId) return; // sem org, nada a carregar
-        if (accountsLoadRef.current === organizationId) return; // já carregando para esta org
-        accountsLoadRef.current = organizationId;
+        if (!organizationId) return; // sem org definida, nada a carregar
         setAccountsLoading(true);
         try {
             // Busca empresa_ids vinculados a este tenant para cobrir contas ligadas por empresa_id
@@ -471,7 +468,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         } catch (error) {
             console.error('Error loading bank accounts:', error);
         } finally {
-            accountsLoadRef.current = null;
             setAccountsLoading(false);
         }
     };

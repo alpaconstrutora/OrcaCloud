@@ -594,6 +594,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         />
       );
 
+    case 'bank-reconciliation':
+    case 'financial-boletos':
+    case 'contas-a-pagar':
     case 'project-financial':
       return (
         <ProjectFinancialManager
@@ -601,6 +604,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           settings={!projectId ? { ...INITIAL_PROJECT_SETTINGS, name: 'Gestão Comercial', classification: 'OBRA' } : settingsWithId}
           projectId={projectId || undefined}
           organizationId={activeOrganizationId || undefined}
+          organizations={organizations}
+          userEmail={session?.user?.email}
+          onOrgChange={(id) => setActiveOrganizationId(id)}
           budget={budget}
           onUpdateSettings={handleUpdateSettings}
           onViewOrder={(id: string) => { setSelectedOrderId(id); setActiveView('supplies-orders'); }}
@@ -720,9 +726,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     // ── Controladoria (unificado) ──────────────────────────────────────────────
     case 'controladoria':
     case 'financial-categories':
-    case 'bank-reconciliation':
-    case 'financial-boletos':
-    case 'contas-a-pagar':
       return (
         <ControladoriaModule
           organizationId={activeOrganizationId || organizations[0]?.id || ''}

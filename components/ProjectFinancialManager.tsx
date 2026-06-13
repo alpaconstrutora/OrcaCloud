@@ -76,12 +76,17 @@ import { exportService } from '../services/exportService';
 import { supabase } from '../lib/supabase';
 import FinancialOrderDetails from './FinancialOrderDetails';
 import BankReconciliation from './BankReconciliation';
+import BoletoManager from './BoletoManager';
+import ContasPagarManager from './ContasPagarManager';
 import { financialSyncService } from '../services/financialSyncService';
 
 interface ProjectFinancialManagerProps {
     settings: ProjectSettings;
     projectId?: string;
     organizationId?: string;
+    organizations?: Organization[];
+    userEmail?: string;
+    onOrgChange?: (id: string | null) => void;
     onUpdateSettings: (settings: ProjectSettings) => void;
     budget?: BudgetEntry[];
     dealTypeFilter?: 'SALE' | 'RENTAL';
@@ -109,7 +114,7 @@ const fmtShort = (v: unknown): string => {
     return fmt(v);
 };
 
-type TabKey = 'resumo' | 'receitas' | 'despesas' | 'fluxo' | 'rentabilidade' | 'extrato' | 'conciliacao';
+type TabKey = 'resumo' | 'receitas' | 'despesas' | 'fluxo' | 'rentabilidade' | 'extrato' | 'conciliacao' | 'boletos' | 'contas_pagar';
 
 const KPICard = ({ title, value, icon: Icon, color, subtitle, trend }: KPICardProps) => (
     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 transition-all hover:shadow-md group">
@@ -129,7 +134,7 @@ const KPICard = ({ title, value, icon: Icon, color, subtitle, trend }: KPICardPr
     </div>
 );
 
-const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ settings, projectId, organizationId, onUpdateSettings, budget = [], dealTypeFilter }) => {
+const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ settings, projectId, organizationId, organizations = [], userEmail, onOrgChange, onUpdateSettings, budget = [], dealTypeFilter }) => {
     const [activeTab, setActiveTab] = useState<TabKey>(
         (localStorage.getItem('financial_active_tab') as TabKey) || 'resumo'
     );
@@ -1539,7 +1544,9 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         { key: 'fluxo', label: 'Fluxo' },
         { key: 'rentabilidade', label: 'Rentabilidade' },
         { key: 'extrato', label: 'Extrato' },
-        { key: 'conciliacao', label: 'Conciliação' }
+        { key: 'conciliacao', label: 'Conciliação' },
+        { key: 'boletos', label: 'Boletos' },
+        { key: 'contas_pagar', label: 'Contas a Pagar' },
     ];
 
     return (
@@ -1614,6 +1621,8 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             {activeTab === 'rentabilidade' && renderRentabilidade()}
             { activeTab === 'extrato' && renderExtrato() }
             { activeTab === 'conciliacao' && <BankReconciliation organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} /> }
+            { activeTab === 'boletos' && <BoletoManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} userEmail={userEmail} organizations={organizations} onOrgChange={onOrgChange || (() => {})} /> }
+            { activeTab === 'contas_pagar' && <ContasPagarManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} organizations={organizations} onOrgChange={(id) => onOrgChange?.(id)} /> }
 
             {selectedOrderId && <FinancialOrderDetails orderId={selectedOrderId} onUpdate={() => setRefreshTrigger(p => p + 1)} onClose={() => setSelectedOrderId(null)} />}
 

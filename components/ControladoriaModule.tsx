@@ -1,12 +1,9 @@
 import React, { Suspense, useState } from 'react'
-import { BarChart3, TrendingUp, TrendingDown, Receipt, Layers, FileText, BookOpen, Construction, Building2 } from 'lucide-react'
+import { BarChart3, TrendingUp, Layers, BookOpen, Construction, Building2 } from 'lucide-react'
 import type { Organization } from '../types'
 
 const DREReport                  = React.lazy(() => import('./DREReport'))
 const CashFlowDashboard          = React.lazy(() => import('./CashFlowDashboard'))
-const BoletoManager              = React.lazy(() => import('./BoletoManager'))
-const ContasPagarManager         = React.lazy(() => import('./ContasPagarManager'))
-const BankReconciliation         = React.lazy(() => import('./BankReconciliation'))
 const FinancialCategoriesManager = React.lazy(() => import('./FinancialCategoriesManager'))
 const BalanceteReport            = React.lazy(() => import('./BalanceteReport'))
 const WIPReport                  = React.lazy(() => import('./WIPReport'))
@@ -30,9 +27,6 @@ const TABS: Array<{ id: ControladoriaTab; label: string; icon: React.ElementType
   { id: 'wip',          label: 'WIP',                 icon: Construction },
   { id: 'balancete',    label: 'Balancete',            icon: BookOpen     },
   { id: 'fluxo',        label: 'Fluxo de Caixa',      icon: TrendingUp   },
-  { id: 'boletos',      label: 'Boletos',              icon: FileText     },
-  { id: 'contas_pagar', label: 'Contas a Pagar',       icon: TrendingDown },
-  { id: 'conciliacao',  label: 'Conciliação Bancária', icon: Receipt      },
   { id: 'categorias',   label: 'Categorias',           icon: Layers       },
 ]
 
@@ -82,24 +76,6 @@ const ControladoriaModule: React.FC<Props> = ({
           )}
           {activeTab === 'fluxo' && (
             <CashFlowDashboard organizationId={orgId} />
-          )}
-          {activeTab === 'boletos' && (
-            <BoletoManager
-              organizationId={orgId}
-              userEmail={userEmail}
-              organizations={organizations}
-              onOrgChange={onOrgChange || (() => {})}
-            />
-          )}
-          {activeTab === 'contas_pagar' && (
-            <ContasPagarManager
-              organizationId={organizationId}
-              organizations={organizations}
-              onOrgChange={onOrgChange || (() => {})}
-            />
-          )}
-          {activeTab === 'conciliacao' && (
-            <BankReconciliation organizationId={orgId} />
           )}
           {activeTab === 'wip' && (
             <WIPReport organizationId={orgId} />

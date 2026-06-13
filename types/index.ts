@@ -24,4 +24,4 @@ export * from "./documents";
 export * from "./cno";
 export * from "./market";
 export * from "./structural";
-
+export * from "./organizationGovernance";

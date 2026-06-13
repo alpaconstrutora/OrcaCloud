@@ -412,6 +412,9 @@ export interface Employee {
     id: string;
     org_id: string;
     empresa_id?: string;
+    role_id?: string | null;
+    department_id?: string | null;
+    user_email?: string | null;
     name: string;
     cpf?: string;
     phone?: string;

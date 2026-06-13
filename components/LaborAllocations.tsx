@@ -95,7 +95,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
         if (selectedEmployee) {
             loadEmployeeState(selectedEmployee.id, selectedPeriod);
         } else {
-            setClosedResult(null);
+            setClosedResults([]);
         }
     }, [selectedEmployee, selectedPeriod]);
 

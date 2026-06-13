@@ -140,6 +140,17 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
       return;
     }
 
+    if (!cityId || cityId.trim() === '') {
+      alert('Erro: Nenhuma cidade válida selecionada para importação.');
+      return;
+    }
+
+    const cleanUUID = (uuid: string | null | undefined): string | null => {
+      if (!uuid) return null;
+      const cleaned = uuid.trim();
+      return cleaned === '' || cleaned === 'null' || cleaned === 'undefined' ? null : cleaned;
+    };
+
     setImporting(true);
     setTotalLines(rows.length);
     setCurrentLine(0);
@@ -228,9 +239,9 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
       const descVal = getVal('description') ? String(getVal('description')) : '';
 
       importedListings.push({
-        cityId,
-        neighborhoodId: matchedNeighborhoodId,
-        organizationId,
+        cityId: cityId || '',
+        neighborhoodId: cleanUUID(matchedNeighborhoodId),
+        organizationId: cleanUUID(organizationId),
         source: 'Planilha Importada',
         sourceUrl: null,
         propertyType,

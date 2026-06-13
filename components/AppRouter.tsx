@@ -341,7 +341,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <OpuraMarketModule
-            organizationId={activeOrganizationId || ''}
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
             setActiveView={setActiveView}
           />
         </React.Suspense>

@@ -540,6 +540,21 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                     </tr>
                                                     );
                                                 })}
+                                                {/* Linha de totalização */}
+                                                {toBase != null && block.units && block.units.length > 0 && (
+                                                    <tr className="bg-indigo-50/60 border-t-2 border-indigo-100">
+                                                        <td colSpan={6} className="px-6 py-3 text-right">
+                                                            <span className="text-[10px] font-black tracking-widest uppercase text-indigo-400">Total Área</span>
+                                                        </td>
+                                                        <td className="px-6 py-3 text-right">
+                                                            <span className="text-sm font-black text-indigo-700">
+                                                                {block.units.reduce((sum, u) => sum + toBase * (u.pavimentos ?? 1), 0)
+                                                                    .toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m²
+                                                            </span>
+                                                        </td>
+                                                        <td />
+                                                    </tr>
+                                                )}
                                                 <tr>
                                                     <td colSpan={8} className="px-6 py-4 bg-slate-50/50">
                                                         <button

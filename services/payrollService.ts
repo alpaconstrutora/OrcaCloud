@@ -644,10 +644,13 @@ export const payrollService = {
     },
 
     async listWorksites(orgId?: string): Promise<Worksite[]> {
-        // Usar o projectService centralizado com includeOrphans=true 
-        // para garantir a mesma visibilidade do restante do sistema.
         const data = await projectService.listProjects(undefined, orgId, true);
-        return (data || []).map(p => ({ id: p.id, name: p.name }));
+        return (data || [])
+            .filter(p => {
+                const cls = (p.settings as { classification?: string } | null)?.classification;
+                return !cls || cls === 'OBRA';
+            })
+            .map(p => ({ id: p.id, name: p.name }));
     },
 
     async listEvents(orgId: string, runId?: string) {

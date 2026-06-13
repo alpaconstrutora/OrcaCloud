@@ -2225,8 +2225,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* Modal de Reajuste */}
             {reajusteModal && contract && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md flex flex-col overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-[200]">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setReajusteModal(false); setReajusteBase(''); setReajusteAtual(''); setReajusteNotes(''); }} />
+                    <div className="absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-lg overflow-hidden border-l border-gray-200 animate-in slide-in-from-right duration-300">
                         {/* Header */}
                         <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-8 py-6">
                             <div className="flex items-start gap-5 flex-1 min-w-0">

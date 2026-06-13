@@ -220,8 +220,9 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
     const mappedCount = draft ? draft.detectedTokens.filter(tk => draft.tokenMap[tk]).length : 0;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+            <div className="absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-2xl overflow-hidden border-l border-gray-200 animate-in slide-in-from-right duration-300">
                 {/* Header */}
                 <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-8 py-6">
                     <div className="flex items-start gap-5 flex-1 min-w-0">

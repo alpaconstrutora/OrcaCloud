@@ -65,6 +65,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
     }
     setTerrainPin(null);
     setAnalysisResult(null);
+    setActiveLayer('concorrencia'); // Altera para a camada de concorrência para exibir os pins imediatamente
   };
   
   // Estados do mapa e filtros

@@ -353,6 +353,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
     );
 
     return (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Lista de Colaboradores */}
             <div className="lg:col-span-4 space-y-4">
@@ -1133,6 +1134,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                 onClose={() => setPaystubRunId(null)}
             />
         )}
+        </>
     );
 };
 

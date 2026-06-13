@@ -89,6 +89,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [suggestions, setSuggestions] = useState<ReconciliationSuggestion[]>([]);
     const [matches, setMatches] = useState<ReconciliationMatch[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [accountsLoading, setAccountsLoading] = useState(false);
+    const accountsLoadRef = useRef<string | null>(null); // guard contra cargas concorrentes
     const [activeView, setActiveView] = useState<'pending' | 'conciliated' | 'rules' | 'categories'>(
         (localStorage.getItem('reconciliation_active_tab') as 'pending' | 'conciliated' | 'rules' | 'categories') || 'rules'
     );
@@ -436,30 +438,30 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     }, []);
 
     const loadAccounts = async () => {
-        setIsLoading(true);
+        if (!organizationId) return; // sem org, nada a carregar
+        if (accountsLoadRef.current === organizationId) return; // já carregando para esta org
+        accountsLoadRef.current = organizationId;
+        setAccountsLoading(true);
         try {
+            // Busca empresa_ids vinculados a este tenant para cobrir contas ligadas por empresa_id
+            const { data: companies } = await supabase
+                .from('companies')
+                .select('id')
+                .eq('org_id', organizationId);
+            const empresaIds = (companies || []).map((c: { id: string }) => c.id);
+
             let query = supabase
                 .from('payment_accounts')
                 .select('id, organization_id, empresa_id, bank, branch, account_number, name, description')
                 .order('name');
 
-            if (organizationId) {
-                // Busca empresa_ids vinculados a este tenant para cobrir contas ligadas por empresa_id
-                const { data: companies } = await supabase
-                    .from('companies')
-                    .select('id')
-                    .eq('org_id', organizationId);
-                const empresaIds = (companies || []).map((c: { id: string }) => c.id);
-
-                if (empresaIds.length > 0) {
-                    query = query.or(`organization_id.eq.${organizationId},empresa_id.in.(${empresaIds.join(',')})`);
-                } else {
-                    query = query.eq('organization_id', organizationId);
-                }
+            if (empresaIds.length > 0) {
+                query = query.or(`organization_id.eq.${organizationId},empresa_id.in.(${empresaIds.join(',')})`);
+            } else {
+                query = query.eq('organization_id', organizationId);
             }
 
             const { data, error } = await query;
-
             if (error) throw error;
 
             setAccounts(data || []);
@@ -469,7 +471,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         } catch (error) {
             console.error('Error loading bank accounts:', error);
         } finally {
-            setIsLoading(false);
+            accountsLoadRef.current = null;
+            setAccountsLoading(false);
         }
     };
 

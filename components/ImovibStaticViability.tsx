@@ -28,8 +28,9 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
 
             block.units?.forEach(unit => {
                 const qty = unit.quantity || 0;
-                blockPrivateArea += qty * (unit.private_area || 0);
-                blockCommonArea += qty * (unit.common_area || 0);
+                const pav = (unit as any).pavimentos || 1;
+                blockPrivateArea += qty * pav * (unit.private_area || 0);
+                blockCommonArea += qty * pav * (unit.common_area || 0);
             });
 
             totalPrivateArea += blockPrivateArea;

@@ -518,12 +518,14 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                         <td className="px-6 py-3 text-right">
                                                             {(() => {
                                                                 const pav = unit.pavimentos ?? 1;
-                                                                const total = areaLivre != null ? areaLivre * pav : null;
-                                                                const totalFmt = total == null ? '—'
-                                                                    : total.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' m²';
-                                                                const totalNeg = total != null && total < 0;
+                                                                const areaTotal = toBase != null
+                                                                    ? (toBase - (((unit.private_area || 0) * (unit.quantity || 0)) + (unit.common_area || 0))) * pav
+                                                                    : null;
+                                                                const totalFmt = areaTotal == null ? '—'
+                                                                    : areaTotal.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' m²';
+                                                                const totalNeg = areaTotal != null && areaTotal < 0;
                                                                 return (
-                                                                    <span className={`text-sm font-bold ${total == null ? 'text-slate-300' : totalNeg ? 'text-red-500' : 'text-indigo-700'}`}>
+                                                                    <span className={`text-sm font-bold ${areaTotal == null ? 'text-slate-300' : totalNeg ? 'text-red-500' : 'text-indigo-700'}`}>
                                                                         {totalFmt}
                                                                     </span>
                                                                 );

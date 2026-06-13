@@ -571,6 +571,9 @@ const Layout: React.FC<LayoutProps> = ({
               )}
 
               <NavItem id="organization" icon={Building2} label="Minha Organização" />
+              {(mod.compliance || isDev) && (
+                <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" />
+              )}
 
               {(mod.obras || isDev) && (
                 <>
@@ -916,7 +919,10 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" forceFull />
 
               {(mod.compliance || isDev) && (
-                <NavItem id="opura-cno" icon={Calculator} label="CNO & Previdência" forceFull />
+                <>
+                  <NavItem id="opura-cno" icon={Calculator} label="CNO & Previdência" forceFull />
+                  <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" forceFull />
+                </>
               )}
 
               <NavGroup label="Suprimentos" />

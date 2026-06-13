@@ -5,8 +5,9 @@ import {
 } from 'lucide-react'
 import { TipoObra, ProjectTypeTemplate, EapPhase, RequiredDoc, TemplateIndicator, ChecklistTemplateItem } from '../types/project'
 import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService'
+import { obraTypeService, ObraType } from '../services/obraTypeService'
 
-const TIPO_OBRA_LABELS: Record<TipoObra, string> = {
+const TIPO_OBRA_LABELS_FALLBACK: Record<string, string> = {
   residencial_multifamiliar: 'Residencial Multifamiliar',
   casa: 'Casa Residencial',
   loja: 'Loja Comercial',
@@ -15,8 +16,6 @@ const TIPO_OBRA_LABELS: Record<TipoObra, string> = {
   reforma: 'Reforma',
   outro: 'Outro',
 }
-
-const TIPOS: TipoObra[] = ['residencial_multifamiliar', 'casa', 'loja', 'sala', 'galpao', 'reforma', 'outro']
 
 const GATE_LABELS: Record<string, string> = {
   pre_start: 'Pré-início',
@@ -28,8 +27,8 @@ interface Props {
   orgId: string
 }
 
-const emptyTemplate = (tipo: TipoObra): ProjectTypeTemplate => ({
-  tipo_obra: tipo,
+const emptyTemplate = (tipo: string): ProjectTypeTemplate => ({
+  tipo_obra: tipo as TipoObra,
   eap_phases: [],
   required_docs: [],
   indicators: [],
@@ -41,7 +40,8 @@ const emptyTemplate = (tipo: TipoObra): ProjectTypeTemplate => ({
 })
 
 const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
-  const [selectedTipo, setSelectedTipo] = useState<TipoObra>('residencial_multifamiliar')
+  const [obraTypes, setObraTypes] = useState<ObraType[]>([])
+  const [selectedTipo, setSelectedTipo] = useState<string>('residencial_multifamiliar')
   const [systemTemplate, setSystemTemplate] = useState<ProjectTypeTemplate | null>(null)
   const [orgTemplate, setOrgTemplate] = useState<ProjectTypeTemplate | null>(null)
   const [draft, setDraft] = useState<ProjectTypeTemplate>(emptyTemplate('residencial_multifamiliar'))
@@ -60,17 +60,28 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
   const [newChecklistItems, setNewChecklistItems] = useState<Record<string, string>>({})
 
   useEffect(() => {
+    if (orgId) {
+      obraTypeService.list(orgId).then(types => {
+        setObraTypes(types)
+        if (types.length > 0 && !types.find(t => t.slug === selectedTipo)) {
+          setSelectedTipo(types[0].slug)
+        }
+      }).catch(console.error)
+    }
+  }, [orgId])
+
+  useEffect(() => {
     loadTemplates(selectedTipo)
   }, [selectedTipo, orgId])
 
-  const loadTemplates = async (tipo: TipoObra) => {
+  const loadTemplates = async (tipo: string) => {
     setLoading(true)
     setError(null)
     setSaved(false)
     try {
       const [sys, org] = await Promise.all([
-        projectTypeTemplatesService.getTemplate(tipo, undefined),
-        projectTypeTemplatesService.getTemplate(tipo, orgId),
+        projectTypeTemplatesService.getTemplate(tipo as TipoObra, undefined),
+        projectTypeTemplatesService.getTemplate(tipo as TipoObra, orgId),
       ])
       setSystemTemplate(sys)
       // org template only if it actually belongs to this org (not the system fallback)
@@ -89,7 +100,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
     setError(null)
     setSaved(false)
     try {
-      await projectTypeTemplatesService.saveOrgTemplate({ ...draft, org_id: orgId, tipo_obra: selectedTipo })
+      await projectTypeTemplatesService.saveOrgTemplate({ ...draft, org_id: orgId, tipo_obra: selectedTipo as TipoObra })
       setSaved(true)
       await loadTemplates(selectedTipo)
       setTimeout(() => setSaved(false), 3000)
@@ -206,17 +217,17 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
 
       {/* Tipo tabs */}
       <div className="flex flex-wrap gap-2">
-        {TIPOS.map(tipo => (
+        {obraTypes.map(tipo => (
           <button
-            key={tipo}
-            onClick={() => setSelectedTipo(tipo)}
+            key={tipo.slug}
+            onClick={() => setSelectedTipo(tipo.slug)}
             className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-              selectedTipo === tipo
+              selectedTipo === tipo.slug
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20'
                 : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-700'
             }`}
           >
-            {TIPO_OBRA_LABELS[tipo]}
+            {tipo.name}
           </button>
         ))}
       </div>
@@ -470,7 +481,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
             <div className="bg-slate-50 rounded-2xl border border-slate-100 p-5 space-y-4 sticky top-4">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <Layers className="w-3.5 h-3.5" />
-                Preview — {TIPO_OBRA_LABELS[selectedTipo]}
+                Preview — {obraTypes.find(t => t.slug === selectedTipo)?.name ?? TIPO_OBRA_LABELS_FALLBACK[selectedTipo] ?? selectedTipo}
               </p>
 
               <div>

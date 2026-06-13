@@ -163,10 +163,12 @@ const ObraTypesManager: React.FC<Props> = ({ organizationId }) => {
   const [deleteLoading, setDeleteLoading] = React.useState(false);
 
   const load = React.useCallback(async () => {
-    if (!organizationId) return;
     setLoading(true);
+    if (!organizationId) { setLoading(false); return; }
     try {
       setTypes(await obraTypeService.list(organizationId));
+    } catch (e) {
+      console.error('[ObraTypesManager] erro ao carregar tipos:', e);
     } finally {
       setLoading(false);
     }

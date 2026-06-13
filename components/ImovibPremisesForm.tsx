@@ -449,11 +449,12 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                             <thead>
                                                 <tr className="bg-white border-b border-slate-100 text-[10px] font-black tracking-widest uppercase text-slate-400">
                                                     <th className="px-6 py-4">Tipologia da Unidade</th>
-                                                    <th className="px-6 py-4 w-24 text-center">Unds.</th>
+                                                    <th className="px-6 py-4 w-32 text-center">Unidades por Pavimento</th>
                                                     <th className="px-6 py-4 w-32 text-right">Área Priv. (m²)</th>
                                                     <th className="px-6 py-4 w-32 text-right">Área Com. (m²)</th>
                                                     <th className="px-6 py-4 w-36 text-right">Área Livre (m²)</th>
                                                     <th className="px-6 py-4 w-28 text-center">Pavimentos</th>
+                                                    <th className="px-6 py-4 w-32 text-center">Unidades Totais</th>
                                                     <th className="px-6 py-4 w-36 text-right">Área Total (m²)</th>
                                                     <th className="px-6 py-4 w-16"></th>
                                                 </tr>
@@ -515,6 +516,11 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                                 className="w-full bg-slate-100/50 border border-slate-200 p-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg text-center font-medium text-slate-800"
                                                             />
                                                         </td>
+                                                        <td className="px-6 py-3 text-center">
+                                                            <span className="text-sm font-bold text-slate-700">
+                                                                {(unit.quantity || 0) * (unit.pavimentos ?? 1)}
+                                                            </span>
+                                                        </td>
                                                         <td className="px-6 py-3 text-right">
                                                             {(() => {
                                                                 const pav = unit.pavimentos ?? 1;
@@ -543,7 +549,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                 {/* Linha de totalização */}
                                                 {toBase != null && block.units && block.units.length > 0 && (
                                                     <tr className="bg-indigo-50/60 border-t-2 border-indigo-100">
-                                                        <td colSpan={6} className="px-6 py-3 text-right">
+                                                        <td colSpan={7} className="px-6 py-3 text-right">
                                                             <span className="text-[10px] font-black tracking-widest uppercase text-indigo-400">Total Área</span>
                                                         </td>
                                                         <td className="px-6 py-3 text-right">
@@ -556,7 +562,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                     </tr>
                                                 )}
                                                 <tr>
-                                                    <td colSpan={8} className="px-6 py-4 bg-slate-50/50">
+                                                    <td colSpan={9} className="px-6 py-4 bg-slate-50/50">
                                                         <button
                                                             onClick={() => handleAddUnit(block.id)}
                                                             className="text-xs font-black tracking-widest uppercase text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 transition-colors"

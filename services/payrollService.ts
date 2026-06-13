@@ -1311,8 +1311,8 @@ export const payrollService = {
     async listChartOfAccounts(_orgId: string) {
         const { data, error } = await supabase
             .from('financial_categories')
-            .select('id, name, sort_order')
-            .order('sort_order', { ascending: true, nullsFirst: false });
+            .select('id, name')
+            .order('name');
         if (error) throw error;
         return (data || []) as { id: string; name: string; code?: string; type?: string }[];
     },

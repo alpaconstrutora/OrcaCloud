@@ -453,6 +453,8 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                     <th className="px-6 py-4 w-32 text-right">Área Priv. (m²)</th>
                                                     <th className="px-6 py-4 w-32 text-right">Área Com. (m²)</th>
                                                     <th className="px-6 py-4 w-36 text-right">Área Livre (m²)</th>
+                                                    <th className="px-6 py-4 w-28 text-center">Pavimentos</th>
+                                                    <th className="px-6 py-4 w-36 text-right">Área Total (m²)</th>
                                                     <th className="px-6 py-4 w-16"></th>
                                                 </tr>
                                             </thead>
@@ -505,6 +507,29 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                             </span>
                                                         </td>
                                                         <td className="px-6 py-3">
+                                                            <input
+                                                                type="number"
+                                                                defaultValue={unit.pavimentos ?? 1}
+                                                                min={1}
+                                                                onBlur={(e) => handleUpdateUnit(unit, 'pavimentos' as any, e.target.value)}
+                                                                className="w-full bg-slate-100/50 border border-slate-200 p-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg text-center font-medium text-slate-800"
+                                                            />
+                                                        </td>
+                                                        <td className="px-6 py-3 text-right">
+                                                            {(() => {
+                                                                const pav = unit.pavimentos ?? 1;
+                                                                const total = areaLivre != null ? areaLivre * pav : null;
+                                                                const totalFmt = total == null ? '—'
+                                                                    : total.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' m²';
+                                                                const totalNeg = total != null && total < 0;
+                                                                return (
+                                                                    <span className={`text-sm font-bold ${total == null ? 'text-slate-300' : totalNeg ? 'text-red-500' : 'text-indigo-700'}`}>
+                                                                        {totalFmt}
+                                                                    </span>
+                                                                );
+                                                            })()}
+                                                        </td>
+                                                        <td className="px-6 py-3">
                                                             <button
                                                                 onClick={() => handleDeleteUnit(unit.id)}
                                                                 className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors w-full flex justify-center opacity-0 group-hover:opacity-100"
@@ -516,7 +541,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                     );
                                                 })}
                                                 <tr>
-                                                    <td colSpan={6} className="px-6 py-4 bg-slate-50/50">
+                                                    <td colSpan={8} className="px-6 py-4 bg-slate-50/50">
                                                         <button
                                                             onClick={() => handleAddUnit(block.id)}
                                                             className="text-xs font-black tracking-widest uppercase text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 transition-colors"

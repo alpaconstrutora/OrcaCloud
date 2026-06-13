@@ -287,6 +287,7 @@ export interface ImovibUnit {
     quantity: number;
     private_area: number;
     common_area: number;
+    pavimentos?: number;
     created_at?: string;
     updated_at?: string;
 }

@@ -440,7 +440,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         try {
             let query = supabase
                 .from('payment_accounts')
-                .select('id, organization_id, bank, account_number, account_type, balance, currency, name')
+                .select('id, organization_id, bank, branch, account_number, name, description')
                 .order('name');
 
             if (organizationId) {

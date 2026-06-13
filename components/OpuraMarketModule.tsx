@@ -987,6 +987,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                             placeholder="Ex: 1500"
                             className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                           />
+                          <span className="text-[9px] text-slate-400 font-bold block leading-normal mt-0.5">ℹ️ Dimensão usada no cálculo do VGV e Viabilidade (abstrata no mapa)</span>
                         </div>
 
                         <div className="space-y-1">
@@ -1001,6 +1002,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                             <option value="3000">3km (Região de Influência)</option>
                             <option value="5000">5km (Macro Região)</option>
                           </select>
+                          <span className="text-[9px] text-slate-400 font-bold block leading-normal mt-0.5">ℹ️ Altera o círculo azul no mapa para busca espacial de concorrentes</span>
                         </div>
 
                         <button

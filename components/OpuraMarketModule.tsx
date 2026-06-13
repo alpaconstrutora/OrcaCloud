@@ -342,10 +342,16 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         radius
       );
 
+      if (!stats || stats.totalListings === 0 || stats.pricePerM2Avg <= 0) {
+        alert('Não foram encontrados valores de referência (anúncios concorrentes) nesta região para o raio selecionado. Importe anúncios para esta área ou aumente o raio de busca.');
+        setAnalysisResult(null);
+        return;
+      }
+
       let recStandard: 'Econômico' | 'Médio' | 'Médio-Alto' | 'Alto Padrão' | 'Luxo' = 'Médio';
       let productMix = { tipologias: [] as any[], ticketSugerido: 0 };
       
-      const avgPricePerM2 = stats.pricePerM2Avg > 0 ? stats.pricePerM2Avg : 3500;
+      const avgPricePerM2 = stats.pricePerM2Avg;
       const areaTerreno = parseFloat(terrainArea);
 
       if (avgPricePerM2 < 3200) {

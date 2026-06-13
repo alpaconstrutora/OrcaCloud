@@ -307,7 +307,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const engViews = ['eng-obras','eng-orcamentos','measure-ai','operacional','estrutural','quality','pos-obra','explorer','eng-planejamento','project-diary','reports','project-settings'];
+  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','operacional','estrutural','quality','pos-obra','explorer','eng-planejamento','project-diary','reports','project-settings'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
   const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts'];
@@ -503,7 +503,6 @@ const Layout: React.FC<LayoutProps> = ({
         <nav ref={navRef} onScroll={handleNavScroll} className={`flex-1 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-3'} py-2`}>
           {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br')) && (
             <>
-              <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
               {(mod.pro       || isDev) && <NavItem id="pro-dashboard"      icon={Briefcase} label="ÒPURA Pro"      />}
               {(mod.offices   || isDev) && <NavItem id="offices-dashboard"  icon={Palette}   label="ÒPURA Offices"  />}
               {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" />}
@@ -586,6 +585,7 @@ const Layout: React.FC<LayoutProps> = ({
                     }}
                     hasActiveChild={engViews.includes(activeView) || activeView.startsWith('eng-')}
                   >
+                    <DropdownItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
                     <DropdownItem id="eng-obras" label="Obras" icon={Building2} />
                     <DropdownItem id="eng-orcamentos" label="Orçamentos" icon={FolderOpen} />
                     <DropdownItem id="measure-ai" label="Medição Inteligente" icon={Calculator} />

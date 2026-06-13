@@ -538,6 +538,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
                 {(activeTab === 'accounts' || activeTab === 'cost_centers' || activeTab === 'chart_of_accounts') && (
                     <FinancialRegistryManager
+                        organizations={activeTab === 'accounts' ? organizations.map(o => ({ id: o.id, name: o.name })) : undefined}
+                        defaultOrganizationId={activeTab === 'accounts' ? (activeOrganizationId || managingOrgId || undefined) : undefined}
                         title={
                             activeTab === 'accounts' ? 'Contas de Pagamento' :
                             activeTab === 'cost_centers' ? 'Centros de Custo' : 'Plano de Contas'
@@ -559,14 +561,14 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         showBankDetails={activeTab === 'accounts'}
                         showCode={activeTab !== 'accounts'}
                         onSave={async (item) => {
-                            const currentOrgId = activeOrganizationId || managingOrgId;
-                            if (!currentOrgId) return alert("Selecione uma empresa ativa ou clique em 'Detalhes' para gerenciar registros financeiros.");
-                            
+                            const currentOrgId = item.organization_id || activeOrganizationId || managingOrgId;
+                            if (!currentOrgId) return alert("Selecione uma organização para vincular a conta.");
+
                             // Remover apenas campos gerados pelo servidor (id, created_at)
-                            const { id: _id, created_at: _ca, ...rest } = item as { id?: string; created_at?: string; name: string; description?: string; bank?: string; branch?: string; account_number?: string; code?: string };
+                            const { id: _id, created_at: _ca, ...rest } = item as { id?: string; created_at?: string; name: string; description?: string; bank?: string; branch?: string; account_number?: string; code?: string; organization_id?: string };
                             if (activeTab === 'accounts') {
                                 const payload = { name: rest.name, description: rest.description, bank: rest.bank, branch: rest.branch, account_number: rest.account_number };
-                                if (item.id) await financialRegistryService.updatePaymentAccount(item.id, payload);
+                                if (item.id) await financialRegistryService.updatePaymentAccount(item.id, { ...payload, organization_id: currentOrgId });
                                 else await financialRegistryService.createPaymentAccount({ ...payload, organization_id: currentOrgId });
                             } else if (activeTab === 'cost_centers') {
                                 const payload = { name: rest.name, code: rest.code };

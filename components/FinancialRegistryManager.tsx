@@ -9,6 +9,12 @@ interface RegistryItem {
     bank?: string;
     branch?: string;
     account_number?: string;
+    organization_id?: string;
+}
+
+interface OrgOption {
+    id: string;
+    name: string;
 }
 
 interface FinancialRegistryManagerProps {
@@ -24,6 +30,8 @@ interface FinancialRegistryManagerProps {
     showCode?: boolean;
     showDescription?: boolean;
     showBankDetails?: boolean;
+    organizations?: OrgOption[];
+    defaultOrganizationId?: string;
 }
 
 const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
@@ -38,7 +46,9 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     onImport,
     showCode = false,
     showDescription = false,
-    showBankDetails = false
+    showBankDetails = false,
+    organizations,
+    defaultOrganizationId,
 }) => {
     const [isEditing, setIsEditing] = useState<string | null>(null);
     const [isAdding, setIsAdding] = useState(false);
@@ -55,7 +65,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     };
 
     const handleAdd = () => {
-        setFormData({ name: '', code: '', description: '' });
+        setFormData({ name: '', code: '', description: '', organization_id: defaultOrganizationId });
         setIsAdding(true);
         setIsEditing(null);
     };
@@ -232,6 +242,21 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                                 placeholder="Ex: Itaú, 341..."
                                             />
                                         </div>
+                                        {organizations && organizations.length > 0 && (
+                                            <div className="md:col-span-2">
+                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Organização</label>
+                                                <select
+                                                    value={formData.organization_id || ''}
+                                                    onChange={(e) => setFormData({ ...formData, organization_id: e.target.value })}
+                                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-700"
+                                                >
+                                                    <option value="">Selecione uma organização…</option>
+                                                    {organizations.map(org => (
+                                                        <option key={org.id} value={org.id}>{org.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
                                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Agência</label>

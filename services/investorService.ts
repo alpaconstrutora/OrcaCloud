@@ -76,10 +76,12 @@ export const investorService = {
     async saveInvestor(investor: Partial<Investor>) {
         const INVESTOR_COLS = 'id, name, email, phone, document, organization_id, created_at';
         if (investor.id) {
+            // Strip immutable fields from update payload
+            const { id, created_at, ...updatePayload } = investor;
             const { data, error } = await supabase
                 .from('investors')
-                .update(investor)
-                .eq('id', investor.id)
+                .update(updatePayload)
+                .eq('id', id)
                 .select(INVESTOR_COLS)
                 .single();
 

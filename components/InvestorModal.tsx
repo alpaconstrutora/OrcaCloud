@@ -10,9 +10,10 @@ interface InvestorModalProps {
     onClose: () => void;
     onSubmit: (data: Partial<Investor>) => Promise<Investor | void>;
     initialData?: Investor;
+    organizationId?: string;
 }
 
-const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
+const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit, initialData, organizationId }) => {
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [formData, setFormData] = React.useState<Partial<Investor>>({
         name: '',
@@ -72,17 +73,19 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
 
     React.useEffect(() => {
         if (initialData && isOpen) {
-            setFormData(initialData);
+            // Ensure organization_id is always set (fixes legacy investors with null org_id)
+            setFormData({ ...initialData, organization_id: initialData.organization_id ?? organizationId });
         } else if (isOpen) {
             setFormData({
                 name: '',
                 email: '',
                 phone: '',
-                document: ''
+                document: '',
+                organization_id: organizationId,
             });
             setSelectedProjectIds(new Set());
         }
-    }, [initialData, isOpen]);
+    }, [initialData, isOpen, organizationId]);
 
     if (!isOpen) return null;
 

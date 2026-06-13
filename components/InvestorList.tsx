@@ -354,6 +354,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                 onClose={() => setIsModalOpen(false)}
                 onSubmit={handleSubmit}
                 initialData={selectedInvestor}
+                organizationId={organizationId}
             />
         </div>
     );

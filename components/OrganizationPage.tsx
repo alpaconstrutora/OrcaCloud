@@ -344,7 +344,6 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                                 </div>
                             </div>
                         </div>
-                    </div>
 
                         {/* Bank Accounts */}
                         {organization?.id && (

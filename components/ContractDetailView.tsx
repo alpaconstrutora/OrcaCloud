@@ -776,7 +776,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+        <div className="space-y-3 animate-in fade-in duration-500 pb-4">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
@@ -792,13 +792,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <span className="w-1 h-1 bg-gray-300 rounded-full" />
                             <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">{contract.contract_type}</span>
                         </div>
-                        <h1 className="text-3xl font-medium text-gray-900 tracking-tight uppercase leading-none">{contract.title}</h1>
+                        <h1 className="text-xl font-medium text-gray-900 tracking-tight uppercase leading-none">{contract.title}</h1>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end mr-4">
                         <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Saldo Contratual</p>
-                        <p className="text-2xl font-medium text-gray-900 tracking-tighter">
+                        <p className="text-lg font-medium text-gray-900 tracking-tighter">
                             R$ {(contract.current_value - totalMeasurements).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </p>
                     </div>
@@ -806,7 +806,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     {contractTemplates.length > 0 && (
                         <button
                             onClick={() => setTemplatePdfModal(true)}
-                            className="flex items-center gap-2 px-6 py-4 bg-white border border-blue-200 text-blue-700 rounded-2xl hover:bg-blue-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
+                            className="flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 text-blue-700 rounded-2xl hover:bg-blue-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
                             title="Gerar PDF usando modelo de contrato HTML"
                         >
                             <FileText className="w-4 h-4" />
@@ -817,7 +817,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     {onEdit && (
                         <button
                             onClick={() => onEdit(contract)}
-                            className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
+                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
                             title="Editar dados do contrato"
                         >
                             <Edit3 className="w-4 h-4 text-gray-500" />
@@ -828,7 +828,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     <button
                         onClick={() => setEmitModalOpen(true)}
                         disabled={loading}
-                        className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
                         title="Preencher seu modelo .docx com os dados do contrato"
                     >
                         <FileDown className="w-4 h-4 text-blue-600" />
@@ -838,7 +838,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     <button
                         onClick={handleSyncFinance}
                         disabled={syncingFinance}
-                        className="flex items-center gap-2 px-6 py-4 bg-white border border-emerald-200 text-emerald-700 rounded-2xl hover:bg-emerald-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm disabled:opacity-50"
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 rounded-2xl hover:bg-emerald-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm disabled:opacity-50"
                         title="Lançar / Re-lançar este contrato no módulo financeiro"
                     >
                         <DollarSign className="w-4 h-4" />
@@ -848,7 +848,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     <button
                         onClick={() => handleSendWebhook()}
                         disabled={loading}
-                        className="flex items-center gap-2 px-6 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 font-medium text-[12px] uppercase tracking-widest disabled:opacity-50"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 font-medium text-[12px] uppercase tracking-widest disabled:opacity-50"
                         title="Enviar para Automação (Make.com)"
                     >
                         <Zap className="w-4 h-4" />
@@ -868,7 +868,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
                                 }
                             }}
-                            className="flex items-center gap-2 px-6 py-4 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-200 font-medium text-[12px] uppercase tracking-widest"
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-200 font-medium text-[12px] uppercase tracking-widest"
                         >
                             <Layers className="w-4 h-4" />
                             Gerar Obra
@@ -891,7 +891,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'utility_bills')}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all font-medium text-[12px] uppercase tracking-widest ${activeTab === tab.id
+                        className={`flex items-center gap-2 px-5 py-2 rounded-2xl transition-all font-medium text-[12px] uppercase tracking-widest ${activeTab === tab.id
                             ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                             }`}
@@ -903,7 +903,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             </div>
 
             {hasDivergence && (
-                <div className="mt-8 bg-amber-50 border border-amber-100 p-6 rounded-[32px] flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm">
+                <div className="bg-amber-50 border border-amber-100 p-4 rounded-[32px] flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center">
                             <AlertCircle className="w-6 h-6 text-amber-600" />
@@ -928,8 +928,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* Tab: Visão Geral */}
             {activeTab === 'overview' && (
-                <div className="grid grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
-                    <div className="col-span-2 space-y-6">
+                <div className="grid grid-cols-3 gap-4 animate-in slide-in-from-bottom-4 duration-500">
+                    <div className="col-span-2 space-y-3">
                         {/* Workflow de Aprovação */}
                         {contract.approval_status && (
                             <ApprovalWorkflowCard
@@ -952,7 +952,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             />
                         )}
                         {/* Status & Timing */}
-                        <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-8">
+                        <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
                             <div className="flex justify-between items-center">
                                 <h3 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2 text-blue-600">
                                     <Clock className="w-4 h-4" /> Resumo de Execução
@@ -964,7 +964,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-4 gap-8">
+                            <div className="grid grid-cols-4 gap-4">
                                 <div className="space-y-1">
                                     <p className="text-[12px] font-medium text-gray-400 uppercase tracking-[0.15em]">{contract.is_recurring ? 'Ciclo' : 'Vigência Total'}</p>
                                     <p className="text-sm font-medium text-gray-700">
@@ -989,25 +989,25 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                             {/* Progress Bars */}
                             {!contract.is_recurring && (
-                                <div className="space-y-6 pt-4">
-                                    <div className="space-y-2">
+                                <div className="space-y-3 pt-2">
+                                    <div className="space-y-1">
                                         <div className="flex justify-between items-end">
                                         <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Progresso Físico-Financeiro</p>
                                         <p className="text-sm font-medium text-gray-900">{physicalProgress.toFixed(1)}%</p>
                                     </div>
-                                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden border border-gray-50 p-0.5">
+                                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden border border-gray-50 p-0.5">
                                         <div
                                             className={`h-full rounded-full shadow-inner transition-all duration-1000 ${physicalProgress > 100 ? 'bg-red-500' : 'bg-blue-600'}`}
                                             style={{ width: `${Math.min(physicalProgress, 100)}%` }}
                                         />
                                     </div>
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-1">
                                     <div className="flex justify-between items-end">
                                         <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Execução do Prazo</p>
                                         <p className="text-sm font-medium text-gray-900">{timeProgress.toFixed(1)}%</p>
                                     </div>
-                                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden border border-gray-50 p-0.5">
+                                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden border border-gray-50 p-0.5">
                                         <div
                                             className={`h-full rounded-full shadow-inner transition-all duration-1000 ${timeProgress > 100 ? 'bg-red-500' : 'bg-gray-900'}`}
                                             style={{ width: `${Math.min(timeProgress, 100)}%` }}
@@ -1022,7 +1022,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         {(contract as any).direction === 'OUTGOING' && (
                             (contract as any).description || (contract as any).services_included || (contract as any).services_excluded
                         ) && (
-                            <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-6">
+                            <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
                                 <h3 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
                                     <ClipboardList className="w-4 h-4 text-blue-600" /> Escopo do Serviço
                                 </h3>
@@ -1056,7 +1056,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Recent Activity / Timeline Placeholder */}
-                        <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-6">
+                        <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
                             <h3 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
                                 <History className="w-4 h-4 text-blue-600" /> Histórico Recente
                             </h3>
@@ -1082,24 +1082,24 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </div>
                     </div>
 
-                    <div className="space-y-6">
+                    <div className="space-y-3">
                         {/* Financial Overview Card */}
-                        <div className="bg-[#0B1727] p-8 rounded-[40px] text-white space-y-8 relative overflow-hidden group shadow-2xl shadow-blue-900/10">
+                        <div className="bg-[#0B1727] p-5 rounded-[40px] text-white space-y-4 relative overflow-hidden group shadow-2xl shadow-blue-900/10">
                             <div className="absolute top-0 right-0 w-40 h-40 bg-blue-600/10 rounded-full -mr-20 -mt-20 group-hover:scale-150 transition-transform duration-700" />
 
-                            <div className="space-y-6 relative z-10">
+                            <div className="space-y-4 relative z-10">
                                 <div>
-                                    <p className="text-[12px] font-medium text-blue-400 uppercase tracking-[0.2em] mb-2">Valor Atual do Contrato</p>
-                                    <h4 className="text-4xl font-medium tracking-tighter">
+                                    <p className="text-[12px] font-medium text-blue-400 uppercase tracking-[0.2em] mb-1">Valor Atual do Contrato</p>
+                                    <h4 className="text-2xl font-medium tracking-tighter">
                                         R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </h4>
-                                    <div className="flex items-center gap-2 mt-2 text-emerald-400">
+                                    <div className="flex items-center gap-2 mt-1 text-emerald-400">
                                         <TrendingUp className="w-4 h-4" />
                                         <span className="text-[12px] font-medium uppercase tracking-widest">{addendumsMetrics.percentage > 0 ? '+' : ''} {addendumsMetrics.percentage.toFixed(1)}% em Aditivos</span>
                                     </div>
                                 </div>
 
-                                <div className="space-y-4 pt-6 border-t border-white/10">
+                                <div className="space-y-2 pt-3 border-t border-white/10">
                                     <div className="flex justify-between items-center text-[12px]">
                                         <span className="text-gray-400 font-medium uppercase tracking-wider">Valor Original</span>
                                         <span className="font-medium">R$ {contract.original_value.toLocaleString('pt-BR')}</span>
@@ -1124,7 +1124,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <span className="text-gray-400 font-medium uppercase tracking-wider">Retenções</span>
                                         <span className="font-medium text-amber-400">R$ {(totalMeasurements * (contract.retention_rate / 100)).toLocaleString('pt-BR')}</span>
                                     </div>
-                                    <div className="flex justify-between items-center text-[12px] pt-3 border-t border-white/10">
+                                    <div className="flex justify-between items-center text-[12px] pt-2 border-t border-white/10">
                                         <span className="text-emerald-400 font-medium uppercase tracking-wider">Saldo a Faturar</span>
                                         <span className="font-medium text-emerald-400">R$ {(contract.current_value - totalMeasurements).toLocaleString('pt-BR')}</span>
                                     </div>
@@ -1134,7 +1134,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <button
                                 onClick={handleExportReport}
                                 disabled={exporting}
-                                className={`w-full py-4 ${exporting ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'} text-white rounded-2xl transition-all font-medium text-[12px] uppercase tracking-widest shadow-xl shadow-blue-950/20 active:scale-95 flex items-center justify-center gap-2`}
+                                className={`w-full py-2.5 ${exporting ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'} text-white rounded-2xl transition-all font-medium text-[12px] uppercase tracking-widest shadow-xl shadow-blue-950/20 active:scale-95 flex items-center justify-center gap-2`}
                             >
                                 {exporting ? (
                                     <>
@@ -1151,7 +1151,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </div>
 
                         {/* Partes do Contrato */}
-                        <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+                        <div className="bg-white p-4 rounded-[32px] border border-gray-100 shadow-sm space-y-2">
                             <h4 className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2 flex items-center gap-2">
                                 <Users className="w-3.5 h-3.5" />
                                 {(contract as any).direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor'}
@@ -1165,7 +1165,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </div>
 
                         {/* Additional Info Cards */}
-                        <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+                        <div className="bg-white p-4 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
                             <h4 className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2">Configurações</h4>
                             <div className="space-y-3">
                                 {contract.budget_snapshot != null && (
@@ -2855,7 +2855,7 @@ const ApprovalWorkflowCard: React.FC<ApprovalWorkflowCardProps> = ({ contract, o
     };
 
     return (
-        <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+        <div className="bg-white p-4 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
                 <h4 className="text-[12px] font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" /> Workflow de Aprovação

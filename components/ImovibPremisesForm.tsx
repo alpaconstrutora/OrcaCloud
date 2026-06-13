@@ -518,11 +518,12 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                         <td className="px-6 py-3 text-right">
                                                             {(() => {
                                                                 const pav = unit.pavimentos ?? 1;
-                                                                const areaTotal = ((unit.private_area || 0) * (unit.quantity || 0) + (unit.common_area || 0)) * pav;
-                                                                const totalFmt = areaTotal.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' m²';
-                                                                const totalNeg = areaTotal < 0;
+                                                                // T.O. × Área do Terreno × Pavimentos
+                                                                const areaTotal = toBase != null ? toBase * pav : null;
+                                                                const totalFmt = areaTotal == null ? '—'
+                                                                    : areaTotal.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' m²';
                                                                 return (
-                                                                    <span className={`text-sm font-bold ${totalNeg ? 'text-red-500' : 'text-indigo-700'}`}>
+                                                                    <span className={`text-sm font-bold ${areaTotal == null ? 'text-slate-300' : 'text-indigo-700'}`}>
                                                                         {totalFmt}
                                                                     </span>
                                                                 );

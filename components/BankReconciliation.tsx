@@ -440,17 +440,28 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         try {
             let query = supabase
                 .from('payment_accounts')
-                .select('id, organization_id, bank, branch, account_number, name, description')
+                .select('id, organization_id, empresa_id, bank, branch, account_number, name, description')
                 .order('name');
 
             if (organizationId) {
-                query = query.eq('organization_id', organizationId);
+                // Busca empresa_ids vinculados a este tenant para cobrir contas ligadas por empresa_id
+                const { data: companies } = await supabase
+                    .from('companies')
+                    .select('id')
+                    .eq('org_id', organizationId);
+                const empresaIds = (companies || []).map((c: { id: string }) => c.id);
+
+                if (empresaIds.length > 0) {
+                    query = query.or(`organization_id.eq.${organizationId},empresa_id.in.(${empresaIds.join(',')})`);
+                } else {
+                    query = query.eq('organization_id', organizationId);
+                }
             }
-            
+
             const { data, error } = await query;
-            
+
             if (error) throw error;
-            
+
             setAccounts(data || []);
             if (data && data.length > 0 && (!selectedAccountId || selectedAccountId === 'mock-acc-1')) {
                 setSelectedAccountId(data[0].id);

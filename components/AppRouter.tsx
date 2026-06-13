@@ -77,6 +77,7 @@ const ComplianceChecklists  = React.lazy(() => import('./ComplianceChecklists'))
 const OpuraDocsModule       = React.lazy(() => import('./OpuraDocsModule'));
 const OpuraCnoModule        = React.lazy(() => import('./OpuraCnoModule'));
 const ObraTypesManager      = React.lazy(() => import('./ObraTypesManager'));
+const OpuraMarketModule     = React.lazy(() => import('./OpuraMarketModule'));
 
 
 // Suspense fallback
@@ -332,6 +333,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             projects={typedProjects}
             currentProfile={currentProfile}
             onChangeView={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    case 'opura-market':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <OpuraMarketModule
+            organizationId={activeOrganizationId || ''}
+            setActiveView={setActiveView}
           />
         </React.Suspense>
       );

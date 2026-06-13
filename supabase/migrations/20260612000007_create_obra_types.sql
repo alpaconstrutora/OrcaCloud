@@ -29,6 +29,11 @@ ON CONFLICT DO NOTHING;
 -- RLS
 ALTER TABLE public.obra_types ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "obra_types_read"   ON public.obra_types;
+DROP POLICY IF EXISTS "obra_types_insert" ON public.obra_types;
+DROP POLICY IF EXISTS "obra_types_update" ON public.obra_types;
+DROP POLICY IF EXISTS "obra_types_delete" ON public.obra_types;
+
 -- Leitura: qualquer usuário autenticado pode ver tipos do sistema (org null) e os da sua org
 CREATE POLICY "obra_types_read" ON public.obra_types
   FOR SELECT USING (

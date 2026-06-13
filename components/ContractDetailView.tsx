@@ -2225,72 +2225,103 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* Modal de Reajuste */}
             {reajusteModal && contract && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-                    <div className="bg-white rounded-[32px] shadow-2xl p-8 max-w-sm w-full space-y-5 border border-gray-100">
-                        <div>
-                            <h3 className="text-base font-semibold text-gray-900">Aplicar Reajuste</h3>
-                            <p className="text-[12px] text-gray-400 mt-1">Índice: <span className="text-blue-600 font-semibold uppercase">{contract.reajuste_index}</span></p>
-                        </div>
-                        {reajusteSuggestion && (
-                            <div className="p-3 bg-blue-50 rounded-xl text-[11px] text-blue-700 space-y-0.5">
-                                <p className="font-semibold">Valores preenchidos automaticamente do banco:</p>
-                                <p>Base: {reajusteSuggestion.base.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({reajusteSuggestion.baseMonth.slice(0, 7)})</p>
-                                <p>Atual: {reajusteSuggestion.atual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({reajusteSuggestion.atualMonth.slice(0, 7)})</p>
-                            </div>
-                        )}
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Base (data de referência)</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={reajusteBase}
-                                    onChange={e => setReajusteBase(e.target.value)}
-                                    placeholder="ex: 2850.00"
-                                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Atual (hoje)</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={reajusteAtual}
-                                    onChange={e => setReajusteAtual(e.target.value)}
-                                    placeholder="ex: 3010.00"
-                                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            {reajusteBase && reajusteAtual && parseFloat(reajusteBase) > 0 && parseFloat(reajusteAtual) > 0 && (
-                                <div className="p-3 bg-blue-50 rounded-xl text-[12px] text-blue-700">
-                                    Fator: {(parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toFixed(5)} ·
-                                    Novo valor: R$ {(contract.current_value * parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md flex flex-col overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-8 py-6">
+                            <div className="flex items-start gap-5 flex-1 min-w-0">
+                                <div className="flex flex-col items-center gap-2 shrink-0">
+                                    <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
+                                        <TrendingUp className="w-6 h-6" />
+                                    </div>
+                                    <div className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
+                                        AJUSTE
+                                    </div>
                                 </div>
-                            )}
-                            <div>
-                                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Observação (opcional)</label>
-                                <input
-                                    type="text"
-                                    value={reajusteNotes}
-                                    onChange={e => setReajusteNotes(e.target.value)}
-                                    placeholder="ex: INCC-M Janeiro/2027"
-                                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
+                                <div className="flex-1 min-w-0 flex flex-col gap-1">
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Aplicar Reajuste</h2>
+                                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
+                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Índice:</span>
+                                            <span className="text-[10px] font-bold text-blue-600 uppercase">{contract.reajuste_index}</span>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-gray-500 font-medium leading-tight">
+                                        Informe os índices para calcular e aplicar o reajuste contratual.
+                                    </p>
+                                </div>
                             </div>
-                        </div>
-                        <div className="flex gap-3">
                             <button
                                 onClick={() => { setReajusteModal(false); setReajusteBase(''); setReajusteAtual(''); setReajusteNotes(''); }}
-                                className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+                                className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                        {/* Body */}
+                        <div className="px-8 py-6 space-y-4">
+                            {reajusteSuggestion && (
+                                <div className="p-3 bg-blue-50 rounded-xl text-[11px] text-blue-700 space-y-0.5">
+                                    <p className="font-semibold">Valores preenchidos automaticamente do banco:</p>
+                                    <p>Base: {reajusteSuggestion.base.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({reajusteSuggestion.baseMonth.slice(0, 7)})</p>
+                                    <p>Atual: {reajusteSuggestion.atual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({reajusteSuggestion.atualMonth.slice(0, 7)})</p>
+                                </div>
+                            )}
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Base (data de referência)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={reajusteBase}
+                                        onChange={e => setReajusteBase(e.target.value)}
+                                        placeholder="ex: 2850.00"
+                                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Atual (hoje)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={reajusteAtual}
+                                        onChange={e => setReajusteAtual(e.target.value)}
+                                        placeholder="ex: 3010.00"
+                                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                {reajusteBase && reajusteAtual && parseFloat(reajusteBase) > 0 && parseFloat(reajusteAtual) > 0 && (
+                                    <div className="p-3 bg-blue-50 rounded-xl text-[12px] text-blue-700">
+                                        Fator: {(parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toFixed(5)} ·
+                                        Novo valor: R$ {(contract.current_value * parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Observação (opcional)</label>
+                                    <input
+                                        type="text"
+                                        value={reajusteNotes}
+                                        onChange={e => setReajusteNotes(e.target.value)}
+                                        placeholder="ex: INCC-M Janeiro/2027"
+                                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        {/* Footer */}
+                        <div className="flex items-center justify-end gap-3 px-8 py-5 border-t border-gray-100">
+                            <button
+                                onClick={() => { setReajusteModal(false); setReajusteBase(''); setReajusteAtual(''); setReajusteNotes(''); }}
+                                className="px-5 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
                             >
                                 Cancelar
                             </button>
                             <button
                                 onClick={handleApplyReajuste}
                                 disabled={applyingReajuste}
-                                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
                             >
                                 {applyingReajuste ? 'Aplicando…' : 'Aplicar Reajuste'}
                             </button>

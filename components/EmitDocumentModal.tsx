@@ -115,16 +115,33 @@ const EmitDocumentModal: React.FC<Props> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-                <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-                    <FileDown className="w-5 h-5 text-blue-600" />
-                    <div className="flex-1">
-                        <h2 className="text-base font-semibold text-gray-900 dark:text-white">Emitir documento</h2>
-                        <p className="text-xs text-gray-400">Contrato {contract.number} · escolha o modelo e o cliente.</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
+                <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-8 py-6">
+                    <div className="flex items-start gap-5 flex-1 min-w-0">
+                        <div className="flex flex-col items-center gap-2 shrink-0">
+                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
+                                <FileDown className="w-6 h-6" />
+                            </div>
+                            <div className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
+                                EMITIR
+                            </div>
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col gap-1">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Emitir Documento</h2>
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
+                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Contrato:</span>
+                                    <span className="text-[10px] font-bold text-gray-600 uppercase">{contract.number}</span>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-500 font-medium leading-tight">
+                                Escolha o modelo e o cliente para gerar o documento.
+                            </p>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400">
-                        <X className="w-5 h-5" />
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors">
+                        <X className="w-6 h-6" />
                     </button>
                 </div>
 

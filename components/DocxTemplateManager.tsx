@@ -220,17 +220,34 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
     const mappedCount = draft ? draft.detectedTokens.filter(tk => draft.tokenMap[tk]).length : 0;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
                 {/* Header */}
-                <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-                    <FileText className="w-5 h-5 text-blue-600" />
-                    <div className="flex-1">
-                        <h2 className="text-base font-semibold text-gray-900 dark:text-white">Modelos de Documento</h2>
-                        <p className="text-xs text-gray-400">Suba um .docx com marcadores {'{001}'} e escolha o que cada um significa.</p>
+                <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-8 py-6">
+                    <div className="flex items-start gap-5 flex-1 min-w-0">
+                        <div className="flex flex-col items-center gap-2 shrink-0">
+                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
+                                <FileText className="w-6 h-6" />
+                            </div>
+                            <div className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
+                                DOC
+                            </div>
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col gap-1">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Modelos de Documento</h2>
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
+                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Tipo:</span>
+                                    <span className="text-[10px] font-bold text-gray-600 uppercase">Template .docx</span>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-500 font-medium leading-tight">
+                                Suba um .docx com marcadores {'{001}'} e associe cada marcador a um campo do contrato.
+                            </p>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400">
-                        <X className="w-5 h-5" />
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors">
+                        <X className="w-6 h-6" />
                     </button>
                 </div>
 

@@ -63,6 +63,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [addendums, setAddendums] = React.useState<ContractAddendum[]>([]);
     const [measurements, setMeasurements] = React.useState<ContractMeasurement[]>([]);
     const [activeBudget, setActiveBudget] = React.useState<BudgetEntry[]>(budget || []);
+    const [projectBudget, setProjectBudget] = React.useState<BudgetEntry[]>([]);
     const [utilityBills, setUtilityBills] = React.useState<ContractUtilityBill[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [activeTab, setActiveTab] = React.useState<'overview' | 'items' | 'addendums' | 'measurements' | 'utility_bills'>('overview');
@@ -133,6 +134,87 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         return { totalBudgeted: budgeted, totalContracted: contracted, hasDivergence: div };
     }, [items, activeBudget, contract]);
 
+    const budgetDifferences = React.useMemo(() => {
+        if (!contract || !contract.budget_snapshot || projectBudget.length === 0) return [];
+        
+        const diffs: {
+            code: string;
+            description: string;
+            unit: string;
+            snapshotQty: number;
+            snapshotPrice: number;
+            currentQty: number;
+            currentPrice: number;
+            type: 'quantity_changed' | 'price_changed' | 'removed' | 'added';
+        }[] = [];
+
+        const snapMap = new Map<string, BudgetEntry>();
+        activeBudget.forEach(item => {
+            const key = item.sinapiItem?.code || item.id || '';
+            if (key) snapMap.set(key, item);
+        });
+
+        const currentMap = new Map<string, BudgetEntry>();
+        projectBudget.forEach(item => {
+            const key = item.sinapiItem?.code || item.id || '';
+            if (key) currentMap.set(key, item);
+        });
+
+        // Verifica itens do snapshot
+        activeBudget.forEach(item => {
+            const key = item.sinapiItem?.code || item.id || '';
+            const currentItem = currentMap.get(key);
+
+            if (!currentItem) {
+                diffs.push({
+                    code: item.sinapiItem?.code || '',
+                    description: item.sinapiItem?.description || 'Item sem descrição',
+                    unit: item.sinapiItem?.unit || 'UN',
+                    snapshotQty: item.quantity,
+                    snapshotPrice: item.sinapiItem?.price || 0,
+                    currentQty: 0,
+                    currentPrice: 0,
+                    type: 'removed'
+                });
+            } else {
+                const qtyDiff = Math.abs(item.quantity - currentItem.quantity) > 0.001;
+                const priceDiff = Math.abs((item.sinapiItem?.price || 0) - (currentItem.sinapiItem?.price || 0)) > 0.001;
+
+                if (qtyDiff || priceDiff) {
+                    diffs.push({
+                        code: item.sinapiItem?.code || '',
+                        description: item.sinapiItem?.description || '',
+                        unit: item.sinapiItem?.unit || '',
+                        snapshotQty: item.quantity,
+                        snapshotPrice: item.sinapiItem?.price || 0,
+                        currentQty: currentItem.quantity,
+                        currentPrice: currentItem.sinapiItem?.price || 0,
+                        type: qtyDiff ? 'quantity_changed' : 'price_changed'
+                    });
+                }
+            }
+        });
+
+        // Verifica itens adicionados no atual
+        projectBudget.forEach(item => {
+            const key = item.sinapiItem?.code || item.id || '';
+            if (!snapMap.has(key)) {
+                diffs.push({
+                    code: item.sinapiItem?.code || '',
+                    description: item.sinapiItem?.description || '',
+                    unit: item.sinapiItem?.unit || '',
+                    snapshotQty: 0,
+                    snapshotPrice: 0,
+                    currentQty: item.quantity,
+                    currentPrice: item.sinapiItem?.price || 0,
+                    type: 'added'
+                });
+            }
+        });
+
+        return diffs;
+    }, [activeBudget, projectBudget, contract]);
+
     const loadContractData = async () => {
         try {
             setLoading(true);
@@ -172,26 +254,33 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             organizationId: projectData.organization_id || projectData.settings?.organizationId
                         });
 
-                        // Always load budget from linked project (budget_id takes precedence)
+                        // Always load budget from linked project
                         if (projectData.budget && projectData.budget.length > 0) {
-                            setActiveBudget(projectData.budget);
+                            setProjectBudget(projectData.budget);
                             projectBudgetLoaded = true;
-                            // Refresh snapshot in background so fallback stays fresh
-                            void supabase.from('contracts')
-                                .update({ budget_snapshot: projectData.budget })
-                                .eq('id', contractId)
-                                .then(() => {});
+                            // Refresh snapshot in background only if not already present
+                            if (!c?.budget_snapshot) {
+                                void supabase.from('contracts')
+                                    .update({ budget_snapshot: projectData.budget })
+                                    .eq('id', contractId)
+                                    .then(() => {});
+                            }
                         }
                     }
                 } catch (err) {
                     console.error("Erro ao carregar dados do projeto:", err);
                 }
             }
-            // Fallback: use budget_snapshot stored on the contract itself
-            if (!projectBudgetLoaded) {
-                const snap = (c as any)?.budget_snapshot;
-                if (Array.isArray(snap) && snap.length > 0) {
-                    setActiveBudget(snap);
+            // Definição do activeBudget de comparação do contrato:
+            // prioritariamente o snapshot congelado do contrato, senão o do projeto como fallback.
+            const snap = (c as any)?.budget_snapshot;
+            if (Array.isArray(snap) && snap.length > 0) {
+                setActiveBudget(snap);
+            } else if (projectBudgetLoaded) {
+                // Se não tem snapshot ainda, o activeBudget recebe o orçamento carregado da obra
+                const { data: proj } = await supabase.from('projects').select('budget').eq('id', sourceProjectId).single();
+                if (proj?.budget) {
+                    setActiveBudget(proj.budget);
                 }
             }
 
@@ -1017,6 +1106,75 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </div>
                             )}
                         </div>
+
+                        {/* Diff Visual do Orçamento */}
+                        {budgetDifferences.length > 0 && (
+                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <TrendingUp className="w-5 h-5 text-amber-500" />
+                                        <div>
+                                            <h3 className="text-[12px] font-bold text-gray-900 uppercase tracking-widest text-amber-600">Divergência de Escopo (Obra vs Contrato)</h3>
+                                            <p className="text-[11px] text-gray-400 font-medium">O orçamento atual da obra diverge das premissas originais do contrato.</p>
+                                        </div>
+                                    </div>
+                                    <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                        {budgetDifferences.length} alteração(ões)
+                                    </span>
+                                </div>
+
+                                <div className="overflow-x-auto border border-gray-50 rounded-2xl">
+                                    <table className="w-full text-left text-xs border-collapse">
+                                        <thead className="bg-gray-50 text-gray-400 font-normal uppercase border-b border-gray-100">
+                                            <tr>
+                                                <th className="px-4 py-2 text-[10px]">Item</th>
+                                                <th className="px-4 py-2 text-[10px] text-right">Orçado Original</th>
+                                                <th className="px-4 py-2 text-[10px] text-right">Atual na Obra</th>
+                                                <th className="px-4 py-2 text-[10px] text-center">Tipo de Alteração</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50 text-gray-600">
+                                            {budgetDifferences.map((diff, i) => (
+                                                <tr key={i} className="hover:bg-gray-50/50">
+                                                    <td className="px-4 py-3">
+                                                        <p className="font-semibold text-gray-800">{diff.description}</p>
+                                                        <p className="text-[10px] text-gray-400 font-mono">{diff.code || 'AVULSO'} · {diff.unit}</p>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right tabular-nums">
+                                                        {diff.type === 'added' ? '—' : (
+                                                            <>
+                                                                <p className="font-medium text-gray-700">{diff.snapshotQty.toLocaleString()} {diff.unit}</p>
+                                                                <p className="text-[10px] text-gray-400">R$ {diff.snapshotPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                            </>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right tabular-nums">
+                                                        {diff.type === 'removed' ? '—' : (
+                                                            <>
+                                                                <p className="font-medium text-gray-700">{diff.currentQty.toLocaleString()} {diff.unit}</p>
+                                                                <p className="text-[10px] text-gray-400">R$ {diff.currentPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                            </>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <span className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                                            diff.type === 'quantity_changed' ? 'bg-amber-50 text-amber-700' :
+                                                            diff.type === 'price_changed' ? 'bg-blue-50 text-blue-700' :
+                                                            diff.type === 'removed' ? 'bg-red-50 text-red-700' :
+                                                            'bg-emerald-50 text-emerald-700'
+                                                        }`}>
+                                                            {diff.type === 'quantity_changed' ? 'Qtd Alterada' :
+                                                             diff.type === 'price_changed' ? 'Preço Alt.' :
+                                                             diff.type === 'removed' ? 'Removido' : 'Adicionado'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Escopo do Serviço (OUTGOING only) */}
                         {(contract as any).direction === 'OUTGOING' && (

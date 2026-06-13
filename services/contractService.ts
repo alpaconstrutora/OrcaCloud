@@ -938,10 +938,25 @@ export const contractService = {
             if (cm?.contract_id) {
                 const { data: ct } = await supabase
                     .from('contracts')
-                    .select('retention_rate')
+                    .select('current_value, retention_rate')
                     .eq('id', cm.contract_id)
                     .single();
                 if (ct) {
+                    const { data: prevMeasurements } = await supabase
+                        .from('contract_measurements')
+                        .select('total_value')
+                        .eq('contract_id', cm.contract_id)
+                        .neq('status', 'Cancelada')
+                        .neq('id', id);
+                    const previousTotal = (prevMeasurements ?? []).reduce((s: number, m: { total_value: number }) => s + m.total_value, 0);
+                    const availableBalance = (ct.current_value ?? 0) - previousTotal;
+
+                    if (patch.total_value > availableBalance + 0.01) {
+                        throw new Error(
+                            `Saldo insuficiente: disponível R$ ${availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, solicitado R$ ${patch.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+                        );
+                    }
+
                     const retentionValue = Math.round(patch.total_value * (ct.retention_rate ?? 0)) / 100;
                     patch.retention_value = retentionValue;
                     patch.net_value = patch.total_value - retentionValue;
@@ -1391,6 +1406,10 @@ export const contractService = {
             .eq('id', contractId)
             .single();
         if (fetchErr) throw fetchErr;
+
+        if (!['Ativo', 'Assinado'].includes(contract.status)) {
+            throw new Error(`Não é possível aplicar reajuste em um contrato com status "${contract.status}". O contrato deve estar "Ativo" ou "Assinado".`);
+        }
 
         const fator = indexValue / indexBase;
         const novoValor = parseFloat((contract.current_value * fator).toFixed(2));

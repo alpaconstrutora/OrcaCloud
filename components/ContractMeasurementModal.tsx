@@ -229,6 +229,12 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                 return;
             }
 
+            if (saldoAFaturar < -0.01) {
+                setModalError(`O valor total da medição excede o saldo disponível do contrato em R$ ${Math.abs(saldoAFaturar).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`);
+                setLoading(false);
+                return;
+            }
+
             if (initialData) {
                 await contractService.updateMeasurement(initialData.id, measurementData, measurementItems);
             } else {

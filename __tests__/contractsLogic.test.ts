@@ -622,3 +622,96 @@ describe('Cálculos financeiros do contrato', () => {
         expect(total).toBe(43000);
     });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SUITE 11 — Validação de Guarda de Saldo e Trava de Reajuste (Fase 1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function checkMeasurementCreationBalance(
+    contractValue: number,
+    previousMeasurements: { total_value: number; status: string }[],
+    newMeasurementValue: number
+): { allowed: boolean; availableBalance: number } {
+    const previousTotal = previousMeasurements
+        .filter(m => m.status !== 'Cancelada')
+        .reduce((sum, m) => sum + m.total_value, 0);
+    const availableBalance = contractValue - previousTotal;
+    const allowed = newMeasurementValue <= availableBalance + 0.01;
+    return { allowed, availableBalance };
+}
+
+function checkMeasurementUpdateBalance(
+    contractValue: number,
+    previousMeasurements: { id: string; total_value: number; status: string }[],
+    measurementId: string,
+    updatedMeasurementValue: number
+): { allowed: boolean; availableBalance: number } {
+    const previousTotal = previousMeasurements
+        .filter(m => m.status !== 'Cancelada' && m.id !== measurementId)
+        .reduce((sum, m) => sum + m.total_value, 0);
+    const availableBalance = contractValue - previousTotal;
+    const allowed = updatedMeasurementValue <= availableBalance + 0.01;
+    return { allowed, availableBalance };
+}
+
+function checkReajusteAllowed(contractStatus: string): boolean {
+    return ['Ativo', 'Assinado'].includes(contractStatus);
+}
+
+describe('Guarda de Saldo e Trava de Reajuste', () => {
+    test('checkMeasurementCreationBalance permite medição dentro do saldo', () => {
+        const prev = [
+            { total_value: 20000, status: 'Processada' },
+            { total_value: 30000, status: 'Pendente' },
+        ];
+        const res = checkMeasurementCreationBalance(100000, prev, 50000);
+        expect(res.allowed).toBe(true);
+        expect(res.availableBalance).toBe(50000);
+    });
+
+    test('checkMeasurementCreationBalance barra medição acima do saldo', () => {
+        const prev = [
+            { total_value: 20000, status: 'Processada' },
+            { total_value: 30000, status: 'Pendente' },
+        ];
+        const res = checkMeasurementCreationBalance(100000, prev, 50001);
+        expect(res.allowed).toBe(false);
+    });
+
+    test('checkMeasurementCreationBalance ignora medições canceladas', () => {
+        const prev = [
+            { total_value: 20000, status: 'Processada' },
+            { total_value: 30000, status: 'Cancelada' },
+        ];
+        const res = checkMeasurementCreationBalance(100000, prev, 80000);
+        expect(res.allowed).toBe(true);
+        expect(res.availableBalance).toBe(80000);
+    });
+
+    test('checkMeasurementUpdateBalance permite atualizar medição mantendo/reduzindo seu valor', () => {
+        const prev = [
+            { id: 'm1', total_value: 20000, status: 'Processada' },
+            { id: 'm2', total_value: 30000, status: 'Pendente' }, // a própria medição em edição
+        ];
+        const res = checkMeasurementUpdateBalance(100000, prev, 'm2', 30000);
+        expect(res.allowed).toBe(true);
+        expect(res.availableBalance).toBe(80000); // saldo restante total é 100k - 20k = 80k para m2 usar
+    });
+
+    test('checkMeasurementUpdateBalance barra se o novo valor estourar o saldo excluindo a si própria', () => {
+        const prev = [
+            { id: 'm1', total_value: 20000, status: 'Processada' },
+            { id: 'm2', total_value: 30000, status: 'Pendente' }, // a própria
+        ];
+        const res = checkMeasurementUpdateBalance(100000, prev, 'm2', 80001);
+        expect(res.allowed).toBe(false);
+    });
+
+    test('checkReajusteAllowed permite apenas contratos com status Ativo ou Assinado', () => {
+        expect(checkReajusteAllowed('Ativo')).toBe(true);
+        expect(checkReajusteAllowed('Assinado')).toBe(true);
+        expect(checkReajusteAllowed('Rascunho')).toBe(false);
+        expect(checkReajusteAllowed('Cancelado')).toBe(false);
+        expect(checkReajusteAllowed('Encerrado')).toBe(false);
+    });
+});

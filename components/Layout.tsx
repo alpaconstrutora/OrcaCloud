@@ -307,7 +307,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','operacional','estrutural','quality','pos-obra','explorer','eng-planejamento','project-diary','reports','project-settings','eng-obra-types'];
+  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','operacional','estrutural','quality','pos-obra','explorer','eng-planejamento','project-diary','reports','project-settings','eng-obra-types','org-type-templates'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
   const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts'];
@@ -571,7 +571,6 @@ const Layout: React.FC<LayoutProps> = ({
               )}
 
               <NavItem id="organization" icon={Building2} label="Minha Organização" />
-              <NavItem id="org-type-templates" icon={Layers} label="Templates de Obra" />
 
               {(mod.obras || isDev) && (
                 <>
@@ -587,6 +586,7 @@ const Layout: React.FC<LayoutProps> = ({
                   >
                     <DropdownItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
                     <DropdownItem id="eng-obras" label="Obras" icon={Building2} />
+                    <DropdownItem id="org-type-templates" label="Templates de Obra" icon={Layers} />
                     <DropdownItem id="eng-orcamentos" label="Orçamentos" icon={FolderOpen} />
                     <DropdownItem id="measure-ai" label="Medição Inteligente" icon={Calculator} />
                     <DropdownItem id="operacional" label="Controle Operacional" icon={ClipboardList} />

@@ -82,7 +82,9 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   // Estudos salvos
   const [savedStudies, setSavedStudies] = React.useState<OpuraMarketTerrainStudy[]>([]);
   const [loadingStudies, setLoadingStudies] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<'analise' | 'estudos'>('analise');
+  const [activeTab, setActiveTab] = React.useState<'analise' | 'estudos' | 'anuncios'>('analise');
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [filterSource, setFilterSource] = React.useState('Todos');
   
   const radiusMeters = analysisRadius;
 
@@ -693,6 +695,53 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
     }
   };
 
+  // Deletar anúncio/ocorrência individual
+  const handleDeleteListing = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este anúncio de concorrência?')) return;
+    try {
+      await opuraMarketService.deleteListing(id);
+      if (selectedCityId) {
+        await loadListings(selectedCityId);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro ao deletar anúncio: ' + err.message);
+    }
+  };
+
+  // Focar no mapa ao clicar no anúncio
+  const handleFocusListing = (l: OpuraMarketListing) => {
+    if (l.latitude && l.longitude && mapInstanceRef.current) {
+      mapInstanceRef.current.setView([l.latitude, l.longitude], 17);
+      if (activeLayer !== 'concorrencia') {
+        setActiveLayer('concorrencia');
+      }
+    }
+  };
+
+  // Lista única de fontes
+  const sources = React.useMemo(() => {
+    const set = new Set<string>();
+    listings.forEach(l => {
+      if (l.source) set.add(l.source);
+    });
+    return Array.from(set);
+  }, [listings]);
+
+  // Filtragem dos anúncios
+  const filteredListings = React.useMemo(() => {
+    return listings.filter(l => {
+      const matchesSearch = !searchTerm.trim() || 
+        (l.address && l.address.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (l.propertyType && l.propertyType.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (l.description && l.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (l.source && l.source.toLowerCase().includes(searchTerm.toLowerCase()));
+         
+      const matchesSource = filterSource === 'Todos' || l.source === filterSource;
+      return matchesSearch && matchesSource;
+    });
+  }, [listings, searchTerm, filterSource]);
+
   // Carregar estudo salvo no mapa
   const handleSelectSavedStudy = (study: OpuraMarketTerrainStudy) => {
     setTerrainPin({ lat: study.latitude, lng: study.longitude });
@@ -922,26 +971,36 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
             <div className="space-y-6">
               
               {/* Abas */}
-              <div className="flex border-b border-slate-100 pb-1">
+              <div className="flex border-b border-slate-100 pb-1 gap-1">
                 <button
                   onClick={() => setActiveTab('analise')}
-                  className={`flex-1 pb-2 text-xs font-black uppercase tracking-wider border-b-2 text-center transition-all ${
+                  className={`flex-1 pb-2 text-[10px] font-black uppercase tracking-wider border-b-2 text-center transition-all ${
                     activeTab === 'analise' 
                       ? 'border-slate-900 text-slate-900' 
                       : 'border-transparent text-slate-400 hover:text-slate-600'
                   }`}
                 >
-                  🧪 Analisar Área
+                  🧪 Analisar
                 </button>
                 <button
                   onClick={() => setActiveTab('estudos')}
-                  className={`flex-1 pb-2 text-xs font-black uppercase tracking-wider border-b-2 text-center transition-all ${
+                  className={`flex-1 pb-2 text-[10px] font-black uppercase tracking-wider border-b-2 text-center transition-all ${
                     activeTab === 'estudos' 
                       ? 'border-slate-900 text-slate-900' 
                       : 'border-transparent text-slate-400 hover:text-slate-600'
                   }`}
                 >
-                  📂 Meus Estudos ({savedStudies.length})
+                  📂 Estudos ({savedStudies.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('anuncios')}
+                  className={`flex-1 pb-2 text-[10px] font-black uppercase tracking-wider border-b-2 text-center transition-all ${
+                    activeTab === 'anuncios' 
+                      ? 'border-slate-900 text-slate-900' 
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  🏢 Concorrência ({listings.length})
                 </button>
               </div>
 
@@ -1098,7 +1157,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                     </div>
                   )}
                 </div>
-              ) : (
+              ) : activeTab === 'estudos' ? (
                 /* Aba: Estudos Salvos */
                 <div className="space-y-3">
                   {loadingStudies ? (
@@ -1143,6 +1202,107 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                       <span>Nenhum estudo salvo encontrado nesta organização.</span>
                     </div>
                   )}
+                </div>
+              ) : (
+                /* Aba: Anúncios / Concorrência */
+                <div className="space-y-4 flex flex-col flex-1 min-h-[450px]">
+                  {/* Busca e Filtros */}
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="🔍 Buscar por endereço, tipo, fonte..."
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                    />
+                    
+                    <div className="flex gap-2">
+                      <select
+                        value={filterSource}
+                        onChange={(e) => setFilterSource(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                      >
+                        <option value="Todos">Todas as Fontes</option>
+                        {sources.map(src => (
+                          <option key={src} value={src}>{src}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Listagem */}
+                  <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1 flex-1">
+                    {filteredListings.length > 0 ? (
+                      filteredListings.map(l => {
+                        const isPrivate = l.organizationId === organizationId;
+                        return (
+                          <div
+                            key={l.id}
+                            onClick={() => handleFocusListing(l)}
+                            className="p-3 bg-slate-50 border border-slate-100 hover:bg-slate-100/50 rounded-xl cursor-pointer transition-all space-y-2 relative group"
+                          >
+                            {/* Badges superiores */}
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                isPrivate ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'
+                              }`}>
+                                {isPrivate ? 'Privado (Importado)' : 'Global'}
+                              </span>
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate max-w-[120px]">
+                                {l.source}
+                              </span>
+                            </div>
+
+                            {/* Detalhes de Preço e Endereço */}
+                            <div className="space-y-0.5">
+                              <span className="block font-black text-slate-900 text-sm">
+                                R$ {l.price.toLocaleString('pt-BR')}
+                              </span>
+                              <span className="block text-[10px] text-slate-500 font-semibold truncate leading-normal" title={l.address || ''}>
+                                📍 {l.address || 'Endereço não geocodificado'}
+                              </span>
+                            </div>
+
+                            {/* Características físicas do imóvel */}
+                            <div className="flex flex-wrap gap-1.5 text-[10px] font-bold text-slate-500">
+                              <span className="bg-white px-2 py-0.5 rounded border border-slate-100">{l.propertyType}</span>
+                              {l.areaPrivate && <span className="bg-white px-2 py-0.5 rounded border border-slate-100">📐 {l.areaPrivate}m²</span>}
+                              {l.bedrooms > 0 && <span className="bg-white px-2 py-0.5 rounded border border-slate-100">🛏️ {l.bedrooms}D</span>}
+                              {l.suites > 0 && <span className="bg-white px-2 py-0.5 rounded border border-slate-100">✨ {l.suites}S</span>}
+                              {l.parkingSpaces > 0 && <span className="bg-white px-2 py-0.5 rounded border border-slate-100">🚗 {l.parkingSpaces}V</span>}
+                              {l.constructionStandard && <span className="bg-white px-2 py-0.5 rounded border border-slate-100 text-slate-600">{l.constructionStandard}</span>}
+                            </div>
+
+                            {/* Descrição, se houver */}
+                            {l.description && (
+                              <p className="text-[9px] text-slate-400 font-semibold italic line-clamp-1 border-t border-slate-100/60 pt-1.5 mt-1">
+                                "{l.description}"
+                              </p>
+                            )}
+
+                            {/* Botão de Excluir (somente se for privado da org) */}
+                            {isPrivate && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteListing(l.id);
+                                }}
+                                className="absolute right-3 top-3 w-6 h-6 rounded-lg bg-white border border-slate-200 text-rose-500 hidden group-hover:flex items-center justify-center text-[10px] active:scale-90 shadow-sm transition-all"
+                                title="Excluir Ocorrência"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-16 text-slate-400 text-xs font-semibold text-center space-y-2">
+                        <span>🏢</span>
+                        <span>Nenhum anúncio encontrado com estes filtros.</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

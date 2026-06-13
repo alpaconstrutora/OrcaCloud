@@ -386,6 +386,19 @@ export const opuraMarketService = {
     }
   },
 
+  // Deletar anúncio/ocorrência individual
+  async deleteListing(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_market_listings')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error(`Error deleting market listing ${id}:`, error);
+      throw new Error(`Failed to delete listing: ${error.message}`);
+    }
+  },
+
   // Histórico de Bairros (Série Temporal)
   async listNeighborhoodHistory(neighborhoodId: string): Promise<OpuraMarketNeighborhoodHistory[]> {
     const { data, error } = await supabase

@@ -11,6 +11,8 @@ import { storageService } from '../services/storageService';
 import { laborService } from '../services/laborService';
 import { sanitizeFileName } from '../utils/storageUtils';
 import ContractScopeManager from './ContractScopeManager';
+import { useServicesToast } from './services/useServicestoast';
+import ServicesToast from './services/ServicesToast';
 import { Upload, Trash2, ExternalLink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -98,6 +100,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [newClientType, setNewClientType] = React.useState<'PJ' | 'PF'>('PJ');
     const [savingClient, setSavingClient] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
+    const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
     const [isFetchingNumber, setIsFetchingNumber] = React.useState(false);
     const [numberError, setNumberError] = React.useState<string | null>(null);
     const [isCheckingNumber, setIsCheckingNumber] = React.useState(false);
@@ -326,6 +329,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             if (!payload.end_date) payload.end_date = undefined;
             if (!payload.start_date) payload.start_date = undefined;
             await onSubmit(payload);
+            showToast(initialData?.id ? 'Contrato atualizado com sucesso!' : 'Contrato criado com sucesso!', 'success');
         } catch (err: unknown) {
             const msg = err instanceof Error
                 ? err.message
@@ -351,6 +355,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 } catch { /* ignore */ }
             } else {
                 setError(msg || "Erro desconhecido ao salvar contrato.");
+                showToast(msg || 'Erro ao salvar contrato.', 'error');
             }
         } finally {
             setIsSubmitting(false);
@@ -1385,6 +1390,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 onClose={() => setScopeManagerOpen(false)}
             />
         )}
+        <ServicesToast toasts={toasts} onDismiss={dismissToast} />
         </>
     );
 };

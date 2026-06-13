@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
-import { Plus, FileText, FileStack } from 'lucide-react';
-import { ContractsDashboard } from './ContractsDashboard';
+import React, { useState } from 'react';
+import { FileStack } from 'lucide-react';
+import SupplyChainContractList from './SupplyChainContractList';
 import ContractDetailView from './ContractDetailView';
 import { ContractModal } from './ContractModal';
 import DocxTemplateManager from './DocxTemplateManager';
@@ -39,6 +39,16 @@ const ServiceContractsModule: React.FC<Props> = ({
         setView('detail');
     };
 
+    const templateButton = (
+        <button
+            onClick={() => setIsTemplateManagerOpen(true)}
+            className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-100 rounded-2xl text-gray-500 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm font-medium text-[12px] uppercase tracking-widest active:scale-95"
+            title="Gerenciar modelos de documento (.docx)"
+        >
+            <FileStack className="w-4 h-4" /> Modelos de Documento
+        </button>
+    );
+
     return (
         <>
             {view === 'detail' && selectedId ? (
@@ -53,57 +63,33 @@ const ServiceContractsModule: React.FC<Props> = ({
                     }}
                 />
             ) : (
-                <div className="h-full flex flex-col">
-                    {/* Barra de ações */}
-                    <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
-                        <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
-                            <FileText size={18} className="text-blue-600" />
-                            <span className="font-semibold text-sm">Contratos de Serviço</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setIsTemplateManagerOpen(true)}
-                                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                                title="Gerenciar modelos de documento (.docx) para emissão"
-                            >
-                                <FileStack size={15} className="text-blue-600" /> Modelos de Documento
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setEditingContract({
-                                        contract_type: 'Prestação de Serviços',
-                                        nature: 'Serviço',
-                                        direction: 'OUTGOING',
-                                    } as any);
-                                    setIsModalOpen(true);
-                                }}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
-                            >
-                                <Plus size={15} /> Novo Contrato
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Dashboard filtrado: só contratos OUTGOING (emitidos para clientes) */}
-                    <div className="flex-1 overflow-auto" key={version}>
-                        <ContractsDashboard
-                            organizationId={organizationId}
-                            direction="OUTGOING"
-                            onViewContract={(id) => { setSelectedId(id); setView('detail'); }}
-                        />
-                    </div>
-
-                    {/* Ambiente de gestão de modelos de documento (.docx) */}
-                    {isTemplateManagerOpen && (
-                        <DocxTemplateManager
-                            organizationId={organizationId}
-                            onClose={() => setIsTemplateManagerOpen(false)}
-                        />
-                    )}
+                <div className="p-6 lg:p-8">
+                    <SupplyChainContractList
+                        projectId=""
+                        organizationId={organizationId}
+                        direction="OUTGOING"
+                        title="Contratos de Serviço"
+                        subtitle="Contratos emitidos para clientes — aditivos e medições."
+                        version={version}
+                        onCreateNew={() => {
+                            setEditingContract({
+                                contract_type: 'Prestação de Serviços',
+                                nature: 'Serviço',
+                                direction: 'OUTGOING',
+                            } as any);
+                            setIsModalOpen(true);
+                        }}
+                        onViewDetails={(id) => { setSelectedId(id); setView('detail'); }}
+                        onEdit={(contract) => {
+                            setEditingContract(contract);
+                            setIsModalOpen(true);
+                        }}
+                        onDelete={() => setVersion(v => v + 1)}
+                        extraActions={templateButton}
+                    />
                 </div>
             )}
 
-            {/* Modal de criação/edição — acessível em qualquer view */}
             <ContractModal
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setEditingContract(null); }}
@@ -113,6 +99,13 @@ const ServiceContractsModule: React.FC<Props> = ({
                 initialData={editingContract ?? undefined}
                 direction="OUTGOING"
             />
+
+            {isTemplateManagerOpen && (
+                <DocxTemplateManager
+                    organizationId={organizationId}
+                    onClose={() => setIsTemplateManagerOpen(false)}
+                />
+            )}
         </>
     );
 };

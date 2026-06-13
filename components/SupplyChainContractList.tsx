@@ -19,6 +19,10 @@ interface SupplyChainContractListProps {
     onDelete?: () => void;
     organizationId?: string;
     version?: number;
+    direction?: 'INCOMING' | 'OUTGOING';
+    title?: string;
+    subtitle?: string;
+    extraActions?: React.ReactNode;
 }
 
 const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
@@ -28,7 +32,11 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     onEdit,
     onDelete,
     organizationId,
-    version
+    version,
+    direction = 'INCOMING',
+    title = 'Gestão de Contratos',
+    subtitle = 'Controle de empreitadas, aditivos e medições físico-financeiras.',
+    extraActions,
 }) => {
     const [contracts, setContracts] = React.useState<Contract[]>([]);
     const [supplierMap, setSupplierMap] = React.useState<Record<string, string>>({});
@@ -56,7 +64,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
             setLoading(true);
             const targetProjectId = localShowAll ? undefined : (projectId || undefined);
             const [data, suppliers, projects] = await Promise.all([
-                contractService.listContracts(targetProjectId, organizationId, undefined, 'INCOMING'),
+                contractService.listContracts(targetProjectId, organizationId, undefined, direction),
                 supplierService.listSuppliers(organizationId).catch(() => []),
                 projectService.listProjects(undefined, organizationId).catch(() => []),
             ]);
@@ -238,10 +246,11 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-medium text-gray-900 tracking-tight">Gestão de Contratos</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle de empreitadas, aditivos e medições físico-financeiras.</p>
+                    <h1 className="text-3xl font-medium text-gray-900 tracking-tight">{title}</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">{subtitle}</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    {extraActions}
                     <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm mr-2">
                         <button
                             onClick={() => setViewMode('grid')}

@@ -281,31 +281,31 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                 </div>
 
                 {/* Tab Bar */}
-                <div className="flex items-center gap-1 border-b border-gray-100 bg-white px-6 pt-1">
+                <div className="flex-shrink-0 flex items-center gap-1 border-b-2 border-slate-200 bg-white px-6 pt-2 overflow-x-auto">
                     <button
                         type="button"
                         onClick={() => setActiveTab('dados')}
                         className={[
-                            'flex items-center gap-2 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all -mb-px whitespace-nowrap',
+                            'flex items-center gap-2 px-5 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all -mb-[2px] whitespace-nowrap',
                             activeTab === 'dados'
                                 ? 'border-blue-600 text-blue-700'
-                                : 'border-transparent text-slate-400 hover:text-slate-700 hover:border-slate-300',
+                                : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300',
                         ].join(' ')}
                     >
-                        <Home className="w-3.5 h-3.5" />
+                        <Home className="w-4 h-4" />
                         Dados do Imóvel
                     </button>
                     <button
                         type="button"
                         onClick={() => setActiveTab('gestao')}
                         className={[
-                            'flex items-center gap-2 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all -mb-px whitespace-nowrap',
+                            'flex items-center gap-2 px-5 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all -mb-[2px] whitespace-nowrap',
                             activeTab === 'gestao'
                                 ? 'border-blue-600 text-blue-700'
-                                : 'border-transparent text-slate-400 hover:text-slate-700 hover:border-slate-300',
+                                : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300',
                         ].join(' ')}
                     >
-                        <Settings2 className="w-3.5 h-3.5" />
+                        <Settings2 className="w-4 h-4" />
                         Gestão de Unidades
                     </button>
                 </div>

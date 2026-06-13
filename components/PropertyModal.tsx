@@ -138,6 +138,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
     };
 
     const [activeTab, setActiveTab] = useState<'dados' | 'gestao'>('dados');
+    const [sheetOpen, setSheetOpen] = useState(false);
     const [clients, setClients] = useState<Client[]>([]);
     const [enableMatrix, setEnableMatrix] = useState(!initialData);
 
@@ -161,7 +162,10 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         if (isOpen) {
             clientService.listClients().then(setClients).catch(console.error);
             setActiveTab('dados');
+            const id = requestAnimationFrame(() => setSheetOpen(true));
+            return () => { cancelAnimationFrame(id); setSheetOpen(false); };
         }
+        setSheetOpen(false);
 
         if (initialData) {
             setFormData(initialData);
@@ -213,71 +217,49 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
     };
 
     return (
-        <div className="absolute inset-0 z-[100] flex items-center justify-center p-12">
-            <div className="absolute inset-0 bg-[#0B1727]/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={onClose} />
+        <div className="fixed inset-0 z-[100]">
+            {/* Backdrop */}
+            <div
+                className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-200 ${sheetOpen ? 'opacity-100' : 'opacity-0'}`}
+                onClick={onClose}
+            />
 
-            <div className="relative bg-white w-full h-full overflow-hidden rounded-[2.5rem] shadow-2xl border border-white/20 animate-in zoom-in-95 duration-300 flex flex-col">
-                {/* Header Executivo (Padrão Premium) */}
-                <div className="px-8 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-4">
+            {/* Drawer panel */}
+            <div className={`absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-2xl overflow-hidden border-l border-gray-200 transition-transform duration-300 ease-in-out ${sheetOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                {/* Header */}
+                <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0">
                     <div className="flex items-start gap-4 flex-1 min-w-0">
-                        {/* Bloco de Identidade: Ícone + Tipo */}
-                        <div className="flex flex-col items-center gap-1 shrink-0">
-                            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-10 h-10">
+                        <div className="flex flex-col items-center gap-1.5 shrink-0">
+                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-11 h-11">
                                 <Home className="w-5 h-5" />
                             </div>
                             <div className="text-[9px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 shadow-sm text-center">
                                 {formData.type === 'BUILDING' ? 'EDIFÍCIO' : 'UNIDADE'}
                             </div>
                         </div>
-
-                        {/* Bloco de Informação: Título e Status */}
                         <div className="flex-1 min-w-0 flex flex-col gap-1">
                             <div className="flex items-center gap-3 flex-wrap">
-                                <h2 className="text-lg font-extrabold text-gray-900 tracking-tight">
+                                <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">
                                     {initialData ? 'Editar Imóvel' : 'Novo Imóvel'}
                                 </h2>
-                                {/* Status Badge */}
                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
                                     <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter">Status:</span>
-                                    <span className={`text-[9px] font-bold uppercase ${formData.status === PropertyStatus.AVAILABLE ? 'text-green-600' :
-                                        formData.status === PropertyStatus.SOLD ? 'text-blue-600' :
-                                            formData.status === PropertyStatus.EXCHANGED ? 'text-purple-600' : 'text-amber-600'
-                                        }`}>
+                                    <span className={`text-[9px] font-bold uppercase ${formData.status === PropertyStatus.AVAILABLE ? 'text-green-600' : formData.status === PropertyStatus.SOLD ? 'text-blue-600' : formData.status === PropertyStatus.EXCHANGED ? 'text-purple-600' : 'text-amber-600'}`}>
                                         {formData.status === PropertyStatus.EXCHANGED ? 'Permutado' : formData.status}
                                     </span>
                                 </div>
                             </div>
-
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest truncate max-w-xl">
-                                {formData.name || 'GESTÃO DE ATIVOS IMOBILIÁRIOS'}
+                            <p className="text-sm text-gray-500 font-medium leading-tight">
+                                {initialData ? 'Atualize as informações do imóvel selecionado.' : 'Configure os dados do novo imóvel.'}
                             </p>
                         </div>
                     </div>
-
-                    {/* Métricas Executivas (Direita) */}
-                    <div className="flex items-center gap-4 shrink-0">
-                        <div className="text-right">
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Área Total</p>
-                            <div className="flex items-baseline gap-1">
-                                <span className="text-xl font-black text-blue-600">{formData.total_area || 0}</span>
-                                <span className="text-[10px] font-bold text-blue-400">m²</span>
-                            </div>
-                        </div>
-                        <div className="h-8 w-px bg-gray-200" />
-                        <div className="text-right">
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Valor de Venda</p>
-                            <div className="flex items-baseline gap-1 text-green-600">
-                                <span className="text-[10px] font-bold font-mono">R$</span>
-                                <span className="text-xl font-black">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(formData.initial_price || formData.price || 0)}</span>
-                            </div>
-                        </div>
-                        <button
-                            onClick={onClose}
-                            className="ml-2 p-2 hover:bg-white hover:text-red-500 rounded-xl transition-all text-gray-400 border border-transparent hover:border-gray-100"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors shrink-0"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
                 </div>
 
                 {/* Tab Bar */}
@@ -1228,28 +1210,22 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                     </div>
                 </form>
 
-                {/* Footer Executivo Compacto */}
-                <div className="px-10 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-400 text-[9px] font-bold uppercase tracking-widest">
-                        <Info className="w-3 h-3" />
-                        Campos marcados com * são obrigatórios
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-8 py-2.5 bg-white text-gray-500 rounded-xl font-black hover:text-gray-900 transition-all border border-gray-200 shadow-sm active:scale-95 text-xs"
-                        >
-                            FECHAR
-                        </button>
-                        <button
-                            onClick={handleSubmit}
-                            className="px-10 py-2.5 bg-blue-600 text-white rounded-xl font-black shadow-xl shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center gap-2 active:scale-95 text-xs"
-                        >
-                            <Check className="w-5 h-5" />
-                            SALVAR ALTERAÇÕES
-                        </button>
-                    </div>
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-3 shrink-0">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-6 py-2.5 bg-white text-gray-500 rounded-xl font-bold hover:text-gray-900 transition-all border border-gray-200 shadow-sm active:scale-95 text-sm"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center gap-2 active:scale-95 text-sm"
+                    >
+                        <Check className="w-4 h-4" />
+                        Salvar Alterações
+                    </button>
                 </div>
             </div>
         </div>

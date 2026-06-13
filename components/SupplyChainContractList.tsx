@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { contractService } from '../services/contractService';
 import { supplierService } from '../services/supplierService';
+import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
 import { Contract } from '../types';
 
@@ -40,6 +41,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
 }) => {
     const [contracts, setContracts] = React.useState<Contract[]>([]);
     const [supplierMap, setSupplierMap] = React.useState<Record<string, string>>({});
+    const [clientMap, setClientMap] = React.useState<Record<string, string>>({});
     const [projectMap, setProjectMap] = React.useState<Record<string, string>>({});
     const [loading, setLoading] = React.useState(true);
     const [sortBy, setSortBy] = React.useState<string>('number-asc');
@@ -63,13 +65,15 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         try {
             setLoading(true);
             const targetProjectId = localShowAll ? undefined : (projectId || undefined);
-            const [data, suppliers, projects] = await Promise.all([
+            const [data, suppliers, clients, projects] = await Promise.all([
                 contractService.listContracts(targetProjectId, organizationId, undefined, direction),
                 supplierService.listSuppliers(organizationId).catch(() => []),
+                clientService.listClients(organizationId).catch(() => []),
                 projectService.listProjects(undefined, organizationId).catch(() => []),
             ]);
             setContracts(data);
             setSupplierMap(Object.fromEntries(suppliers.map(s => [s.id, s.name])));
+            setClientMap(Object.fromEntries(clients.map((c: { id: string; name: string }) => [c.id, c.name])));
             setProjectMap(Object.fromEntries(projects.map((p: { id: string; name: string }) => [p.id, p.name])));
         } catch (error) {
             console.error("ERRO CRÍTICO AO CARREGAR CONTRATOS:", error);
@@ -457,7 +461,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         { label: 'Código',     field: 'number',   align: '' },
                                         { label: 'Contrato',   field: 'title',    align: '' },
                                         { label: 'Obra',       field: 'project',  align: '' },
-                                        { label: 'Fornecedor', field: 'supplier', align: '' },
+                                        { label: direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor', field: 'supplier', align: '' },
                                         { label: 'Vigência',   field: 'date',     align: '' },
                                         { label: 'Status',     field: 'status',   align: '' },
                                         { label: 'Valor Atual',field: 'value',    align: 'text-right' },
@@ -501,7 +505,9 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         </td>
                                         <td className="px-6 py-5">
                                             <span className="text-[12px] font-medium text-gray-700">
-                                                {contract.supplier_id ? (supplierMap[contract.supplier_id] ?? '—') : '—'}
+                                                {direction === 'OUTGOING'
+                                                    ? (contract.client_id ? (clientMap[contract.client_id] ?? '—') : '—')
+                                                    : (contract.supplier_id ? (supplierMap[contract.supplier_id] ?? '—') : '—')}
                                             </span>
                                         </td>
                                         <td className="px-6 py-5">

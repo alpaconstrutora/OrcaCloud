@@ -6,6 +6,8 @@ import { ContractModal } from './ContractModal';
 import DocxTemplateManager from './DocxTemplateManager';
 import { Contract, BudgetEntry } from '../types';
 import { contractService } from '../services/contractService';
+import { useServicesToast } from './services/useServicestoast';
+import ServicesToast from './services/ServicesToast';
 
 interface Props {
     organizationId: string;
@@ -24,6 +26,7 @@ const ServiceContractsModule: React.FC<Props> = ({
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
     const [version, setVersion] = useState(0);
+    const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
 
     const handleSubmit = async (data: Partial<Contract>) => {
         const payload = { ...data, direction: 'OUTGOING' as const, organization_id: organizationId };
@@ -98,7 +101,9 @@ const ServiceContractsModule: React.FC<Props> = ({
                 organizationId={organizationId}
                 initialData={editingContract ?? undefined}
                 direction="OUTGOING"
+                onToast={showToast}
             />
+            <ServicesToast toasts={toasts} onDismiss={dismissToast} />
 
             {isTemplateManagerOpen && (
                 <DocxTemplateManager

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Trash2 } from 'lucide-react';
+import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Trash2, Settings2 } from 'lucide-react';
 import { Property, PropertyStatus, Client, TowerMatrixConfig, GridCellConfig } from '../types';
 import { clientService } from '../services/clientService';
 
@@ -137,6 +137,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         });
     };
 
+    const [activeTab, setActiveTab] = useState<'dados' | 'gestao'>('dados');
     const [clients, setClients] = useState<Client[]>([]);
     const [enableMatrix, setEnableMatrix] = useState(!initialData);
 
@@ -159,6 +160,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
     useEffect(() => {
         if (isOpen) {
             clientService.listClients().then(setClients).catch(console.error);
+            setActiveTab('dados');
         }
 
         if (initialData) {
@@ -278,9 +280,40 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                     </div>
                 </div>
 
+                {/* Tab Bar */}
+                <div className="flex items-center gap-1 border-b border-gray-100 bg-white px-6 pt-1">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('dados')}
+                        className={[
+                            'flex items-center gap-2 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all -mb-px whitespace-nowrap',
+                            activeTab === 'dados'
+                                ? 'border-blue-600 text-blue-700'
+                                : 'border-transparent text-slate-400 hover:text-slate-700 hover:border-slate-300',
+                        ].join(' ')}
+                    >
+                        <Home className="w-3.5 h-3.5" />
+                        Dados do Imóvel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('gestao')}
+                        className={[
+                            'flex items-center gap-2 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all -mb-px whitespace-nowrap',
+                            activeTab === 'gestao'
+                                ? 'border-blue-600 text-blue-700'
+                                : 'border-transparent text-slate-400 hover:text-slate-700 hover:border-slate-300',
+                        ].join(' ')}
+                    >
+                        <Settings2 className="w-3.5 h-3.5" />
+                        Gestão de Unidades
+                    </button>
+                </div>
+
                 <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {/* ── ABA: DADOS DO IMÓVEL ─────────────────────────────── */}
                     {/* Section: Identificação, Localização e Tipo */}
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                    <div className={`grid grid-cols-1 md:grid-cols-12 gap-6 ${activeTab !== 'dados' ? 'hidden' : ''}`}>
                         <div className="md:col-span-8 space-y-4">
                             <div className="flex items-center gap-2 text-blue-600">
                                 <Info className="w-4 h-4" />
@@ -421,8 +454,9 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                         </div>
                     </div>
 
+                    {/* ── ABA: GESTÃO DE UNIDADES ──────────────────────────── */}
                     {/* Configuração em Lote (Livre para novos e opcional para edição) */}
-                    {formData.type === 'BUILDING' && (
+                    {formData.type === 'BUILDING' && activeTab === 'gestao' && (
                         <div className="grid grid-cols-1 gap-6 pb-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             {initialData && !enableMatrix ? (
                                 <div className="col-span-1 border border-dashed border-blue-200 bg-white rounded-[2rem] p-6 shadow-sm relative overflow-hidden flex items-center justify-between">
@@ -941,7 +975,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                     )}
 
                     {/* Section: Áreas e Dimensões Integradas */}
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                    <div className={`grid grid-cols-1 md:grid-cols-12 gap-6 ${activeTab !== 'gestao' ? 'hidden' : ''}`}>
                         <div className="md:col-span-8 space-y-4">
                             <div className="flex items-center gap-2 text-blue-600">
                                 <Maximize2 className="w-4 h-4" />
@@ -1031,7 +1065,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                     </div>
 
                     {/* Section: Propriedade e Status (Horizontal) */}
-                    <div className="space-y-4">
+                    <div className={`space-y-4 ${activeTab !== 'dados' ? 'hidden' : ''}`}>
                         <div className="flex items-center gap-2 text-blue-600">
                             <DollarSign className="w-4 h-4" />
                             <h3 className="font-black uppercase tracking-widest text-[10px]">Propriedade e Status</h3>
@@ -1128,7 +1162,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                     </div>
 
                     {/* Section: Upload de Fotos */}
-                    <div className="space-y-6">
+                    <div className={`space-y-6 ${activeTab !== 'gestao' ? 'hidden' : ''}`}>
                         <div className="flex items-center gap-2 text-blue-600">
                             <Camera className="w-5 h-5" />
                             <h3 className="font-black uppercase tracking-widest text-xs">Mídia do Imóvel</h3>

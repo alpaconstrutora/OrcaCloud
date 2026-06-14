@@ -309,6 +309,8 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                 <th className="text-right px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Á. Priv.</th>
                                 <th className="text-right px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Preço</th>
                                 <th className="text-right px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vlr/m²</th>
+                                <th className="text-center px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso Pos.</th>
+                                <th className="text-center px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso Sol</th>
                                 <th className="text-center px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Posição</th>
                                 <th className="text-center px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Sol</th>
                                 <th className="text-center px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
@@ -349,6 +351,30 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                         {/* VLR/m² */}
                                         <td className="px-4 py-2.5 text-right text-slate-600 font-medium">
                                             {pricePerSqm ? formatBRL(pricePerSqm) : '—'}
+                                        </td>
+
+                                        {/* Peso Pos. */}
+                                        <td className="px-4 py-2.5 text-center text-[10px] font-black">
+                                            <div className="flex flex-col items-center">
+                                                <span className="text-slate-900 leading-none mb-0.5">
+                                                    {inst.position_type === 'FRENTE' ? '1.03x' : inst.position_type === 'FUNDOS' ? '0.97x' : '1.00x'}
+                                                </span>
+                                                <span className="text-slate-400 font-bold uppercase text-[8px] tracking-tighter">
+                                                    {inst.position_type === 'FRENTE' ? 'Frente' : inst.position_type === 'FUNDOS' ? 'Fundos' : 'Lateral / Base'}
+                                                </span>
+                                            </div>
+                                        </td>
+
+                                        {/* Peso Sol */}
+                                        <td className="px-4 py-2.5 text-center text-[10px] font-black">
+                                            <div className="flex flex-col items-center">
+                                                <span className="text-slate-900 leading-none mb-0.5">
+                                                    {inst.sun_orientation === 'NORTE' ? '1.02x' : inst.sun_orientation === 'LESTE' ? '1.01x' : inst.sun_orientation === 'OESTE' ? '0.99x' : '0.98x'}
+                                                </span>
+                                                <span className="text-slate-400 font-bold uppercase text-[8px] tracking-tighter">
+                                                    {inst.sun_orientation === 'NORTE' ? 'Norte' : inst.sun_orientation === 'LESTE' ? 'Leste' : inst.sun_orientation === 'OESTE' ? 'Oeste' : 'Sul'}
+                                                </span>
+                                            </div>
                                         </td>
 
                                         {/* Posição */}

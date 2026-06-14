@@ -425,14 +425,16 @@ export const contractService = {
         return data as Contract[];
     },
 
-    listContractsByClientId: async (clientId: string, orgId: string): Promise<Contract[]> => {
-        const { data, error } = await supabase
+    listContractsByClientId: async (clientId: string, orgId?: string): Promise<Contract[]> => {
+        let query = supabase
             .from('contracts')
             .select('id, number, title, contract_type, status, original_value, current_value, start_date, end_date, signature_status, signature_url, signed_contract_url, direction, created_at')
             .eq('client_id', clientId)
-            .eq('organization_id', orgId)
             .eq('direction', 'OUTGOING')
             .order('created_at', { ascending: false });
+        // Filtro de org é opcional — na visão consolidada o RLS já restringe às orgs acessíveis
+        if (orgId) query = query.eq('organization_id', orgId);
+        const { data, error } = await query;
         if (error) throw error;
         return data as Contract[];
     },

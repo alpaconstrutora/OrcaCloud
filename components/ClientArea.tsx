@@ -86,11 +86,15 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
     React.useEffect(() => {
         const orgId = settings.organizationId || (settings as any).organization_id || organizationId;
-        if (clientProfile && activeTab === 'financeiro' && orgId) {
-            commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId).then(installments => {
-                setGlobalClientInstallments(installments);
-            }).catch(console.error);
-            contractService.listContractsByClientId(clientProfile.id, orgId).then(contracts => {
+        if (clientProfile && activeTab === 'financeiro') {
+            // Parcelas globais dependem da org (busca em projetos de Gestão Comercial)
+            if (orgId) {
+                commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId).then(installments => {
+                    setGlobalClientInstallments(installments);
+                }).catch(console.error);
+            }
+            // Contratos: busca por client_id (RLS já restringe às orgs acessíveis); org é filtro opcional
+            contractService.listContractsByClientId(clientProfile.id, orgId || undefined).then(contracts => {
                 setClientContracts(contracts);
             }).catch(console.error);
         }

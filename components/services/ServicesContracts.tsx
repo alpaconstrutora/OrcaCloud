@@ -9,9 +9,9 @@ import { servicesCommercialService, ServiceContract } from '../../services/servi
 import { ServicesView } from '../ServicesCommercialModule';
 
 interface Props {
-  organizationId: string;
-  onNavigate: (view: ServicesView, opportunityId?: string) => void;
-  onGoToContract: (contractId: string) => void;
+  organizationId: string | null;
+  onNavigate: (view: ServicesView, opportunityId?: string, opportunityOrgId?: string) => void;
+  onGoToContract: (contractId: string, contractOrgId?: string) => void;
 }
 
 const STATUS_LABELS: Record<ServiceContract['status'], string> = {
@@ -114,9 +114,9 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoTo
 
   const handleRowClick = (c: ContractWithRich) => {
     if (c.rich_contract_id) {
-      onGoToContract(c.rich_contract_id);
+      onGoToContract(c.rich_contract_id, c.organization_id);
     } else if (c.opportunity_id) {
-      onNavigate('opportunity', c.opportunity_id);
+      onNavigate('opportunity', c.opportunity_id, c.organization_id);
     }
   };
 

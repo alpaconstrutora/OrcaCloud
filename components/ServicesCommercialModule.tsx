@@ -19,22 +19,32 @@ export type ServicesView =
   | 'contract-detail';
 
 interface Props {
-  organizationId: string;
+  // null ⇒ "todas as organizações" (visão consolidada, somente leitura para criação)
+  organizationId: string | null;
   onGoToProject: (projectId: string) => void;
 }
 
 const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProject }) => {
   const [view, setView] = useState<ServicesView>('pipeline');
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
+  // Org da oportunidade selecionada — usada nas sub-telas de escrita quando
+  // estamos na visão "todas as organizações" (organizationId === null).
+  const [selectedOppOrgId, setSelectedOppOrgId] = useState<string | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
 
-  const navigate = useCallback((nextView: ServicesView, opportunityId?: string) => {
+  // Org efetiva para as telas de detalhe/escrita: a org selecionada, ou a org
+  // da própria oportunidade quando estamos na visão consolidada.
+  const effectiveOrgId = organizationId ?? selectedOppOrgId;
+
+  const navigate = useCallback((nextView: ServicesView, opportunityId?: string, opportunityOrgId?: string) => {
     if (opportunityId !== undefined) setSelectedOpportunityId(opportunityId);
+    if (opportunityOrgId !== undefined) setSelectedOppOrgId(opportunityOrgId);
     setView(nextView);
   }, []);
 
-  const goToContract = useCallback((contractId: string) => {
+  const goToContract = useCallback((contractId: string, contractOrgId?: string) => {
     setSelectedContractId(contractId);
+    if (contractOrgId !== undefined) setSelectedOppOrgId(contractOrgId);
     setView('contract-detail');
   }, []);
 
@@ -58,7 +68,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
         return selectedOpportunityId ? (
           <ServicesOpportunityDetail
             opportunityId={selectedOpportunityId}
-            organizationId={organizationId}
+            organizationId={effectiveOrgId ?? ''}
             onNavigate={navigate}
             onBack={() => navigate('pipeline')}
             onGoToProject={onGoToProject}
@@ -69,7 +79,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
         return selectedOpportunityId ? (
           <ServicesVisit
             opportunityId={selectedOpportunityId}
-            organizationId={organizationId}
+            organizationId={effectiveOrgId ?? ''}
             onBack={() => navigate('opportunity', selectedOpportunityId)}
           />
         ) : null;
@@ -77,7 +87,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
         return selectedOpportunityId ? (
           <ServicesBudget
             opportunityId={selectedOpportunityId}
-            organizationId={organizationId}
+            organizationId={effectiveOrgId ?? ''}
             onBack={() => navigate('opportunity', selectedOpportunityId)}
           />
         ) : null;
@@ -85,7 +95,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
         return selectedOpportunityId ? (
           <ServicesProposal
             opportunityId={selectedOpportunityId}
-            organizationId={organizationId}
+            organizationId={effectiveOrgId ?? ''}
             onBack={() => navigate('opportunity', selectedOpportunityId)}
           />
         ) : null;
@@ -103,7 +113,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
             contractId={selectedContractId}
             onBack={() => setView('contracts')}
             budget={[]}
-            organizationId={organizationId}
+            organizationId={effectiveOrgId ?? ''}
           />
         ) : null;
       default:

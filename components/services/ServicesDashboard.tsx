@@ -7,8 +7,8 @@ import { servicesCommercialService } from '../../services/servicesCommercialServ
 import { ServicesView } from '../ServicesCommercialModule';
 
 interface Props {
-  organizationId: string;
-  onNavigate: (view: ServicesView, opportunityId?: string) => void;
+  organizationId: string | null;
+  onNavigate: (view: ServicesView, opportunityId?: string, opportunityOrgId?: string) => void;
 }
 
 interface KPIs {

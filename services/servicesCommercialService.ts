@@ -146,12 +146,15 @@ export interface ServiceOpportunityEvent {
 // ─── Opportunities ────────────────────────────────────────────────────────────
 
 export const servicesCommercialService = {
-  async listOpportunities(organizationId: string): Promise<ServiceOpportunity[]> {
-    const { data, error } = await supabase
+  // organizationId null/undefined ⇒ "todas as organizações": sem filtro de org,
+  // a RLS do Supabase restringe às orgs que o usuário pode acessar.
+  async listOpportunities(organizationId?: string | null): Promise<ServiceOpportunity[]> {
+    let query = supabase
       .from('services_opportunities')
       .select('id, organization_id, contact_name, contact_phone, contact_email, contact_whatsapp, city, work_type, estimated_area, estimated_value, scope_summary, stage, assigned_to, priority, origin_channel, lost_reason, won_at, lost_at, converted_project_id, converted_contract_id, rich_contract_id, budget_source, engineering_project_id, engineering_request_status, assigned_email, notes, created_at, updated_at')
-      .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
+    if (organizationId) query = query.eq('organization_id', organizationId);
+    const { data, error } = await query;
     if (error) throw error;
     return data ?? [];
   },
@@ -511,12 +514,13 @@ export const servicesCommercialService = {
 
   // ─── Contracts listing ────────────────────────────────────────────────────
 
-  async listContracts(organizationId: string): Promise<(ServiceContract & { rich_contract_id: string | null })[]> {
-    const { data, error } = await supabase
+  async listContracts(organizationId?: string | null): Promise<(ServiceContract & { rich_contract_id: string | null })[]> {
+    let query = supabase
       .from('services_contracts')
       .select('*, opportunity:services_opportunities!services_contracts_opportunity_id_fkey(rich_contract_id)')
-      .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
+    if (organizationId) query = query.eq('organization_id', organizationId);
+    const { data, error } = await query;
     if (error) throw error;
     return (data ?? []).map((row: any) => ({
       ...row,
@@ -527,11 +531,12 @@ export const servicesCommercialService = {
 
   // ─── Pipeline stage counts (for dashboard chart) ─────────────────────────
 
-  async getStageCounts(organizationId: string): Promise<{ stage: string; count: number; value: number }[]> {
-    const { data, error } = await supabase
+  async getStageCounts(organizationId?: string | null): Promise<{ stage: string; count: number; value: number }[]> {
+    let query = supabase
       .from('services_opportunities')
-      .select('stage, estimated_value')
-      .eq('organization_id', organizationId);
+      .select('stage, estimated_value');
+    if (organizationId) query = query.eq('organization_id', organizationId);
+    const { data, error } = await query;
     if (error) throw error;
     const all = data ?? [];
     const stages = ['lead', 'visit', 'budget', 'proposal', 'won', 'lost'];
@@ -578,11 +583,12 @@ export const servicesCommercialService = {
 
   // ─── Dashboard KPIs ───────────────────────────────────────────────────────
 
-  async getKPIs(organizationId: string) {
-    const { data, error } = await supabase
+  async getKPIs(organizationId?: string | null) {
+    let query = supabase
       .from('services_opportunities')
-      .select('stage, estimated_value, won_at, created_at')
-      .eq('organization_id', organizationId);
+      .select('stage, estimated_value, won_at, created_at');
+    if (organizationId) query = query.eq('organization_id', organizationId);
+    const { data, error } = await query;
     if (error) throw error;
     const all = data ?? [];
     const active = all.filter(o => !['won', 'lost'].includes(o.stage));

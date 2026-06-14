@@ -117,16 +117,11 @@ const SalesManagementModule: React.FC<Props> = ({
             />
           )}
 
-          {activeTab === 'crm' && organizationId && (
+          {activeTab === 'crm' && (
             <ServicesCommercialModule
-              organizationId={organizationId}
+              organizationId={organizationId ?? null}
               onGoToProject={onGoToProject ? (id) => onGoToProject(id, 'analytic') : () => {}}
             />
-          )}
-          {activeTab === 'crm' && !organizationId && (
-            <div className="flex items-center justify-center py-20 text-sm text-gray-400">
-              Selecione uma organização para acessar o CRM de Serviços.
-            </div>
           )}
 
           {activeTab === 'contratos' && organizationId && (

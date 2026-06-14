@@ -11,8 +11,8 @@ import { ServicesView } from '../ServicesCommercialModule';
 import ServicesOpportunityModal from './ServicesOpportunityModal';
 
 interface Props {
-  organizationId: string;
-  onNavigate: (view: ServicesView, opportunityId?: string) => void;
+  organizationId: string | null;
+  onNavigate: (view: ServicesView, opportunityId?: string, opportunityOrgId?: string) => void;
 }
 
 const STAGES: { id: OpportunityStage; label: string; hex: string }[] = [
@@ -110,7 +110,7 @@ const PipelineColumn: React.FC<{
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: () => void;
-  onNavigate: (view: ServicesView, id: string) => void;
+  onNavigate: (view: ServicesView, id: string, orgId?: string) => void;
   setDraggingId: (id: string) => void;
   onAddNew?: () => void;
 }> = ({ id, label, hex, cards, loading, isOver, readonly, draggingId, onDragOver, onDragLeave, onDrop, onNavigate, setDraggingId, onAddNew }) => (
@@ -157,7 +157,7 @@ const PipelineColumn: React.FC<{
             opp={opp}
             stageHex={hex}
             isDragging={draggingId === opp.id}
-            onClick={() => onNavigate('opportunity', opp.id)}
+            onClick={() => onNavigate('opportunity', opp.id, opp.organization_id)}
             onDragStart={e => {
               if (readonly) { e.preventDefault(); return; }
               e.dataTransfer.effectAllowed = 'move';
@@ -193,7 +193,6 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
   const [filterPriority, setFilterPriority] = useState<'all' | 'high' | 'medium' | 'low'>('all');
 
   const load = useCallback(() => {
-    if (!organizationId) return;
     setLoading(true);
     servicesCommercialService.listOpportunities(organizationId)
       .then(setOpportunities)
@@ -203,6 +202,10 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
+    // Visão "todas as organizações": sem assinatura realtime filtrada por org
+    // (evita escutar uma org específica). O usuário recarrega para atualizar.
+    if (!organizationId) { setRealtimeStatus('connecting'); return; }
+
     const channel = supabase
       .channel(`services-pipeline-${organizationId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'services_opportunities', filter: `organization_id=eq.${organizationId}` },
@@ -267,7 +270,9 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+          disabled={!organizationId}
+          title={!organizationId ? 'Selecione uma organização específica para criar um lead' : undefined}
+          className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Plus size={15} /> Novo Lead
         </button>
@@ -327,7 +332,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
             onDrop={() => handleDrop(id)}
             onNavigate={onNavigate}
             setDraggingId={setDraggingId}
-            onAddNew={id === 'lead' ? () => setIsModalOpen(true) : undefined}
+            onAddNew={id === 'lead' && organizationId ? () => setIsModalOpen(true) : undefined}
           />
         ))}
 
@@ -349,7 +354,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
         />
       </div>
 
-      {isModalOpen && (
+      {isModalOpen && organizationId && (
         <ServicesOpportunityModal
           organizationId={organizationId}
           onClose={() => setIsModalOpen(false)}

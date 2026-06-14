@@ -42,6 +42,27 @@ const CATEGORIES_ALLOWED: AssetCategory[] = [
   'mobiliario'
 ];
 
+const getCellValueAsString = (cell: ExcelJS.Cell): string => {
+  if (!cell || cell.value === null || cell.value === undefined) return '';
+  const val = cell.value;
+  if (typeof val === 'object') {
+    if (val instanceof Date) {
+      return val.toISOString().split('T')[0];
+    }
+    if ('result' in val) {
+      return val.result !== null && val.result !== undefined ? String(val.result).trim() : '';
+    }
+    if ('richText' in val) {
+      return (val as any).richText.map((rt: any) => rt.text).join('').trim();
+    }
+    if ('text' in val) {
+      return String((val as any).text).trim();
+    }
+    return '';
+  }
+  return String(val).trim();
+};
+
 export const AssetImportModal: React.FC<AssetImportModalProps> = ({
   isOpen,
   onClose,
@@ -211,7 +232,11 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
 
   // Processar arquivo e validar dados
   const processFile = async () => {
-    if (!file || !activeOrganizationId) return;
+    console.log('[AssetImportModal] Iniciando processamento do arquivo:', file?.name, 'Org:', activeOrganizationId);
+    if (!file) {
+      setError('Por favor, selecione ou arraste um arquivo primeiro.');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -232,18 +257,18 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
       worksheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return; // Pula o cabeçalho
 
-        const codeRaw = row.getCell(1).text.trim();
-        const nameRaw = row.getCell(2).text.trim();
-        const categoryRaw = row.getCell(3).text.trim().toLowerCase();
-        const subcategory = row.getCell(4).text.trim();
-        const brand = row.getCell(5).text.trim();
-        const model = row.getCell(6).text.trim();
-        const serial_number = row.getCell(7).text.trim();
-        const purchaseDateRaw = row.getCell(8).text.trim();
-        const purchaseValueRaw = row.getCell(9).text.trim();
-        const usefulLifeRaw = row.getCell(10).text.trim();
-        const residualValueRaw = row.getCell(11).text.trim();
-        const notes = row.getCell(12).text.trim();
+        const codeRaw = getCellValueAsString(row.getCell(1));
+        const nameRaw = getCellValueAsString(row.getCell(2));
+        const categoryRaw = getCellValueAsString(row.getCell(3)).toLowerCase();
+        const subcategory = getCellValueAsString(row.getCell(4));
+        const brand = getCellValueAsString(row.getCell(5));
+        const model = getCellValueAsString(row.getCell(6));
+        const serial_number = getCellValueAsString(row.getCell(7));
+        const purchaseDateRaw = getCellValueAsString(row.getCell(8));
+        const purchaseValueRaw = getCellValueAsString(row.getCell(9));
+        const usefulLifeRaw = getCellValueAsString(row.getCell(10));
+        const residualValueRaw = getCellValueAsString(row.getCell(11));
+        const notes = getCellValueAsString(row.getCell(12));
 
         // Se a linha inteira estiver em branco, ignora
         if (!codeRaw && !nameRaw && !categoryRaw && !purchaseValueRaw) return;
@@ -369,7 +394,12 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
 
   // Gravar linhas válidas no banco
   const handleImportData = async () => {
-    if (!activeOrganizationId || parsedRows.length === 0) return;
+    if (!activeOrganizationId) {
+      setError('Organização ativa não encontrada. Por favor, selecione uma organização na barra lateral.');
+      return;
+    }
+    
+    if (parsedRows.length === 0) return;
 
     const validRows = parsedRows.filter((r) => r.isValid);
     if (validRows.length === 0) {

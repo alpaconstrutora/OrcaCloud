@@ -10,7 +10,7 @@ import { useServicesToast } from './services/useServicestoast';
 import ServicesToast from './services/ServicesToast';
 
 interface Props {
-    organizationId: string;
+    organizationId?: string;
     budget?: BudgetEntry[];
     onGoToProject?: (projectId: string) => void;
 }
@@ -75,6 +75,7 @@ const ServiceContractsModule: React.FC<Props> = ({
                         subtitle="Contratos emitidos para clientes — aditivos e medições."
                         version={version}
                         onCreateNew={() => {
+                            if (!organizationId) return;
                             setEditingContract({
                                 contract_type: 'Prestação de Serviços',
                                 nature: 'Serviço',
@@ -93,6 +94,7 @@ const ServiceContractsModule: React.FC<Props> = ({
                 </div>
             )}
 
+            {organizationId && (
             <ContractModal
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setEditingContract(null); }}
@@ -103,9 +105,10 @@ const ServiceContractsModule: React.FC<Props> = ({
                 direction="OUTGOING"
                 onToast={showToast}
             />
+            )}
             <ServicesToast toasts={toasts} onDismiss={dismissToast} />
 
-            {isTemplateManagerOpen && (
+            {isTemplateManagerOpen && organizationId && (
                 <DocxTemplateManager
                     organizationId={organizationId}
                     onClose={() => setIsTemplateManagerOpen(false)}

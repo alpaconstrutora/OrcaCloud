@@ -651,8 +651,43 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         ))}
                                     </div>
 
-                                    {/* Documento */}
-                                    {docUrl ? (
+                                    {/* Versões da Minuta */}
+                                    {isMinuta && c.minuta_versions && c.minuta_versions.length > 0 && (
+                                        <div className="space-y-3">
+                                            <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Versões da Minuta</p>
+                                            <div className="space-y-2">
+                                                {[...c.minuta_versions].sort((a, b) => b.v - a.v).map(ver => (
+                                                    <a
+                                                        key={ver.v}
+                                                        href={ver.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-4 p-4 bg-purple-50 border border-purple-100 rounded-2xl hover:bg-purple-100 transition-all group"
+                                                    >
+                                                        <div className="w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center shrink-0 text-white font-black text-[11px]">
+                                                            v{ver.v}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-black text-purple-800">
+                                                                Versão {ver.v}
+                                                                {ver.v === Math.max(...c.minuta_versions!.map(x => x.v)) && (
+                                                                    <span className="ml-2 px-2 py-0.5 bg-purple-200 text-purple-700 rounded-full text-[9px] font-black uppercase">Atual</span>
+                                                                )}
+                                                            </p>
+                                                            <p className="text-[10px] text-purple-400 mt-0.5">
+                                                                {new Date(ver.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                {ver.notes && ` · ${ver.notes}`}
+                                                            </p>
+                                                        </div>
+                                                        <Download className="w-4 h-4 text-purple-400 group-hover:text-purple-700 transition-colors" />
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Documento (contratos assinados / sem versionamento) */}
+                                    {!isMinuta && (docUrl ? (
                                         <div className="space-y-3">
                                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Documento do Contrato</p>
                                             <a
@@ -676,7 +711,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <FileText className="w-5 h-5 text-gray-300" />
                                             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Documento ainda não disponível</p>
                                         </div>
-                                    )}
+                                    ))}
                                 </div>
                             </div>
                         </div>

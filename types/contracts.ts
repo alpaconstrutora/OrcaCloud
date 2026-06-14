@@ -17,6 +17,13 @@ export type ContractStatus =
     | 'Rascunho' | 'Minuta' | 'Revisão' | 'Enviado' | 'Aprovado' | 'Assinado'
     | 'Ativo' | 'Concluído' | 'Suspenso' | 'Encerrado' | 'Cancelado';
 
+export interface MinutaVersion {
+    v: number;
+    url: string;
+    notes: string;
+    created_at: string;
+}
+
 export interface Contract {
     id: string;
     organization_id: string;
@@ -78,6 +85,7 @@ export interface Contract {
     approval_required_levels?: 1 | 2;
     billing_mode?: BillingMode;
     release_requirements?: ReleaseRequirements;
+    minuta_versions?: MinutaVersion[];
     created_at?: string;
 }
 

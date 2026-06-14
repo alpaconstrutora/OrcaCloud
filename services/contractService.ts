@@ -428,16 +428,37 @@ export const contractService = {
     listContractsByClientId: async (clientId: string, orgId?: string): Promise<Contract[]> => {
         let query = supabase
             .from('contracts')
-            .select('id, number, title, contract_type, status, original_value, current_value, start_date, end_date, signature_status, signature_url, signed_contract_url, direction, created_at')
+            .select('id, number, title, contract_type, status, original_value, current_value, start_date, end_date, signature_status, signature_url, signed_contract_url, direction, minuta_versions, created_at')
             .eq('client_id', clientId)
             .eq('direction', 'OUTGOING')
-            .neq('status', 'Rascunho')  // Rascunho é interno; Minuta em diante fica visível ao cliente
+            .neq('status', 'Rascunho')
             .order('created_at', { ascending: false });
-        // Filtro de org é opcional — na visão consolidada o RLS já restringe às orgs acessíveis
         if (orgId) query = query.eq('organization_id', orgId);
         const { data, error } = await query;
         if (error) throw error;
         return data as Contract[];
+    },
+
+    addMinutaVersion: async (contractId: string, version: { url: string; notes: string }): Promise<void> => {
+        // Lê versões atuais, incrementa número e faz append
+        const { data, error: fetchErr } = await supabase
+            .from('contracts')
+            .select('minuta_versions')
+            .eq('id', contractId)
+            .single();
+        if (fetchErr) throw fetchErr;
+        const current: import('../types').MinutaVersion[] = (data?.minuta_versions as any) ?? [];
+        const next: import('../types').MinutaVersion = {
+            v: (current.length > 0 ? Math.max(...current.map((x: any) => x.v)) : 0) + 1,
+            url: version.url,
+            notes: version.notes,
+            created_at: new Date().toISOString(),
+        };
+        const { error } = await supabase
+            .from('contracts')
+            .update({ minuta_versions: [...current, next] })
+            .eq('id', contractId);
+        if (error) throw error;
     },
 
     getContractById: async (id: string): Promise<Contract | null> => {

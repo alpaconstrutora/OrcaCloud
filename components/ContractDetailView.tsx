@@ -1527,6 +1527,19 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 }}
                             />
                         </div>
+
+                        {/* Versões da Minuta */}
+                        {contract.status === 'Minuta' && (
+                            <MinutaVersionsPanel
+                                contract={contract}
+                                onVersionAdded={async () => {
+                                    const updated = await contractService.getContractById(contract.id);
+                                    if (updated) setContract(updated);
+                                    notify('Nova versão publicada com sucesso!', 'success');
+                                }}
+                                onNotify={notify}
+                            />
+                        )}
                     </div>
                 </div>
             )}
@@ -2852,6 +2865,106 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                 subtitle="Selecione um item da base de dados para adicionar ao contrato."
                 zIndex={210}
             />
+        </div>
+    );
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── MinutaVersionsPanel ─────────────────────────────────────────────────────
+interface MinutaVersionsPanelProps {
+    contract: Contract;
+    onVersionAdded: () => Promise<void>;
+    onNotify: (msg: string, type: 'success' | 'error' | 'info') => void;
+}
+
+const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onVersionAdded, onNotify }) => {
+    const versions = (contract.minuta_versions ?? []).slice().sort((a, b) => b.v - a.v);
+    const [notes, setNotes] = React.useState('');
+    const [uploading, setUploading] = React.useState(false);
+    const fileRef = React.useRef<HTMLInputElement>(null);
+
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploading(true);
+        try {
+            const path = `contract-minutas/${contract.id}/${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
+            const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
+            if (upErr) throw upErr;
+            const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path);
+            await contractService.addMinutaVersion(contract.id, { url: urlData.publicUrl, notes: notes.trim() });
+            setNotes('');
+            if (fileRef.current) fileRef.current.value = '';
+            await onVersionAdded();
+        } catch (err) {
+            onNotify(`Erro ao publicar versão: ${err instanceof Error ? err.message : ''}`, 'error');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const nextV = (versions[0]?.v ?? 0) + 1;
+
+    return (
+        <div className="bg-white p-6 rounded-[32px] border border-purple-100 shadow-sm space-y-5">
+            <div className="flex items-center gap-3">
+                <History className="w-4 h-4 text-purple-500" />
+                <h4 className="text-[12px] font-medium text-purple-700 uppercase tracking-widest">Versões da Minuta</h4>
+            </div>
+
+            {/* Publicar nova versão */}
+            <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 space-y-3">
+                <p className="text-[11px] font-bold text-purple-600 uppercase tracking-widest">Publicar Versão {String(nextV).padStart(2, '0')}</p>
+                <textarea
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    placeholder="Descreva o que mudou nesta versão (opcional)..."
+                    rows={2}
+                    className="w-full px-4 py-3 bg-white border border-purple-100 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300 resize-none"
+                />
+                <div className="flex items-center gap-3">
+                    <input ref={fileRef} type="file" accept=".pdf,.docx,.doc" onChange={handleUpload} className="hidden" />
+                    <button
+                        onClick={() => fileRef.current?.click()}
+                        disabled={uploading}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest hover:bg-purple-700 disabled:opacity-50 transition-all active:scale-95 shadow-sm"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        {uploading ? 'Enviando…' : 'Subir Documento'}
+                    </button>
+                    <span className="text-[10px] text-gray-400">PDF ou DOCX</span>
+                </div>
+            </div>
+
+            {/* Histórico */}
+            {versions.length > 0 ? (
+                <div className="space-y-2">
+                    {versions.map(ver => (
+                        <div key={ver.v} className="flex items-start gap-4 p-4 rounded-2xl border border-gray-100 hover:border-purple-100 transition-all group">
+                            <div className="w-9 h-9 bg-purple-100 rounded-xl flex items-center justify-center shrink-0 text-purple-700 font-black text-[12px]">
+                                v{ver.v}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">
+                                    {new Date(ver.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                                {ver.notes && <p className="text-sm text-gray-700 mt-0.5">{ver.notes}</p>}
+                            </div>
+                            <a
+                                href={ver.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                title="Abrir documento"
+                            >
+                                <ExternalLink className="w-4 h-4" />
+                            </a>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-[11px] text-gray-400 uppercase tracking-widest text-center py-2">Nenhuma versão publicada ainda</p>
+            )}
         </div>
     );
 };

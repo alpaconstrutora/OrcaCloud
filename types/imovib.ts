@@ -294,3 +294,21 @@ export interface ImovibUnit {
 
 export type ImovibUnitInsert = Omit<ImovibUnit, 'id' | 'created_at' | 'updated_at'>;
 export type ImovibUnitUpdate = Partial<ImovibUnitInsert>;
+
+export interface ImovibUnitInstance {
+    id: string;
+    study_id: string;
+    block_id: string;
+    unit_id?: string | null;
+    name: string;
+    floor: number;
+    private_area: number;
+    position_type: 'FRENTE' | 'LATERAL' | 'FUNDOS';
+    sun_orientation: 'NORTE' | 'SUL' | 'LESTE' | 'OESTE';
+    price: number;
+    status: 'DISPONÍVEL' | 'RESERVADO' | 'PERMUTADO' | 'VENDIDO';
+    created_at: string;
+    updated_at: string;
+}
+
+export type ImovibUnitInstanceInsert = Omit<ImovibUnitInstance, 'id' | 'created_at' | 'updated_at'>;

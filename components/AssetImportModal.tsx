@@ -452,30 +452,39 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
                     id="assets-excel-upload"
                     onChange={handleFileChange}
                   />
-                  <label htmlFor="assets-excel-upload" className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
-                    {file ? (
-                      <>
-                        <FileSpreadsheet className="w-12 h-12 text-emerald-600 mb-3 animate-pulse" />
-                        <p className="font-bold text-gray-800 text-sm">{file.name}</p>
-                        <p className="text-xs font-semibold text-gray-400 mt-1">{(file.size / 1024).toFixed(1)} KB</p>
+                  {file ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center">
+                      <FileSpreadsheet className="w-12 h-12 text-emerald-600 mb-3 animate-pulse" />
+                      <p className="font-bold text-gray-800 text-sm">{file.name}</p>
+                      <p className="text-xs font-semibold text-gray-400 mt-1">{(file.size / 1024).toFixed(1)} KB</p>
+                      <div className="flex gap-3 mt-6">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setFile(null);
+                          }}
+                          className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all active:scale-95"
+                        >
+                          Limpar
+                        </button>
                         <button
                           onClick={(e) => {
                             e.preventDefault();
                             processFile();
                           }}
-                          className="mt-6 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
+                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
                         >
                           Analisar Planilha
                         </button>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-10 h-10 text-gray-300 mb-3" />
-                        <p className="font-bold text-gray-700 text-sm">Selecione ou arraste a planilha</p>
-                        <p className="text-xs font-semibold text-gray-400 mt-1">Formatos suportados: .xlsx</p>
-                      </>
-                    )}
-                  </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <label htmlFor="assets-excel-upload" className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
+                      <Upload className="w-10 h-10 text-gray-300 mb-3" />
+                      <p className="font-bold text-gray-700 text-sm">Selecione ou arraste a planilha</p>
+                      <p className="text-xs font-semibold text-gray-400 mt-1">Formatos suportados: .xlsx</p>
+                    </label>
+                  )}
                 </div>
               </div>
 

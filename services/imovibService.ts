@@ -263,4 +263,43 @@ export const imovibService = {
         if (error) throw new Error(`Failed to delete regulatory zone: ${error.message}`);
     },
 
+    // ── Unit Instances (Espelho de Vendas da Viabilidade) ─────────────────────
+
+    async getUnitInstances(studyId: string): Promise<import('../types').ImovibUnitInstance[]> {
+        const { data, error } = await supabase
+            .from('imovib_unit_instances')
+            .select('id, study_id, block_id, unit_id, name, floor, private_area, position_type, sun_orientation, price, status, created_at, updated_at')
+            .eq('study_id', studyId)
+            .order('floor', { ascending: true })
+            .order('name', { ascending: true });
+        if (error) throw new Error(`Failed to fetch unit instances: ${error.message}`);
+        return data || [];
+    },
+
+    async createUnitInstances(instances: import('../types').ImovibUnitInstanceInsert[]): Promise<import('../types').ImovibUnitInstance[]> {
+        if (!instances || instances.length === 0) return [];
+        const { data, error } = await supabase
+            .from('imovib_unit_instances')
+            .insert(instances)
+            .select();
+        if (error) throw new Error(`Failed to create unit instances: ${error.message}`);
+        return data || [];
+    },
+
+    async updateUnitInstance(id: string, updates: Partial<import('../types').ImovibUnitInstanceInsert>): Promise<void> {
+        const { error } = await supabase
+            .from('imovib_unit_instances')
+            .update(updates)
+            .eq('id', id);
+        if (error) throw new Error(`Failed to update unit instance: ${error.message}`);
+    },
+
+    async deleteUnitInstancesByStudy(studyId: string): Promise<void> {
+        const { error } = await supabase
+            .from('imovib_unit_instances')
+            .delete()
+            .eq('study_id', studyId);
+        if (error) throw new Error(`Failed to delete unit instances: ${error.message}`);
+    },
+
 };

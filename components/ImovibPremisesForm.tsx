@@ -395,39 +395,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                 onBlur={(e) => handleUpdateBlock(block, 'name', e.target.value)}
                                             />
                                         </div>
-                                        <div className="flex items-center gap-4 flex-wrap bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
-                                            <div className="flex items-center gap-3 px-3 border-r border-slate-100">
-                                                <Calculator className="w-5 h-5 text-rose-400" />
-                                                <div>
-                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block leading-none mb-1">Custo Obra</span>
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-slate-500 font-medium text-xs">R$</span>
-                                                        <input
-                                                            type="number"
-                                                            defaultValue={block.construction_cost_sqm}
-                                                            onBlur={(e) => handleUpdateBlock(block, 'construction_cost_sqm', e.target.value)}
-                                                            className="w-20 bg-transparent border-none p-0 text-sm font-black text-slate-800 focus:ring-0"
-                                                        />
-                                                        <span className="text-slate-500 font-medium text-xs">/m²</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3 px-3">
-                                                <Calculator className="w-5 h-5 text-emerald-400" />
-                                                <div>
-                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block leading-none mb-1">Venda VGV</span>
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-slate-500 font-medium text-xs">R$</span>
-                                                        <input
-                                                            type="number"
-                                                            defaultValue={block.sales_price_sqm}
-                                                            onBlur={(e) => handleUpdateBlock(block, 'sales_price_sqm', e.target.value)}
-                                                            className="w-20 bg-transparent border-none p-0 text-sm font-black text-slate-800 focus:ring-0"
-                                                        />
-                                                        <span className="text-slate-500 font-medium text-xs">/m²</span>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                        <div className="flex items-center bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
                                             <button
                                                 onClick={() => handleDeleteBlock(block.id)}
                                                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0"

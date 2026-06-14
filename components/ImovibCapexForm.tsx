@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ImovibStudy, ImovibCapexItem, ImovibCapexItemInsert } from '../types';
+import { ImovibStudy, ImovibCapexItem, ImovibCapexItemInsert, ImovibRegulatoryZone } from '../types';
 import { imovibService } from '../services/imovibService';
 import { Calculator, ChevronRight, Activity, Leaf, Trash2, Plus, LayoutList, Zap } from 'lucide-react';
 import { useImovibMath } from '../hooks/useImovibMath';
+
+const parseRegVal = (v: string | undefined): number | null => {
+    if (!v || v === 'N.A.' || v.trim() === '') return null;
+    return parseFloat(v.replace(',', '.')) || null;
+};
 
 interface ImovibCapexFormProps {
     study: ImovibStudy;
@@ -67,6 +72,10 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const [initializing, setInitializing] = useState(true);
     const [landCost, setLandCost] = useState<number>(study.land_cost || 0);
     const [landCostFocused, setLandCostFocused] = useState(false);
+    const [zones, setZones] = useState<ImovibRegulatoryZone[]>([]);
+    const [blockCosts, setBlockCosts] = useState<Record<string, number>>(
+        Object.fromEntries((study.blocks || []).map(b => [b.id, b.construction_cost_sqm || 0]))
+    );
     const fmtBRL = (v: number) => v > 0 ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) : '';
 
     // Simplified mode local state
@@ -75,6 +84,25 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const [simplifiedAreaSqm, setSimplifiedAreaSqm] = useState<number>(study.capex_simplified_area_sqm || 0);
 
     const math = useImovibMath(study);
+
+    useEffect(() => {
+        imovibService.getRegulatoryZones(study.id).then(setZones).catch(console.error);
+    }, [study.id]);
+
+    // Área Total = Σ(T.O. × Área do Terreno × Pavimentos) — igual à coluna nas Premissas
+    const totalAreaM2 = useMemo(() => {
+        const toVal = zones.length ? parseRegVal(zones[0].taxa_ocupacao_maxima) : null;
+        const terrArea = study.terreno_area || null;
+        const toBase = (toVal != null && terrArea) ? toVal * terrArea : null;
+        if (toBase == null) return null;
+        let total = 0;
+        study.blocks?.forEach(block => {
+            block.units?.forEach(u => {
+                total += toBase * ((u as any).pavimentos || 1);
+            });
+        });
+        return total;
+    }, [study, zones]);
 
     // Total area from blocks for pre-filling
     const totalBlockArea = useMemo(() => {
@@ -141,6 +169,15 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
         };
         fetchOrSeed();
     }, [study.id]);
+
+    const saveBlockCost = async (blockId: string, value: number) => {
+        try {
+            await imovibService.updateBlock(blockId, { construction_cost_sqm: value });
+            onDataChanged();
+        } catch (e) {
+            console.error('Failed to save construction_cost_sqm', e);
+        }
+    };
 
     const saveLandCost = async (value: number) => {
         try {
@@ -283,6 +320,55 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                         </button>
                     </div>
                 </div>
+
+                {/* ── ÁREA TOTAL ── */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-4">
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-3">
+                        Área Total (m²)
+                    </label>
+                    <div className="text-2xl font-black text-indigo-700">
+                        {totalAreaM2 != null
+                            ? totalAreaM2.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' m²'
+                            : <span className="text-slate-300 text-base font-bold">— preencha T.O. e Área do Terreno nas Premissas</span>
+                        }
+                    </div>
+                    <p className="text-xs text-slate-400 font-medium mt-1">
+                        Σ (T.O. × Área do Terreno × Pavimentos) por tipologia
+                    </p>
+                </div>
+
+                {/* ── CUSTO OBRA POR BLOCO ── */}
+                {study.blocks && study.blocks.length > 0 && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-4">
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-4">
+                            Custo de Obra (R$/m²) por Bloco
+                        </label>
+                        <div className="space-y-3">
+                            {study.blocks.map(block => (
+                                <div key={block.id} className="flex items-center gap-4">
+                                    <span className="text-sm font-bold text-slate-700 min-w-[120px]">{block.name}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-slate-500 font-bold text-sm">R$</span>
+                                        <input
+                                            type="number"
+                                            value={blockCosts[block.id] ?? block.construction_cost_sqm ?? 0}
+                                            onChange={(e) => setBlockCosts(prev => ({ ...prev, [block.id]: parseFloat(e.target.value) || 0 }))}
+                                            onBlur={() => saveBlockCost(block.id, blockCosts[block.id] ?? 0)}
+                                            className="w-32 px-3 py-2 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none font-bold text-slate-800 text-right"
+                                        />
+                                        <span className="text-slate-400 text-sm font-medium">/m²</span>
+                                    </div>
+                                    {totalAreaM2 != null && (
+                                        <span className="text-sm text-slate-500 font-medium">
+                                            = {((blockCosts[block.id] ?? block.construction_cost_sqm ?? 0) * totalAreaM2)
+                                                .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                                        </span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* ── CUSTO DE AQUISIÇÃO DO TERRENO ── */}
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-6">

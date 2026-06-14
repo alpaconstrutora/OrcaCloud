@@ -14,7 +14,7 @@ export interface ReleaseRequirements {
 export type MeasurementMode = 'QUANTITATIVO' | 'PERCENTUAL' | 'HIBRIDO';
 export type ContractNature = 'Fornecimento' | 'Serviço' | 'Mão de Obra' | 'Locação' | 'Consumo' | 'Outros';
 export type ContractStatus =
-    | 'Rascunho' | 'Revisão' | 'Enviado' | 'Aprovado' | 'Assinado'
+    | 'Rascunho' | 'Minuta' | 'Revisão' | 'Enviado' | 'Aprovado' | 'Assinado'
     | 'Ativo' | 'Concluído' | 'Suspenso' | 'Encerrado' | 'Cancelado';
 
 export interface Contract {

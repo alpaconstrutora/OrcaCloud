@@ -574,10 +574,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
                                                 isSigned ? 'bg-emerald-100 text-emerald-700' :
                                                 contract.status === 'Ativo' ? 'bg-indigo-100 text-indigo-700' :
-                                                contract.status === 'Rascunho' ? 'bg-gray-100 text-gray-500' :
+                                                contract.status === 'Minuta' ? 'bg-purple-100 text-purple-700' :
                                                 'bg-amber-100 text-amber-700'
                                             }`}>
-                                                {isSigned ? 'Assinado' : (contract.status || 'Em andamento')}
+                                                {isSigned ? 'Assinado' :
+                                                 contract.status === 'Minuta' ? 'Minuta — aguardando suas considerações' :
+                                                 (contract.status || 'Em andamento')}
                                             </span>
                                             {docUrl && (
                                                 <a

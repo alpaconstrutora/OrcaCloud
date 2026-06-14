@@ -87,6 +87,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         const colors: Record<string, string> = {
             'Ativo': 'bg-green-100 text-green-800',
             'Rascunho': 'bg-gray-100 text-gray-800',
+            'Minuta': 'bg-purple-100 text-purple-800',
             'Suspenso': 'bg-amber-100 text-amber-800',
             'Encerrado': 'bg-blue-100 text-blue-800',
             'Cancelado': 'bg-red-100 text-red-800',
@@ -350,8 +351,9 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         className="px-6 py-4 bg-white border border-gray-100 rounded-2xl text-[12px] font-medium text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-all uppercase tracking-widest"
                     >
                         <option value="all">Todos os Status</option>
-                        <option value="Ativo">Ativo</option>
                         <option value="Rascunho">Rascunho</option>
+                        <option value="Minuta">Minuta</option>
+                        <option value="Ativo">Ativo</option>
                         <option value="Suspenso">Suspenso</option>
                         <option value="Encerrado">Encerrado</option>
                         <option value="Cancelado">Cancelado</option>

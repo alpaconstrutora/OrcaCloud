@@ -590,7 +590,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             onChange={(e) => setFormData({ ...formData, status: e.target.value as ContractStatus })}
                                             className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                         >
-                                            <option value="Rascunho">Rascunho</option>
+                                            <option value="Rascunho">Rascunho (interno)</option>
+                                            <option value="Minuta">Minuta (visível ao cliente)</option>
                                             <option value="Revisão">Revisão</option>
                                             <option value="Enviado">Enviado</option>
                                             <option value="Aprovado">Aprovado</option>

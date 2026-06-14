@@ -431,6 +431,7 @@ export const contractService = {
             .select('id, number, title, contract_type, status, original_value, current_value, start_date, end_date, signature_status, signature_url, signed_contract_url, direction, created_at')
             .eq('client_id', clientId)
             .eq('direction', 'OUTGOING')
+            .neq('status', 'Rascunho')  // Rascunho é interno; Minuta em diante fica visível ao cliente
             .order('created_at', { ascending: false });
         // Filtro de org é opcional — na visão consolidada o RLS já restringe às orgs acessíveis
         if (orgId) query = query.eq('organization_id', orgId);

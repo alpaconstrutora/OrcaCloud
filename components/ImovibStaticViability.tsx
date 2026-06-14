@@ -1,12 +1,24 @@
-import React, { useMemo } from 'react';
-import { ImovibStudy } from '../types';
+import React, { useMemo, useState, useEffect } from 'react';
+import { ImovibStudy, ImovibRegulatoryZone } from '../types';
+import { imovibService } from '../services/imovibService';
 import { Calculator, TrendingUp, DollarSign, PieChart, Activity } from 'lucide-react';
+
+const parseRegVal = (v: string | undefined): number | null => {
+    if (!v || v === 'N.A.' || v.trim() === '') return null;
+    return parseFloat(v.replace(',', '.')) || null;
+};
 
 interface ImovibStaticViabilityProps {
     study: ImovibStudy;
 }
 
 const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) => {
+    const [zones, setZones] = useState<ImovibRegulatoryZone[]>([]);
+
+    useEffect(() => {
+        imovibService.getRegulatoryZones(study.id).then(setZones).catch(console.error);
+    }, [study.id]);
+
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
     };
@@ -18,40 +30,48 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
     const calculations = useMemo(() => {
         let totalPrivateArea = 0;
         let totalCommonArea = 0;
+        let totalConstructionArea = 0;
         let vgv = 0;
         let constructionCost = 0;
         const landCost = study.land_cost || 0;
 
+        // T.O. × Área do Terreno = base para Área Total (igual à coluna Área Total nas Premissas)
+        const toVal = zones.length ? parseRegVal(zones[0].taxa_ocupacao_maxima) : null;
+        const terrArea = study.terreno_area || null;
+        const toBase = (toVal != null && terrArea) ? toVal * terrArea : null;
+
         study.blocks?.forEach(block => {
             let blockPrivateArea = 0;
             let blockCommonArea = 0;
+            let blockAreaTotal = 0;
 
             block.units?.forEach(unit => {
                 const qty = unit.quantity || 0;
                 const pav = (unit as any).pavimentos || 1;
                 blockPrivateArea += qty * pav * (unit.private_area || 0);
                 blockCommonArea += qty * pav * (unit.common_area || 0);
+                // Área Total = T.O. × Área do Terreno × Pavimentos
+                if (toBase != null) blockAreaTotal += toBase * pav;
             });
 
             totalPrivateArea += blockPrivateArea;
             totalCommonArea += blockCommonArea;
+            totalConstructionArea += blockAreaTotal;
 
-            // Pricing & Costing logic per block
-            vgv += (blockPrivateArea * (block.sales_price_sqm || 0));
-            // Base construction cost generally applies to total built area (private + common)
-            const blockTotalArea = blockPrivateArea + blockCommonArea;
-            constructionCost += (blockTotalArea * (block.construction_cost_sqm || 0));
+            // VGV = Área Privativa Total × Preço de Venda/m²
+            vgv += blockPrivateArea * (block.sales_price_sqm || 0);
+            // Custo de Construção = Σ Área Total × Custo Obra/m²
+            constructionCost += blockAreaTotal * (block.construction_cost_sqm || 0);
         });
 
         const totalCost = landCost + constructionCost;
         const grossProfit = vgv - totalCost;
         const margin = vgv > 0 ? (grossProfit / vgv) * 100 : 0;
-        const totalArea = totalPrivateArea + totalCommonArea;
 
         return {
             totalPrivateArea,
             totalCommonArea,
-            totalArea,
+            totalConstructionArea,
             vgv,
             landCost,
             constructionCost,
@@ -59,7 +79,7 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
             grossProfit,
             margin
         };
-    }, [study]);
+    }, [study, zones]);
 
     return (
         <div className="space-y-6 pb-10">
@@ -190,7 +210,7 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
                 </div>
                 <div className="bg-white rounded-2xl p-5 border border-green-100 shadow-sm bg-green-50/30">
                     <span className="text-green-700 text-xs font-black uppercase tracking-wider">Área Total Construída</span>
-                    <div className="text-2xl font-black text-green-900 mt-1">{formatArea(calculations.totalArea)}</div>
+                    <div className="text-2xl font-black text-green-900 mt-1">{formatArea(calculations.totalConstructionArea)}</div>
                 </div>
             </div>
         </div>

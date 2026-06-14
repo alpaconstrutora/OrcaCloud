@@ -29,7 +29,9 @@ const ServiceContractsModule: React.FC<Props> = ({
     const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
 
     const handleSubmit = async (data: Partial<Contract>) => {
-        const payload = { ...data, direction: 'OUTGOING' as const, organization_id: organizationId };
+        // Na visão consolidada (sem org ativa) usa a org do próprio contrato em edição
+        const effectiveOrgId = organizationId || editingContract?.organization_id;
+        const payload = { ...data, direction: 'OUTGOING' as const, organization_id: effectiveOrgId };
         let saved: Contract;
         if (editingContract?.id) {
             saved = await contractService.updateContract(editingContract.id, payload);
@@ -94,13 +96,13 @@ const ServiceContractsModule: React.FC<Props> = ({
                 </div>
             )}
 
-            {organizationId && (
+            {(organizationId || editingContract?.organization_id) && (
             <ContractModal
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setEditingContract(null); }}
                 onSubmit={handleSubmit}
                 projectId={editingContract?.project_id ?? ''}
-                organizationId={organizationId}
+                organizationId={organizationId || editingContract?.organization_id}
                 initialData={editingContract ?? undefined}
                 direction="OUTGOING"
                 onToast={showToast}

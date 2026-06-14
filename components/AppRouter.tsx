@@ -620,6 +620,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         />
       );
 
+    case 'financial-categories':
     case 'bank-reconciliation':
     case 'financial-boletos':
     case 'contas-a-pagar':
@@ -751,7 +752,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     // ── Controladoria (unificado) ──────────────────────────────────────────────
     case 'controladoria':
-    case 'financial-categories':
       return (
         <ControladoriaModule
           organizationId={activeOrganizationId || organizations[0]?.id || ''}

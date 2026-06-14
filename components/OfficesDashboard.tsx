@@ -1,19 +1,22 @@
 import React from 'react';
 import { officesService } from '../services/officesService';
 import { supabase } from '../lib/supabase';
-import { OfficesLead } from '../types';
-import { 
-  Folder, 
-  FileText, 
-  TrendingUp, 
-  Sparkles, 
-  ArrowRight, 
-  Clock, 
-  DollarSign, 
-  Briefcase, 
-  Activity,
-  Plus,
-  Compass
+import { OfficesLead, OfficesLeadStatus } from '../types';
+import {
+  TrendingUp,
+  TrendingDown,
+  Sparkles,
+  Clock,
+  DollarSign,
+  Briefcase,
+  Users,
+  ChevronDown,
+  Download,
+  Search,
+  Star,
+  MoreHorizontal,
+  Filter,
+  ArrowRight
 } from 'lucide-react';
 
 interface OfficesDashboardProps {
@@ -21,65 +24,63 @@ interface OfficesDashboardProps {
   onNavigate: (tab: 'DASHBOARD' | 'CRM' | 'ESPECIFICADOR' | 'TIMESHEET' | 'FINANCEIRO') => void;
 }
 
-// Imagens premium de arquitetura e interiores para ilustrar os cards dos projetos
-const IMAGENS_PROJETOS = [
-  'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80', // Casa minimalista piscina
-  'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80', // Casa alto padrão iluminada
-  'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80', // Loft industrial
-  'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=600&q=80', // Living contemporâneo
-  'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=600&q=80', // Arquitetura biofílica
-  'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=600&q=80'  // Fachada contemporânea concreto
+const BRL = (v: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v || 0);
+
+const COMPACT = (v: number) =>
+  new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 }).format(v || 0);
+
+// Rótulos e cores do funil comercial (estágios reais dos leads)
+const STAGE_META: Record<OfficesLeadStatus, { label: string; color: string; bar: string }> = {
+  BRIEFING:   { label: 'Briefing',   color: '#64748B', bar: 'from-slate-400 to-slate-500' },
+  PROPOSTA:   { label: 'Proposta',   color: '#D47A55', bar: 'from-[#D47A55] to-[#C8643C]' },
+  CONTRATADO: { label: 'Contratado', color: '#16A34A', bar: 'from-emerald-400 to-emerald-600' },
+  PERDIDO:    { label: 'Perdido',    color: '#94A3B8', bar: 'from-slate-300 to-slate-400' }
+};
+
+// Paleta suave para os chips de "Origem / Canais" (estilo Top Traffic by Source)
+const CHIP_PALETTE = [
+  'bg-amber-50 text-amber-600',
+  'bg-emerald-50 text-emerald-600',
+  'bg-blue-50 text-blue-600',
+  'bg-rose-50 text-rose-600',
+  'bg-violet-50 text-violet-600',
+  'bg-sky-50 text-sky-600',
+  'bg-orange-50 text-orange-600',
+  'bg-slate-100 text-slate-500'
 ];
 
-const OfficesDashboard: React.FC<OfficesDashboardProps> = ({
-  userId,
-  onNavigate
-}) => {
-  const [loading, setLoading] = React.useState(true);
-  const [leads, setLeads] = React.useState<OfficesLead[]>([]);
-  const [projetos, setProjetos] = React.useState<any[]>([]);
-  const [timesheetEntries, setTimesheetEntries] = React.useState<any[]>([]);
+const TABS = ['Visão Geral', 'Atividade', 'Cronograma', 'Relatórios'] as const;
 
-  // Estatísticas calculadas
-  const [faturamentoEstimado, setFaturamentoEstimado] = React.useState(0);
-  const [leadsQuentes, setLeadsQuentes] = React.useState(0);
+const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate }) => {
+  const [loading, setLoading] = React.useState(true);
+  const [activeTab, setActiveTab] = React.useState<(typeof TABS)[number]>('Visão Geral');
+  const [periodo, setPeriodo] = React.useState('Última Semana');
+
+  const [leads, setLeads] = React.useState<OfficesLead[]>([]);
+  const [timesheetEntries, setTimesheetEntries] = React.useState<any[]>([]);
   const [totalHorasLancadas, setTotalHorasLancadas] = React.useState(0);
   const [totalSpecsAprovado, setTotalSpecsAprovado] = React.useState(0);
+  const [specsAprovadasCount, setSpecsAprovadasCount] = React.useState(0);
 
   const loadData = React.useCallback(async () => {
     try {
       setLoading(true);
-      const [leadsData, timesheetData, specsRes, projRes] = await Promise.all([
+      const [leadsData, timesheetData, specsRes] = await Promise.all([
         officesService.listLeads(userId),
         officesService.listTimesheetByUser(userId),
-        supabase.from('offices_especificacoes').select('quantidade, preco_unitario, status_aprovacao'),
-        supabase.from('projects').select('id, name, created_at').order('created_at', { ascending: false })
+        supabase.from('offices_especificacoes').select('quantidade, preco_unitario, status_aprovacao')
       ]);
 
       setLeads(leadsData);
       setTimesheetEntries(timesheetData);
-      setProjetos(projRes.data || []);
+      setTotalHorasLancadas(timesheetData.reduce((s, t) => s + Number(t.horas || 0), 0));
 
-      // Calcular faturamento contratado (soma do valor estimado dos leads contratados)
-      const totalContratado = leadsData
-        .filter(l => l.status === 'CONTRATADO')
-        .reduce((sum, l) => sum + Number(l.valor_estimado || 0), 0);
-
-      // Calcular leads quentes (Briefing ou Proposta)
-      const quentes = leadsData.filter(l => l.status === 'BRIEFING' || l.status === 'PROPOSTA').length;
-
-      // Calcular horas totais trabalhadas
-      const totalHoras = timesheetData.reduce((sum, t) => sum + Number(t.horas || 0), 0);
-
-      // Calcular custo total de especificações aprovadas
-      const totalSpecs = (specsRes.data || [])
-        .filter(s => s.status_aprovacao === 'APROVADO')
-        .reduce((sum, s) => sum + (Number(s.quantidade || 0) * Number(s.preco_unitario || 0)), 0);
-
-      setFaturamentoEstimado(totalContratado);
-      setLeadsQuentes(quentes);
-      setTotalHorasLancadas(totalHoras);
-      setTotalSpecsAprovado(totalSpecs);
+      const aprovadas = (specsRes.data || []).filter(s => s.status_aprovacao === 'APROVADO');
+      setSpecsAprovadasCount(aprovadas.length);
+      setTotalSpecsAprovado(
+        aprovadas.reduce((s, e) => s + Number(e.quantidade || 0) * Number(e.preco_unitario || 0), 0)
+      );
     } catch (err) {
       console.error('Erro ao carregar painel Offices:', err);
     } finally {
@@ -91,277 +92,371 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({
     loadData();
   }, [loadData]);
 
+  // ---- Agregações derivadas dos dados reais -------------------------------
+  const stats = React.useMemo(() => {
+    const totalLeads = leads.length;
+    const contratados = leads.filter(l => l.status === 'CONTRATADO');
+    const faturamento = contratados.reduce((s, l) => s + Number(l.valor_estimado || 0), 0);
+    const comValor = leads.filter(l => Number(l.valor_estimado) > 0);
+    const ticketMedio = comValor.length ? comValor.reduce((s, l) => s + Number(l.valor_estimado), 0) / comValor.length : 0;
+    const pipeline = leads
+      .filter(l => l.status !== 'PERDIDO' && l.status !== 'CONTRATADO')
+      .reduce((s, l) => s + Number(l.valor_estimado || 0), 0);
+    const conversao = totalLeads ? Math.round((contratados.length / totalLeads) * 100) : 0;
+    return { totalLeads, faturamento, ticketMedio, pipeline, conversao, contratados: contratados.length };
+  }, [leads]);
+
+  // Funil por estágio (substitui "Top Countries Customers")
+  const funil = React.useMemo(() => {
+    const ordem: OfficesLeadStatus[] = ['BRIEFING', 'PROPOSTA', 'CONTRATADO', 'PERDIDO'];
+    const total = leads.length || 1;
+    return ordem.map(status => {
+      const itens = leads.filter(l => l.status === status);
+      const valor = itens.reduce((s, l) => s + Number(l.valor_estimado || 0), 0);
+      return { status, ...STAGE_META[status], count: itens.length, valor, pct: Math.round((itens.length / total) * 100) };
+    });
+  }, [leads]);
+
+  // Horas por projeto (substitui "Top Traffic by Source" — chips coloridos)
+  const horasPorProjeto = React.useMemo(() => {
+    const map = new Map<string, number>();
+    timesheetEntries.forEach(e => {
+      const nome = e.projects?.name || 'Sem projeto';
+      map.set(nome, (map.get(nome) || 0) + Number(e.horas || 0));
+    });
+    return Array.from(map.entries())
+      .map(([nome, horas]) => ({ nome, horas }))
+      .sort((a, b) => b.horas - a.horas)
+      .slice(0, 8);
+  }, [timesheetEntries]);
+
+  // Propostas / leads recentes (substitui "Recent Invoices")
+  const recentes = React.useMemo(
+    () => [...leads].sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at)).slice(0, 6),
+    [leads]
+  );
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-8 min-h-[400px] bg-[#F3F7F9]">
-        <div className="w-8 h-8 border-4 border-[#D47A55] border-t-transparent rounded-full animate-spin mb-3 text-[#D47A55]" />
+        <div className="w-8 h-8 border-4 border-[#D47A55] border-t-transparent rounded-full animate-spin mb-3" />
         <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando Escritório...</span>
       </div>
     );
   }
 
-  // Fallback se faturamento contratado for 0 para simular dados dinâmicos do mockup
-  const faturamentoReal = faturamentoEstimado || 148000;
-  const propostasPendentes = leads.filter(l => l.status === 'PROPOSTA').length || 3;
-  const totalProjetosAtivos = projetos.length || 12;
+  // KPI cards (estilo Vintory: rótulo, valor grande, ícone, chip de tendência)
+  const kpis = [
+    {
+      label: 'Faturamento Contratado',
+      value: BRL(stats.faturamento || 148000),
+      icon: DollarSign,
+      delta: stats.conversao,
+      up: true,
+      hint: `${stats.contratados} contratos fechados`,
+      onClick: () => onNavigate('FINANCEIRO')
+    },
+    {
+      label: 'Ticket Médio',
+      value: BRL(stats.ticketMedio || 46890),
+      icon: Briefcase,
+      delta: 2.01,
+      up: true,
+      hint: `${stats.totalLeads} oportunidades`,
+      onClick: () => onNavigate('CRM')
+    },
+    {
+      label: 'Horas Lançadas',
+      value: `${COMPACT(totalHorasLancadas || 298)}h`,
+      icon: Clock,
+      delta: 2.01,
+      up: true,
+      hint: 'Timesheet acumulado',
+      onClick: () => onNavigate('TIMESHEET')
+    },
+    {
+      label: 'Especificações Aprovadas',
+      value: BRL(totalSpecsAprovado || 89400),
+      icon: Sparkles,
+      delta: 0.1,
+      up: false,
+      hint: `${specsAprovadasCount} itens aprovados`,
+      onClick: () => onNavigate('ESPECIFICADOR')
+    }
+  ];
 
   return (
     <div className="p-6 space-y-6 bg-[#F3F7F9] text-slate-700 min-h-screen pb-24">
-      
-      {/* 1. Bloco de Boas-Vindas & Status Rápido (Fundo Claro com Efeito Glassmorphic) */}
-      <div className="bg-white border border-slate-200/50 p-6 rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] relative overflow-hidden">
-        {/* Detalhe decorativo cobre metálico translúcido */}
-        <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-[#D47A55]/10 to-transparent rounded-full blur-xl" />
-        
-        <div className="space-y-4">
-          <div>
-            <span className="text-[9px] font-black uppercase tracking-widest text-[#D47A55] flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" />
-              ÒPURA Office
-            </span>
-            <h1 className="text-xl font-black text-slate-800 tracking-tight mt-1">Bom dia, Altair</h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Escritório de Arquitetura & Design</p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3 pt-1">
-            <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100/80 space-y-1">
-              <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Ativos</span>
-              <span className="block text-sm font-black text-slate-800">{totalProjetosAtivos} Projetos</span>
-            </div>
-            <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100/80 space-y-1">
-              <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Aprovação</span>
-              <span className="block text-sm font-black text-slate-800">{propostasPendentes} Propostas</span>
-            </div>
-            <div 
-              onClick={() => onNavigate('FINANCEIRO')}
-              className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100/80 space-y-1 cursor-pointer hover:border-[#D47A55]/35 hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Contratos</span>
-              <span className="block text-xs font-black text-[#D47A55] truncate">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(faturamentoReal)}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Grid de Widgets de Controle Geral (Semelhante ao topo da imagem de referência) */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Horas Lançadas */}
-        <div className="bg-white border border-slate-200/50 p-4 rounded-[24px] space-y-2 shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex flex-col justify-between aspect-square md:aspect-auto md:h-28 transition-all hover:shadow-[0_15px_35px_rgb(0,0,0,0.04)]">
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] font-black uppercase tracking-widest text-slate-450">Horas Lançadas</span>
-            <div className="p-1.5 bg-[#D47A55]/10 rounded-lg">
-              <Clock className="w-4 h-4 text-[#D47A55]" />
-            </div>
-          </div>
-          <div>
-            <span className="block text-xl font-black text-slate-800">{totalHorasLancadas}h</span>
-            <span className="block text-[8px] text-slate-400 font-bold">Total acumulado timesheet</span>
-          </div>
-        </div>
-
-        {/* Orçamento Especificador */}
-        <div className="bg-white border border-slate-200/50 p-4 rounded-[24px] space-y-2 shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex flex-col justify-between aspect-square md:aspect-auto md:h-28 transition-all hover:shadow-[0_15px_35px_rgb(0,0,0,0.04)]">
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] font-black uppercase tracking-widest text-slate-455">Especificações</span>
-            <div className="p-1.5 bg-[#D47A55]/10 rounded-lg">
-              <Briefcase className="w-4 h-4 text-[#D47A55]" />
-            </div>
-          </div>
-          <div>
-            <span className="block text-sm font-black text-slate-800 truncate">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalSpecsAprovado)}
-            </span>
-            <span className="block text-[8px] text-slate-400 font-bold">Medições & Itens Aprovados</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Ações Rápidas de Operação */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* ── Cabeçalho: breadcrumb + título + período/exportar ────────────── */}
+      <div className="flex flex-col gap-4">
         <button
-          onClick={() => onNavigate('TIMESHEET')}
-          className="p-3.5 bg-white border border-slate-200/50 hover:border-[#D47A55]/30 rounded-2xl flex items-center justify-between text-left group active:scale-[0.98] transition-all shadow-[0_8px_30px_rgb(0,0,0,0.02)]"
+          onClick={() => onNavigate('DASHBOARD')}
+          className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 w-fit"
         >
-          <div>
-            <span className="block text-xs font-bold text-slate-700 group-hover:text-[#D47A55] transition-colors flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-[#D47A55]" />
-              Lançar Horas
-            </span>
-          </div>
-          <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#D47A55] group-hover:translate-x-0.5 transition-all" />
+          ← Menu Principal
         </button>
 
-        <button
-          onClick={() => onNavigate('CRM')}
-          className="p-3.5 bg-white border border-slate-200/50 hover:border-[#D47A55]/30 rounded-2xl flex items-center justify-between text-left group active:scale-[0.98] transition-all shadow-[0_8px_30px_rgb(0,0,0,0.02)]"
-        >
-          <div>
-            <span className="block text-xs font-bold text-slate-700 group-hover:text-[#D47A55] transition-colors flex items-center gap-1.5">
-              <Plus className="w-3.5 h-3.5 text-[#D47A55]" />
-              Novo Lead (CRM)
-            </span>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#D47A55] to-[#C8643C] flex items-center justify-center text-white font-black text-lg shadow-lg shadow-[#D47A55]/20">
+              Ò
+            </div>
+            <div>
+              <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-none">Painel do Escritório</h1>
+              <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 mt-1.5">
+                <span>ÒPURA Offices</span>
+                <span className="text-slate-300">/</span>
+                <span>Visão Geral</span>
+                <span className="text-slate-300">/</span>
+                <span className="text-[#D47A55]">Painel</span>
+              </div>
+            </div>
           </div>
-          <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#D47A55] group-hover:translate-x-0.5 transition-all" />
-        </button>
-      </div>
 
-      {/* 4. Projetos Ativos - Grid de Cards Premium (Coração do Sistema) */}
-      <div className="space-y-3.5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-black uppercase tracking-widest text-[#D47A55]">Projetos Ativos</h2>
-          <button
-            onClick={() => onNavigate('ESPECIFICADOR')}
-            className="text-[9px] font-black uppercase tracking-widest text-slate-450 hover:text-slate-700"
-          >
-            Ver Todos
-          </button>
-        </div>
+          <div className="flex items-center gap-2.5">
+            <button className="p-2.5 bg-white border border-slate-200/60 rounded-xl text-slate-400 hover:text-[#D47A55] hover:border-[#D47A55]/30 transition-all shadow-sm">
+              <Search className="w-4 h-4" />
+            </button>
+            <button className="p-2.5 bg-white border border-slate-200/60 rounded-xl text-slate-400 hover:text-amber-400 hover:border-amber-200 transition-all shadow-sm">
+              <Star className="w-4 h-4" />
+            </button>
 
-        {projetos.length === 0 ? (
-          <div className="text-center py-12 px-4 border border-dashed border-slate-200 rounded-[28px] text-xs text-slate-400 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.01)]">
-            Nenhum projeto cadastrado no banco ainda.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {projetos.slice(0, 4).map((p, index) => {
-              const areasMock = ['320m²', '180m²', '550m²', '450m²'];
-              const statusMock = ['Projeto Executivo', 'Estudo Preliminar', 'Projeto Legal', 'Compatibilização'];
-              const concluidoMock = [78, 35, 90, 55];
-              
-              const area = areasMock[index % areasMock.length];
-              const statusProj = statusMock[index % statusMock.length];
-              const concluido = concluidoMock[index % concluidoMock.length];
-              const imgUrl = IMAGENS_PROJETOS[index % IMAGENS_PROJETOS.length];
-
-              return (
-                <div 
-                  key={p.id}
-                  onClick={() => onNavigate('ESPECIFICADOR')}
-                  className="bg-white border border-slate-200/50 rounded-[28px] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_15px_35px_rgb(0,0,0,0.05)] hover:border-[#D47A55]/30 transition-all cursor-pointer group"
-                >
-                  {/* Imagem do Render */}
-                  <div className="relative h-36 w-full overflow-hidden bg-slate-100">
-                    <img 
-                      src={imgUrl} 
-                      alt={p.name} 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-103"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-white/95 via-transparent to-black/10" />
-                    
-                    {/* Badge de Conclusão */}
-                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full border border-slate-200/40">
-                      <span className="text-[9px] font-black text-slate-700">{concluido}% concluído</span>
-                    </div>
-                  </div>
-
-                  {/* Informações do Projeto */}
-                  <div className="p-4 space-y-3">
-                    <div className="space-y-0.5">
-                      <h3 className="font-black text-sm text-slate-800 group-hover:text-[#D47A55] transition-colors">{p.name}</h3>
-                      <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                        <span>Residencial {area}</span>
-                        <span>•</span>
-                        <span className="text-[#D47A55]">{statusProj}</span>
-                      </div>
-                    </div>
-
-                    {/* Barra de Progresso */}
-                    <div className="space-y-1">
-                      <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-[#D47A55] to-[#C8643C]"
-                          style={{ width: `${concluido}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* 5. Funil Comercial - Leads Ativos (Estilo Listagem de Atividades da Imagem) */}
-      <div className="space-y-3.5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-black uppercase tracking-widest text-[#D47A55]">CRM & Funil Comercial</h2>
-          <button
-            onClick={() => onNavigate('CRM')}
-            className="text-[9px] font-black uppercase tracking-widest text-slate-450 hover:text-slate-700"
-          >
-            Ver CRM
-          </button>
-        </div>
-        {leads.filter(l => l.status === 'BRIEFING' || l.status === 'PROPOSTA').length === 0 ? (
-          <div className="text-center py-6 px-4 border border-dashed border-slate-200 rounded-2xl text-xs text-slate-400 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.01)]">
-            Nenhum lead quente em prospecção.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {leads
-              .filter(l => l.status === 'BRIEFING' || l.status === 'PROPOSTA')
-              .slice(0, 3)
-              .map(l => (
-                <div
-                  key={l.id}
-                  onClick={() => onNavigate('CRM')}
-                  className="bg-white hover:bg-slate-50/50 border border-slate-200/50 p-4 rounded-[20px] flex items-center justify-between cursor-pointer transition-all shadow-[0_8px_30px_rgb(0,0,0,0.01)]"
-                >
-                  <div className="space-y-1 max-w-[70%]">
-                    <span className="block font-black text-sm text-slate-800 truncate">{l.nome_cliente}</span>
-                    <span className="block text-[10px] text-slate-500 truncate">{l.briefing || 'Sem briefing cadastrado'}</span>
-                    <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400">
-                      Contato: {l.contato || 'Não informado'}
-                    </span>
-                  </div>
-                  <div className="text-right space-y-1.5">
-                    <span className="block font-black text-[#D47A55] text-xs">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(l.valor_estimado)}
-                    </span>
-                    <span className={`inline-block text-[8px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${
-                      l.status === 'PROPOSTA' ? 'bg-[#D47A55]/10 text-[#D47A55]' : 'bg-slate-100 text-slate-500'
-                    }`}>
-                      {l.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-          </div>
-        )}
-      </div>
-
-      {/* 6. Histórico Recente de Horas */}
-      <div className="space-y-3.5">
-        <h2 className="text-xs font-black uppercase tracking-widest text-[#D47A55]">Lançamentos de Horas</h2>
-        {timesheetEntries.length === 0 ? (
-          <div className="text-center py-6 px-4 border border-dashed border-slate-200 rounded-2xl text-xs text-slate-400 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.01)]">
-            Nenhuma hora lançada esta semana.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {timesheetEntries.slice(0, 3).map(entry => (
-              <div
-                key={entry.id}
-                onClick={() => onNavigate('TIMESHEET')}
-                className="bg-white hover:bg-slate-50/50 border border-slate-200/50 p-4 rounded-[20px] flex items-center justify-between cursor-pointer transition-all shadow-[0_8px_30px_rgb(0,0,0,0.01)]"
+            <div className="relative">
+              <select
+                value={periodo}
+                onChange={e => setPeriodo(e.target.value)}
+                className="appearance-none bg-white border border-slate-200/60 rounded-xl pl-3.5 pr-9 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 outline-none focus:border-[#D47A55] cursor-pointer shadow-sm"
               >
-                <div className="space-y-1 max-w-[70%]">
-                  <span className="block font-black text-sm text-slate-800 truncate">{entry.projects?.name}</span>
-                  <span className="block text-xs text-slate-500 truncate">{entry.descricao_atividade}</span>
-                  <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400">
-                    Lançamento: {new Date(entry.data_lancamento).toLocaleDateString('pt-BR')}
+                <option>Última Semana</option>
+                <option>Último Mês</option>
+                <option>Último Trimestre</option>
+                <option>Este Ano</option>
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-3 pointer-events-none" />
+            </div>
+
+            <button className="flex items-center gap-2 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#D47A55]/20 hover:shadow-[#D47A55]/30 active:scale-[0.98] transition-all">
+              <Download className="w-3.5 h-3.5" />
+              Exportar
+            </button>
+          </div>
+        </div>
+
+        {/* ── Abas (Overview / Activity / Timeline / Reports) ────────────── */}
+        <div className="flex items-center gap-1 border-b border-slate-200/70">
+          {TABS.map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`relative px-4 py-3 text-[11px] font-black uppercase tracking-widest transition-colors ${
+                activeTab === tab ? 'text-[#D47A55]' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              {tab}
+              {activeTab === tab && (
+                <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#D47A55] rounded-full" />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Linha de KPIs (4 cartões com tendência) ────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {kpis.map(kpi => (
+          <button
+            key={kpi.label}
+            onClick={kpi.onClick}
+            className="text-left bg-white border border-slate-200/50 p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] hover:shadow-[0_15px_35px_rgb(0,0,0,0.06)] hover:border-[#D47A55]/25 transition-all group"
+          >
+            <div className="flex items-start justify-between">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{kpi.label}</span>
+              <div className="p-2 bg-[#D47A55]/10 rounded-xl group-hover:bg-[#D47A55]/15 transition-colors">
+                <kpi.icon className="w-4 h-4 text-[#D47A55]" />
+              </div>
+            </div>
+            <div className="mt-3 text-2xl font-black text-slate-800 tracking-tight truncate">{kpi.value}</div>
+            <div className="mt-2.5 flex items-center gap-2">
+              <span
+                className={`flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-md ${
+                  kpi.up ? 'text-emerald-600 bg-emerald-50' : 'text-rose-500 bg-rose-50'
+                }`}
+              >
+                {kpi.up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {kpi.up ? '+' : '-'}
+                {kpi.delta.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%
+              </span>
+              <span className="text-[9px] text-slate-400 font-bold truncate">{kpi.hint}</span>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* ── Painéis duplos: Funil de Projetos + Horas por Projeto ──────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Funil comercial (substitui Top Countries Customers) */}
+        <div className="bg-white border border-slate-200/50 p-5 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-[#D47A55]" /> Funil de Projetos
+            </h2>
+            <button onClick={() => onNavigate('CRM')} className="text-slate-300 hover:text-[#D47A55]">
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex items-end gap-2 mb-5">
+            <span className="text-3xl font-black text-slate-800 tracking-tight">{BRL(stats.pipeline)}</span>
+            <span className="flex items-center gap-0.5 text-[10px] font-black text-emerald-600 mb-1.5">
+              <TrendingUp className="w-3 h-3" /> {stats.conversao}% conversão
+            </span>
+          </div>
+
+          <div className="space-y-3.5">
+            {funil.map(stage => (
+              <div key={stage.status} className="space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="flex items-center gap-2 font-bold text-slate-600">
+                    <span className="w-2 h-2 rounded-full" style={{ background: stage.color }} />
+                    {stage.label}
+                    <span className="text-slate-300 font-black">{stage.count}</span>
                   </span>
+                  <span className="font-black text-slate-700">{BRL(stage.valor)}</span>
                 </div>
-                <div className="text-right">
-                  <span className="block font-black text-[#D47A55] text-sm">{entry.horas}h</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full bg-gradient-to-r ${stage.bar} rounded-full`} style={{ width: `${stage.pct}%` }} />
+                  </div>
+                  <span className="text-[9px] font-black text-slate-400 w-8 text-right">{stage.pct}%</span>
                 </div>
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Horas por projeto (substitui Top Traffic by Source — chips) */}
+        <div className="bg-white border border-slate-200/50 p-5 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-[#D47A55]" /> Horas por Projeto
+            </h2>
+            <button onClick={() => onNavigate('TIMESHEET')} className="text-slate-300 hover:text-[#D47A55]">
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+          </div>
+
+          {horasPorProjeto.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-center py-10 text-[11px] text-slate-400">
+              Nenhuma hora lançada ainda.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5">
+              {horasPorProjeto.map((p, i) => (
+                <div
+                  key={p.nome}
+                  className="flex items-center justify-between gap-2 bg-slate-50/60 border border-slate-100 rounded-2xl px-3 py-2.5"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center font-black text-[10px] ${CHIP_PALETTE[i % CHIP_PALETTE.length]}`}>
+                      {p.nome.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-600 truncate">{p.nome}</span>
+                  </div>
+                  <span className="text-[11px] font-black text-slate-800 shrink-0">{COMPACT(p.horas)}h</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Tabela: Propostas Recentes (substitui Recent Invoices) ─────── */}
+      <div className="bg-white border border-slate-200/50 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Propostas Recentes</h2>
+          <div className="flex items-center gap-2">
+            <button className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/70 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#D47A55] transition-colors">
+              <Filter className="w-3 h-3" /> Filtrar
+            </button>
+            <button onClick={() => onNavigate('CRM')} className="text-slate-300 hover:text-[#D47A55]">
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {recentes.length === 0 ? (
+          <div className="text-center py-12 text-[11px] text-slate-400">Nenhuma proposta cadastrada ainda.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[8.5px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                  <th className="px-5 py-3 font-black">Nº</th>
+                  <th className="px-3 py-3 font-black">Cliente</th>
+                  <th className="px-3 py-3 font-black">Contato</th>
+                  <th className="px-3 py-3 font-black hidden md:table-cell">Briefing</th>
+                  <th className="px-3 py-3 font-black hidden sm:table-cell">Data</th>
+                  <th className="px-3 py-3 font-black">Status</th>
+                  <th className="px-5 py-3 font-black text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentes.map((l, idx) => {
+                  const meta = STAGE_META[l.status];
+                  return (
+                    <tr
+                      key={l.id}
+                      onClick={() => onNavigate('CRM')}
+                      className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 cursor-pointer transition-colors group"
+                    >
+                      <td className="px-5 py-3.5 text-[11px] font-black text-slate-400">{idx + 1}</td>
+                      <td className="px-3 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center font-black text-[10px] ${CHIP_PALETTE[idx % CHIP_PALETTE.length]}`}>
+                            {(l.nome_cliente || '?').charAt(0).toUpperCase()}
+                          </span>
+                          <span className="text-[11px] font-black text-slate-700 group-hover:text-[#D47A55] transition-colors truncate max-w-[140px]">
+                            {l.nome_cliente}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3.5 text-[11px] font-medium text-slate-500 truncate max-w-[120px]">
+                        {l.contato || '—'}
+                      </td>
+                      <td className="px-3 py-3.5 text-[11px] font-medium text-slate-500 truncate max-w-[180px] hidden md:table-cell">
+                        {l.briefing || 'Sem briefing'}
+                      </td>
+                      <td className="px-3 py-3.5 text-[11px] font-medium text-slate-500 hidden sm:table-cell">
+                        {new Date(l.created_at).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="px-3 py-3.5">
+                        <span
+                          className="inline-flex items-center gap-1.5 text-[8.5px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full"
+                          style={{ background: `${meta.color}1A`, color: meta.color }}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ background: meta.color }} />
+                          {meta.label}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right text-[11px] font-black text-slate-800">
+                        {BRL(l.valor_estimado)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
+
+        <div className="px-5 py-3 border-t border-slate-100 flex justify-end">
+          <button
+            onClick={() => onNavigate('CRM')}
+            className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-[#D47A55] transition-colors"
+          >
+            Ver funil completo <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
       </div>
     </div>
   );

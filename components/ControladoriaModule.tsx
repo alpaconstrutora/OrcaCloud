@@ -1,10 +1,9 @@
 import React, { Suspense, useState } from 'react'
-import { BarChart3, TrendingUp, Layers, BookOpen, Construction, Building2 } from 'lucide-react'
+import { BarChart3, TrendingUp, BookOpen, Construction, Building2 } from 'lucide-react'
 import type { Organization } from '../types'
 
 const DREReport                  = React.lazy(() => import('./DREReport'))
 const CashFlowDashboard          = React.lazy(() => import('./CashFlowDashboard'))
-const FinancialCategoriesManager = React.lazy(() => import('./FinancialCategoriesManager'))
 const BalanceteReport            = React.lazy(() => import('./BalanceteReport'))
 const WIPReport                  = React.lazy(() => import('./WIPReport'))
 const DRESPEReport               = React.lazy(() => import('./DRESPEReport'))
@@ -27,7 +26,6 @@ const TABS: Array<{ id: ControladoriaTab; label: string; icon: React.ElementType
   { id: 'wip',          label: 'WIP',                 icon: Construction },
   { id: 'balancete',    label: 'Balancete',            icon: BookOpen     },
   { id: 'fluxo',        label: 'Fluxo de Caixa',      icon: TrendingUp   },
-  { id: 'categorias',   label: 'Categorias',           icon: Layers       },
 ]
 
 const Spinner = () => (
@@ -82,9 +80,6 @@ const ControladoriaModule: React.FC<Props> = ({
           )}
           {activeTab === 'dre_spe' && (
             <DRESPEReport organizationId={orgId} />
-          )}
-          {activeTab === 'categorias' && (
-            <FinancialCategoriesManager />
           )}
         </Suspense>
       </div>

@@ -83,6 +83,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
     const [globalClientInstallments, setGlobalClientInstallments] = React.useState<PaymentInstallment[]>([]);
     const [clientContracts, setClientContracts] = React.useState<Contract[]>([]);
+    const [viewingContract, setViewingContract] = React.useState<Contract | null>(null);
 
     React.useEffect(() => {
         const orgId = settings.organizationId || (settings as any).organization_id || organizationId;
@@ -553,9 +554,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 const isSigned = contract.signature_status === 'SIGNED' || contract.status === 'Assinado';
                                 const docUrl = contract.signature_url || contract.signed_contract_url;
                                 return (
-                                    <div key={contract.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-gray-100 hover:border-indigo-100 hover:bg-indigo-50/20 transition-all group">
+                                    <div
+                                        key={contract.id}
+                                        onClick={() => setViewingContract(contract)}
+                                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group cursor-pointer"
+                                    >
                                         <div className="flex flex-col gap-1 min-w-0">
-                                            <span className="text-sm font-black text-gray-900 uppercase truncate">{contract.title}</span>
+                                            <span className="text-sm font-black text-gray-900 uppercase truncate group-hover:text-indigo-700 transition-colors">{contract.title}</span>
                                             <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                                                 {contract.number && <span>Nº {contract.number}</span>}
                                                 {contract.contract_type && <span>· {contract.contract_type}</span>}
@@ -578,20 +583,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 'bg-amber-100 text-amber-700'
                                             }`}>
                                                 {isSigned ? 'Assinado' :
-                                                 contract.status === 'Minuta' ? 'Minuta — aguardando suas considerações' :
+                                                 contract.status === 'Minuta' ? 'Minuta' :
                                                  (contract.status || 'Em andamento')}
                                             </span>
-                                            {docUrl && (
-                                                <a
-                                                    href={docUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all"
-                                                    title="Baixar Contrato"
-                                                >
-                                                    <Download className="w-4 h-4" />
-                                                </a>
-                                            )}
+                                            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-indigo-400 transition-colors" />
                                         </div>
                                     </div>
                                 );
@@ -599,6 +594,94 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     </div>
                 )}
+
+                {/* Modal de visualização do contrato pelo cliente */}
+                {viewingContract && (() => {
+                    const c = viewingContract;
+                    const isSigned = c.signature_status === 'SIGNED' || c.status === 'Assinado';
+                    const docUrl = c.signature_url || c.signed_contract_url;
+                    const isMinuta = c.status === 'Minuta';
+                    return (
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setViewingContract(null)}>
+                            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                            <div
+                                className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 fade-in duration-200"
+                                onClick={e => e.stopPropagation()}
+                            >
+                                {/* Header */}
+                                <div className="flex items-start justify-between p-8 border-b border-gray-100">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center">
+                                            <FileText className="w-6 h-6 text-indigo-600" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">{c.title}</h2>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Nº {c.number} · {c.contract_type}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setViewingContract(null)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="p-8 space-y-6">
+                                    {/* Status banner */}
+                                    {isMinuta && (
+                                        <div className="flex items-start gap-4 p-5 bg-purple-50 border border-purple-100 rounded-2xl">
+                                            <AlertCircle className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                                            <div>
+                                                <p className="text-sm font-black text-purple-800 uppercase tracking-tight">Minuta — Aguardando suas considerações</p>
+                                                <p className="text-xs text-purple-600 mt-1">Este é um rascunho do contrato enviado para sua análise. Entre em contato conosco com suas observações antes da assinatura.</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Dados principais */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {[
+                                            { label: 'Valor do Contrato', value: `R$ ${(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
+                                            { label: 'Status', value: isSigned ? 'Assinado' : (c.status || '—') },
+                                            { label: 'Data de Início', value: c.start_date ? new Date(c.start_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—' },
+                                            { label: 'Data de Término', value: c.end_date ? new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado' },
+                                        ].map(item => (
+                                            <div key={item.label} className="p-4 bg-gray-50 rounded-2xl">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{item.label}</p>
+                                                <p className="text-sm font-black text-gray-900">{item.value}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Documento */}
+                                    {docUrl ? (
+                                        <div className="space-y-3">
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Documento do Contrato</p>
+                                            <a
+                                                href={docUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-4 p-5 bg-indigo-50 border border-indigo-100 rounded-2xl hover:bg-indigo-100 transition-all group"
+                                            >
+                                                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+                                                    <Download className="w-5 h-5 text-white" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-black text-indigo-700">Visualizar / Baixar Contrato</p>
+                                                    <p className="text-[10px] text-indigo-400 mt-0.5">Clique para abrir o documento</p>
+                                                </div>
+                                                <ChevronRight className="w-4 h-4 text-indigo-400 ml-auto group-hover:translate-x-1 transition-transform" />
+                                            </a>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-3 p-5 bg-gray-50 border border-dashed border-gray-200 rounded-2xl">
+                                            <FileText className="w-5 h-5 text-gray-300" />
+                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Documento ainda não disponível</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 <div className="space-y-8">
                     {/* Financial Planning Card */}

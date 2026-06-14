@@ -116,6 +116,10 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             await imovibService.updateUnit(unit.id, {
                 [field]: typeof value === 'boolean' ? value : field === 'name' ? value : parseFloat(value as string) || 0
             });
+            // When a unit is marked as not for sale, remove its instances from the espelho
+            if (field === 'is_vendavel' && value === false) {
+                await imovibService.deleteUnitInstancesByUnit(unit.id);
+            }
             onDataChanged();
         } catch (e) {
             console.error(e);

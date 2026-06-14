@@ -302,4 +302,12 @@ export const imovibService = {
         if (error) throw new Error(`Failed to delete unit instances: ${error.message}`);
     },
 
+    async deleteUnitInstancesByUnit(unitId: string): Promise<void> {
+        const { error } = await supabase
+            .from('imovib_unit_instances')
+            .delete()
+            .eq('unit_id', unitId);
+        if (error) throw new Error(`Failed to delete unit instances by unit: ${error.message}`);
+    },
+
 };

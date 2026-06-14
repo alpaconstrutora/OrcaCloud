@@ -65,6 +65,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [initializing, setInitializing] = useState(true);
+    const [landCost, setLandCost] = useState<number>(study.land_cost || 0);
 
     // Simplified mode local state
     const [capexMode, setCapexMode] = useState<'simplified' | 'detailed'>(study.capex_mode || 'detailed');
@@ -138,6 +139,15 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
         };
         fetchOrSeed();
     }, [study.id]);
+
+    const saveLandCost = async (value: number) => {
+        try {
+            await imovibService.updateStudy(study.id, { land_cost: value } as any);
+            onDataChanged();
+        } catch (e) {
+            console.error('Failed to save land_cost', e);
+        }
+    };
 
     const saveMode = async (newMode: 'simplified' | 'detailed') => {
         setCapexMode(newMode);
@@ -270,6 +280,27 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                             Completo
                         </button>
                     </div>
+                </div>
+
+                {/* ── CUSTO DE AQUISIÇÃO DO TERRENO ── */}
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-6">
+                    <label className="block text-xs font-black uppercase tracking-wider text-amber-700 mb-3">
+                        Custo de Aquisição do Terreno (R$)
+                    </label>
+                    <div className="flex items-center gap-3 max-w-xs">
+                        <span className="text-slate-500 font-bold text-sm">R$</span>
+                        <input
+                            type="number"
+                            value={landCost || ''}
+                            placeholder="0"
+                            onChange={(e) => setLandCost(parseFloat(e.target.value) || 0)}
+                            onBlur={() => saveLandCost(landCost)}
+                            className="flex-1 px-4 py-3 bg-white border border-amber-300 rounded-xl focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none font-bold text-slate-800 text-lg"
+                        />
+                    </div>
+                    <p className="text-xs text-amber-600 font-medium mt-2">
+                        Valor usado em: Estática → Aquisição do Terreno
+                    </p>
                 </div>
 
                 {/* ── SIMPLIFIED MODE ── */}

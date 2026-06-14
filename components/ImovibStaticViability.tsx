@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { ImovibStudy, ImovibRegulatoryZone } from '../types';
+import { ImovibStudy, ImovibRegulatoryZone, ImovibUnitInstance } from '../types';
 import { imovibService } from '../services/imovibService';
 import { Calculator, TrendingUp, DollarSign, PieChart, Activity } from 'lucide-react';
 
@@ -14,9 +14,11 @@ interface ImovibStaticViabilityProps {
 
 const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) => {
     const [zones, setZones] = useState<ImovibRegulatoryZone[]>([]);
+    const [unitInstances, setUnitInstances] = useState<ImovibUnitInstance[]>([]);
 
     useEffect(() => {
         imovibService.getRegulatoryZones(study.id).then(setZones).catch(console.error);
+        imovibService.getUnitInstances(study.id).then(setUnitInstances).catch(console.error);
     }, [study.id]);
 
     const formatCurrency = (value: number) => {
@@ -31,11 +33,10 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
         let totalPrivateArea = 0;
         let totalCommonArea = 0;
         let totalConstructionArea = 0;
-        let vgv = 0;
+        let vgvFormula = 0;
         let constructionCost = 0;
         const landCost = study.land_cost || 0;
 
-        // T.O. × Área do Terreno = base para Área Total (igual à coluna Área Total nas Premissas)
         const toVal = zones.length ? parseRegVal(zones[0].taxa_ocupacao_maxima) : null;
         const terrArea = study.terreno_area || null;
         const toBase = (toVal != null && terrArea) ? toVal * terrArea : null;
@@ -50,7 +51,6 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
                 const pav = (unit as any).pavimentos || 1;
                 blockPrivateArea += qty * pav * (unit.private_area || 0);
                 blockCommonArea += qty * pav * (unit.common_area || 0);
-                // Área Total = T.O. × Área do Terreno × Pavimentos
                 if (toBase != null) blockAreaTotal += toBase * pav;
             });
 
@@ -58,11 +58,16 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
             totalCommonArea += blockCommonArea;
             totalConstructionArea += blockAreaTotal;
 
-            // VGV = Área Privativa Total × Preço de Venda/m²
-            vgv += blockPrivateArea * (block.sales_price_sqm || 0);
-            // Custo de Construção = Σ Área Total × Custo Obra/m²
+            vgvFormula += blockPrivateArea * (block.sales_price_sqm || 0);
             constructionCost += blockAreaTotal * (block.construction_cost_sqm || 0);
         });
+
+        // Use espelho de vendas VGV when instances with prices exist
+        const espelhoVgv = unitInstances
+            .filter(i => i.status !== 'PERMUTADO')
+            .reduce((sum, i) => sum + (i.price || 0), 0);
+        const vgvFromEspelho = espelhoVgv > 0;
+        const vgv = vgvFromEspelho ? espelhoVgv : vgvFormula;
 
         const totalCost = landCost + constructionCost;
         const grossProfit = vgv - totalCost;
@@ -73,13 +78,14 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
             totalCommonArea,
             totalConstructionArea,
             vgv,
+            vgvFromEspelho,
             landCost,
             constructionCost,
             totalCost,
             grossProfit,
             margin
         };
-    }, [study, zones]);
+    }, [study, zones, unitInstances]);
 
     return (
         <div className="space-y-6 pb-10">
@@ -138,6 +144,11 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
                                     <span className="font-black text-gray-900 flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                                         Valor Geral de Vendas (VGV)
+                                        {calculations.vgvFromEspelho && (
+                                            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200">
+                                                Espelho de Vendas
+                                            </span>
+                                        )}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-right font-black text-gray-900">

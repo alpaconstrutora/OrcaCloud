@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { DollarSign, Landmark, PieChart, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { DollarSign, Landmark, PieChart, AlertTriangle, CheckCircle2, TrendingUp } from 'lucide-react';
 
 interface ImovibFundingFormProps {
     study: ImovibStudy;
@@ -22,8 +22,21 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
     const [swapFin, setSwapFin] = useState(study.swap_financial_percent ?? 0);
     const [swapPhys, setSwapPhys] = useState(study.swap_physical_percent ?? 0);
 
+    const [blockSalesPrices, setBlockSalesPrices] = useState<Record<string, number>>(
+        Object.fromEntries((study.blocks || []).map(b => [b.id, b.sales_price_sqm || 0]))
+    );
+
     const revenueTotal = Number((downpayment + construction + handover).toFixed(2));
     const isRevenueValid = revenueTotal === 100;
+
+    const saveBlockSalesPrice = async (blockId: string, value: number) => {
+        try {
+            await imovibService.updateBlock(blockId, { sales_price_sqm: value });
+            onDataChanged();
+        } catch (e) {
+            console.error('Failed to save sales_price_sqm', e);
+        }
+    };
 
     const handleUpdateField = async (field: keyof ImovibStudy, value: number) => {
         try {
@@ -58,6 +71,39 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
 
     return (
         <div className="space-y-6 pb-10 max-w-5xl mx-auto">
+
+            {/* ── PREÇO DE VENDA POR BLOCO ── */}
+            {study.blocks && study.blocks.length > 0 && (
+                <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+                            <TrendingUp className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-black text-slate-900 tracking-tight">Preço de Venda (R$/m²) por Bloco</h2>
+                            <p className="text-slate-500 text-sm font-medium mt-0.5">Base de cálculo do VGV = Área Privativa Total × Preço de Venda/m²</p>
+                        </div>
+                    </div>
+                    <div className="space-y-3">
+                        {study.blocks.map(block => (
+                            <div key={block.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <span className="font-bold text-slate-800">{block.name}</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-slate-500 font-bold text-sm">R$</span>
+                                    <input
+                                        type="number"
+                                        value={blockSalesPrices[block.id] ?? block.sales_price_sqm ?? 0}
+                                        onChange={(e) => setBlockSalesPrices(prev => ({ ...prev, [block.id]: parseFloat(e.target.value) || 0 }))}
+                                        onBlur={() => saveBlockSalesPrice(block.id, blockSalesPrices[block.id] ?? 0)}
+                                        className="w-32 pr-4 pl-4 py-2.5 bg-white border border-slate-200 rounded-xl font-black text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-right transition-all"
+                                    />
+                                    <span className="text-slate-400 font-bold text-sm">/m²</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 

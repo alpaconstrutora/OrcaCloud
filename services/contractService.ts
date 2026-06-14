@@ -425,6 +425,18 @@ export const contractService = {
         return data as Contract[];
     },
 
+    listContractsByClientId: async (clientId: string, orgId: string): Promise<Contract[]> => {
+        const { data, error } = await supabase
+            .from('contracts')
+            .select('id, number, title, contract_type, status, original_value, current_value, start_date, end_date, signature_status, signature_url, signed_contract_url, direction, created_at')
+            .eq('client_id', clientId)
+            .eq('organization_id', orgId)
+            .eq('direction', 'OUTGOING')
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return data as Contract[];
+    },
+
     getContractById: async (id: string): Promise<Contract | null> => {
         const { data, error } = await supabase
             .from('contracts')

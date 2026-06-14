@@ -30,7 +30,7 @@ import {
     FileDown
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
-import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment } from '../types';
+import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
 import { calculateProjectProgress, calculateUpcomingPhases, getPhaseSchedule, calculateRealizedFinancialProgress, calculatePlannedFinancialProgress } from '../utils/projectUtils';
 import ProjectGallery from './ProjectGallery';
 import { ClientAIInsight } from '../services/clientAiService';
@@ -40,6 +40,7 @@ import ClientList from './ClientList';
 import { clientService } from '../services/clientService';
 import { exportService } from '../services/exportService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
+import { contractService } from '../services/contractService';
 import { projectService } from '../services/projectService';
 import { orderService } from '../services/orderService';
 import { storageService } from '../services/storageService';
@@ -51,6 +52,7 @@ interface ClientAreaProps {
     profile?: { group: string; role: string };
     clientProfile?: Client | null;
     clients?: Client[]; // For admin selection
+    organizationId?: string | null; // Fallback quando settings não traz organizationId (ex.: portal sem projeto aberto)
     activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'financeiro' | 'suporte';
     onUpdateSettings?: (settings: ProjectSettings) => void;
     onClientSelect?: (client: Client) => void;
@@ -58,7 +60,7 @@ interface ClientAreaProps {
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'];
 
-export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, activeTab: initialTab, onUpdateSettings, onClientSelect }) => {
+export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, onUpdateSettings, onClientSelect }) => {
     const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'financeiro' | 'suporte'>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
@@ -80,15 +82,19 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const isAdmin = profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER || profile?.group === 'DESENVOLVEDOR';
 
     const [globalClientInstallments, setGlobalClientInstallments] = React.useState<PaymentInstallment[]>([]);
-    
+    const [clientContracts, setClientContracts] = React.useState<Contract[]>([]);
+
     React.useEffect(() => {
-        const orgId = settings.organizationId || (settings as any).organization_id;
+        const orgId = settings.organizationId || (settings as any).organization_id || organizationId;
         if (clientProfile && activeTab === 'financeiro' && orgId) {
             commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId).then(installments => {
                 setGlobalClientInstallments(installments);
             }).catch(console.error);
+            contractService.listContractsByClientId(clientProfile.id, orgId).then(contracts => {
+                setClientContracts(contracts);
+            }).catch(console.error);
         }
-    }, [clientProfile, activeTab, settings]);
+    }, [clientProfile, activeTab, settings, organizationId]);
 
     React.useEffect(() => {
         const fetchOrders = async () => {
@@ -530,6 +536,63 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     ))}
                 </div>
+
+                {/* Contratos de Serviço do Cliente */}
+                {clientContracts.length > 0 && (
+                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                        <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight flex items-center gap-3 mb-6">
+                            <FileText className="w-5 h-5 text-indigo-500" />
+                            Meus Contratos
+                        </h3>
+                        <div className="space-y-3">
+                            {clientContracts.map(contract => {
+                                const isSigned = contract.signature_status === 'SIGNED' || contract.status === 'Assinado';
+                                const docUrl = contract.signature_url || contract.signed_contract_url;
+                                return (
+                                    <div key={contract.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-gray-100 hover:border-indigo-100 hover:bg-indigo-50/20 transition-all group">
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                            <span className="text-sm font-black text-gray-900 uppercase truncate">{contract.title}</span>
+                                            <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                {contract.number && <span>Nº {contract.number}</span>}
+                                                {contract.contract_type && <span>· {contract.contract_type}</span>}
+                                                {contract.start_date && (
+                                                    <span>· Início: {new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                                )}
+                                                {contract.end_date && (
+                                                    <span>· Término: {new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 shrink-0">
+                                            <span className="text-base font-black text-gray-900 tabular-nums">
+                                                R$ {(contract.current_value || contract.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </span>
+                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                                                isSigned ? 'bg-emerald-100 text-emerald-700' :
+                                                contract.status === 'Ativo' ? 'bg-indigo-100 text-indigo-700' :
+                                                contract.status === 'Rascunho' ? 'bg-gray-100 text-gray-500' :
+                                                'bg-amber-100 text-amber-700'
+                                            }`}>
+                                                {isSigned ? 'Assinado' : (contract.status || 'Em andamento')}
+                                            </span>
+                                            {docUrl && (
+                                                <a
+                                                    href={docUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all"
+                                                    title="Baixar Contrato"
+                                                >
+                                                    <Download className="w-4 h-4" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 <div className="space-y-8">
                     {/* Financial Planning Card */}

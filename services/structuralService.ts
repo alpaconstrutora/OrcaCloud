@@ -9,7 +9,13 @@ import type {
   UpsertElementInput,
   UpsertRebarInput,
   AssemblyWithElements,
+  OpuraStructuralProject,
+  OpuraStructuralDimensionElement,
+  OpuraStructuralCalculationRevision,
+  UpsertStructuralProjectInput,
+  UpsertStructuralDimensionElementInput,
 } from '../types/structural'
+
 
 // ============================================================
 // Módulo Estrutural / Ferragem Armada — acesso a dados
@@ -194,4 +200,129 @@ export const structuralService = {
     if (error) throw error
     return (data ?? []) as AssemblyWithElements[]
   },
+
+  // ── Dimensionamento Estrutural ÒPURA (v1.0) ─────────────────
+  async listStructuralProjects(organizationId?: string): Promise<OpuraStructuralProject[]> {
+    let query = supabase.from('opura_structural_projects').select('*')
+    if (organizationId) {
+      query = query.eq('organization_id', organizationId)
+    }
+    const { data, error } = await query.order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []) as OpuraStructuralProject[]
+  },
+
+  async getStructuralProjectById(id: string): Promise<OpuraStructuralProject | null> {
+    const { data, error } = await supabase
+      .from('opura_structural_projects')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (error) throw error
+    return data as OpuraStructuralProject | null
+  },
+
+  async upsertStructuralProject(input: UpsertStructuralProjectInput): Promise<OpuraStructuralProject> {
+    const payload: Record<string, unknown> = {
+      organization_id: input.organizationId,
+      nome: input.nome,
+      responsavel_tecnico: input.responsavelTecnico,
+      numero_art: input.numeroArt ?? null,
+      caa: input.caa,
+      norma: input.norma ?? 'ABNT NBR 6118:2023',
+      status: input.status ?? 'EM_ANDAMENTO',
+      revisao_atual: input.revisaoAtual ?? 0,
+    }
+    if (input.id) payload.id = input.id
+
+    const { data, error } = await supabase
+      .from('opura_structural_projects')
+      .upsert(payload)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data as OpuraStructuralProject
+  },
+
+  async deleteStructuralProject(id: string): Promise<void> {
+    const { error } = await supabase.from('opura_structural_projects').delete().eq('id', id)
+    if (error) throw error
+  },
+
+  async listStructuralDimensionElements(projectId: string): Promise<OpuraStructuralDimensionElement[]> {
+    const { data, error } = await supabase
+      .from('opura_structural_dimension_elements')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true })
+
+    if (error) throw error
+    return (data ?? []) as OpuraStructuralDimensionElement[]
+  },
+
+  async upsertStructuralDimensionElement(input: UpsertStructuralDimensionElementInput): Promise<OpuraStructuralDimensionElement> {
+    const payload: Record<string, unknown> = {
+      organization_id: input.organizationId,
+      project_id: input.projectId,
+      tipo: input.tipo,
+      pavimento: input.pavimento,
+      tag: input.tag,
+      geometria: input.geometria,
+      cargas: input.cargas,
+      resultado_calculo: input.resultadoCalculo ?? null,
+      status_verificacao: input.statusVerificacao ?? 'NAO_CALCULADO',
+      structural_element_id: input.structuralElementId ?? null,
+    }
+    if (input.id) payload.id = input.id
+
+    const { data, error } = await supabase
+      .from('opura_structural_dimension_elements')
+      .upsert(payload)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data as OpuraStructuralDimensionElement
+  },
+
+  async deleteStructuralDimensionElement(id: string): Promise<void> {
+    const { error } = await supabase.from('opura_structural_dimension_elements').delete().eq('id', id)
+    if (error) throw error
+  },
+
+  async listCalculationRevisions(projectId: string): Promise<OpuraStructuralCalculationRevision[]> {
+    const { data, error } = await supabase
+      .from('opura_structural_calculation_revisions')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('calculado_em', { ascending: false })
+
+    if (error) throw error
+    return (data ?? []) as OpuraStructuralCalculationRevision[]
+  },
+
+  async createCalculationRevision(revision: Omit<OpuraStructuralCalculationRevision, 'id' | 'calculado_em'>): Promise<OpuraStructuralCalculationRevision> {
+    const { data, error } = await supabase
+      .from('opura_structural_calculation_revisions')
+      .insert({
+        organization_id: revision.organization_id,
+        project_id: revision.project_id,
+        revisao: revision.revisao,
+        elemento_tag: revision.elemento_tag,
+        tipo_elemento: revision.tipo_elemento,
+        geometria_calculada: revision.geometria_calculada,
+        cargas_calculadas: revision.cargas_calculadas,
+        resultado_verificacao: revision.resultado_verificacao,
+        armadura_calculada: revision.armadura_calculada,
+        calculado_por: revision.calculado_por,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data as OpuraStructuralCalculationRevision
+  },
 }
+

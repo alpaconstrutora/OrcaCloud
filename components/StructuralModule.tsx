@@ -11,6 +11,7 @@ import StructuralElements from './structural/StructuralElements'
 import StructuralRebars from './structural/StructuralRebars'
 import StructuralCutTable from './structural/StructuralCutTable'
 import StructuralQuantitative from './structural/StructuralQuantitative'
+import StructuralDimension from './structural/StructuralDimension'
 
 interface Props {
   activeOrganizationId?: string
@@ -19,7 +20,7 @@ interface Props {
   onChangeView?: (view: string) => void
 }
 
-type ModuleTab = 'catalogo' | 'obra' | 'corte' | 'quantitativo'
+type ModuleTab = 'catalogo' | 'obra' | 'corte' | 'quantitativo' | 'dimensionamento'
 
 const STEEL_TYPES: SteelType[] = ['CA-50', 'CA-60', 'tela', 'trelica']
 
@@ -493,6 +494,7 @@ const StructuralModule: React.FC<Props> = ({ activeOrganizationId, projects = []
         <TabBtn active={tab === 'obra'} icon={ClipboardList} label="Obra & Armaduras" onClick={() => setTab('obra')} />
         <TabBtn active={tab === 'corte'} icon={Scissors} label="Corte & Dobra" onClick={() => setTab('corte')} />
         <TabBtn active={tab === 'quantitativo'} icon={Calculator} label="Quantitativo" onClick={() => setTab('quantitativo')} />
+        <TabBtn active={tab === 'dimensionamento'} icon={Construction} label="Dimensionamento NBR 6118" onClick={() => setTab('dimensionamento')} />
       </div>
 
       {tab === 'catalogo' && <SteelCatalog orgId={effectiveOrgId} />}
@@ -504,6 +506,9 @@ const StructuralModule: React.FC<Props> = ({ activeOrganizationId, projects = []
       )}
       {tab === 'quantitativo' && (
         <StructuralQuantitative orgId={effectiveOrgId ?? ''} projectId={projectId} projectName={projectName} />
+      )}
+      {tab === 'dimensionamento' && (
+        <StructuralDimension activeOrganizationId={effectiveOrgId} />
       )}
     </div>
   )

@@ -179,3 +179,77 @@ export interface QuantitativeRow {
   pesoComPerdaKg: number
   custo: number | null
 }
+
+// ── Dimensionamento Estrutural ÒPURA (v1.0 NBR 6118) ───────────
+
+export interface OpuraStructuralProject {
+  id: string
+  organization_id: string
+  nome: string
+  responsavel_tecnico: string
+  numero_art: string | null
+  caa: 'I' | 'II' | 'III' | 'IV'
+  norma: string
+  status: 'EM_ANDAMENTO' | 'VERIFICADO' | 'EMITIDO' | 'REVISADO'
+  revisao_atual: number
+  created_at: string
+  updated_at: string
+}
+
+export interface OpuraStructuralDimensionElement {
+  id: string
+  organization_id: string
+  project_id: string
+  tipo: 'VIGA' | 'PILAR' | 'LAJE' | 'SAPATA' | 'VIGA_BALDRAME'
+  pavimento: string
+  tag: string
+  geometria: Record<string, any>
+  cargas: Record<string, any>
+  resultado_calculo: Record<string, any> | null
+  status_verificacao: 'OK' | 'ATENCAO' | 'REPROVADO' | 'NAO_CALCULADO'
+  structural_element_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface OpuraStructuralCalculationRevision {
+  id: string
+  organization_id: string
+  project_id: string
+  revisao: number
+  elemento_tag: string
+  tipo_elemento: string
+  geometria_calculada: Record<string, any>
+  cargas_calculadas: Record<string, any>
+  resultado_verificacao: Record<string, any>
+  armadura_calculada: Record<string, any>
+  calculado_em: string
+  calculado_por: string
+}
+
+export interface UpsertStructuralProjectInput {
+  id?: string
+  organizationId: string
+  nome: string
+  responsavelTecnico: string
+  numeroArt?: string | null
+  caa: 'I' | 'II' | 'III' | 'IV'
+  norma?: string
+  status?: 'EM_ANDAMENTO' | 'VERIFICADO' | 'EMITIDO' | 'REVISADO'
+  revisaoAtual?: number
+}
+
+export interface UpsertStructuralDimensionElementInput {
+  id?: string
+  organizationId: string
+  projectId: string
+  tipo: 'VIGA' | 'PILAR' | 'LAJE' | 'SAPATA' | 'VIGA_BALDRAME'
+  pavimento: string
+  tag: string
+  geometria: Record<string, any>
+  cargas: Record<string, any>
+  resultadoCalculo?: Record<string, any> | null
+  statusVerificacao?: 'OK' | 'ATENCAO' | 'REPROVADO' | 'NAO_CALCULADO'
+  structuralElementId?: string | null
+}
+

@@ -507,6 +507,7 @@ const Layout: React.FC<LayoutProps> = ({
               {(mod.offices   || isDev) && <NavItem id="offices-dashboard"  icon={Palette}   label="ÒPURA Offices"  />}
               {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" />}
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" />
+              <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
@@ -899,6 +900,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="offices-dashboard" icon={Palette} label="ÒPURA Offices" forceFull />
               <NavItem id="reformas-dashboard" icon={Hammer} label="ÒPURA Reformas" forceFull />
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" forceFull />
+              <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" forceFull />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
                 <div className="space-y-1 mb-4">

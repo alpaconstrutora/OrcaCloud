@@ -25,3 +25,4 @@ export * from "./cno";
 export * from "./market";
 export * from "./structural";
 export * from "./organizationGovernance";
+export * from "./assets";

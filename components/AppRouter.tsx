@@ -79,6 +79,7 @@ const OpuraCnoModule        = React.lazy(() => import('./OpuraCnoModule'));
 const ObraTypesManager      = React.lazy(() => import('./ObraTypesManager'));
 const OpuraMarketModule     = React.lazy(() => import('./OpuraMarketModule'));
 const OpuraGovernanceModule = React.lazy(() => import('./OpuraGovernanceModule'));
+const OpuraAssetsModule     = React.lazy(() => import('./OpuraAssetsModule'));
 
 
 // Suspense fallback
@@ -276,6 +277,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = true;
     } else if (activeView === 'opura-governance') {
       allowed = true;
+    } else if (activeView === 'opura-assets') {
+      allowed = true;
     }
 
     if (!allowed) {
@@ -365,6 +368,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <OpuraGovernanceModule
+            activeOrganizationId={activeOrganizationId}
+            onChangeView={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    case 'opura-assets':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <OpuraAssetsModule
             activeOrganizationId={activeOrganizationId}
             onChangeView={setActiveView}
           />

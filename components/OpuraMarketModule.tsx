@@ -3,6 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { opuraMarketService } from '../services/opuraMarketService';
+import { imovibService } from '../services/imovibService';
 import { supabase } from '../lib/supabase';
 import {
   OpuraMarketCity,
@@ -694,8 +695,6 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       
       const { data: { user } } = await supabase.auth.getUser();
       const userEmail = user?.email || 'sistema@opura.com.br';
-
-      const { imovibService } = await import('../services/imovibService');
 
       // 1. Criar Estudo no banco
       const areaTerreno = parseFloat(terrainArea);

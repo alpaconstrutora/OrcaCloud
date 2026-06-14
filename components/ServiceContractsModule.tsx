@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { FileStack } from 'lucide-react';
 import SupplyChainContractList from './SupplyChainContractList';
 import ContractDetailView from './ContractDetailView';
 import { ContractModal } from './ContractModal';
-import DocxTemplateManager from './DocxTemplateManager';
 import { Contract, BudgetEntry } from '../types';
 import { contractService } from '../services/contractService';
 import { useServicesToast } from './services/useServicestoast';
@@ -18,18 +16,15 @@ interface Props {
 const ServiceContractsModule: React.FC<Props> = ({
     organizationId,
     budget = [],
-    onGoToProject,
 }) => {
     const [view, setView] = useState<'list' | 'detail'>('list');
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [editingContract, setEditingContract] = useState<Contract | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
     const [version, setVersion] = useState(0);
     const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
 
     const handleSubmit = async (data: Partial<Contract>) => {
-        // Na visão consolidada (sem org ativa) usa a org do próprio contrato em edição
         const effectiveOrgId = organizationId || editingContract?.organization_id;
         const payload = { ...data, direction: 'OUTGOING' as const, organization_id: effectiveOrgId };
         let saved: Contract;
@@ -43,16 +38,6 @@ const ServiceContractsModule: React.FC<Props> = ({
         setSelectedId(saved.id);
         setView('detail');
     };
-
-    const templateButton = (
-        <button
-            onClick={() => setIsTemplateManagerOpen(true)}
-            className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-100 rounded-2xl text-gray-500 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm font-medium text-[12px] uppercase tracking-widest active:scale-95"
-            title="Gerenciar modelos de documento (.docx)"
-        >
-            <FileStack className="w-4 h-4" /> Modelos de Documento
-        </button>
-    );
 
     return (
         <>
@@ -91,31 +76,23 @@ const ServiceContractsModule: React.FC<Props> = ({
                             setIsModalOpen(true);
                         }}
                         onDelete={() => setVersion(v => v + 1)}
-                        extraActions={templateButton}
                     />
                 </div>
             )}
 
             {(organizationId || editingContract?.organization_id) && (
-            <ContractModal
-                isOpen={isModalOpen}
-                onClose={() => { setIsModalOpen(false); setEditingContract(null); }}
-                onSubmit={handleSubmit}
-                projectId={editingContract?.project_id ?? ''}
-                organizationId={organizationId || editingContract?.organization_id}
-                initialData={editingContract ?? undefined}
-                direction="OUTGOING"
-                onToast={showToast}
-            />
-            )}
-            <ServicesToast toasts={toasts} onDismiss={dismissToast} />
-
-            {isTemplateManagerOpen && organizationId && (
-                <DocxTemplateManager
-                    organizationId={organizationId}
-                    onClose={() => setIsTemplateManagerOpen(false)}
+                <ContractModal
+                    isOpen={isModalOpen}
+                    onClose={() => { setIsModalOpen(false); setEditingContract(null); }}
+                    onSubmit={handleSubmit}
+                    projectId={editingContract?.project_id ?? ''}
+                    organizationId={organizationId || editingContract?.organization_id}
+                    initialData={editingContract ?? undefined}
+                    direction="OUTGOING"
+                    onToast={showToast}
                 />
             )}
+            <ServicesToast toasts={toasts} onDismiss={dismissToast} />
         </>
     );
 };

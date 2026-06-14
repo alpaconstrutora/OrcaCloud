@@ -66,7 +66,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [projectBudget, setProjectBudget] = React.useState<BudgetEntry[]>([]);
     const [utilityBills, setUtilityBills] = React.useState<ContractUtilityBill[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [activeTab, setActiveTab] = React.useState<'overview' | 'items' | 'addendums' | 'measurements' | 'utility_bills'>('overview');
+    const [activeTab, setActiveTab] = React.useState<'overview' | 'items' | 'addendums' | 'measurements' | 'utility_bills' | 'emissao'>('overview');
     const [isBudgetPickerOpen, setIsBudgetPickerOpen] = React.useState(false);
     const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingIndex: number | null; initial: AvulsoItem | null }>({ open: false, editingIndex: null, initial: null });
     const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
@@ -915,16 +915,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     )}
 
                     <button
-                        onClick={() => setEmitModalOpen(true)}
-                        disabled={loading}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm"
-                        title="Preencher seu modelo .docx com os dados do contrato"
-                    >
-                        <FileDown className="w-4 h-4 text-blue-600" />
-                        Emitir Contrato
-                    </button>
-
-                    <button
                         onClick={handleSyncFinance}
                         disabled={syncingFinance}
                         className="flex items-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 rounded-2xl hover:bg-emerald-50 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm disabled:opacity-50"
@@ -976,10 +966,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     { id: 'items', label: 'Itens do Contrato', icon: FileText },
                     { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
                     { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
+                    { id: 'emissao', label: 'Emissão', icon: FileDown },
                 ]).map((tab) => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'utility_bills')}
+                        onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'utility_bills' | 'emissao')}
                         className={`flex items-center gap-2 px-5 py-2 rounded-2xl transition-all font-medium text-[12px] uppercase tracking-widest ${activeTab === tab.id
                             ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
@@ -1453,94 +1444,118 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </div>
                         </div>
 
-                        {/* GED: signed contract card */}
-                        <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
-                            <h4 className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2">Documentos (GED)</h4>
-                            <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl group flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
-                                        <FileText className="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[12px] font-medium text-blue-600 uppercase tracking-widest leading-none mb-1">Contrato Assinado</p>
-                                        <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">
-                                            {contract.signed_contract_url ? 'PDF Vinculado' : 'Não Anexado'}
-                                        </p>
-                                    </div>
-                                </div>
-                                {contract.signed_contract_url && (
-                                    <a
-                                        href={contract.signed_contract_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-2 bg-white text-blue-600 rounded-lg border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                                        title="Abrir Contrato Assinado"
-                                    >
-                                        <ExternalLink className="w-4 h-4" />
-                                    </a>
-                                )}
-                            </div>
+                    </div>
+                </div>
+            )}
 
-                            {/* Assinatura Eletrônica */}
-                            <SignaturePanel
-                                contract={contract}
-                                onSend={async (signers) => {
-                                    if (!contract.signed_contract_url) {
-                                        notify('Anexe o PDF do contrato antes de enviar para assinatura.', 'error');
-                                        return;
-                                    }
-                                    try {
-                                        notify('Enviando para ZapSign…', 'info');
-                                        // Busca o PDF como base64
-                                        const pdfResp = await fetch(contract.signed_contract_url);
-                                        const blob = await pdfResp.blob();
-                                        const base64 = await new Promise<string>((res, rej) => {
-                                            const fr = new FileReader();
-                                            fr.onload = () => res((fr.result as string).split(',')[1]);
-                                            fr.onerror = rej;
-                                            fr.readAsDataURL(blob);
-                                        });
-                                        await contractService.sendForSignature(
-                                            contract.id,
-                                            contract.organization_id,
-                                            base64,
-                                            `Contrato ${contract.number} — ${contract.title}`,
-                                            signers
-                                        );
-                                        const updated = await contractService.getContractById(contract.id);
-                                        if (updated) setContract(updated);
-                                        notify('Contrato enviado para assinatura!', 'success');
-                                    } catch (e) {
-                                        notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
-                                    }
-                                }}
-                                onRefreshStatus={async () => {
-                                    if (!contract.signature_token) return;
-                                    try {
-                                        await contractService.getSignatureStatus(contract.signature_token);
-                                        const updated = await contractService.getContractById(contract.id);
-                                        if (updated) setContract(updated);
-                                        notify('Status atualizado.', 'info');
-                                    } catch (e) {
-                                        notify(`Erro ao consultar status: ${e instanceof Error ? e.message : ''}`, 'error');
-                                    }
-                                }}
-                            />
+            {/* Tab: Emissão */}
+            {activeTab === 'emissao' && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                    {/* Ações de emissão */}
+                    <div className="flex flex-wrap gap-3">
+                        <button
+                            onClick={() => setEmitModalOpen(true)}
+                            disabled={loading}
+                            className="flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all font-medium text-[12px] uppercase tracking-widest shadow-lg shadow-blue-100 active:scale-95"
+                        >
+                            <FileDown className="w-4 h-4" />
+                            Emitir Contrato (.docx)
+                        </button>
+                        <button
+                            onClick={() => setDocxManagerOpen(true)}
+                            className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 text-gray-600 rounded-2xl hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 transition-all font-medium text-[12px] uppercase tracking-widest shadow-sm active:scale-95"
+                        >
+                            <FileText className="w-4 h-4" />
+                            Modelos de Documento
+                        </button>
+                    </div>
+
+                    {/* GED: signed contract card */}
+                    <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+                        <h4 className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2">Documentos (GED)</h4>
+                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl group flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+                                    <FileText className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <p className="text-[12px] font-medium text-blue-600 uppercase tracking-widest leading-none mb-1">Contrato Assinado</p>
+                                    <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">
+                                        {contract.signed_contract_url ? 'PDF Vinculado' : 'Não Anexado'}
+                                    </p>
+                                </div>
+                            </div>
+                            {contract.signed_contract_url && (
+                                <a
+                                    href={contract.signed_contract_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2 bg-white text-blue-600 rounded-lg border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                                    title="Abrir Contrato Assinado"
+                                >
+                                    <ExternalLink className="w-4 h-4" />
+                                </a>
+                            )}
                         </div>
 
-                        {/* Versões da Minuta */}
-                        {contract.status === 'Minuta' && (
-                            <MinutaVersionsPanel
-                                contract={contract}
-                                onVersionAdded={async () => {
+                        {/* Assinatura Eletrônica */}
+                        <SignaturePanel
+                            contract={contract}
+                            onSend={async (signers) => {
+                                if (!contract.signed_contract_url) {
+                                    notify('Anexe o PDF do contrato antes de enviar para assinatura.', 'error');
+                                    return;
+                                }
+                                try {
+                                    notify('Enviando para ZapSign…', 'info');
+                                    const pdfResp = await fetch(contract.signed_contract_url);
+                                    const blob = await pdfResp.blob();
+                                    const base64 = await new Promise<string>((res, rej) => {
+                                        const fr = new FileReader();
+                                        fr.onload = () => res((fr.result as string).split(',')[1]);
+                                        fr.onerror = rej;
+                                        fr.readAsDataURL(blob);
+                                    });
+                                    await contractService.sendForSignature(
+                                        contract.id,
+                                        contract.organization_id,
+                                        base64,
+                                        `Contrato ${contract.number} — ${contract.title}`,
+                                        signers
+                                    );
                                     const updated = await contractService.getContractById(contract.id);
                                     if (updated) setContract(updated);
-                                    notify('Nova versão publicada com sucesso!', 'success');
-                                }}
-                                onNotify={notify}
-                            />
-                        )}
+                                    notify('Contrato enviado para assinatura!', 'success');
+                                } catch (e) {
+                                    notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
+                                }
+                            }}
+                            onRefreshStatus={async () => {
+                                if (!contract.signature_token) return;
+                                try {
+                                    await contractService.getSignatureStatus(contract.signature_token);
+                                    const updated = await contractService.getContractById(contract.id);
+                                    if (updated) setContract(updated);
+                                    notify('Status atualizado.', 'info');
+                                } catch (e) {
+                                    notify(`Erro ao consultar status: ${e instanceof Error ? e.message : ''}`, 'error');
+                                }
+                            }}
+                        />
                     </div>
+
+                    {/* Versões da Minuta */}
+                    {contract.status === 'Minuta' && (
+                        <MinutaVersionsPanel
+                            contract={contract}
+                            onVersionAdded={async () => {
+                                const updated = await contractService.getContractById(contract.id);
+                                if (updated) setContract(updated);
+                                notify('Nova versão publicada com sucesso!', 'success');
+                            }}
+                            onNotify={notify}
+                        />
+                    )}
                 </div>
             )}
 
@@ -2381,7 +2396,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     notify={notify}
                 />
             )}
-
             {/* Ambiente de gestão de modelos de documento (.docx) */}
             {docxManagerOpen && contract && (
                 <DocxTemplateManager

@@ -66,6 +66,8 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const [isSaving, setIsSaving] = useState(false);
     const [initializing, setInitializing] = useState(true);
     const [landCost, setLandCost] = useState<number>(study.land_cost || 0);
+    const [landCostFocused, setLandCostFocused] = useState(false);
+    const fmtBRL = (v: number) => v > 0 ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) : '';
 
     // Simplified mode local state
     const [capexMode, setCapexMode] = useState<'simplified' | 'detailed'>(study.capex_mode || 'detailed');
@@ -290,11 +292,12 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                     <div className="flex items-center gap-3 max-w-xs">
                         <span className="text-slate-500 font-bold text-sm">R$</span>
                         <input
-                            type="number"
-                            value={landCost || ''}
-                            placeholder="0"
+                            type={landCostFocused ? 'number' : 'text'}
+                            value={landCostFocused ? (landCost || '') : fmtBRL(landCost)}
+                            placeholder="0,00"
+                            onFocus={() => setLandCostFocused(true)}
                             onChange={(e) => setLandCost(parseFloat(e.target.value) || 0)}
-                            onBlur={() => saveLandCost(landCost)}
+                            onBlur={() => { setLandCostFocused(false); saveLandCost(landCost); }}
                             className="flex-1 px-4 py-3 bg-white border border-amber-300 rounded-xl focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none font-bold text-slate-800 text-lg"
                         />
                     </div>

@@ -288,6 +288,7 @@ export interface ImovibUnit {
     private_area: number;
     common_area: number;
     pavimentos?: number;
+    is_vendavel?: boolean;
     created_at?: string;
     updated_at?: string;
 }

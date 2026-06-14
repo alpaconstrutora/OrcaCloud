@@ -57,6 +57,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
             for (const block of blocks) {
                 const units = block.units || [];
                 for (const unit of units) {
+                    if (unit.is_vendavel === false) continue;
                     const pavimentos = unit.pavimentos || 1;
                     const quantity = unit.quantity || 1;
                     for (let floor = 1; floor <= pavimentos; floor++) {

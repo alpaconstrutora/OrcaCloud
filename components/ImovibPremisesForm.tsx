@@ -111,10 +111,10 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
         }
     };
 
-    const handleUpdateUnit = async (unit: ImovibUnit, field: keyof ImovibUnit, value: string) => {
+    const handleUpdateUnit = async (unit: ImovibUnit, field: keyof ImovibUnit, value: string | boolean) => {
         try {
             await imovibService.updateUnit(unit.id, {
-                [field]: field === 'name' ? value : parseFloat(value) || 0
+                [field]: typeof value === 'boolean' ? value : field === 'name' ? value : parseFloat(value as string) || 0
             });
             onDataChanged();
         } catch (e) {
@@ -425,6 +425,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                     <th className="px-6 py-4 w-32 text-center">Unidades Totais</th>
                                                     <th className="px-6 py-4 w-40 text-right">Área Privativa Total (m²)</th>
                                                     <th className="px-6 py-4 w-36 text-right">Área Total (m²)</th>
+                                                    <th className="px-6 py-4 w-20 text-center">Venda</th>
                                                     <th className="px-6 py-4 w-16"></th>
                                                 </tr>
                                             </thead>
@@ -510,6 +511,15 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                                 );
                                                             })()}
                                                         </td>
+                                                        <td className="px-6 py-3 text-center">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={unit.is_vendavel !== false}
+                                                                onChange={(e) => handleUpdateUnit(unit, 'is_vendavel', e.target.checked)}
+                                                                className="w-4 h-4 rounded accent-emerald-600 cursor-pointer"
+                                                                title="Incluir no Espelho de Vendas"
+                                                            />
+                                                        </td>
                                                         <td className="px-6 py-3">
                                                             <button
                                                                 onClick={() => handleDeleteUnit(unit.id)}
@@ -533,11 +543,11 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                                     .toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m²
                                                             </span>
                                                         </td>
-                                                        <td />
+                                                        <td colSpan={2} />
                                                     </tr>
                                                 )}
                                                 <tr>
-                                                    <td colSpan={10} className="px-6 py-4 bg-slate-50/50">
+                                                    <td colSpan={11} className="px-6 py-4 bg-slate-50/50">
                                                         <button
                                                             onClick={() => handleAddUnit(block.id)}
                                                             className="text-xs font-black tracking-widest uppercase text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 transition-colors"

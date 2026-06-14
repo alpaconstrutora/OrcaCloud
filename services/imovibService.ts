@@ -54,7 +54,7 @@ export const imovibService = {
                     const blockIds = blocks.map(b => b.id);
                     const { data: units, error: unitsError } = await supabase
                         .from('imovib_units')
-                        .select('id, block_id, name, quantity, private_area, common_area, pavimentos, created_at, updated_at')
+                        .select('id, block_id, name, quantity, private_area, common_area, pavimentos, is_vendavel, created_at, updated_at')
                         .in('block_id', blockIds)
                         .order('created_at', { ascending: true });
 
@@ -161,7 +161,7 @@ export const imovibService = {
 
     // Units
     async getUnitsByBlockId(blockId: string): Promise<ImovibUnit[]> {
-        const { data, error } = await supabase.from('imovib_units').select('id, block_id, name, quantity, private_area, common_area, pavimentos, created_at, updated_at').eq('block_id', blockId).order('created_at', { ascending: true });
+        const { data, error } = await supabase.from('imovib_units').select('id, block_id, name, quantity, private_area, common_area, pavimentos, is_vendavel, created_at, updated_at').eq('block_id', blockId).order('created_at', { ascending: true });
         if (error) throw new Error(`Failed to fetch IMOVIB units: ${error.message}`);
         return data || [];
     },

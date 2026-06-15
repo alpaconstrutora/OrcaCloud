@@ -544,6 +544,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                             }
 
                             const hasChildren = node.children && node.children.length > 0;
+                            const nodeSchedule = schedule.itemSchedules?.find(s => s.id === node.id);
 
                             return (
                                 <React.Fragment key={node.id}>
@@ -561,7 +562,15 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                             )}
                                         </td>
                                         <td className={`px-1 py-3 text-center font-medium ${node.isCritical ? 'text-red-500 bg-red-50' : 'text-gray-400'}`}>{node.uid}</td>
-                                        <td className="px-1 py-3"></td>
+                                        <td className="px-1 py-1 text-center group/pred relative" onClick={(e) => e.stopPropagation()}>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-transparent border-none rounded text-center text-[12px] p-1 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
+                                                value={nodeSchedule?.predecessors?.map(p => idToUid[p.id] || '').filter(Boolean).join(', ') || ''}
+                                                onChange={(e) => handleUpdatePredecessorField(node.id, 'uid', e.target.value)}
+                                                placeholder="-"
+                                            />
+                                        </td>
                                         <td className="px-1 py-3"></td>
                                         <td className="px-1 py-3"></td>
                                         <td className="px-1 py-3"></td>

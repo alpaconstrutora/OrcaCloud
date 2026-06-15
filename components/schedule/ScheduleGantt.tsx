@@ -584,7 +584,21 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             )}
                         </div>
                         <div data-gantt-col="gId" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gId')}>{node.uid}</div>
-                        <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gPred')}></div>
+                        <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-200 flex items-center px-0.5" style={getGanttColStyle('gPred')}>
+                            {(() => {
+                                const ns = schedule.itemSchedules?.find(s => s.id === node.id);
+                                return (
+                                    <input
+                                        type="text"
+                                        className="w-full bg-transparent border-none rounded text-center text-[12px] p-0.5 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
+                                        value={ns?.predecessors?.map(p => idToUid[p.id] || '').filter(Boolean).join(', ') || ''}
+                                        onChange={(e) => handleUpdatePredecessorField(node.id, 'uid', e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        placeholder="-"
+                                    />
+                                );
+                            })()}
+                        </div>
                         <div data-gantt-col="gDur" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gDur')}></div>
                         <div data-gantt-col="gStart" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gStart')}></div>
                         <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gEnd')}></div>

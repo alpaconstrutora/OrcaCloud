@@ -458,6 +458,11 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
         try {
             if (target === 'budget') {
                 if (budget && onUpdateBudget) {
+                    const itemInBudget = budget.some(entry => entry.sinapiItem.code === selectedItem.code);
+                    if (!itemInBudget) {
+                        notify('Este item não está no orçamento ativo. Selecione "Atualizar na Base de Dados" para salvar.', 'error');
+                        return;
+                    }
                     const updatedBudget = budget.map(entry => {
                         if (entry.sinapiItem.code === selectedItem.code) {
                             return {
@@ -1465,7 +1470,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                 onClose={() => setIsSaveModalOpen(false)}
                                 onConfirm={handleSave}
                                 isSaving={isSaving}
-                                hasBudget={!!budget && budget.length > 0}
+                                hasBudget={!!budget?.some(e => e.sinapiItem.code === selectedItem?.code)}
                                 isCustomItem={true}
                             />
 

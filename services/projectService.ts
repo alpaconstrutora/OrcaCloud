@@ -177,16 +177,28 @@ export const projectService = {
             throw new Error('Não é possível excluir a obra do sistema "Gestão Comercial". Ela é vital para o armazenamento no banco de dados e sincronização.');
         }
 
-        // Primeiro verificamos se existem pedidos vinculados
-        const { count, error: countError } = await supabase
+        // Verificar purchase_orders vinculadas
+        const { count: poCount, error: poCountError } = await supabase
             .from('purchase_orders')
             .select('*', { count: 'exact', head: true })
             .eq('project_id', id);
 
-        if (countError) throw countError;
+        if (poCountError) throw poCountError;
 
-        if (count && count > 0) {
-            throw new Error(`Não é possível excluir esta obra pois existem ${count} pedido(s) vinculados a ela. Exclua ou cancele os pedidos primeiro.`);
+        if (poCount && poCount > 0) {
+            throw new Error(`Não é possível excluir esta obra pois existem ${poCount} pedido(s) de compra vinculados a ela. Exclua ou cancele os pedidos primeiro.`);
+        }
+
+        // Verificar work_orders vinculadas
+        const { count: woCount, error: woCountError } = await supabase
+            .from('work_orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('project_id', id);
+
+        if (woCountError) throw woCountError;
+
+        if (woCount && woCount > 0) {
+            throw new Error(`Não é possível excluir esta obra pois existem ${woCount} ordem(ns) de serviço vinculadas a ela. Exclua as ordens de serviço primeiro.`);
         }
 
         const { error } = await supabase

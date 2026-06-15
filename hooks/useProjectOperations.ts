@@ -169,8 +169,11 @@ export const useProjectOperations = ({
       try {
         await projectService.deleteProject(id);
         fetchProjects(organizations);
+        showToast('Projeto excluído com sucesso!', 'success');
       } catch (error) {
-        console.error(error);
+        console.error('Erro ao excluir orçamento:', error);
+        const msg = error instanceof Error ? error.message : 'Erro ao excluir projeto.';
+        showToast(msg, 'error');
       } finally {
         setIsSaving(false);
       }

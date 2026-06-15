@@ -53,7 +53,7 @@ interface ClientAreaProps {
     clientProfile?: Client | null;
     clients?: Client[]; // For admin selection
     organizationId?: string | null; // Fallback quando settings não traz organizationId (ex.: portal sem projeto aberto)
-    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'financeiro' | 'suporte';
+    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte';
     onUpdateSettings?: (settings: ProjectSettings) => void;
     onClientSelect?: (client: Client) => void;
 }
@@ -61,7 +61,7 @@ interface ClientAreaProps {
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'];
 
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, onUpdateSettings, onClientSelect }) => {
-    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'financeiro' | 'suporte'>(initialTab || 'dashboard');
+    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte'>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
@@ -87,7 +87,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
     React.useEffect(() => {
         const orgId = settings.organizationId || (settings as any).organization_id || organizationId;
-        if (clientProfile && activeTab === 'financeiro') {
+        if (clientProfile && (activeTab === 'financeiro' || activeTab === 'contratos')) {
             // Parcelas globais dependem da org (busca em projetos de Gestão Comercial)
             if (orgId) {
                 commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId).then(installments => {
@@ -439,6 +439,178 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         );
     };
 
+    const renderContratos = () => (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {clientContracts.length === 0 ? (
+                <div className="bg-white p-20 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center text-center">
+                    <FileText className="w-16 h-16 text-gray-200 mb-6" />
+                    <p className="text-lg font-black text-gray-400 uppercase tracking-widest">Nenhum contrato disponível</p>
+                </div>
+            ) : (
+                <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight flex items-center gap-3 mb-6">
+                        <FileText className="w-5 h-5 text-indigo-500" />
+                        Meus Contratos
+                    </h3>
+                    <div className="space-y-3">
+                        {clientContracts.map(contract => {
+                            const isSigned = contract.signature_status === 'SIGNED' || contract.status === 'Assinado';
+                            return (
+                                <div
+                                    key={contract.id}
+                                    onClick={() => setViewingContract(contract)}
+                                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group cursor-pointer"
+                                >
+                                    <div className="flex flex-col gap-1 min-w-0">
+                                        <span className="text-sm font-black text-gray-900 uppercase truncate group-hover:text-indigo-700 transition-colors">{contract.title}</span>
+                                        <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                            {contract.number && <span>Nº {contract.number}</span>}
+                                            {contract.contract_type && <span>· {contract.contract_type}</span>}
+                                            {contract.start_date && (
+                                                <span>· Início: {new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                            )}
+                                            {contract.end_date && (
+                                                <span>· Término: {new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <span className="text-base font-black text-gray-900 tabular-nums">
+                                            R$ {(contract.current_value || contract.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </span>
+                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                                            isSigned ? 'bg-emerald-100 text-emerald-700' :
+                                            contract.status === 'Ativo' ? 'bg-indigo-100 text-indigo-700' :
+                                            contract.status === 'Minuta' ? 'bg-purple-100 text-purple-700' :
+                                            'bg-amber-100 text-amber-700'
+                                        }`}>
+                                            {isSigned ? 'Assinado' : contract.status === 'Minuta' ? 'Minuta' : (contract.status || 'Em andamento')}
+                                        </span>
+                                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-indigo-400 transition-colors" />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de visualização do contrato */}
+            {viewingContract && (() => {
+                const c = viewingContract;
+                const isSigned = c.signature_status === 'SIGNED' || c.status === 'Assinado';
+                const docUrl = c.signature_url || c.signed_contract_url;
+                const isMinuta = c.status === 'Minuta';
+                return (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setViewingContract(null)}>
+                        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                        <div
+                            className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 fade-in duration-200"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="flex items-start justify-between p-8 border-b border-gray-100">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center">
+                                        <FileText className="w-6 h-6 text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">{c.title}</h2>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Nº {c.number} · {c.contract_type}</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setViewingContract(null)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="p-8 space-y-6">
+                                {isMinuta && (
+                                    <div className="flex items-start gap-4 p-5 bg-purple-50 border border-purple-100 rounded-2xl">
+                                        <AlertCircle className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="text-sm font-black text-purple-800 uppercase tracking-tight">Minuta — Aguardando suas considerações</p>
+                                            <p className="text-xs text-purple-600 mt-1">Este é um rascunho do contrato enviado para sua análise. Entre em contato conosco com suas observações antes da assinatura.</p>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-2 gap-4">
+                                    {[
+                                        { label: 'Valor do Contrato', value: `R$ ${(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
+                                        { label: 'Status', value: isSigned ? 'Assinado' : (c.status || '—') },
+                                        { label: 'Data de Início', value: c.start_date ? new Date(c.start_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—' },
+                                        { label: 'Data de Término', value: c.end_date ? new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado' },
+                                    ].map(item => (
+                                        <div key={item.label} className="p-4 bg-gray-50 rounded-2xl">
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{item.label}</p>
+                                            <p className="text-sm font-black text-gray-900">{item.value}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                {isMinuta && c.minuta_versions && c.minuta_versions.length > 0 && (
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Versões da Minuta</p>
+                                        <div className="space-y-2">
+                                            {[...c.minuta_versions].sort((a, b) => b.v - a.v).map(ver => (
+                                                <a
+                                                    key={ver.v}
+                                                    href={ver.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-4 p-4 bg-purple-50 border border-purple-100 rounded-2xl hover:bg-purple-100 transition-all group"
+                                                >
+                                                    <div className="w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center shrink-0 text-white font-black text-[11px]">
+                                                        v{ver.v}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-black text-purple-800">
+                                                            Versão {ver.v}
+                                                            {ver.v === Math.max(...c.minuta_versions!.map(x => x.v)) && (
+                                                                <span className="ml-2 px-2 py-0.5 bg-purple-200 text-purple-700 rounded-full text-[9px] font-black uppercase">Atual</span>
+                                                            )}
+                                                        </p>
+                                                        <p className="text-[10px] text-purple-400 mt-0.5">
+                                                            {new Date(ver.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                            {ver.notes && ` · ${ver.notes}`}
+                                                        </p>
+                                                    </div>
+                                                    <Download className="w-4 h-4 text-purple-400 group-hover:text-purple-700 transition-colors" />
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {!isMinuta && (docUrl ? (
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Documento do Contrato</p>
+                                        <a
+                                            href={docUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-4 p-5 bg-indigo-50 border border-indigo-100 rounded-2xl hover:bg-indigo-100 transition-all group"
+                                        >
+                                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+                                                <Download className="w-5 h-5 text-white" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-black text-indigo-700">Visualizar / Baixar Contrato</p>
+                                                <p className="text-[10px] text-indigo-400 mt-0.5">Clique para abrir o documento</p>
+                                            </div>
+                                            <ChevronRight className="w-4 h-4 text-indigo-400 ml-auto group-hover:translate-x-1 transition-transform" />
+                                        </a>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-3 p-5 bg-gray-50 border border-dashed border-gray-200 rounded-2xl">
+                                        <FileText className="w-5 h-5 text-gray-300" />
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Documento ainda não disponível</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+        </div>
+    );
+
     const renderFinanceiro = () => {
         let baseFinInfo = currentFinancialInfo || {
             totalValue: 0,
@@ -541,182 +713,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     ))}
                 </div>
-
-                {/* Contratos de Serviço do Cliente */}
-                {clientContracts.length > 0 && (
-                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
-                        <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight flex items-center gap-3 mb-6">
-                            <FileText className="w-5 h-5 text-indigo-500" />
-                            Meus Contratos
-                        </h3>
-                        <div className="space-y-3">
-                            {clientContracts.map(contract => {
-                                const isSigned = contract.signature_status === 'SIGNED' || contract.status === 'Assinado';
-                                const docUrl = contract.signature_url || contract.signed_contract_url;
-                                return (
-                                    <div
-                                        key={contract.id}
-                                        onClick={() => setViewingContract(contract)}
-                                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group cursor-pointer"
-                                    >
-                                        <div className="flex flex-col gap-1 min-w-0">
-                                            <span className="text-sm font-black text-gray-900 uppercase truncate group-hover:text-indigo-700 transition-colors">{contract.title}</span>
-                                            <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                                {contract.number && <span>Nº {contract.number}</span>}
-                                                {contract.contract_type && <span>· {contract.contract_type}</span>}
-                                                {contract.start_date && (
-                                                    <span>· Início: {new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                                                )}
-                                                {contract.end_date && (
-                                                    <span>· Término: {new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3 shrink-0">
-                                            <span className="text-base font-black text-gray-900 tabular-nums">
-                                                R$ {(contract.current_value || contract.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                            </span>
-                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                                                isSigned ? 'bg-emerald-100 text-emerald-700' :
-                                                contract.status === 'Ativo' ? 'bg-indigo-100 text-indigo-700' :
-                                                contract.status === 'Minuta' ? 'bg-purple-100 text-purple-700' :
-                                                'bg-amber-100 text-amber-700'
-                                            }`}>
-                                                {isSigned ? 'Assinado' :
-                                                 contract.status === 'Minuta' ? 'Minuta' :
-                                                 (contract.status || 'Em andamento')}
-                                            </span>
-                                            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-indigo-400 transition-colors" />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-
-                {/* Modal de visualização do contrato pelo cliente */}
-                {viewingContract && (() => {
-                    const c = viewingContract;
-                    const isSigned = c.signature_status === 'SIGNED' || c.status === 'Assinado';
-                    const docUrl = c.signature_url || c.signed_contract_url;
-                    const isMinuta = c.status === 'Minuta';
-                    return (
-                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setViewingContract(null)}>
-                            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                            <div
-                                className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 fade-in duration-200"
-                                onClick={e => e.stopPropagation()}
-                            >
-                                {/* Header */}
-                                <div className="flex items-start justify-between p-8 border-b border-gray-100">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center">
-                                            <FileText className="w-6 h-6 text-indigo-600" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">{c.title}</h2>
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Nº {c.number} · {c.contract_type}</p>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => setViewingContract(null)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
-                                        <X className="w-5 h-5" />
-                                    </button>
-                                </div>
-
-                                <div className="p-8 space-y-6">
-                                    {/* Status banner */}
-                                    {isMinuta && (
-                                        <div className="flex items-start gap-4 p-5 bg-purple-50 border border-purple-100 rounded-2xl">
-                                            <AlertCircle className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
-                                            <div>
-                                                <p className="text-sm font-black text-purple-800 uppercase tracking-tight">Minuta — Aguardando suas considerações</p>
-                                                <p className="text-xs text-purple-600 mt-1">Este é um rascunho do contrato enviado para sua análise. Entre em contato conosco com suas observações antes da assinatura.</p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Dados principais */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {[
-                                            { label: 'Valor do Contrato', value: `R$ ${(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
-                                            { label: 'Status', value: isSigned ? 'Assinado' : (c.status || '—') },
-                                            { label: 'Data de Início', value: c.start_date ? new Date(c.start_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—' },
-                                            { label: 'Data de Término', value: c.end_date ? new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado' },
-                                        ].map(item => (
-                                            <div key={item.label} className="p-4 bg-gray-50 rounded-2xl">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{item.label}</p>
-                                                <p className="text-sm font-black text-gray-900">{item.value}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Versões da Minuta */}
-                                    {isMinuta && c.minuta_versions && c.minuta_versions.length > 0 && (
-                                        <div className="space-y-3">
-                                            <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Versões da Minuta</p>
-                                            <div className="space-y-2">
-                                                {[...c.minuta_versions].sort((a, b) => b.v - a.v).map(ver => (
-                                                    <a
-                                                        key={ver.v}
-                                                        href={ver.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="flex items-center gap-4 p-4 bg-purple-50 border border-purple-100 rounded-2xl hover:bg-purple-100 transition-all group"
-                                                    >
-                                                        <div className="w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center shrink-0 text-white font-black text-[11px]">
-                                                            v{ver.v}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-sm font-black text-purple-800">
-                                                                Versão {ver.v}
-                                                                {ver.v === Math.max(...c.minuta_versions!.map(x => x.v)) && (
-                                                                    <span className="ml-2 px-2 py-0.5 bg-purple-200 text-purple-700 rounded-full text-[9px] font-black uppercase">Atual</span>
-                                                                )}
-                                                            </p>
-                                                            <p className="text-[10px] text-purple-400 mt-0.5">
-                                                                {new Date(ver.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                                                {ver.notes && ` · ${ver.notes}`}
-                                                            </p>
-                                                        </div>
-                                                        <Download className="w-4 h-4 text-purple-400 group-hover:text-purple-700 transition-colors" />
-                                                    </a>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Documento (contratos assinados / sem versionamento) */}
-                                    {!isMinuta && (docUrl ? (
-                                        <div className="space-y-3">
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Documento do Contrato</p>
-                                            <a
-                                                href={docUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-4 p-5 bg-indigo-50 border border-indigo-100 rounded-2xl hover:bg-indigo-100 transition-all group"
-                                            >
-                                                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-                                                    <Download className="w-5 h-5 text-white" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-black text-indigo-700">Visualizar / Baixar Contrato</p>
-                                                    <p className="text-[10px] text-indigo-400 mt-0.5">Clique para abrir o documento</p>
-                                                </div>
-                                                <ChevronRight className="w-4 h-4 text-indigo-400 ml-auto group-hover:translate-x-1 transition-transform" />
-                                            </a>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-3 p-5 bg-gray-50 border border-dashed border-gray-200 rounded-2xl">
-                                            <FileText className="w-5 h-5 text-gray-300" />
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Documento ainda não disponível</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })()}
 
                 <div className="space-y-8">
                     {/* Financial Planning Card */}
@@ -1920,7 +1916,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         { id: 'personalizacao', label: 'Personalização', icon: <Palette className="w-4 h-4" /> },
         { id: 'diario', label: 'Diário de Obra', icon: <BookOpen className="w-4 h-4" /> },
         { id: 'documentos', label: 'Documentos', icon: <FileText className="w-4 h-4" /> },
-        { id: 'financeiro', label: 'Financeiro e Contratos', icon: <DollarSign className="w-4 h-4" /> },
+        { id: 'contratos', label: 'Contratos', icon: <FileText className="w-4 h-4" /> },
+        { id: 'financeiro', label: 'Financeiro', icon: <DollarSign className="w-4 h-4" /> },
         { id: 'suporte', label: 'Suporte', icon: <ShieldCheck className="w-4 h-4" /> },
     ];
 
@@ -2115,6 +2112,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 )}
                 {activeTab === 'diario' && renderDiario()}
                 {activeTab === 'documentos' && renderDocumentos()}
+                {activeTab === 'contratos' && renderContratos()}
                 {activeTab === 'financeiro' && renderFinanceiro()}
                 {activeTab === 'suporte' && (
                     <div className="bg-white p-12 rounded-[2.5rem] border border-gray-100 flex flex-col items-center text-center">

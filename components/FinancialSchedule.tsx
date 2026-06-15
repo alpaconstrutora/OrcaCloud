@@ -366,7 +366,12 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
     const [ganttExpandedNodes, setGanttExpandedNodes] = useState<Record<string, boolean>>({});
     const [tableExpandedNodes, setTableExpandedNodes] = useState<Record<string, boolean>>({});
-    const [sidebarWidth, setSidebarWidth] = useState(300);
+    const [sidebarWidth, setSidebarWidth] = useState(() => {
+        try {
+            const saved = localStorage.getItem('gantt-sidebar-width');
+            return saved ? Math.max(120, Math.min(700, parseInt(saved))) : 300;
+        } catch { return 300; }
+    });
     const [isResizing, setIsResizing] = useState(false);
     const [predecessorModalTask, setPredecessorModalTask] = useState<string | null>(null);
     const [isBaselineModalOpen, setIsBaselineModalOpen] = useState(false);
@@ -503,6 +508,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         } catch { return { ...GANTT_DEFAULT_COL_WIDTHS }; }
     });
     const ganttColResizeRef = React.useRef<{ colKey: string; startX: number; startW: number } | null>(null);
+    const sidebarResizeRef = React.useRef<{ startX: number; startW: number } | null>(null);
     const ganttSidebarRef = React.useRef<HTMLDivElement>(null);
 
     const getGanttColW = (key: string) => ganttColWidths[key] ?? GANTT_DEFAULT_COL_WIDTHS[key] ?? 80;
@@ -517,35 +523,73 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         document.body.style.userSelect = 'none';
     };
 
+    const handleSidebarResizeStart = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        sidebarResizeRef.current = { startX: e.clientX, startW: sidebarWidth };
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    };
+
     useEffect(() => {
+        const SIDEBAR_MIN = 120, SIDEBAR_MAX = 700;
+
         const onMouseMove = (e: MouseEvent) => {
+            // Gantt column resize
             const ref = ganttColResizeRef.current;
-            if (!ref) return;
-            const delta = e.clientX - ref.startX;
-            const newW = Math.max(COL_MIN, Math.min(COL_MAX, ref.startW + delta));
-            // Direct DOM update for perf: find all elements with data-gantt-col
-            if (ganttSidebarRef.current) {
-                ganttSidebarRef.current.querySelectorAll(`[data-gantt-col="${ref.colKey}"]`).forEach((el) => {
-                    (el as HTMLElement).style.width = `${newW}px`;
-                });
+            if (ref) {
+                const delta = e.clientX - ref.startX;
+                const newW = Math.max(COL_MIN, Math.min(COL_MAX, ref.startW + delta));
+                if (ganttSidebarRef.current) {
+                    ganttSidebarRef.current.querySelectorAll(`[data-gantt-col="${ref.colKey}"]`).forEach((el) => {
+                        (el as HTMLElement).style.width = `${newW}px`;
+                    });
+                }
+            }
+            // Sidebar (Tarefa / Atividade) resize
+            const sRef = sidebarResizeRef.current;
+            if (sRef) {
+                const newW = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, sRef.startW + (e.clientX - sRef.startX)));
+                if (ganttSidebarRef.current) {
+                    ganttSidebarRef.current.querySelectorAll('[data-gantt-sidebar]').forEach((el) => {
+                        (el as HTMLElement).style.width = `${newW}px`;
+                    });
+                }
             }
         };
         const onMouseUp = () => {
+            // Gantt column resize flush
             const ref = ganttColResizeRef.current;
-            if (!ref) return;
-            let finalW = ref.startW;
-            if (ganttSidebarRef.current) {
-                const el = ganttSidebarRef.current.querySelector(`[data-gantt-col="${ref.colKey}"]`) as HTMLElement;
-                if (el) finalW = parseInt(el.style.width) || ref.startW;
+            if (ref) {
+                let finalW = ref.startW;
+                if (ganttSidebarRef.current) {
+                    const el = ganttSidebarRef.current.querySelector(`[data-gantt-col="${ref.colKey}"]`) as HTMLElement;
+                    if (el) finalW = parseInt(el.style.width) || ref.startW;
+                }
+                ganttColResizeRef.current = null;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                setGanttColWidths(prev => {
+                    const next = { ...prev, [ref.colKey]: finalW };
+                    localStorage.setItem('gantt-col-widths', JSON.stringify(next));
+                    return next;
+                });
             }
-            ganttColResizeRef.current = null;
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            setGanttColWidths(prev => {
-                const next = { ...prev, [ref.colKey]: finalW };
-                localStorage.setItem('gantt-col-widths', JSON.stringify(next));
-                return next;
-            });
+            // Sidebar resize flush
+            const sRef = sidebarResizeRef.current;
+            if (sRef) {
+                let finalW = sRef.startW;
+                if (ganttSidebarRef.current) {
+                    const el = ganttSidebarRef.current.querySelector('[data-gantt-sidebar]') as HTMLElement;
+                    if (el) finalW = parseInt(el.style.width) || sRef.startW;
+                }
+                sidebarResizeRef.current = null;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                const clamped = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, finalW));
+                setSidebarWidth(clamped);
+                localStorage.setItem('gantt-sidebar-width', String(clamped));
+            }
         };
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
@@ -2966,6 +3010,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 collapsedCols={ganttCollapsedCols}
                                                 onToggleColumn={handleToggleGanttColumn}
                                                 handleSplitterDblClick={handleGanttSplitterDblClick}
+                                                onSidebarResizeStart={handleSidebarResizeStart}
                                                 idToUid={idToUid}
                                                 handleUpdatePredecessorField={handleUpdatePredecessorField}
                                                 handleUpdateCrewField={handleUpdateCrewField}

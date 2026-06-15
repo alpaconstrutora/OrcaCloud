@@ -37,6 +37,7 @@ interface ScheduleGanttProps {
     collapsedCols: Set<string>;
     onToggleColumn: (key: string) => void;
     handleSplitterDblClick: () => void;
+    onSidebarResizeStart: (e: React.MouseEvent) => void;
     handleUpdateRealPct: (itemId: string, value: string) => void;
 }
 
@@ -75,6 +76,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     collapsedCols,
     onToggleColumn,
     handleSplitterDblClick,
+    onSidebarResizeStart,
     handleUpdateRealPct
 }) => {
 
@@ -166,6 +168,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         <div
                             className="shrink-0 truncate px-4 py-2 text-[12px] text-gray-600 border-r border-gray-100 flex items-center gap-1.5"
                             title={item.sinapiItem.description}
+                            data-gantt-sidebar
                             style={{ paddingLeft: `${(node.level * 20) + 16}px`, width: `${sidebarWidth}px` }}
                         >
                             <span className="truncate flex-1">{item.sinapiItem.description}</span>
@@ -564,6 +567,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                     >
                         <div
                             className={`shrink-0 font-medium ${node.type === 'subphase' ? 'text-gray-700' : 'text-gray-800'} py-1.5 px-4 border-r border-gray-200 flex items-center gap-2`}
+                            data-gantt-sidebar
                             style={{ paddingLeft: `${(node.level * 20) + 16}px`, width: `${sidebarWidth}px` }}
                         >
                             {node.children && node.children.length > 0 && (
@@ -728,7 +732,15 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             className="shrink-0 flex sticky left-0 z-60 bg-gray-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)] border-r border-gray-200"
                             style={{ width: `${getGanttSidebarTotal()}px` }}
                         >
-                            <div className="shrink-0 px-4 py-3 text-[12px] font-medium text-gray-400 uppercase tracking-widest border-r border-gray-200 bg-gray-50/80 backdrop-blur-sm flex items-center justify-between group/h-task" style={{ width: `${sidebarWidth}px` }}>
+                            <div className="relative shrink-0 px-4 py-3 text-[12px] font-medium text-gray-400 uppercase tracking-widest border-r border-gray-200 bg-gray-50/80 backdrop-blur-sm flex items-center justify-between group/h-task" data-gantt-sidebar style={{ width: `${sidebarWidth}px` }}>
+                                {/* Sidebar resize handle */}
+                                <div
+                                    className="absolute right-0 top-0 bottom-0 w-[5px] cursor-col-resize z-30 group/sresize hover:bg-blue-400/40 active:bg-blue-500/60 transition-colors"
+                                    onMouseDown={onSidebarResizeStart}
+                                    title="Arrastar para redimensionar"
+                                >
+                                    <div className="absolute right-0 top-1/4 bottom-1/4 w-px bg-gray-300 group-hover/sresize:bg-blue-400" />
+                                </div>
                                 <div className="flex items-center gap-2">
                                     <span>Tarefa / Atividade</span>
                                     <div className="relative" ref={colMenuRef}>

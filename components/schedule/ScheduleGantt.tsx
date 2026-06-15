@@ -130,7 +130,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     };
 
     const renderGanttRow = (node: HierarchyNode, isParentVisible = true): React.ReactNode => {
-        const isVisible = node.type === 'item' || visibleSummaryLevels.has(node.type);
+        const isVisible = visibleSummaryLevels.has(node.type);
         const isExpanded = expandedNodes[node.id];
         const isItem = node.type === 'item';
 
@@ -702,7 +702,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
         let rowIdx = 0;
         const flatten = (nodes: HierarchyNode[], isParentExpanded = true) => {
             nodes.forEach(node => {
-                const isVisible = node.type === 'item' || visibleSummaryLevels.has(node.type);
+                const isVisible = visibleSummaryLevels.has(node.type);
                 const isExpanded = expandedNodes[node.id];
 
                 if (isParentExpanded && isVisible) {
@@ -812,7 +812,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                 {[
                                                     { id: 'group', label: 'Grupos' },
                                                     { id: 'phase', label: 'Etapas' },
-                                                    { id: 'subphase', label: 'Subetapas' }
+                                                    { id: 'subphase', label: 'Subetapas' },
+                                                    { id: 'item', label: 'Itens' }
                                                 ].map((level) => (
                                                     <button
                                                         key={level.id}

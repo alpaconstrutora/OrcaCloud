@@ -626,11 +626,13 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         } catch { return new Set(); }
     });
 
+    const DEFAULT_VISIBLE_LEVELS = ['group', 'phase', 'subphase', 'item'];
+
     const [ganttVisibleLevels, setGanttVisibleLevels] = useState<Set<string>>(() => {
         try {
-            const saved = localStorage.getItem('idx_schedule_gantt_levels_v5');
-            return saved ? new Set(JSON.parse(saved)) : new Set(['group', 'phase', 'subphase']);
-        } catch { return new Set(['group', 'phase', 'subphase']); }
+            const saved = localStorage.getItem('idx_schedule_gantt_levels_v6');
+            return saved ? new Set(JSON.parse(saved)) : new Set(DEFAULT_VISIBLE_LEVELS);
+        } catch { return new Set(DEFAULT_VISIBLE_LEVELS); }
     });
 
     const handleToggleGanttLevel = (level: string) => {
@@ -638,16 +640,16 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             const next = new Set(prev);
             if (next.has(level)) next.delete(level);
             else next.add(level);
-            localStorage.setItem('idx_schedule_gantt_levels_v5', JSON.stringify([...next]));
+            localStorage.setItem('idx_schedule_gantt_levels_v6', JSON.stringify([...next]));
             return next;
         });
     };
 
     const [tableVisibleLevels, setTableVisibleLevels] = useState<Set<string>>(() => {
         try {
-            const saved = localStorage.getItem('idx_schedule_table_levels_v5');
-            return saved ? new Set(JSON.parse(saved)) : new Set(['group', 'phase', 'subphase']);
-        } catch { return new Set(['group', 'phase', 'subphase']); }
+            const saved = localStorage.getItem('idx_schedule_table_levels_v6');
+            return saved ? new Set(JSON.parse(saved)) : new Set(DEFAULT_VISIBLE_LEVELS);
+        } catch { return new Set(DEFAULT_VISIBLE_LEVELS); }
     });
 
     const handleToggleTableLevel = (level: string) => {
@@ -655,7 +657,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             const next = new Set(prev);
             if (next.has(level)) next.delete(level);
             else next.add(level);
-            localStorage.setItem('idx_schedule_table_levels_v5', JSON.stringify([...next]));
+            localStorage.setItem('idx_schedule_table_levels_v6', JSON.stringify([...next]));
             return next;
         });
     };

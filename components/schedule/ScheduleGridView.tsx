@@ -232,7 +232,8 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 {[
                                                     { id: 'group', label: 'Grupos' },
                                                     { id: 'phase', label: 'Etapas' },
-                                                    { id: 'subphase', label: 'Subetapas' }
+                                                    { id: 'subphase', label: 'Subetapas' },
+                                                    { id: 'item', label: 'Itens' }
                                                 ].map((level) => (
                                                     <button
                                                         key={level.id}
@@ -301,6 +302,11 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         const renderNode = (node: HierarchyNode) => {
                             const isExpanded = expandedNodes[node.id];
                             const isItem = node.type === 'item';
+
+                            // Respect the levels filter for all node types including items
+                            if (visibleSummaryLevels && !visibleSummaryLevels.has(node.type)) {
+                                return <React.Fragment key={node.id}>{node.children?.map(child => renderNode(child))}</React.Fragment>;
+                            }
 
                             if (isItem && node.data) {
                                 const item = node.data;
@@ -538,15 +544,6 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                             }
 
                             const hasChildren = node.children && node.children.length > 0;
-                            const isVisible = isItem || !visibleSummaryLevels || visibleSummaryLevels.has(node.type);
-
-                            if (!isVisible) {
-                                return (
-                                    <React.Fragment key={node.id}>
-                                        {node.children.map(child => renderNode(child))}
-                                    </React.Fragment>
-                                );
-                            }
 
                             return (
                                 <React.Fragment key={node.id}>

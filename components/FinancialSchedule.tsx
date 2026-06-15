@@ -1183,31 +1183,30 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     React.useEffect(() => {
         const itemSchedules = schedule.itemSchedules || [];
         const budgetLength = budget.length;
-        const scheduleLength = itemSchedules.length;
 
-        // 1. If we have budget items but NO schedule items, we MUST recalculate to initialize them
-        if (budgetLength > 0 && scheduleLength === 0) {
-            handleRecalculate();
-            return;
-        }
+        // Use a Set for O(1) lookup — itemSchedules may contain non-budget entries
+        // (e.g. group/phase nodes with predecessors), so never compare raw lengths.
+        const scheduleIds = new Set(itemSchedules.map(s => s.id));
 
-        // 2. If length differs, we likely added/removed items from budget
-        if (budgetLength !== scheduleLength) {
+        // 1. No schedule items at all → initialize
+        if (budgetLength > 0 && itemSchedules.length === 0) {
             handleRecalculate();
             return;
         }
 
         let shouldRecalculate = false;
         for (const budgetItem of budget) {
-            const task = itemSchedules.find(t => t.id === budgetItem.id);
+            const task = scheduleIds.has(budgetItem.id)
+                ? itemSchedules.find(t => t.id === budgetItem.id)!
+                : null;
 
-            // If task is missing for a budget item, we MUST sync
+            // 2. Budget item missing from schedule → sync
             if (!task) {
                 shouldRecalculate = true;
                 break;
             }
 
-            // check sync for auto-duration tasks
+            // 3. Auto-duration tasks that need a quantity update
             if (task.autoDuration) {
                 const expectedDuration = SchedulingEngine.calculateDuration(task, budgetItem.quantity);
                 if (expectedDuration !== null && expectedDuration !== task.duration) {

@@ -439,8 +439,8 @@ export const contractService = {
         return data as Contract[];
     },
 
-    addMinutaVersion: async (contractId: string, version: { url: string; notes: string }): Promise<void> => {
-        // Lê versões atuais, incrementa número e faz append
+    addMinutaVersion: async (contractId: string, version: { url: string; notes: string; name?: string }): Promise<void> => {
+        // Lê versões atuais, incrementa número e faz append. Versão entra como rascunho (não emitida).
         const { data, error: fetchErr } = await supabase
             .from('contracts')
             .select('minuta_versions')
@@ -451,7 +451,9 @@ export const contractService = {
         const next: import('../types').MinutaVersion = {
             v: (current.length > 0 ? Math.max(...current.map((x: any) => x.v)) : 0) + 1,
             url: version.url,
+            name: version.name?.trim() || undefined,
             notes: version.notes,
+            emitted: false,
             created_at: new Date().toISOString(),
         };
         const { error } = await supabase
@@ -459,6 +461,64 @@ export const contractService = {
             .update({ minuta_versions: [...current, next] })
             .eq('id', contractId);
         if (error) throw error;
+    },
+
+    // Helper interno: lê, transforma e grava o array de versões
+    _mutateMinutaVersions: async (
+        contractId: string,
+        transform: (versions: import('../types').MinutaVersion[]) => import('../types').MinutaVersion[],
+    ): Promise<void> => {
+        const { data, error: fetchErr } = await supabase
+            .from('contracts')
+            .select('minuta_versions')
+            .eq('id', contractId)
+            .single();
+        if (fetchErr) throw fetchErr;
+        const current: import('../types').MinutaVersion[] = (data?.minuta_versions as any) ?? [];
+        const { error } = await supabase
+            .from('contracts')
+            .update({ minuta_versions: transform(current) })
+            .eq('id', contractId);
+        if (error) throw error;
+    },
+
+    // Emite uma versão → fica disponível no portal do cliente
+    emitMinutaVersion: async (contractId: string, v: number): Promise<void> => {
+        await contractService._mutateMinutaVersions(contractId, versions =>
+            versions.map(ver =>
+                ver.v === v ? { ...ver, emitted: true, emitted_at: new Date().toISOString() } : ver,
+            ),
+        );
+    },
+
+    // Edita nome / notas de uma versão
+    updateMinutaVersion: async (
+        contractId: string,
+        v: number,
+        patch: { name?: string; notes?: string },
+    ): Promise<void> => {
+        await contractService._mutateMinutaVersions(contractId, versions =>
+            versions.map(ver =>
+                ver.v === v
+                    ? {
+                          ...ver,
+                          ...(patch.name !== undefined ? { name: patch.name.trim() || undefined } : {}),
+                          ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+                      }
+                    : ver,
+            ),
+        );
+    },
+
+    // Exclui uma versão (bloqueada caso já emitida)
+    deleteMinutaVersion: async (contractId: string, v: number): Promise<void> => {
+        await contractService._mutateMinutaVersions(contractId, versions => {
+            const target = versions.find(ver => ver.v === v);
+            if (target && target.emitted !== false) {
+                throw new Error('Não é possível excluir uma versão já emitida ao cliente.');
+            }
+            return versions.filter(ver => ver.v !== v);
+        });
     },
 
     getContractById: async (id: string): Promise<Contract | null> => {

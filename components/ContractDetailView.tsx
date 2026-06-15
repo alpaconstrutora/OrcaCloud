@@ -12,7 +12,7 @@ import {
 import {
     Contract, ContractItem, ContractAddendum,
     ContractMeasurement, ContractMeasurementItem, BudgetEntry, ProjectSettings, ContractTemplate,
-    ContractUtilityBill, SinapiItem, CustomDatabase, SinapiType
+    ContractUtilityBill, SinapiItem, CustomDatabase, SinapiType, MinutaVersion
 } from '../types';
 import { contractService } from '../services/contractService';
 import { contractIndexService, IndexName } from '../services/contractIndexService';
@@ -1551,7 +1551,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             onVersionAdded={async () => {
                                 const updated = await contractService.getContractById(contract.id);
                                 if (updated) setContract(updated);
-                                notify('Nova versão publicada com sucesso!', 'success');
                             }}
                             onNotify={notify}
                         />
@@ -2894,8 +2893,16 @@ interface MinutaVersionsPanelProps {
 const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onVersionAdded, onNotify }) => {
     const versions = (contract.minuta_versions ?? []).slice().sort((a, b) => b.v - a.v);
     const [notes, setNotes] = React.useState('');
+    const [docName, setDocName] = React.useState('');
     const [uploading, setUploading] = React.useState(false);
+    const [busyV, setBusyV] = React.useState<number | null>(null);
+    const [editingV, setEditingV] = React.useState<number | null>(null);
+    const [editName, setEditName] = React.useState('');
     const fileRef = React.useRef<HTMLInputElement>(null);
+
+    // Uma versão é considerada "emitida" quando emitted === true.
+    // Versões antigas (sem o campo) são tratadas como emitidas para manter compatibilidade.
+    const isEmitted = (ver: MinutaVersion) => ver.emitted !== false;
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -2906,14 +2913,68 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
             const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
             if (upErr) throw upErr;
             const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path);
-            await contractService.addMinutaVersion(contract.id, { url: urlData.publicUrl, notes: notes.trim() });
+            const fallbackName = file.name.replace(/\.[^.]+$/, '');
+            await contractService.addMinutaVersion(contract.id, {
+                url: urlData.publicUrl,
+                notes: notes.trim(),
+                name: docName.trim() || fallbackName,
+            });
             setNotes('');
+            setDocName('');
             if (fileRef.current) fileRef.current.value = '';
             await onVersionAdded();
+            onNotify('Versão adicionada como rascunho. Clique em "Emitir" para liberá-la ao cliente.', 'success');
         } catch (err) {
             onNotify(`Erro ao publicar versão: ${err instanceof Error ? err.message : ''}`, 'error');
         } finally {
             setUploading(false);
+        }
+    };
+
+    const handleEmit = async (v: number) => {
+        setBusyV(v);
+        try {
+            await contractService.emitMinutaVersion(contract.id, v);
+            await onVersionAdded();
+            onNotify('Versão emitida! Agora está disponível no portal do cliente.', 'success');
+        } catch (err) {
+            onNotify(`Erro ao emitir versão: ${err instanceof Error ? err.message : ''}`, 'error');
+        } finally {
+            setBusyV(null);
+        }
+    };
+
+    const handleDelete = async (ver: MinutaVersion) => {
+        if (isEmitted(ver)) return;
+        if (!window.confirm(`Excluir a versão ${ver.v}? Esta ação não pode ser desfeita.`)) return;
+        setBusyV(ver.v);
+        try {
+            await contractService.deleteMinutaVersion(contract.id, ver.v);
+            await onVersionAdded();
+            onNotify('Versão excluída.', 'success');
+        } catch (err) {
+            onNotify(`Erro ao excluir versão: ${err instanceof Error ? err.message : ''}`, 'error');
+        } finally {
+            setBusyV(null);
+        }
+    };
+
+    const startEdit = (ver: MinutaVersion) => {
+        setEditingV(ver.v);
+        setEditName(ver.name ?? '');
+    };
+
+    const saveEdit = async (v: number) => {
+        setBusyV(v);
+        try {
+            await contractService.updateMinutaVersion(contract.id, v, { name: editName });
+            setEditingV(null);
+            await onVersionAdded();
+            onNotify('Nome do documento atualizado.', 'success');
+        } catch (err) {
+            onNotify(`Erro ao renomear: ${err instanceof Error ? err.message : ''}`, 'error');
+        } finally {
+            setBusyV(null);
         }
     };
 
@@ -2928,7 +2989,14 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
 
             {/* Publicar nova versão */}
             <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 space-y-3">
-                <p className="text-[11px] font-bold text-purple-600 uppercase tracking-widest">Publicar Versão {String(nextV).padStart(2, '0')}</p>
+                <p className="text-[11px] font-bold text-purple-600 uppercase tracking-widest">Adicionar Versão {String(nextV).padStart(2, '0')}</p>
+                <input
+                    type="text"
+                    value={docName}
+                    onChange={e => setDocName(e.target.value)}
+                    placeholder="Nome do documento (opcional — usa o nome do arquivo)"
+                    className="w-full px-4 py-3 bg-white border border-purple-100 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                />
                 <textarea
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
@@ -2953,28 +3021,90 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
             {/* Histórico */}
             {versions.length > 0 ? (
                 <div className="space-y-2">
-                    {versions.map(ver => (
+                    {versions.map(ver => {
+                        const emitted = isEmitted(ver);
+                        const busy = busyV === ver.v;
+                        return (
                         <div key={ver.v} className="flex items-start gap-4 p-4 rounded-2xl border border-gray-100 hover:border-purple-100 transition-all group">
-                            <div className="w-9 h-9 bg-purple-100 rounded-xl flex items-center justify-center shrink-0 text-purple-700 font-black text-[12px]">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-black text-[12px] ${emitted ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}`}>
                                 v{ver.v}
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">
-                                    {new Date(ver.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                </p>
-                                {ver.notes && <p className="text-sm text-gray-700 mt-0.5">{ver.notes}</p>}
+                                {editingV === ver.v ? (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={editName}
+                                            onChange={e => setEditName(e.target.value)}
+                                            autoFocus
+                                            placeholder={`Versão ${ver.v}`}
+                                            onKeyDown={e => { if (e.key === 'Enter') saveEdit(ver.v); if (e.key === 'Escape') setEditingV(null); }}
+                                            className="flex-1 px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                        />
+                                        <button onClick={() => saveEdit(ver.v)} disabled={busy} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all disabled:opacity-50" title="Salvar">
+                                            <Save className="w-4 h-4" />
+                                        </button>
+                                        <button onClick={() => setEditingV(null)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg transition-all" title="Cancelar">
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-sm font-bold text-gray-800 truncate">{ver.name?.trim() || `Versão ${ver.v}`}</p>
+                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 ${emitted ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                {emitted ? 'Emitida' : 'Rascunho'}
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] font-medium text-gray-400 uppercase tracking-widest mt-0.5">
+                                            {new Date(ver.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                        {ver.notes && <p className="text-sm text-gray-600 mt-0.5">{ver.notes}</p>}
+                                    </>
+                                )}
                             </div>
-                            <a
-                                href={ver.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                                title="Abrir documento"
-                            >
-                                <ExternalLink className="w-4 h-4" />
-                            </a>
+                            {editingV !== ver.v && (
+                                <div className="flex items-center gap-1 shrink-0">
+                                    {!emitted && (
+                                        <button
+                                            onClick={() => handleEmit(ver.v)}
+                                            disabled={busy}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-50 transition-all active:scale-95"
+                                            title="Emitir ao cliente"
+                                        >
+                                            <Send className="w-3 h-3" />
+                                            {busy ? '…' : 'Emitir'}
+                                        </button>
+                                    )}
+                                    <a
+                                        href={ver.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all"
+                                        title="Abrir documento"
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                    </a>
+                                    <button
+                                        onClick={() => startEdit(ver)}
+                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                                        title="Editar nome"
+                                    >
+                                        <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(ver)}
+                                        disabled={emitted || busy}
+                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                                        title={emitted ? 'Versão emitida não pode ser excluída' : 'Excluir versão'}
+                                    >
+                                        {emitted ? <LockIcon className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             ) : (
                 <p className="text-[11px] text-gray-400 uppercase tracking-widest text-center py-2">Nenhuma versão publicada ainda</p>

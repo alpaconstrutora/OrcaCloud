@@ -545,11 +545,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </div>
                                     ))}
                                 </div>
-                                {isMinuta && c.minuta_versions && c.minuta_versions.length > 0 && (
+                                {isMinuta && c.minuta_versions && c.minuta_versions.some(v => v.emitted !== false) && (
                                     <div className="space-y-3">
                                         <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Versões da Minuta</p>
                                         <div className="space-y-2">
-                                            {[...c.minuta_versions].sort((a, b) => b.v - a.v).map(ver => (
+                                            {(() => {
+                                                const emitted = c.minuta_versions!.filter(v => v.emitted !== false);
+                                                const latestV = Math.max(...emitted.map(x => x.v));
+                                                return [...emitted].sort((a, b) => b.v - a.v).map(ver => (
                                                 <a
                                                     key={ver.v}
                                                     href={ver.url}
@@ -562,8 +565,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-sm font-black text-purple-800">
-                                                            Versão {ver.v}
-                                                            {ver.v === Math.max(...c.minuta_versions!.map(x => x.v)) && (
+                                                            {ver.name?.trim() || `Versão ${ver.v}`}
+                                                            {ver.v === latestV && (
                                                                 <span className="ml-2 px-2 py-0.5 bg-purple-200 text-purple-700 rounded-full text-[9px] font-black uppercase">Atual</span>
                                                             )}
                                                         </p>
@@ -574,7 +577,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     </div>
                                                     <Download className="w-4 h-4 text-purple-400 group-hover:text-purple-700 transition-colors" />
                                                 </a>
-                                            ))}
+                                                ));
+                                            })()}
                                         </div>
                                     </div>
                                 )}

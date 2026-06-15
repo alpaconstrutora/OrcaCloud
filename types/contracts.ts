@@ -20,7 +20,10 @@ export type ContractStatus =
 export interface MinutaVersion {
     v: number;
     url: string;
+    name?: string;          // nome editável do documento
     notes: string;
+    emitted?: boolean;      // true = emitida / disponível no portal do cliente
+    emitted_at?: string;    // quando foi emitida
     created_at: string;
 }
 

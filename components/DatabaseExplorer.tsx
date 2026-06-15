@@ -502,11 +502,12 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                 setSelectedItem(newItem); // Muda o foco para o novo item
                 notify(`Novo item criado com código: ${newItem.code}`, 'success');
 
-                // Muda para base própria se não estiver nela
+                // Garante que a lista reflita o novo item
                 if (searchDatabase !== 'GENERAL') {
                     setSearchDatabase('GENERAL');
                     setSearchCode(newItem.code);
-                    // O search será disparado pelo useEffect/debounce ou manual depois
+                } else {
+                    handleSearch();
                 }
             } else if (target === 'origin') {
                 // Bug 2: não mutar selectedItem diretamente — criar cópia
@@ -521,8 +522,10 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                 await customDatabaseService.saveItem(itemToSave);
                 notify('Item atualizado na base de dados com sucesso!', 'success');
 
-                // Recarrega a busca para refletir a mudança
-                if (searchDatabase === 'GENERAL') {
+                // Recarrega a lista (muda para base própria se necessário)
+                if (searchDatabase !== 'GENERAL') {
+                    setSearchDatabase('GENERAL');
+                } else {
                     handleSearch();
                 }
             }

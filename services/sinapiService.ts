@@ -137,7 +137,7 @@ class SinapiDatabaseService {
       if (codes.length > 0) {
         const { data: overrides } = await supabase
           .from('custom_items')
-          .select('code, description, unit, price, type, category, nature, composition, database_id, is_favorite')
+          .select('code, description, unit, price, type, category, composition, database_id')
           .in('code', codes);
 
         if (overrides && overrides.length > 0) {

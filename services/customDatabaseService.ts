@@ -181,7 +181,7 @@ export const customDatabaseService = {
             codes?: string[];
         }
     ) {
-        let query = supabase.from('custom_items').select('code, description, unit, price, type, category, composition, database_id, is_favorite');
+        let query = supabase.from('custom_items').select('code, description, unit, price, type, category, composition, database_id');
 
         // IMPORTANT: Filter by database ID if provided
         if (filters?.databaseId) {
@@ -326,7 +326,7 @@ export const customDatabaseService = {
         } else {
             const { data, error } = await supabase
                 .from('custom_items')
-                .select('code, description, unit, price, type, category, nature, composition, database_id, is_favorite')
+                .select('code, description, unit, price, type, category, composition, database_id')
                 .eq('category', sourceName);
 
             if (error) throw error;

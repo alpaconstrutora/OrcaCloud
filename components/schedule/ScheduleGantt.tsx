@@ -514,13 +514,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     </div>
 
                                     <div
-                                        className={`relative h-6 rounded shadow-sm border group/bar transition-all z-[2] flex overflow-hidden ${itemSchedule?.isCritical ? 'border-red-600' : 'border-black/10'} ${isSimulationMode ? 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:z-[10]' : 'cursor-pointer'} ${isDraggingTask === item.id ? 'opacity-80 scale-105 z-[20] shadow-xl ring-2 ring-purple-600 ring-offset-1' : ''}`}
+                                        className={`relative h-6 rounded shadow-sm border group/bar transition-all z-[2] flex overflow-hidden ${itemSchedule?.isCritical ? 'border-red-600' : 'border-black/10'} cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-400 hover:z-[10] ${isSimulationMode ? 'hover:ring-purple-400' : ''} ${isDraggingTask === item.id ? 'opacity-80 scale-105 z-[20] shadow-xl ring-2 ring-blue-600 ring-offset-1' : ''}`}
                                         style={{ width: `${width}px`, backgroundColor: `${baseColor}55` }} // translucent base
-                                        onMouseDown={(e) => {
-                                            if (isSimulationMode) {
-                                                handleGanttBarMouseDown(e, item.id, itemSchedule.startDate as string);
-                                            }
-                                        }}
+                                        onMouseDown={(e) => handleGanttBarMouseDown(e, item.id, itemSchedule.startDate as string)}
                                     >
                                         {/* Progress Bar (darker portion) */}
                                         <div

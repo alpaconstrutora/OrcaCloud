@@ -282,7 +282,8 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                         value={schedule.endDate ? schedule.endDate.split('T')[0] : ''}
                         onChange={(val) => {
                             const next = { ...schedule, endDate: val };
-                            onUpdateSettings({ ...settings, schedule: next });
+                            // Sync settings.endDate too so the sync effect doesn't revert the change.
+                            onUpdateSettings({ ...settings, schedule: next, endDate: val });
                         }}
                         className="w-36"
                     />

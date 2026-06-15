@@ -390,6 +390,14 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const [isDraggingTask, setIsDraggingTask] = useState<string | null>(null);
     const [dragTaskStartOffset, setDragTaskStartOffset] = useState<number>(0);
 
+    // Refs to avoid stale closures in drag useEffect
+    const isSimulationModeRef = useRef(isSimulationMode);
+    useEffect(() => { isSimulationModeRef.current = isSimulationMode; }, [isSimulationMode]);
+    const scheduleRef = useRef(schedule);
+    useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
+    const timeScaleRef = useRef(timeScale);
+    useEffect(() => { timeScaleRef.current = timeScale; }, [timeScale]);
+
     // ── Safe Persistence Wrapper ──
     const persistSchedule = (newSchedule: ProjectSchedule) => {
         if (isSimulationMode) {
@@ -1279,8 +1287,13 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 );
 
                 const newSchedule = { ...prev, startDate: projectStart, itemSchedules: calculated };
-                // Also trigger persistence
-                persistSchedule(newSchedule);
+                // When the user explicitly sets a new start date, sync settings.startDate too
+                // so the sync useEffect doesn't detect a mismatch and revert the change.
+                if (newStartDate && !isSimulationMode) {
+                    onUpdateSettings({ ...settings, schedule: newSchedule, startDate: newStartDate });
+                } else {
+                    persistSchedule(newSchedule);
+                }
                 return newSchedule;
             } catch (err: unknown) {
                 const error = err instanceof Error ? err : new Error(String(err));
@@ -2042,14 +2055,11 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     };
 
     const handleGanttBarMouseDown = (e: React.MouseEvent, taskId: string, taskStartStr?: string) => {
-        if (!isSimulationMode) return; // Só permite arrastar no modo simulação
         if (!taskStartStr) return;
 
         e.preventDefault();
         e.stopPropagation();
 
-        const taskStart = new Date(taskStartStr);
-        // O offset inicial = a posição X do mouse menos a data base do projeto (simplificação para drag)
         setIsDraggingTask(taskId);
         setDragTaskStartOffset(e.clientX);
         document.body.style.cursor = 'grabbing';
@@ -2058,11 +2068,15 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     useEffect(() => {
         if (!isDraggingTask) return;
 
-        const handleMouseMove = (e: MouseEvent) => {
-            if (!isDraggingTask) return;
+        const pxPerDayByScale: Record<string, number> = { day: 40, week: 10, month: 3, year: 0.5 };
 
+        // Snapshot the backup at drag-start so mousemove can reference original positions
+        const dragBackup = originalScheduleBackup ?? scheduleRef.current;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const pxPerDay = pxPerDayByScale[timeScaleRef.current] ?? 10;
             const deltaX = e.clientX - dragTaskStartOffset;
-            const daysShift = Math.round(deltaX / 30); // Usando 30px como base de 1 dia na visualização padrão
+            const daysShift = Math.round(deltaX / pxPerDay);
 
             if (daysShift !== 0) {
                 setSchedule(prev => {
@@ -2071,15 +2085,13 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     if (taskIdx === -1) return prev;
 
                     const activeBaseline = prev.baselines?.find(b => b.id === prev.activeBaselineId);
-                    // Pega a data original (usamos originalScheduleBackup para evitar acumular offsets de arrastos rápidos)
-                    const backupTask = originalScheduleBackup?.itemSchedules?.find(s => s.id === isDraggingTask);
+                    const backupTask = dragBackup?.itemSchedules?.find(s => s.id === isDraggingTask);
                     if (!backupTask || !backupTask.startDate) return prev;
 
                     const originalDate = new Date(backupTask.startDate);
                     const newDate = SchedulingEngine.addDays(originalDate, daysShift, prev.useWorkingDays ?? true);
                     const newDateStr = newDate.toISOString().split('T')[0];
 
-                    // Atualiza a task sendo arrastada
                     const newTask = { ...currentItems[taskIdx], startDate: newDateStr, constraintType: ConstraintType.MSO as ConstraintType, constraintDate: newDateStr };
 
                     const updatedSchedules = [...currentItems];
@@ -2089,7 +2101,6 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
                     try {
-                        // Faz o recálculo live do impacto (O SchedulingEngine cuida de empurrar sucessores)
                         const calculated = SchedulingEngine.calculate(
                             ensureFullScheduleList(updatedSchedules, budget),
                             prev.startDate,
@@ -2112,6 +2123,10 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         const handleMouseUp = () => {
             setIsDraggingTask(null);
             document.body.style.cursor = '';
+            // Outside simulation mode: persist the repositioned schedule immediately
+            if (!isSimulationModeRef.current) {
+                onUpdateSettings({ ...settings, schedule: scheduleRef.current });
+            }
         };
 
         window.addEventListener('mousemove', handleMouseMove);

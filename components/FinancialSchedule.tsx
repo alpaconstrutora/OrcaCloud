@@ -2893,6 +2893,31 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 </div>
             )}
 
+            {/* ── Sync Budget Banner (visible when budget drifted) ── */}
+            {syncDiff.total > 0 && !syncModalOpen && (
+                <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-50 border border-amber-200/70 rounded-xl shadow-sm">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <RefreshCw className="w-4 h-4 text-amber-500 shrink-0" />
+                        <p className="text-[12px] text-amber-800 font-medium truncate">
+                            <span className="font-bold">{syncDiff.newItems.length > 0 && syncDiff.changedItems.length > 0
+                                ? `${syncDiff.newItems.length} item(s) novo(s) e ${syncDiff.changedItems.length} com duração alterada`
+                                : syncDiff.newItems.length > 0
+                                    ? `${syncDiff.newItems.length} item(s) novo(s) no orçamento`
+                                    : `${syncDiff.changedItems.length} item(s) com duração alterada`}
+                            </span>
+                            {' '}— o planejamento está desatualizado.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => setSyncModalOpen(true)}
+                        className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-500 text-white hover:bg-amber-600 transition-all shadow-sm whitespace-nowrap"
+                    >
+                        <RefreshCw className="w-3 h-3" />
+                        Sincronizar com Orçamento
+                    </button>
+                </div>
+            )}
+
             {/* Simulation Active Banner */}
             <SimulationBanner
                 isSimulationMode={isSimulationMode}

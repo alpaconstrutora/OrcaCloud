@@ -335,16 +335,15 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
             if (searchDatabase === 'SINAPI') {
                 results = await sinapiService.search(searchTerm, filters);
             } else {
-                // Se for Base Própria, permite busca mesmo sem database selecionado (será a Base Geral)
-                // Bug 5: currentDatabase é null quando "Base Geral" está selecionada;
-                // passar 'GENERAL' para que o service filtre database_id IS NULL
+                // currentDatabase=null significa "Base Geral" — sem filtro de database_id para
+                // mostrar TODOS os itens próprios (legados com null e novos com UUID).
                 results = await customDatabaseService.search(searchTerm, {
                     type: searchType,
                     category: searchGroup,
                     code: searchCode,
                     searchScope: searchScope,
                     searchMode: searchMode,
-                    databaseId: currentDatabase?.id ?? 'GENERAL',
+                    databaseId: currentDatabase?.id,
                     codes: showOnlyFavorites ? favorites : undefined
                 });
             }

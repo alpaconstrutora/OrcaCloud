@@ -11,7 +11,8 @@ import {
     ChevronsDownUp,
     Trash2,
     Loader2,
-    ShieldAlert
+    ShieldAlert,
+    RefreshCw
 } from 'lucide-react';
 import { ProjectSchedule, ProjectSettings, ItemScheduleDetails } from '../../types';
 import ModernDateInput from '../ModernDateInput';
@@ -45,6 +46,8 @@ interface ScheduleHeaderProps {
     autoCount: number;
     allAuto: boolean;
     onClearAll: () => void;
+    syncDiffCount: number;
+    onSyncBudget: () => void;
 }
 
 const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
@@ -75,7 +78,9 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     budgetLength,
     autoCount,
     allAuto,
-    onClearAll
+    onClearAll,
+    syncDiffCount,
+    onSyncBudget
 }) => {
     return (
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
@@ -267,6 +272,26 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                         {budgetLength > 0 && <span className="text-[9px] bg-green-200 text-green-800 px-1 rounded-full">{autoCount}/{budgetLength}</span>}
                     </button>
                 </div>
+
+                {/* ── Sync Button ── */}
+                <div className="h-5 w-px bg-gray-200"></div>
+                <button
+                    onClick={onSyncBudget}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border ${
+                        syncDiffCount > 0
+                            ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 shadow-sm'
+                            : 'bg-gray-50/80 text-gray-400 border-gray-200/40 hover:bg-white hover:text-gray-600 hover:shadow-sm'
+                    }`}
+                    title={syncDiffCount > 0 ? `${syncDiffCount} alteração(ões) no orçamento pendentes` : 'Planejamento sincronizado com o orçamento'}
+                >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncDiffCount > 0 ? 'text-amber-500' : ''}`} />
+                    Sincronizar
+                    {syncDiffCount > 0 && (
+                        <span className="bg-amber-200 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
+                            {syncDiffCount}
+                        </span>
+                    )}
+                </button>
 
                 {/* ── Group 4: Dates ── */}
                 <div className="h-5 w-px bg-gray-200"></div>

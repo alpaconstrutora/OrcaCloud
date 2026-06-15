@@ -48,7 +48,8 @@ import {
     Camera,
     X,
     FileDown,
-    Trash
+    Trash,
+    RefreshCw
 } from 'lucide-react';
 
 function getWeekNumber(d: Date): number {
@@ -1180,45 +1181,34 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
     // Sync budget quantity changes to schedule
 
+    // Auto-init only: if schedule is completely empty (no budget items), initialize once.
+    // Budget changes after that are handled manually via the Sincronizar button.
     React.useEffect(() => {
-        const itemSchedules = schedule.itemSchedules || [];
-        const budgetLength = budget.length;
+        const scheduleIds = new Set((schedule.itemSchedules || []).map(s => s.id));
+        const budgetItemsInSchedule = budget.filter(b => scheduleIds.has(b.id)).length;
+        if (budget.length > 0 && budgetItemsInSchedule === 0) {
+            handleRecalculate();
+        }
+    }, [budget, schedule.itemSchedules]);
 
-        // Use a Set for O(1) lookup — itemSchedules may contain non-budget entries
-        // (e.g. group/phase nodes with predecessors), so never compare raw lengths.
+    // Diff between current budget and schedule — drives the Sincronizar button and modal
+    const [syncModalOpen, setSyncModalOpen] = React.useState(false);
+
+    const syncDiff = React.useMemo(() => {
+        const itemSchedules = schedule.itemSchedules || [];
         const scheduleIds = new Set(itemSchedules.map(s => s.id));
 
-        // 1. No schedule items at all → initialize
-        if (budgetLength > 0 && itemSchedules.length === 0) {
-            handleRecalculate();
-            return;
-        }
+        const newItems = budget.filter(b => !scheduleIds.has(b.id));
 
-        let shouldRecalculate = false;
-        for (const budgetItem of budget) {
-            const task = scheduleIds.has(budgetItem.id)
-                ? itemSchedules.find(t => t.id === budgetItem.id)!
-                : null;
+        const changedItems = budget.filter(b => {
+            if (!scheduleIds.has(b.id)) return false;
+            const task = itemSchedules.find(s => s.id === b.id);
+            if (!task?.autoDuration) return false;
+            const expected = SchedulingEngine.calculateDuration(task, b.quantity);
+            return expected !== null && expected !== task.duration;
+        });
 
-            // 2. Budget item missing from schedule → sync
-            if (!task) {
-                shouldRecalculate = true;
-                break;
-            }
-
-            // 3. Auto-duration tasks that need a quantity update
-            if (task.autoDuration) {
-                const expectedDuration = SchedulingEngine.calculateDuration(task, budgetItem.quantity);
-                if (expectedDuration !== null && expectedDuration !== task.duration) {
-                    shouldRecalculate = true;
-                    break;
-                }
-            }
-        }
-
-        if (shouldRecalculate) {
-            handleRecalculate();
-        }
+        return { newItems, changedItems, total: newItems.length + changedItems.length };
     }, [budget, schedule.itemSchedules]);
 
 
@@ -2797,7 +2787,111 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                         onUpdateSettings({ ...settings, schedule: newSchedule });
                     }
                 }}
+                syncDiffCount={syncDiff.total}
+                onSyncBudget={() => setSyncModalOpen(true)}
             />
+
+            {/* ── Sync Budget Modal ── */}
+            {syncModalOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-[520px] max-h-[75vh] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${syncDiff.total > 0 ? 'bg-amber-100' : 'bg-green-100'}`}>
+                                    <RefreshCw className={`w-4 h-4 ${syncDiff.total > 0 ? 'text-amber-600' : 'text-green-600'}`} />
+                                </div>
+                                <div>
+                                    <h2 className="text-sm font-bold text-gray-900">Sincronizar Planejamento</h2>
+                                    <p className="text-[11px] text-gray-400">Alterações detectadas no orçamento</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setSyncModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-all text-gray-400 hover:text-gray-600">
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+                            {syncDiff.total === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-green-100 flex items-center justify-center">
+                                        <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                    </div>
+                                    <p className="text-sm font-semibold text-gray-700">Planejamento atualizado</p>
+                                    <p className="text-xs text-gray-400 text-center">Todos os itens do orçamento já estão no planejamento.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {syncDiff.newItems.length > 0 && (
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                                <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                                                    {syncDiff.newItems.length} item(s) novo(s) no orçamento
+                                                </h3>
+                                                <span className="text-[10px] text-gray-400">serão adicionados sem data/duração</span>
+                                            </div>
+                                            <div className="space-y-1 max-h-40 overflow-y-auto">
+                                                {syncDiff.newItems.map(item => (
+                                                    <div key={item.id} className="flex items-center gap-2 text-xs text-gray-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                                                        <span className="truncate flex-1 font-medium">{item.sinapiItem.description}</span>
+                                                        <span className="shrink-0 text-gray-400">{item.quantity} {item.sinapiItem.unit}</span>
+                                                        <span className="shrink-0 text-emerald-600 font-bold">+ Novo</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {syncDiff.changedItems.length > 0 && (
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                                                <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                                                    {syncDiff.changedItems.length} item(s) com duração a recalcular
+                                                </h3>
+                                                <span className="text-[10px] text-gray-400">quantidade alterada</span>
+                                            </div>
+                                            <div className="space-y-1 max-h-40 overflow-y-auto">
+                                                {syncDiff.changedItems.map(item => (
+                                                    <div key={item.id} className="flex items-center gap-2 text-xs text-gray-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                                                        <span className="truncate flex-1 font-medium">{item.sinapiItem.description}</span>
+                                                        <span className="shrink-0 text-gray-400">{item.quantity} {item.sinapiItem.unit}</span>
+                                                        <span className="shrink-0 text-amber-600 font-bold">↻ Recalcular</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
+                                        <strong>O que acontece ao aplicar:</strong> itens novos entram no planejamento sem data e duração (você preenche depois). Itens com duração automática terão a duração recalculada com a nova quantidade.
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                            <button
+                                onClick={() => setSyncModalOpen(false)}
+                                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-xl transition-all border border-gray-200"
+                            >
+                                Fechar
+                            </button>
+                            {syncDiff.total > 0 && (
+                                <button
+                                    onClick={() => { handleRecalculate(); setSyncModalOpen(false); }}
+                                    className="px-4 py-2 text-sm font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-sm"
+                                >
+                                    Aplicar Sincronização
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Simulation Active Banner */}
             <SimulationBanner

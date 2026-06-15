@@ -252,7 +252,9 @@ export const useProjectOperations = ({
         setProjectId(id);
         setProjectSettings(loadedSettings);
         let projectBudget = projectData.budget || [];
-        if (loadedSettings.classification === 'PLANEJAMENTO' && projectBudget.length === 0) {
+        if (loadedSettings.classification === 'PLANEJAMENTO') {
+          // Always load budget from the linked orçamento/obra — the planning's own saved budget
+          // may be stale if items were added/removed from the linked project since last sync.
           const linkedId = loadedSettings.linkedProjectId;
           const linkedName = loadedSettings.linkedProjectName;
 

@@ -630,8 +630,14 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
     const [ganttVisibleLevels, setGanttVisibleLevels] = useState<Set<string>>(() => {
         try {
-            const saved = localStorage.getItem('idx_schedule_gantt_levels_v6');
-            return saved ? new Set(JSON.parse(saved)) : new Set(DEFAULT_VISIBLE_LEVELS);
+            const saved = localStorage.getItem('idx_schedule_gantt_levels_v7');
+            if (saved) {
+                const parsed = new Set<string>(JSON.parse(saved));
+                // Always ensure all default levels are present (guards against stale state)
+                DEFAULT_VISIBLE_LEVELS.forEach(l => parsed.add(l));
+                return parsed;
+            }
+            return new Set(DEFAULT_VISIBLE_LEVELS);
         } catch { return new Set(DEFAULT_VISIBLE_LEVELS); }
     });
 
@@ -640,15 +646,20 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             const next = new Set(prev);
             if (next.has(level)) next.delete(level);
             else next.add(level);
-            localStorage.setItem('idx_schedule_gantt_levels_v6', JSON.stringify([...next]));
+            localStorage.setItem('idx_schedule_gantt_levels_v7', JSON.stringify([...next]));
             return next;
         });
     };
 
     const [tableVisibleLevels, setTableVisibleLevels] = useState<Set<string>>(() => {
         try {
-            const saved = localStorage.getItem('idx_schedule_table_levels_v6');
-            return saved ? new Set(JSON.parse(saved)) : new Set(DEFAULT_VISIBLE_LEVELS);
+            const saved = localStorage.getItem('idx_schedule_table_levels_v7');
+            if (saved) {
+                const parsed = new Set<string>(JSON.parse(saved));
+                DEFAULT_VISIBLE_LEVELS.forEach(l => parsed.add(l));
+                return parsed;
+            }
+            return new Set(DEFAULT_VISIBLE_LEVELS);
         } catch { return new Set(DEFAULT_VISIBLE_LEVELS); }
     });
 
@@ -657,7 +668,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             const next = new Set(prev);
             if (next.has(level)) next.delete(level);
             else next.add(level);
-            localStorage.setItem('idx_schedule_table_levels_v6', JSON.stringify([...next]));
+            localStorage.setItem('idx_schedule_table_levels_v7', JSON.stringify([...next]));
             return next;
         });
     };

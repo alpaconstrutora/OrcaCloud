@@ -481,11 +481,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 </div>
             ) : (
                 viewMode === 'list' ? (
-                    <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
+                    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-visible">
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
-                                    {(isObraContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
+                                    {(isObraContext || isPlanejamentoContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
                                         <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-20 text-center">Código</th>
                                     )}
                                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
@@ -501,7 +501,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Planejamento Vinculado</th>
                                         </>
                                     )}
-                                    {!isObraContext && (
+                                    {!isObraContext && !isPlanejamentoContext && (
                                         <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Cliente</th>
                                     )}
                                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Clima' : 'Atualização'}</th>
@@ -520,7 +520,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
                                         className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                                     >
-                                        {(isObraContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
+                                        {(isObraContext || isPlanejamentoContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
                                             <td className="px-4 py-4 text-center">
                                                 <span className="text-sm font-black font-mono text-blue-700">
                                                     {project.code || project.settings?.code || '—'}
@@ -659,7 +659,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </td>
                                             </>
                                         )}
-                                        {!isObraContext && (
+                                        {!isObraContext && !isPlanejamentoContext && (
                                             <td className="px-6 py-4">
                                                 {(activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)) ? (
                                                     <span className="text-sm text-gray-600 font-medium">
@@ -791,7 +791,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </button>
                                             </td>
                                         )}
-                                        {!isObraContext && !isDiaryContext && (
+                                        {!isObraContext && !isPlanejamentoContext && !isDiaryContext && (
                                             <td className="px-6 py-4">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'analytic'); }}
@@ -917,7 +917,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 </div>
 
                                 <div className="p-4 bg-gray-50 rounded-b-[2.5rem] border-t border-gray-100 flex items-center justify-between">
-                                    {!isObraContext && !isPlanejamentoContext && (
+                                    {!isObraContext && !isPlanejamentoContext && !isDiaryContext && (
                                         <div className="flex items-center gap-1">
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'dashboard'); }}

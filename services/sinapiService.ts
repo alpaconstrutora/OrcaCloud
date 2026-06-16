@@ -52,7 +52,7 @@ class SinapiDatabaseService {
     if (cleanTerm.length < 2 && !filters?.code && !filters?.group && !filters?.nature && !filters?.type && (!filters?.codes || filters.codes.length === 0)) return [];
 
     // composition (sub-itens JSON) omitido na listagem — carregado apenas no detalhe individual
-    let query = supabase.from('sinapi_items').select('code, description, unit, price, prices, category, nature, origin');
+    let query = supabase.from('sinapi_items').select('code, description, unit, price, prices, category, nature, type, origin');
 
     // 1. Filtrar por Código (Correspondência Exata ou Início)
     if (filters?.code) {

@@ -2407,7 +2407,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     if (isAdmin && !clientProfile) {
         return (
             <div className="min-h-screen bg-gray-50/30 lg:p-8 p-4">
-                <ClientList onSelectClient={onClientSelect} />
+                <ClientList onSelectClient={onClientSelect} organizationId={organizationId ?? undefined} />
             </div>
         );
     }

@@ -10,6 +10,9 @@ import {
     StockNetPosition,
     StockSummary,
     StockMinLevel,
+    MaterialRequest,
+    MaterialRequestItem,
+    CreateMaterialRequestInput,
     CreateStockMovementInput,
     CreateWarehouseInput,
     CreateSupplierLeadTimeInput,
@@ -611,6 +614,131 @@ export const inventoryService = {
 
     async deleteMinLevel(id: string): Promise<void> {
         const { error } = await supabase.from('stock_min_levels').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    // ─── REQUISIÇÕES DE MATERIAIS ──────────────────────────────────────────────
+
+    async listMaterialRequests(organizationId: string, projectId?: string): Promise<MaterialRequest[]> {
+        let q = supabase
+            .from('material_requests')
+            .select('id, organization_id, project_id, warehouse_id, number, requested_by, approved_by, status, notes, requested_at, approved_at, delivered_at, created_at, projects(name), warehouses(name)')
+            .eq('organization_id', organizationId)
+            .order('created_at', { ascending: false });
+        if (projectId) q = q.eq('project_id', projectId);
+        const { data, error } = await q;
+        if (error) throw error;
+
+        const ids = (data || []).map(r => r.id);
+        const itemsMap: Record<string, MaterialRequestItem[]> = {};
+        if (ids.length > 0) {
+            const { data: itemRows } = await supabase
+                .from('material_request_items')
+                .select('id, request_id, input_code, input_description, input_unit, quantity_requested, quantity_approved, quantity_delivered, notes')
+                .in('request_id', ids);
+            (itemRows || []).forEach(r => {
+                if (!itemsMap[r.request_id]) itemsMap[r.request_id] = [];
+                itemsMap[r.request_id].push({
+                    id: r.id, requestId: r.request_id,
+                    inputCode: r.input_code ?? undefined,
+                    inputDescription: r.input_description,
+                    inputUnit: r.input_unit,
+                    quantityRequested: Number(r.quantity_requested),
+                    quantityApproved: r.quantity_approved != null ? Number(r.quantity_approved) : undefined,
+                    quantityDelivered: r.quantity_delivered != null ? Number(r.quantity_delivered) : undefined,
+                    notes: r.notes ?? undefined,
+                });
+            });
+        }
+
+        return (data || []).map(r => {
+            const row = r as unknown as Record<string, unknown>;
+            return {
+                id: row.id as string,
+                organizationId: row.organization_id as string,
+                projectId: row.project_id as string | undefined,
+                projectName: (row.projects as Record<string, unknown> | null)?.name as string | undefined,
+                warehouseId: row.warehouse_id as string | undefined,
+                warehouseName: (row.warehouses as Record<string, unknown> | null)?.name as string | undefined,
+                number: row.number as string,
+                requestedBy: row.requested_by as string,
+                approvedBy: row.approved_by as string | undefined,
+                status: row.status as MaterialRequest['status'],
+                notes: row.notes as string | undefined,
+                requestedAt: row.requested_at as string,
+                approvedAt: row.approved_at as string | undefined,
+                deliveredAt: row.delivered_at as string | undefined,
+                items: itemsMap[r.id] ?? [],
+                created_at: row.created_at as string,
+            };
+        });
+    },
+
+    async createMaterialRequest(organizationId: string, input: CreateMaterialRequestInput): Promise<string> {
+        const { data: numData, error: numError } = await supabase.rpc('fn_next_material_request_number', {
+            p_organization_id: organizationId,
+        });
+        if (numError) throw numError;
+
+        const { data: req, error } = await supabase
+            .from('material_requests')
+            .insert({
+                organization_id: organizationId,
+                project_id: input.projectId ?? null,
+                warehouse_id: input.warehouseId ?? null,
+                number: numData,
+                requested_by: input.requestedBy,
+                notes: input.notes ?? null,
+            })
+            .select('id')
+            .single();
+        if (error) throw error;
+
+        const { error: itemsError } = await supabase.from('material_request_items').insert(
+            input.items.map(it => ({
+                request_id: req.id,
+                input_code: it.inputCode ?? null,
+                input_description: it.inputDescription,
+                input_unit: it.inputUnit,
+                quantity_requested: it.quantityRequested,
+                notes: it.notes ?? null,
+            }))
+        );
+        if (itemsError) throw itemsError;
+        return req.id;
+    },
+
+    async approveMaterialRequest(id: string, approvedBy: string, itemApprovals?: Record<string, number>): Promise<void> {
+        if (itemApprovals) {
+            for (const [itemId, qty] of Object.entries(itemApprovals)) {
+                await supabase.from('material_request_items').update({ quantity_approved: qty }).eq('id', itemId);
+            }
+        }
+        const { error } = await supabase.from('material_requests').update({
+            status: 'approved', approved_by: approvedBy,
+            approved_at: new Date().toISOString().slice(0, 10),
+        }).eq('id', id);
+        if (error) throw error;
+    },
+
+    async rejectMaterialRequest(id: string, approvedBy: string): Promise<void> {
+        const { error } = await supabase.from('material_requests').update({
+            status: 'rejected', approved_by: approvedBy,
+            approved_at: new Date().toISOString().slice(0, 10),
+        }).eq('id', id);
+        if (error) throw error;
+    },
+
+    async deliverMaterialRequest(id: string, deliveredBy?: string): Promise<void> {
+        const { error } = await supabase.rpc('fn_deliver_material_request', {
+            p_request_id: id,
+            p_delivered_by: deliveredBy ?? null,
+        });
+        if (error) throw error;
+    },
+
+    async cancelMaterialRequest(id: string): Promise<void> {
+        const { error } = await supabase.from('material_requests').update({ status: 'cancelled' }).eq('id', id);
         if (error) throw error;
     },
 };

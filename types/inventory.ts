@@ -231,3 +231,52 @@ export interface CreateStockMinLevelInput {
     minQuantity: number;
     notes?: string;
 }
+
+// ── Requisições de Materiais (Fase 4) ────────────────────────────────────────
+
+export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'separated' | 'delivered' | 'cancelled';
+
+export interface MaterialRequestItem {
+    id: string;
+    requestId: string;
+    inputCode?: string;
+    inputDescription: string;
+    inputUnit: string;
+    quantityRequested: number;
+    quantityApproved?: number;
+    quantityDelivered?: number;
+    notes?: string;
+}
+
+export interface MaterialRequest {
+    id: string;
+    organizationId: string;
+    projectId?: string;
+    projectName?: string;
+    warehouseId?: string;
+    warehouseName?: string;
+    number: string;
+    requestedBy: string;
+    approvedBy?: string;
+    status: RequestStatus;
+    notes?: string;
+    requestedAt: string;
+    approvedAt?: string;
+    deliveredAt?: string;
+    items: MaterialRequestItem[];
+    created_at: string;
+}
+
+export interface CreateMaterialRequestInput {
+    warehouseId?: string;
+    projectId?: string;
+    requestedBy: string;
+    notes?: string;
+    items: Array<{
+        inputCode?: string;
+        inputDescription: string;
+        inputUnit: string;
+        quantityRequested: number;
+        notes?: string;
+    }>;
+}

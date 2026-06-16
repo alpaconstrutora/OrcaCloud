@@ -25,6 +25,7 @@ import {
     TrendingDown,
     TrendingUp,
     ShieldAlert,
+    ClipboardList,
 } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import { useStore } from '../store/useStore';
@@ -36,10 +37,13 @@ import type {
     StockTransfer,
     StockNetPosition,
     StockSummary,
+    MaterialRequest,
+    MaterialRequestItem,
     CreateWarehouseInput,
     CreateStockMovementInput,
     CreateSupplierLeadTimeInput,
     CreateTransferInput,
+    CreateMaterialRequestInput,
 } from '../types/inventory';
 
 interface Props {
@@ -47,7 +51,7 @@ interface Props {
     onChangeView: (view: string) => void;
 }
 
-type Tab = 'saldos' | 'movimentos' | 'almoxarifados' | 'lead_times' | 'transferencias' | 'posicao';
+type Tab = 'saldos' | 'movimentos' | 'almoxarifados' | 'lead_times' | 'transferencias' | 'posicao' | 'requisicoes';
 
 // ─── Modal de movimento manual ────────────────────────────────────────────────
 interface MovementModalProps {
@@ -325,6 +329,12 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const [warehouseModal, setWarehouseModal] = React.useState<WarehouseType | true | null>(null);
     const [transferModal, setTransferModal] = React.useState(false);
 
+    // Requisições
+    const [requests, setRequests] = React.useState<MaterialRequest[]>([]);
+    const [reqFilter, setReqFilter] = React.useState('');
+    const [showRequestModal, setShowRequestModal] = React.useState(false);
+    const [approvingRequest, setApprovingRequest] = React.useState<MaterialRequest | null>(null);
+
     const load = React.useCallback(async () => {
         if (!activeOrganizationId) return;
         setLoading(true);
@@ -355,6 +365,11 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     }, [activeOrganizationId, selectedWarehouseId]);
 
     React.useEffect(() => { load(); }, [load]);
+
+    React.useEffect(() => {
+        if (!activeOrganizationId || tab !== 'requisicoes') return;
+        inventoryService.listMaterialRequests(activeOrganizationId).then(setRequests).catch(console.error);
+    }, [tab, activeOrganizationId]);
 
     const fmt = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
     const fmtBrl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -459,6 +474,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     { key: 'transferencias', label: 'Transferências', icon: ArrowLeftRight },
                     { key: 'almoxarifados', label: 'Almoxarifados', icon: Warehouse },
                     { key: 'lead_times', label: 'Lead Time', icon: Clock },
+                    { key: 'requisicoes', label: 'Requisições', icon: ClipboardList },
                 ] as const).map(t => (
                     <button
                         key={t.key}
@@ -953,10 +969,25 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                             )}
                         </div>
                     )}
+
+                    {/* ── TAB: REQUISIÇÕES ── */}
+                    {tab === 'requisicoes' && (
+                        <RequisitionsTab
+                            orgId={activeOrganizationId}
+                            warehouses={warehouses.filter(w => w.isActive)}
+                            requests={requests}
+                            reqFilter={reqFilter}
+                            setReqFilter={setReqFilter}
+                            showRequestModal={showRequestModal}
+                            setShowRequestModal={setShowRequestModal}
+                            approvingRequest={approvingRequest}
+                            setApprovingRequest={setApprovingRequest}
+                            reload={() => inventoryService.listMaterialRequests(activeOrganizationId).then(setRequests)}
+                        />
+                    )}
                 </>
             )}
 
-            {/* Modais */}
             {movementModal && (
                 <MovementModal
                     orgId={activeOrganizationId}
@@ -1119,6 +1150,461 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
                         <button onClick={save} disabled={saving} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                             Enviar Transferência
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ─── Tab de Requisições ────────────────────────────────────────────────────────
+const STATUS_LABELS: Record<string, string> = {
+    pending: 'Pendente',
+    approved: 'Aprovada',
+    rejected: 'Rejeitada',
+    separated: 'Separada',
+    delivered: 'Entregue',
+    cancelled: 'Cancelada',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+    pending: 'bg-yellow-500/20 text-yellow-300',
+    approved: 'bg-green-500/20 text-green-300',
+    rejected: 'bg-red-500/20 text-red-300',
+    separated: 'bg-blue-500/20 text-blue-300',
+    delivered: 'bg-gray-500/20 text-gray-300',
+    cancelled: 'bg-gray-700/50 text-gray-500',
+};
+
+interface RequisitionsTabProps {
+    orgId: string;
+    warehouses: WarehouseType[];
+    requests: MaterialRequest[];
+    reqFilter: string;
+    setReqFilter: (f: string) => void;
+    showRequestModal: boolean;
+    setShowRequestModal: (v: boolean) => void;
+    approvingRequest: MaterialRequest | null;
+    setApprovingRequest: (r: MaterialRequest | null) => void;
+    reload: () => void;
+}
+
+const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
+    orgId, warehouses, requests, reqFilter, setReqFilter,
+    showRequestModal, setShowRequestModal, approvingRequest, setApprovingRequest, reload,
+}) => {
+    const [delivering, setDelivering] = React.useState<string | null>(null);
+    const [cancelling, setCancelling] = React.useState<string | null>(null);
+    const [err, setErr] = React.useState('');
+
+    const filters = ['', 'pending', 'approved', 'separated', 'delivered', 'rejected', 'cancelled'];
+    const filterLabels: Record<string, string> = { '': 'Todos', ...STATUS_LABELS };
+    const visible = reqFilter ? requests.filter(r => r.status === reqFilter) : requests;
+
+    const handleDeliver = async (id: string) => {
+        setDelivering(id); setErr('');
+        try { await inventoryService.deliverMaterialRequest(id); reload(); }
+        catch (e: unknown) { setErr((e as Error).message); }
+        finally { setDelivering(null); }
+    };
+
+    const handleCancel = async (id: string) => {
+        setCancelling(id); setErr('');
+        try { await inventoryService.cancelMaterialRequest(id); reload(); }
+        catch (e: unknown) { setErr((e as Error).message); }
+        finally { setCancelling(null); }
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-2">
+                    {filters.map(f => (
+                        <button
+                            key={f}
+                            onClick={() => setReqFilter(f)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${reqFilter === f ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                        >
+                            {filterLabels[f]}
+                        </button>
+                    ))}
+                </div>
+                <button
+                    onClick={() => setShowRequestModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium"
+                >
+                    <Plus className="w-4 h-4" /> Nova Requisição
+                </button>
+            </div>
+
+            {err && <p className="text-red-400 text-xs">{err}</p>}
+
+            {visible.length === 0 && (
+                <div className="text-center py-12 text-gray-500 border border-dashed border-gray-700 rounded-xl">
+                    Nenhuma requisição{reqFilter ? ` com status "${STATUS_LABELS[reqFilter]}"` : ''}.
+                </div>
+            )}
+
+            <div className="space-y-4">
+                {visible.map(req => (
+                    <div key={req.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-3">
+                                <ClipboardList className="w-4 h-4 text-blue-400 shrink-0" />
+                                <span className="font-semibold text-white">{req.number}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[req.status]}`}>
+                                    {STATUS_LABELS[req.status]}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {req.status === 'pending' && (
+                                    <button
+                                        onClick={() => setApprovingRequest(req)}
+                                        className="px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium flex items-center gap-1"
+                                    >
+                                        <Check className="w-3 h-3" /> Avaliar
+                                    </button>
+                                )}
+                                {(req.status === 'approved' || req.status === 'separated') && (
+                                    <button
+                                        onClick={() => handleDeliver(req.id)}
+                                        disabled={delivering === req.id}
+                                        className="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-xs font-medium flex items-center gap-1 disabled:opacity-50"
+                                    >
+                                        {delivering === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                                        Entregar
+                                    </button>
+                                )}
+                                {(req.status === 'pending' || req.status === 'approved' || req.status === 'separated') && (
+                                    <button
+                                        onClick={() => handleCancel(req.id)}
+                                        disabled={cancelling === req.id}
+                                        className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-medium flex items-center gap-1 disabled:opacity-50"
+                                    >
+                                        {cancelling === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                        Cancelar
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 text-xs text-gray-400">
+                            <div><span className="text-gray-500">Solicitante:</span> <span className="text-gray-200">{req.requestedBy}</span></div>
+                            {req.warehouseName && <div><span className="text-gray-500">Almoxarifado:</span> <span className="text-gray-200">{req.warehouseName}</span></div>}
+                            {req.projectName && <div><span className="text-gray-500">Obra:</span> <span className="text-gray-200">{req.projectName}</span></div>}
+                            <div><span className="text-gray-500">Data:</span> <span className="text-gray-200">{new Date(req.requestedAt).toLocaleDateString('pt-BR')}</span></div>
+                            {req.approvedBy && <div><span className="text-gray-500">Aprovado por:</span> <span className="text-gray-200">{req.approvedBy}</span></div>}
+                        </div>
+                        {req.notes && <p className="text-xs text-gray-500 italic">{req.notes}</p>}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-gray-500 border-b border-gray-700">
+                                        <th className="text-left pb-1 font-medium">Insumo</th>
+                                        <th className="text-left pb-1 font-medium">Cód.</th>
+                                        <th className="text-right pb-1 font-medium">Solicitado</th>
+                                        <th className="text-right pb-1 font-medium">Aprovado</th>
+                                        <th className="text-right pb-1 font-medium">Entregue</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {req.items.map(item => (
+                                        <tr key={item.id} className="border-b border-gray-800">
+                                            <td className="py-1.5 text-gray-200">{item.inputDescription}</td>
+                                            <td className="py-1.5 text-gray-500">{item.inputCode ?? '—'}</td>
+                                            <td className="py-1.5 text-right text-gray-300">{item.quantityRequested} {item.inputUnit}</td>
+                                            <td className="py-1.5 text-right text-gray-300">{item.quantityApproved != null ? `${item.quantityApproved} ${item.inputUnit}` : '—'}</td>
+                                            <td className="py-1.5 text-right text-gray-300">{item.quantityDelivered != null ? `${item.quantityDelivered} ${item.inputUnit}` : '—'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {showRequestModal && (
+                <RequestModal
+                    orgId={orgId}
+                    warehouses={warehouses}
+                    onClose={() => setShowRequestModal(false)}
+                    onCreated={() => { setShowRequestModal(false); reload(); }}
+                />
+            )}
+            {approvingRequest && (
+                <ApproveModal
+                    request={approvingRequest}
+                    onClose={() => setApprovingRequest(null)}
+                    onDone={() => { setApprovingRequest(null); reload(); }}
+                />
+            )}
+        </div>
+    );
+};
+
+// ─── Modal: Nova Requisição ────────────────────────────────────────────────────
+interface RequestModalProps {
+    orgId: string;
+    warehouses: WarehouseType[];
+    onClose: () => void;
+    onCreated: () => void;
+}
+
+const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose, onCreated }) => {
+    const keyRef = React.useRef(0);
+    const [form, setForm] = React.useState<CreateMaterialRequestInput>({
+        requestedBy: '',
+        warehouseId: warehouses[0]?.id ?? '',
+        items: [],
+    });
+    const [saving, setSaving] = React.useState(false);
+    const [err, setErr] = React.useState('');
+
+    const addItem = () => {
+        keyRef.current += 1;
+        setForm(f => ({
+            ...f,
+            items: [...f.items, { inputCode: '', inputDescription: '', inputUnit: 'un', quantityRequested: 0 }],
+        }));
+    };
+
+    const updateItem = (idx: number, patch: Partial<CreateMaterialRequestInput['items'][0]>) => {
+        setForm(f => ({ ...f, items: f.items.map((it, i) => i === idx ? { ...it, ...patch } : it) }));
+    };
+
+    const removeItem = (idx: number) => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
+
+    const save = async () => {
+        if (!form.requestedBy.trim()) { setErr('Informe o solicitante.'); return; }
+        const validItems = form.items.filter(i => i.inputDescription && i.quantityRequested > 0);
+        if (validItems.length === 0) { setErr('Adicione ao menos um item com quantidade.'); return; }
+        setSaving(true);
+        try {
+            await inventoryService.createMaterialRequest(orgId, { ...form, items: validItems });
+            onCreated();
+        } catch (e: unknown) {
+            setErr((e as Error).message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+                    <div className="flex items-center gap-2">
+                        <ClipboardList className="w-5 h-5 text-blue-400" />
+                        <h3 className="font-semibold text-white">Nova Requisição de Material</h3>
+                    </div>
+                    <button onClick={onClose}><X className="w-5 h-5 text-gray-400 hover:text-white" /></button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1">Solicitante *</label>
+                            <input
+                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                value={form.requestedBy}
+                                onChange={e => setForm(f => ({ ...f, requestedBy: e.target.value }))}
+                                placeholder="Nome do solicitante"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1">Almoxarifado</label>
+                            <select
+                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                value={form.warehouseId ?? ''}
+                                onChange={e => setForm(f => ({ ...f, warehouseId: e.target.value || undefined }))}
+                            >
+                                <option value="">— Sem almoxarifado —</option>
+                                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs text-gray-400 mb-1">Observações</label>
+                        <input
+                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                            value={form.notes ?? ''}
+                            onChange={e => setForm(f => ({ ...f, notes: e.target.value || undefined }))}
+                        />
+                    </div>
+
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs text-gray-400 uppercase font-medium">Itens *</label>
+                            <button onClick={addItem} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
+                                <Plus className="w-3 h-3" /> Adicionar
+                            </button>
+                        </div>
+                        {form.items.length === 0 && (
+                            <div className="text-center py-6 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg">
+                                Adicione os materiais necessários.
+                            </div>
+                        )}
+                        <div className="space-y-2">
+                            {form.items.map((item, idx) => (
+                                <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                                    <div className="col-span-5">
+                                        <label className="block text-xs text-gray-500 mb-1">Descrição *</label>
+                                        <input
+                                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                                            value={item.inputDescription}
+                                            onChange={e => updateItem(idx, { inputDescription: e.target.value })}
+                                            placeholder="Insumo"
+                                        />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs text-gray-500 mb-1">Cód.</label>
+                                        <input
+                                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                                            value={item.inputCode ?? ''}
+                                            onChange={e => updateItem(idx, { inputCode: e.target.value || undefined })}
+                                        />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs text-gray-500 mb-1">Un</label>
+                                        <input
+                                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                                            value={item.inputUnit}
+                                            onChange={e => updateItem(idx, { inputUnit: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs text-gray-500 mb-1">Qtd *</label>
+                                        <input
+                                            type="number" min="0.001" step="0.01"
+                                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                                            value={item.quantityRequested || ''}
+                                            onChange={e => updateItem(idx, { quantityRequested: parseFloat(e.target.value) || 0 })}
+                                        />
+                                    </div>
+                                    <div className="col-span-1 flex justify-center">
+                                        <button onClick={() => removeItem(idx)} className="text-gray-600 hover:text-red-400">
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="px-6 py-4 border-t border-gray-700 shrink-0">
+                    {err && <p className="text-red-400 text-xs mb-3">{err}</p>}
+                    <div className="flex gap-3">
+                        <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">Cancelar</button>
+                        <button
+                            onClick={save} disabled={saving}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50"
+                        >
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                            Enviar Requisição
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ─── Modal: Avaliar Requisição ─────────────────────────────────────────────────
+interface ApproveModalProps {
+    request: MaterialRequest;
+    onClose: () => void;
+    onDone: () => void;
+}
+
+const ApproveModal: React.FC<ApproveModalProps> = ({ request, onClose, onDone }) => {
+    const [approvedBy, setApprovedBy] = React.useState('');
+    const [quantities, setQuantities] = React.useState<Record<string, number>>(
+        Object.fromEntries(request.items.map(i => [i.id, i.quantityApproved ?? i.quantityRequested]))
+    );
+    const [saving, setSaving] = React.useState(false);
+    const [err, setErr] = React.useState('');
+
+    const handle = async (action: 'approve' | 'reject') => {
+        if (!approvedBy.trim()) { setErr('Informe o nome do aprovador.'); return; }
+        setSaving(true);
+        try {
+            if (action === 'approve') {
+                await inventoryService.approveMaterialRequest(request.id, approvedBy, quantities);
+            } else {
+                await inventoryService.rejectMaterialRequest(request.id, approvedBy);
+            }
+            onDone();
+        } catch (e: unknown) {
+            setErr((e as Error).message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+                    <div>
+                        <h3 className="font-semibold text-white">Avaliar Requisição {request.number}</h3>
+                        <p className="text-xs text-gray-400 mt-0.5">Solicitante: {request.requestedBy}</p>
+                    </div>
+                    <button onClick={onClose}><X className="w-5 h-5 text-gray-400 hover:text-white" /></button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                    <div>
+                        <label className="block text-xs text-gray-400 mb-1">Aprovado / Rejeitado por *</label>
+                        <input
+                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                            value={approvedBy}
+                            onChange={e => setApprovedBy(e.target.value)}
+                            placeholder="Seu nome"
+                        />
+                    </div>
+
+                    <div>
+                        <p className="text-xs text-gray-400 uppercase font-medium mb-2">Itens — ajuste as quantidades aprovadas</p>
+                        <div className="space-y-2">
+                            {request.items.map(item => (
+                                <div key={item.id} className="flex items-center gap-3 bg-gray-800/50 border border-gray-700 rounded-lg px-3 py-2">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-white truncate">{item.inputDescription}</p>
+                                        <p className="text-xs text-gray-500">{item.inputCode ?? ''} · solicitado: {item.quantityRequested} {item.inputUnit}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <input
+                                            type="number" min="0" step="0.01"
+                                            className="w-20 bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white text-right"
+                                            value={quantities[item.id] ?? item.quantityRequested}
+                                            onChange={e => setQuantities(q => ({ ...q, [item.id]: parseFloat(e.target.value) || 0 }))}
+                                        />
+                                        <span className="text-xs text-gray-500">{item.inputUnit}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="px-6 py-4 border-t border-gray-700 shrink-0">
+                    {err && <p className="text-red-400 text-xs mb-3">{err}</p>}
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => handle('reject')} disabled={saving}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-800 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50"
+                        >
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                            Rejeitar
+                        </button>
+                        <button
+                            onClick={() => handle('approve')} disabled={saving}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white text-sm font-medium disabled:opacity-50"
+                        >
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                            Aprovar
                         </button>
                     </div>
                 </div>

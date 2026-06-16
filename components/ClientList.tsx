@@ -98,14 +98,20 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     };
 
     const handleGenerateToken = async () => {
-        if (!tokenModal || !organizationId) return;
+        const orgId = organizationId || tokenModal?.client.organization_id;
+        if (!tokenModal || !orgId) {
+            console.error('[ClientPortal] organizationId ausente', { organizationId, clientOrgId: tokenModal?.client.organization_id });
+            showToast('Erro: organização não identificada.', 'error');
+            return;
+        }
         setTokenLoading(true);
         try {
-            const rawToken = await clientPortalService.generateToken(tokenModal.client.id, organizationId);
+            await clientPortalService.generateToken(tokenModal.client.id, orgId);
             const tok = await clientPortalService.getTokenForClient(tokenModal.client.id);
             setTokenModal(prev => prev ? { ...prev, token: tok } : null);
             showToast('Link gerado com sucesso!', 'success');
         } catch (e) {
+            console.error('[ClientPortal] Erro ao gerar token:', e);
             showToast('Erro ao gerar link.', 'error');
         } finally {
             setTokenLoading(false);
@@ -566,8 +572,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 </div>
                                 <button
                                     onClick={handleGenerateToken}
-                                    disabled={!organizationId}
-                                    className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-50 transition-all active:scale-95"
+                                    className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
                                 >
                                     <Link2 className="w-4 h-4" />
                                     Gerar Link de Acesso

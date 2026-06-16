@@ -40,7 +40,9 @@ import {
     Smartphone,
     Bell,
     ArrowRight,
-    Wallet
+    Wallet,
+    Wrench,
+    ClipboardList
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
@@ -67,7 +69,7 @@ interface ClientAreaProps {
     clientProfile?: Client | null;
     clients?: Client[]; // For admin selection
     organizationId?: string | null; // Fallback quando settings não traz organizationId (ex.: portal sem projeto aberto)
-    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte';
+    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao' | 'os';
     onUpdateSettings?: (settings: ProjectSettings) => void;
     onClientSelect?: (client: Client) => void;
     /** Renderiza a área como o cliente a vê (sem chrome de admin), usado na prévia mobile. */
@@ -77,7 +79,7 @@ interface ClientAreaProps {
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'];
 
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, onUpdateSettings, onClientSelect, isPreview = false }) => {
-    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte'>(initialTab || 'dashboard');
+    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao' | 'os'>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
@@ -2345,11 +2347,22 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         { id: 'contratos', label: 'Contratos', icon: <FileText className="w-4 h-4" /> },
         { id: 'financeiro', label: 'Financeiro', icon: <DollarSign className="w-4 h-4" /> },
         { id: 'suporte', label: 'Suporte', icon: <ShieldCheck className="w-4 h-4" /> },
+        { id: 'manutencao', label: 'Manutenção', icon: <Wrench className="w-4 h-4" /> },
+        { id: 'os', label: 'Ordens de Serviço', icon: <ClipboardList className="w-4 h-4" /> },
     ];
+
+    const CATEGORY_TAB_PRESETS: Record<string, string[]> = {
+        'Vendas':   ['dashboard', 'jornada', 'visual', 'personalizacao', 'diario', 'documentos', 'contratos', 'financeiro', 'suporte'],
+        'Locação':  ['dashboard', 'financeiro', 'contratos', 'documentos', 'manutencao'],
+        'Serviços': ['dashboard', 'os', 'financeiro', 'contratos', 'documentos'],
+    };
+
+    const clientCategory = clientProfile?.category ?? '';
+    const categoryPreset = CATEGORY_TAB_PRESETS[clientCategory];
 
     const enabledTabIds = settings.clientPortalTabs && settings.clientPortalTabs.length > 0
         ? settings.clientPortalTabs
-        : ALL_TABS.map(t => t.id);
+        : (categoryPreset ?? ALL_TABS.map(t => t.id));
 
     const tabs = isAdmin ? ALL_TABS : ALL_TABS.filter(t => enabledTabIds.includes(t.id));
 
@@ -2837,6 +2850,76 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <button className="px-8 py-4 bg-gray-100 text-gray-400 rounded-2xl text-[10px] font-black uppercase tracking-widest cursor-not-allowed">
                             Abrir Chamado (Em breve)
                         </button>
+                    </div>
+                )}
+                {activeTab === 'manutencao' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="w-1.5 h-6 bg-amber-500 rounded-full" />
+                            <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Manutenção do Imóvel</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {[
+                                { label: 'Chamados Abertos', value: '0', color: 'amber', icon: <Wrench className="w-5 h-5" /> },
+                                { label: 'Em Andamento', value: '0', color: 'blue', icon: <Clock className="w-5 h-5" /> },
+                                { label: 'Concluídos', value: '0', color: 'emerald', icon: <CheckCircle2 className="w-5 h-5" /> },
+                            ].map(card => (
+                                <div key={card.label} className={`bg-white border border-gray-100 rounded-3xl p-6 flex items-center gap-4 shadow-sm`}>
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500`}>
+                                        {card.icon}
+                                    </div>
+                                    <div>
+                                        <p className="text-3xl font-black text-gray-900">{card.value}</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 md:p-12 flex flex-col items-center text-center shadow-sm">
+                            <div className="w-16 h-16 bg-amber-50 rounded-3xl flex items-center justify-center text-amber-500 mb-5">
+                                <Wrench className="w-8 h-8" />
+                            </div>
+                            <h4 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-2">Solicitar Manutenção</h4>
+                            <p className="text-gray-500 max-w-sm mx-auto mb-6 text-sm font-medium">Abra chamados para reparos, ajustes e serviços no seu imóvel. Nossa equipe técnica será acionada rapidamente.</p>
+                            <button className="px-8 py-4 bg-gray-100 text-gray-400 rounded-2xl text-[10px] font-black uppercase tracking-widest cursor-not-allowed">
+                                Abrir Chamado (Em breve)
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {activeTab === 'os' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="w-1.5 h-6 bg-blue-500 rounded-full" />
+                            <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Ordens de Serviço</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {[
+                                { label: 'OS Abertas', value: '0', color: 'blue', icon: <ClipboardList className="w-5 h-5" /> },
+                                { label: 'Em Execução', value: '0', color: 'amber', icon: <Clock className="w-5 h-5" /> },
+                                { label: 'Finalizadas', value: '0', color: 'emerald', icon: <CheckCircle2 className="w-5 h-5" /> },
+                            ].map(card => (
+                                <div key={card.label} className={`bg-white border border-gray-100 rounded-3xl p-6 flex items-center gap-4 shadow-sm`}>
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500`}>
+                                        {card.icon}
+                                    </div>
+                                    <div>
+                                        <p className="text-3xl font-black text-gray-900">{card.value}</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 md:p-12 flex flex-col items-center text-center shadow-sm">
+                            <div className="w-16 h-16 bg-blue-50 rounded-3xl flex items-center justify-center text-blue-500 mb-5">
+                                <ClipboardList className="w-8 h-8" />
+                            </div>
+                            <h4 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-2">Acompanhe seus Serviços</h4>
+                            <p className="text-gray-500 max-w-sm mx-auto mb-6 text-sm font-medium">Visualize o status de todas as ordens de serviço contratadas, laudos técnicos emitidos e histórico de atendimentos.</p>
+                            <button className="px-8 py-4 bg-gray-100 text-gray-400 rounded-2xl text-[10px] font-black uppercase tracking-widest cursor-not-allowed">
+                                Ver Minhas OS (Em breve)
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

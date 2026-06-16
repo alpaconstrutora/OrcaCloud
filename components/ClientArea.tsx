@@ -370,9 +370,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </div>
                 )}
 
-                {/* ── Acesso rápido ── */}
+                {/* ── Acesso rápido — desktop only (mobile já tem bottom nav) ── */}
                 {quickTabs.length > 0 && (
-                    <div className="px-4 md:px-0">
+                    <div className="hidden md:block px-4 md:px-0">
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Acesso Rápido</p>
                         <div className="grid grid-cols-4 gap-2">
                             {quickTabs.map(tab => (
@@ -504,9 +504,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     ))}
                 </div>
 
-                {/* ── Acesso rápido ── */}
+                {/* ── Acesso rápido — desktop only (mobile já tem bottom nav) ── */}
                 {quickTabs.length > 0 && (
-                    <div className="px-4 md:px-0">
+                    <div className="hidden md:block px-4 md:px-0">
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Acesso Rápido</p>
                         <div className="grid grid-cols-4 gap-2">
                             {quickTabs.map(tab => (

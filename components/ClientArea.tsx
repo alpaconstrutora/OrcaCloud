@@ -30,7 +30,13 @@ import {
     FileDown,
     Settings2,
     Eye,
-    EyeOff
+    EyeOff,
+    UserCircle,
+    Phone,
+    Mail,
+    Hash,
+    Home,
+    Save
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
@@ -85,6 +91,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const isAdmin = profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER || profile?.group === 'DESENVOLVEDOR';
 
     const [showTabConfig, setShowTabConfig] = React.useState(false);
+    const [showMeusDados, setShowMeusDados] = React.useState(false);
+    const [meusDadosForm, setMeusDadosForm] = React.useState<Partial<Client>>({});
+    const [savingDados, setSavingDados] = React.useState(false);
     const [globalClientInstallments, setGlobalClientInstallments] = React.useState<PaymentInstallment[]>([]);
     const [clientContracts, setClientContracts] = React.useState<Contract[]>([]);
     const [viewingContract, setViewingContract] = React.useState<Contract | null>(null);
@@ -1961,73 +1970,225 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none group-hover:bg-indigo-100/50 transition-colors duration-1000" />
 
                 <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-100">
-                                {settings.name.charAt(0)}
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-3">
-                                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                                        {clientProfile?.name ? `Olá, ${clientProfile.name.split(' ')[0]}` : (
-                                            profile?.role === UserProfile.RENTAL ? 'Área do Locatário' :
-                                                profile?.role === UserProfile.ADMINISTRATION ? 'Gestão de Contrato' :
-                                                    'Área do Cliente'
-                                        )}
-                                    </h1>
-                                    {isAdmin && clientProfile && (
-                                        <button
-                                            onClick={() => onClientSelect?.(null!)}
-                                            className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-indigo-100 text-gray-500 hover:text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-transparent hover:border-indigo-200"
-                                        >
-                                            <Users className="w-3 h-3" />
-                                            Trocar Cliente
-                                        </button>
-                                    )}
-                                </div>
-                                <p className="text-sm font-medium text-gray-400">
-                                    {profile?.role === UserProfile.RENTAL ? 'Acompanhe seus aluguéis e solicitações' :
-                                        profile?.role === UserProfile.ADMINISTRATION ? 'Status da construção e pagamentos' :
-                                            'Bem-vindo à sua área exclusiva'}
-                                    <span style={{ fontSize: '10px', color: 'red', marginLeft: '10px' }}>
-                                        {/* Profile info removed from UI */}
-                                    </span>
-                                </p>
-                            </div>
+                    <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-indigo-100 shrink-0">
+                            {(clientProfile?.name || settings.name).charAt(0)}
                         </div>
+                        <div>
+                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                                {clientProfile?.name ? `Olá, ${clientProfile.name.split(' ')[0]}` : 'Área do Cliente'}
+                            </h1>
+                            <p className="text-sm font-medium text-gray-400 mt-0.5">Bem-vindo à sua área exclusiva</p>
+                        </div>
+                    </div>
 
-                        {/* Delivery Countdown */}
-                        {settings.schedule?.endDate && (
-                            <div className="flex items-center gap-4 bg-indigo-50/50 px-6 py-3 rounded-2xl border border-indigo-100/50">
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Previsão de Entrega</span>
-                                    <div className="flex items-center gap-2">
-                                        <Calendar className="w-4 h-4 text-indigo-500" />
-                                        <span className="text-sm font-black text-gray-900">
-                                            {Math.max(0, Math.ceil((new Date(settings.schedule.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))} dias
-                                        </span>
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">para a entrega das chaves</span>
-                                    </div>
-                                </div>
-                            </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                        {clientProfile && (
+                            <button
+                                onClick={() => {
+                                    setMeusDadosForm({ ...clientProfile });
+                                    setShowMeusDados(true);
+                                }}
+                                className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                            >
+                                <UserCircle className="w-4 h-4" />
+                                Meus Dados
+                            </button>
                         )}
-                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-bold text-gray-400 tracking-wide uppercase mt-2">
-                            <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-lg group-hover:bg-white transition-colors border border-transparent group-hover:border-gray-100">
-                                <MapPin className="w-3.5 h-3.5 text-indigo-500" />
-                                <span>{clientProfile?.city ? `${clientProfile.city}${clientProfile.neighborhood ? ' - ' + clientProfile.neighborhood : ''}` : settings.location || 'Localização'}</span>
-                            </div>
-                            <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-lg group-hover:bg-white transition-colors border border-transparent group-hover:border-gray-100">
-                                <Clock className="w-3.5 h-3.5 text-blue-500" />
-                                <span>{clientProfile?.email || 'Sem E-mail'}</span>
-                            </div>
-                            <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-lg group-hover:bg-white transition-colors border border-transparent group-hover:border-gray-100">
-                                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                                <span>{clientProfile?.phone || '(--) ---------'}</span>
-                            </div>
-                        </div>
+                        {isAdmin && clientProfile && (
+                            <button
+                                onClick={() => onClientSelect?.(null!)}
+                                className="flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border border-transparent hover:border-indigo-200"
+                            >
+                                <Users className="w-4 h-4" />
+                                Trocar Cliente
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
+
+            {/* Modal Meus Dados */}
+            {showMeusDados && clientProfile && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowMeusDados(false)}>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <div
+                        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in zoom-in-95 fade-in duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between p-8 border-b border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+                                    <UserCircle className="w-5 h-5 text-indigo-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Meus Dados</h2>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Informações cadastrais</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowMeusDados(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-8 space-y-5">
+                            {/* Nome */}
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Nome completo</label>
+                                <div className="relative">
+                                    <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                                    <input
+                                        type="text"
+                                        value={meusDadosForm.name || ''}
+                                        onChange={e => setMeusDadosForm(f => ({ ...f, name: e.target.value }))}
+                                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                {/* E-mail */}
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">E-mail</label>
+                                    <div className="relative">
+                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                                        <input
+                                            type="email"
+                                            value={meusDadosForm.email || ''}
+                                            onChange={e => setMeusDadosForm(f => ({ ...f, email: e.target.value }))}
+                                            className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                        />
+                                    </div>
+                                </div>
+                                {/* Telefone */}
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Telefone</label>
+                                    <div className="relative">
+                                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                                        <input
+                                            type="tel"
+                                            value={meusDadosForm.phone || ''}
+                                            onChange={e => setMeusDadosForm(f => ({ ...f, phone: e.target.value }))}
+                                            className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* CPF/CNPJ */}
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                                    {meusDadosForm.type === 'PJ' ? 'CNPJ' : 'CPF'}
+                                </label>
+                                <div className="relative">
+                                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                                    <input
+                                        type="text"
+                                        value={meusDadosForm.document || ''}
+                                        onChange={e => setMeusDadosForm(f => ({ ...f, document: e.target.value }))}
+                                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="border-t border-gray-100 pt-5">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Home className="w-3.5 h-3.5" /> Endereço
+                                </p>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="col-span-2">
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Logradouro</label>
+                                            <input
+                                                type="text"
+                                                placeholder="Rua / Av."
+                                                value={meusDadosForm.address || ''}
+                                                onChange={e => setMeusDadosForm(f => ({ ...f, address: e.target.value }))}
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Número</label>
+                                            <input
+                                                type="text"
+                                                value={meusDadosForm.address_number || ''}
+                                                onChange={e => setMeusDadosForm(f => ({ ...f, address_number: e.target.value }))}
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Bairro</label>
+                                            <input
+                                                type="text"
+                                                value={meusDadosForm.neighborhood || ''}
+                                                onChange={e => setMeusDadosForm(f => ({ ...f, neighborhood: e.target.value }))}
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">CEP</label>
+                                            <input
+                                                type="text"
+                                                value={meusDadosForm.zip_code || ''}
+                                                onChange={e => setMeusDadosForm(f => ({ ...f, zip_code: e.target.value }))}
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Cidade</label>
+                                            <input
+                                                type="text"
+                                                value={meusDadosForm.city || ''}
+                                                onChange={e => setMeusDadosForm(f => ({ ...f, city: e.target.value }))}
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Estado</label>
+                                            <input
+                                                type="text"
+                                                maxLength={2}
+                                                placeholder="UF"
+                                                value={meusDadosForm.state || ''}
+                                                onChange={e => setMeusDadosForm(f => ({ ...f, state: e.target.value.toUpperCase() }))}
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="px-8 pb-8">
+                            <button
+                                disabled={savingDados}
+                                onClick={async () => {
+                                    if (!clientProfile) return;
+                                    setSavingDados(true);
+                                    try {
+                                        await clientService.saveClient({ id: clientProfile.id, ...meusDadosForm });
+                                        onClientSelect?.({ ...clientProfile, ...meusDadosForm } as Client);
+                                        setShowMeusDados(false);
+                                    } catch (err) {
+                                        console.error(err);
+                                        alert('Erro ao salvar dados. Tente novamente.');
+                                    } finally {
+                                        setSavingDados(false);
+                                    }
+                                }}
+                                className="w-full flex items-center justify-center gap-3 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                            >
+                                <Save className="w-4 h-4" />
+                                {savingDados ? 'Salvando...' : 'Salvar Alterações'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Navigation Tabs */}
             <div className="flex items-center gap-3 flex-wrap">

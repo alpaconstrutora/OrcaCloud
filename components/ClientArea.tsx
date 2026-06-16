@@ -1964,41 +1964,49 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     }
 
     return (
-        <div className="space-y-8 min-h-screen bg-gray-50/30">
+        <div className="min-h-screen bg-gray-50/30 pb-24 md:pb-0 space-y-4 md:space-y-8">
             {/* Main Header */}
-            <div className="bg-white rounded-3xl p-6 md:p-10 shadow-sm border border-gray-100 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none group-hover:bg-indigo-100/50 transition-colors duration-1000" />
+            <div className="bg-white md:rounded-3xl p-4 md:p-10 shadow-sm border-b md:border border-gray-100 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
 
-                <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-indigo-100 shrink-0">
+                <div className="relative flex items-center justify-between gap-4">
+                    {/* Avatar + greeting */}
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 md:w-14 md:h-14 bg-indigo-600 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-black text-lg md:text-2xl shadow-lg shadow-indigo-100 shrink-0">
                             {(clientProfile?.name || settings.name).charAt(0)}
                         </div>
                         <div>
-                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                            <h1 className="text-lg md:text-3xl font-black text-gray-900 tracking-tight leading-tight">
                                 {clientProfile?.name ? `Olá, ${clientProfile.name.split(' ')[0]}` : 'Área do Cliente'}
                             </h1>
-                            <p className="text-sm font-medium text-gray-400 mt-0.5">Bem-vindo à sua área exclusiva</p>
+                            <p className="text-xs md:text-sm font-medium text-gray-400">Bem-vindo à sua área exclusiva</p>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2 shrink-0">
                         {clientProfile && (
                             <button
-                                onClick={() => {
-                                    setMeusDadosForm({ ...clientProfile });
-                                    setShowMeusDados(true);
-                                }}
-                                className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                                onClick={() => { setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}
+                                className="flex items-center gap-2 px-3 py-2 md:px-5 md:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
                             >
                                 <UserCircle className="w-4 h-4" />
-                                Meus Dados
+                                <span className="hidden sm:inline">Meus Dados</span>
+                            </button>
+                        )}
+                        {isAdmin && onUpdateSettings && (
+                            <button
+                                onClick={() => setShowTabConfig(true)}
+                                title="Configurar abas"
+                                className="p-2 md:p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
+                            >
+                                <Settings2 className="w-4 h-4" />
                             </button>
                         )}
                         {isAdmin && clientProfile && (
                             <button
                                 onClick={() => onClientSelect?.(null!)}
-                                className="flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border border-transparent hover:border-indigo-200"
+                                className="hidden md:flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border border-transparent hover:border-indigo-200"
                             >
                                 <Users className="w-4 h-4" />
                                 Trocar Cliente
@@ -2190,8 +2198,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 </div>
             )}
 
-            {/* Navigation Tabs */}
-            <div className="flex items-center gap-3 flex-wrap">
+            {/* Desktop Navigation Tabs */}
+            <div className="hidden md:flex items-center gap-3 flex-wrap">
                 <div className="flex flex-wrap gap-2 md:gap-4 p-1.5 bg-white border border-gray-100 rounded-2xl shadow-sm">
                     {tabs.map(tab => {
                         const isVisible = enabledTabIds.includes(tab.id);
@@ -2216,15 +2224,38 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         );
                     })}
                 </div>
-                {isAdmin && onUpdateSettings && (
-                    <button
-                        onClick={() => setShowTabConfig(true)}
-                        title="Configurar abas visíveis no portal do cliente"
-                        className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
-                    >
-                        <Settings2 className="w-4 h-4" />
-                    </button>
-                )}
+            </div>
+
+            {/* Mobile Bottom Navigation */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
+                <div className="flex overflow-x-auto scrollbar-hide">
+                    {tabs.map(tab => {
+                        const isActive = activeTab === tab.id;
+                        const isVisible = enabledTabIds.includes(tab.id);
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                                className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-[64px] py-3 px-2 transition-all duration-200 relative
+                                    ${isActive ? 'text-indigo-600' : isAdmin && !isVisible ? 'text-gray-200' : 'text-gray-400'}
+                                `}
+                            >
+                                {isActive && (
+                                    <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-600 rounded-full" />
+                                )}
+                                <span className={`transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}>
+                                    {tab.icon}
+                                </span>
+                                <span className="text-[9px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
+                                    {tab.label.split(' ')[0]}
+                                </span>
+                                {isAdmin && !isVisible && <EyeOff className="w-2 h-2 absolute top-2 right-2 text-gray-200" />}
+                            </button>
+                        );
+                    })}
+                </div>
+                {/* Safe area for iOS home indicator */}
+                <div className="h-safe-area-inset-bottom bg-white" style={{ height: 'env(safe-area-inset-bottom)' }} />
             </div>
 
             {/* Tab Visibility Config Modal */}
@@ -2283,7 +2314,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             )}
 
             {/* Tab Content */}
-            <div className="min-h-[500px]">
+            <div className="min-h-[500px] px-4 md:px-0">
                 {activeTab === 'dashboard' && (
                     <div className="space-y-10">
                         {/* AI Client Concierge Row */}
@@ -2387,7 +2418,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             </div>
 
             {/* Decorative footer message */}
-            <div className="text-center pt-10 pb-6 opacity-30 select-none pointer-events-none">
+            <div className="hidden md:block text-center pt-10 pb-6 opacity-30 select-none pointer-events-none">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Poderoso e intuitivo • Opura Platinum © 2026</p>
             </div>
         </div>

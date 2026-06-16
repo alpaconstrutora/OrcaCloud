@@ -421,7 +421,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         );
     };
 
-    const renderContratos = () => (
+    const renderContratos = () => {
+        const isLocacao  = clientCategory === 'Locação';
+        const isServicos = clientCategory === 'Serviços';
+
+        return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {clientContracts.length === 0 ? (
                 <div className="bg-white p-20 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center text-center">
@@ -437,13 +441,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     <div className="space-y-3">
                         {clientContracts.map(contract => {
                             const isSigned = contract.signature_status === 'SIGNED' || contract.status === 'Assinado';
+                            // Locação: alerta se reajuste em ≤ 30 dias
+                            const reajusteProximo = contract.reajuste_proximo ? new Date(contract.reajuste_proximo + 'T12:00:00') : null;
+                            const reajusteAlerta  = reajusteProximo && (reajusteProximo.getTime() - Date.now()) / 86400000 <= 30;
                             return (
                                 <div
                                     key={contract.id}
                                     onClick={() => setViewingContract(contract)}
                                     className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group cursor-pointer"
                                 >
-                                    <div className="flex flex-col gap-1 min-w-0">
+                                    <div className="flex flex-col gap-1.5 min-w-0">
                                         <span className="text-sm font-black text-gray-900 uppercase truncate group-hover:text-indigo-700 transition-colors">{contract.title}</span>
                                         <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                                             {contract.number && <span>Nº {contract.number}</span>}
@@ -453,6 +460,29 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             )}
                                             {contract.end_date && (
                                                 <span>· Término: {new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                            )}
+                                        </div>
+                                        {/* Chips extras por categoria */}
+                                        <div className="flex flex-wrap gap-2 mt-0.5">
+                                            {isLocacao && contract.billing_cycle && (
+                                                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-blue-100">
+                                                    {contract.billing_cycle}{contract.due_day ? ` · dia ${contract.due_day}` : ''}
+                                                </span>
+                                            )}
+                                            {isLocacao && contract.reajuste_index && (
+                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${reajusteAlerta ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-gray-50 text-gray-500 border-gray-100'}`}>
+                                                    {contract.reajuste_index}{reajusteAlerta ? ' · Reajuste próximo!' : ''}
+                                                </span>
+                                            )}
+                                            {isServicos && contract.sla_days != null && (
+                                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-indigo-100">
+                                                    SLA {contract.sla_days}d
+                                                </span>
+                                            )}
+                                            {isServicos && contract.warranty_months != null && (
+                                                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-emerald-100">
+                                                    Garantia {contract.warranty_months}m
+                                                </span>
                                             )}
                                         </div>
                                     </div>
@@ -483,6 +513,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 const isSigned = c.signature_status === 'SIGNED' || c.status === 'Assinado';
                 const docUrl = c.signature_url || c.signed_contract_url;
                 const isMinuta = c.status === 'Minuta';
+                const reajusteProximo = c.reajuste_proximo ? new Date(c.reajuste_proximo + 'T12:00:00') : null;
+                const diasParaReajuste = reajusteProximo ? Math.ceil((reajusteProximo.getTime() - Date.now()) / 86400000) : null;
                 return (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setViewingContract(null)}>
                         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
@@ -514,6 +546,19 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Alerta de reajuste próximo — Locação */}
+                                {isLocacao && diasParaReajuste !== null && diasParaReajuste <= 30 && (
+                                    <div className="flex items-start gap-4 p-5 bg-amber-50 border border-amber-200 rounded-2xl">
+                                        <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="text-sm font-black text-amber-800 uppercase tracking-tight">Reajuste em {diasParaReajuste} dia{diasParaReajuste !== 1 ? 's' : ''}</p>
+                                            <p className="text-xs text-amber-600 mt-1">O contrato será reajustado pelo índice {c.reajuste_index || '—'} em {reajusteProximo!.toLocaleDateString('pt-BR')}.</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Dados base */}
                                 <div className="grid grid-cols-2 gap-4">
                                     {[
                                         { label: 'Valor do Contrato', value: `R$ ${(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
@@ -527,6 +572,80 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* Seção extra: Reajuste e Vigência — Locação */}
+                                {isLocacao && (c.reajuste_index || c.billing_cycle || c.due_day != null) && (
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-2">
+                                            <TrendingUp className="w-3.5 h-3.5" /> Reajuste e Vigência
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {c.billing_cycle && (
+                                                <div className="p-4 bg-blue-50 rounded-2xl">
+                                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Periodicidade</p>
+                                                    <p className="text-sm font-black text-blue-800">{c.billing_cycle}{c.due_day != null ? ` · Dia ${c.due_day}` : ''}</p>
+                                                </div>
+                                            )}
+                                            {c.reajuste_index && (
+                                                <div className="p-4 bg-blue-50 rounded-2xl">
+                                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Índice de Reajuste</p>
+                                                    <p className="text-sm font-black text-blue-800">{c.reajuste_index}</p>
+                                                </div>
+                                            )}
+                                            {c.reajuste_data_base && (
+                                                <div className="p-4 bg-blue-50 rounded-2xl">
+                                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Data-Base</p>
+                                                    <p className="text-sm font-black text-blue-800">{new Date(c.reajuste_data_base + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                                                </div>
+                                            )}
+                                            {c.reajuste_proximo && (
+                                                <div className={`p-4 rounded-2xl ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'bg-amber-50' : 'bg-blue-50'}`}>
+                                                    <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'text-amber-400' : 'text-blue-400'}`}>Próximo Reajuste</p>
+                                                    <p className={`text-sm font-black ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'text-amber-700' : 'text-blue-800'}`}>
+                                                        {new Date(c.reajuste_proximo + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                        {diasParaReajuste !== null && <span className="text-[10px] ml-1">({diasParaReajuste}d)</span>}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Seção extra: Condições de Serviço — Serviços */}
+                                {isServicos && (c.sla_days != null || c.warranty_months != null || c.services_included || c.services_excluded) && (
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
+                                            <ClipboardList className="w-3.5 h-3.5" /> Condições de Serviço
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {c.sla_days != null && (
+                                                <div className="p-4 bg-indigo-50 rounded-2xl">
+                                                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">SLA de Atendimento</p>
+                                                    <p className="text-sm font-black text-indigo-800">{c.sla_days} dia{c.sla_days !== 1 ? 's' : ''}</p>
+                                                </div>
+                                            )}
+                                            {c.warranty_months != null && (
+                                                <div className="p-4 bg-emerald-50 rounded-2xl">
+                                                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Garantia</p>
+                                                    <p className="text-sm font-black text-emerald-800">{c.warranty_months} mês{c.warranty_months !== 1 ? 'es' : ''}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {c.services_included && (
+                                            <div className="p-4 bg-emerald-50 rounded-2xl">
+                                                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Serviços Incluídos</p>
+                                                <p className="text-sm text-emerald-800 font-medium whitespace-pre-line">{c.services_included}</p>
+                                            </div>
+                                        )}
+                                        {c.services_excluded && (
+                                            <div className="p-4 bg-red-50 rounded-2xl">
+                                                <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-2">Serviços Excluídos</p>
+                                                <p className="text-sm text-red-700 font-medium whitespace-pre-line">{c.services_excluded}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {isMinuta && c.minuta_versions && c.minuta_versions.some(v => v.emitted !== false) && (
                                     <div className="space-y-3">
                                         <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Versões da Minuta</p>
@@ -595,7 +714,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 );
             })()}
         </div>
-    );
+        );
+    };
 
     const renderFinanceiro = () => {
         let baseFinInfo = currentFinancialInfo || {

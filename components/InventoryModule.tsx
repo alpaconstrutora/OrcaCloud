@@ -1,4 +1,4 @@
-// components/InventoryModule.tsx — Módulo Almoxarifado Fases 1 e 2
+// components/InventoryModule.tsx — Módulo Almoxarifado Fases 1, 2 e 3
 
 import React from 'react';
 import {
@@ -21,6 +21,10 @@ import {
     ArrowLeftRight,
     Send,
     CheckCircle2,
+    Activity,
+    TrendingDown,
+    TrendingUp,
+    ShieldAlert,
 } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import { useStore } from '../store/useStore';
@@ -30,6 +34,8 @@ import type {
     StockMovement,
     SupplierLeadTime,
     StockTransfer,
+    StockNetPosition,
+    StockSummary,
     CreateWarehouseInput,
     CreateStockMovementInput,
     CreateSupplierLeadTimeInput,
@@ -41,7 +47,7 @@ interface Props {
     onChangeView: (view: string) => void;
 }
 
-type Tab = 'saldos' | 'movimentos' | 'almoxarifados' | 'lead_times' | 'transferencias';
+type Tab = 'saldos' | 'movimentos' | 'almoxarifados' | 'lead_times' | 'transferencias' | 'posicao';
 
 // ─── Modal de movimento manual ────────────────────────────────────────────────
 interface MovementModalProps {
@@ -309,6 +315,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const [movements, setMovements] = React.useState<StockMovement[]>([]);
     const [leadTimes, setLeadTimes] = React.useState<SupplierLeadTime[]>([]);
     const [transfers, setTransfers] = React.useState<StockTransfer[]>([]);
+    const [netPositions, setNetPositions] = React.useState<StockNetPosition[]>([]);
+    const [summary, setSummary] = React.useState<StockSummary[]>([]);
 
     const [selectedWarehouseId, setSelectedWarehouseId] = React.useState<string>('');
     const [searchTerm, setSearchTerm] = React.useState('');
@@ -325,16 +333,20 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
             setWarehouses(whs);
             if (!selectedWarehouseId && whs.length > 0) setSelectedWarehouseId(whs[0].id);
 
-            const [bal, mov, lts, trfs] = await Promise.all([
+            const [bal, mov, lts, trfs, net, smry] = await Promise.all([
                 inventoryService.listBalances(activeOrganizationId, { warehouseId: selectedWarehouseId || undefined }),
                 inventoryService.listMovements(activeOrganizationId, { warehouseId: selectedWarehouseId || undefined }),
                 inventoryService.listLeadTimes(activeOrganizationId),
                 inventoryService.listTransfers(activeOrganizationId),
+                inventoryService.getNetPositions(activeOrganizationId, { warehouseId: selectedWarehouseId || undefined }),
+                inventoryService.getStockSummary(activeOrganizationId, selectedWarehouseId || undefined),
             ]);
             setBalances(bal);
             setMovements(mov);
             setLeadTimes(lts);
             setTransfers(trfs);
+            setNetPositions(net);
+            setSummary(smry);
         } catch (e) {
             console.error(e);
         } finally {
@@ -442,6 +454,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
             <div className="flex flex-wrap gap-1 bg-gray-800/50 rounded-xl p-1 w-fit">
                 {([
                     { key: 'saldos', label: 'Saldos', icon: Package },
+                    { key: 'posicao', label: 'Posição Líquida', icon: Activity },
                     { key: 'movimentos', label: 'Movimentos', icon: History },
                     { key: 'transferencias', label: 'Transferências', icon: ArrowLeftRight },
                     { key: 'almoxarifados', label: 'Almoxarifados', icon: Warehouse },
@@ -516,6 +529,161 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                         </tr>
                                     </tfoot>
                                 </table>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── TAB: POSIÇÃO LÍQUIDA ── */}
+                    {tab === 'posicao' && (
+                        <div className="space-y-4">
+                            {/* KPIs de alerta */}
+                            {(() => {
+                                const ruptures = summary.filter(s => s.isRupture).length;
+                                const belowMin  = summary.filter(s => s.isBelowMin && !s.isRupture).length;
+                                const excess    = summary.filter(s => s.isExcess).length;
+                                return (ruptures > 0 || belowMin > 0 || excess > 0) ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        {ruptures > 0 && (
+                                            <div className="flex items-center gap-3 bg-red-900/20 border border-red-800 rounded-xl p-4">
+                                                <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
+                                                <div>
+                                                    <p className="text-xs text-red-300">Ruptura de estoque</p>
+                                                    <p className="text-lg font-bold text-red-400">{ruptures} {ruptures === 1 ? 'item' : 'itens'}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {belowMin > 0 && (
+                                            <div className="flex items-center gap-3 bg-yellow-900/20 border border-yellow-800 rounded-xl p-4">
+                                                <TrendingDown className="w-5 h-5 text-yellow-400 shrink-0" />
+                                                <div>
+                                                    <p className="text-xs text-yellow-300">Abaixo do mínimo</p>
+                                                    <p className="text-lg font-bold text-yellow-400">{belowMin} {belowMin === 1 ? 'item' : 'itens'}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {excess > 0 && (
+                                            <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-800 rounded-xl p-4">
+                                                <TrendingUp className="w-5 h-5 text-blue-400 shrink-0" />
+                                                <div>
+                                                    <p className="text-xs text-blue-300">Possível excesso</p>
+                                                    <p className="text-lg font-bold text-blue-400">{excess} {excess === 1 ? 'item' : 'itens'}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : null;
+                            })()}
+
+                            {/* Tabela de posição líquida */}
+                            <div className="bg-gray-800/30 border border-gray-700 rounded-xl overflow-hidden">
+                                <div className="px-4 py-3 border-b border-gray-700">
+                                    <p className="text-sm text-white font-medium">Posição Líquida por Insumo</p>
+                                    <p className="text-xs text-gray-400">Saldo + Em Trânsito (POs ativos) − Reservado</p>
+                                </div>
+                                {netPositions.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                                        <Activity className="w-10 h-10 mb-3 opacity-40" />
+                                        <p>Nenhum dado de posição líquida disponível.</p>
+                                    </div>
+                                ) : (
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase">
+                                                <th className="text-left px-4 py-3">Insumo</th>
+                                                <th className="text-left px-4 py-3 hidden md:table-cell">Almoxarifado</th>
+                                                <th className="text-right px-4 py-3">Saldo</th>
+                                                <th className="text-right px-4 py-3 hidden lg:table-cell">Em Trânsito</th>
+                                                <th className="text-right px-4 py-3 hidden lg:table-cell">Reservado</th>
+                                                <th className="text-right px-4 py-3 font-bold">Líquido</th>
+                                                <th className="text-right px-4 py-3 hidden xl:table-cell">Valor</th>
+                                                <th className="text-center px-4 py-3">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {netPositions.map((p, i) => {
+                                                const smr = summary.find(s => s.warehouseId === p.warehouseId && s.inputCode === p.inputCode);
+                                                const isRupture  = smr?.isRupture  ?? p.netQty <= 0;
+                                                const isExcess   = smr?.isExcess   ?? false;
+                                                const isBelowMin = p.isBelowMin;
+                                                return (
+                                                    <tr key={`${p.warehouseId}-${p.inputCode}`} className={`border-b border-gray-700/50 hover:bg-gray-700/30 ${i % 2 === 0 ? '' : 'bg-gray-800/20'}`}>
+                                                        <td className="px-4 py-3">
+                                                            <p className="text-white font-medium">{p.inputDescription}</p>
+                                                            {p.inputCode && <p className="text-xs text-gray-500">{p.inputCode}</p>}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-gray-400 hidden md:table-cell">{p.warehouseName ?? '—'}</td>
+                                                        <td className="px-4 py-3 text-right text-gray-300 font-mono">{fmt(p.balanceQty)}</td>
+                                                        <td className="px-4 py-3 text-right text-green-400 font-mono hidden lg:table-cell">
+                                                            {p.inTransitQty > 0 ? `+${fmt(p.inTransitQty)}` : '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right text-yellow-400 font-mono hidden lg:table-cell">
+                                                            {p.reservedQty > 0 ? `−${fmt(p.reservedQty)}` : '—'}
+                                                        </td>
+                                                        <td className={`px-4 py-3 text-right font-mono font-bold ${isRupture ? 'text-red-400' : isBelowMin ? 'text-yellow-400' : 'text-green-400'}`}>
+                                                            {fmt(p.netQty)} {p.inputUnit}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right text-gray-300 hidden xl:table-cell">{fmtBrl(p.totalValue)}</td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            {isRupture ? (
+                                                                <span className="px-2 py-0.5 rounded-full text-xs bg-red-900/40 text-red-400">Ruptura</span>
+                                                            ) : isBelowMin ? (
+                                                                <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-900/40 text-yellow-400">Baixo</span>
+                                                            ) : isExcess ? (
+                                                                <span className="px-2 py-0.5 rounded-full text-xs bg-blue-900/40 text-blue-400">Excesso</span>
+                                                            ) : (
+                                                                <span className="px-2 py-0.5 rounded-full text-xs bg-green-900/40 text-green-400">OK</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+
+                            {/* Giro de estoque (30 dias) */}
+                            {summary.filter(s => s.outflow30d > 0).length > 0 && (
+                                <div className="bg-gray-800/30 border border-gray-700 rounded-xl overflow-hidden">
+                                    <div className="px-4 py-3 border-b border-gray-700">
+                                        <p className="text-sm text-white font-medium">Giro de Estoque — últimos 30 dias</p>
+                                        <p className="text-xs text-gray-400">Saídas ÷ saldo atual. Quanto maior, maior a rotatividade.</p>
+                                    </div>
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase">
+                                                <th className="text-left px-4 py-3">Insumo</th>
+                                                <th className="text-right px-4 py-3">Saídas 30d</th>
+                                                <th className="text-right px-4 py-3">Entradas 30d</th>
+                                                <th className="text-right px-4 py-3">Giro</th>
+                                                <th className="text-right px-4 py-3 hidden md:table-cell">Último mov.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {summary
+                                                .filter(s => s.outflow30d > 0 || s.inflow30d > 0)
+                                                .sort((a, b) => b.turnoverRate - a.turnoverRate)
+                                                .map(s => (
+                                                <tr key={`${s.warehouseId}-${s.inputCode}`} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                                                    <td className="px-4 py-3">
+                                                        <p className="text-white">{s.inputDescription}</p>
+                                                        <p className="text-xs text-gray-500">{s.warehouseName}</p>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-red-400 font-mono">{fmt(s.outflow30d)} {s.inputUnit}</td>
+                                                    <td className="px-4 py-3 text-right text-green-400 font-mono">{fmt(s.inflow30d)} {s.inputUnit}</td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <span className={`font-bold ${s.turnoverRate > 0.5 ? 'text-green-400' : s.turnoverRate > 0.1 ? 'text-yellow-400' : 'text-gray-400'}`}>
+                                                            {(s.turnoverRate * 100).toFixed(1)}%
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-gray-400 hidden md:table-cell">
+                                                        {s.lastMovementDate ? new Date(s.lastMovementDate).toLocaleDateString('pt-BR') : '—'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             )}
                         </div>
                     )}

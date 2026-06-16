@@ -170,15 +170,64 @@ export interface StockConsumptionItem {
     quantity: number;
 }
 
-// Posição líquida (Fase 3 — exposta ao Plano de Aquisições)
+// ── Fase 3 ────────────────────────────────────────────────────────────────────
+
+// Posição líquida (retorno da fn_net_position — alimenta o Plano de Aquisições)
 export interface StockNetPosition {
     organizationId: string;
+    warehouseId: string;
+    warehouseName?: string;
+    inputCode: string;
+    inputDescription: string;
+    inputUnit: string;
+    balanceQty: number;       // stock_balances.quantity
+    inTransitQty: number;     // POs em status ativo (Enviado/Em Trânsito/…)
+    reservedQty: number;      // stock_reservations ativas
+    netQty: number;           // balance + inTransit − reserved
+    avgUnitCost: number;
+    totalValue: number;       // balanceQty × avgUnitCost
+    minQuantity?: number;     // estoque mínimo cadastrado
+    isBelowMin: boolean;
+}
+
+// Indicadores de giro, ruptura e excesso (fn_stock_summary)
+export interface StockSummary {
+    warehouseId: string;
+    warehouseName?: string;
+    inputCode: string;
+    inputDescription: string;
+    inputUnit: string;
+    balanceQty: number;
+    avgUnitCost: number;
+    outflow30d: number;
+    inflow30d: number;
+    lastMovementDate?: string;
+    turnoverRate: number;     // outflow30d / balance (0 se balance = 0)
+    isRupture: boolean;       // saldo ≤ 0
+    isExcess: boolean;        // sem saída em 60d e saldo > 0
+    isBelowMin: boolean;
+}
+
+// Estoque mínimo
+export interface StockMinLevel {
+    id: string;
+    organizationId: string;
+    warehouseId: string;
+    warehouseName?: string;
+    inputCode: string;
+    inputDescription: string;
+    inputUnit: string;
+    minQuantity: number;
+    notes?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface CreateStockMinLevelInput {
     warehouseId: string;
     inputCode: string;
     inputDescription: string;
     inputUnit: string;
-    balanceQty: number;       // stock_balances
-    inTransitQty: number;     // POs enviados não recebidos
-    reservedQty: number;      // stock_reservations (Fase 2)
-    netQty: number;           // balance + inTransit - reserved
+    minQuantity: number;
+    notes?: string;
 }

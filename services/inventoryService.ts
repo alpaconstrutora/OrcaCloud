@@ -7,11 +7,15 @@ import {
     StockReservation,
     StockTransfer,
     StockTransferItem,
+    StockNetPosition,
+    StockSummary,
+    StockMinLevel,
     CreateStockMovementInput,
     CreateWarehouseInput,
     CreateSupplierLeadTimeInput,
     CreateReservationInput,
     CreateTransferInput,
+    CreateStockMinLevelInput,
     StockConsumptionItem,
 } from '../types/inventory';
 
@@ -474,6 +478,139 @@ export const inventoryService = {
             .update({ status: 'cancelled' })
             .eq('id', transferId)
             .eq('status', 'in_transit');
+        if (error) throw error;
+    },
+
+    // ─── POSIÇÃO LÍQUIDA / fn_net_position (Fase 3) ────────────────────────────
+
+    async getNetPositions(
+        organizationId: string,
+        opts?: { warehouseId?: string; inputCode?: string }
+    ): Promise<StockNetPosition[]> {
+        const { data, error } = await supabase.rpc('fn_net_position', {
+            p_organization_id: organizationId,
+            p_warehouse_id: opts?.warehouseId ?? null,
+            p_input_code: opts?.inputCode ?? null,
+        });
+        if (error) throw error;
+        return ((data as Record<string, unknown>[]) ?? []).map(r => ({
+            organizationId: r.organization_id as string,
+            warehouseId: r.warehouse_id as string,
+            warehouseName: r.warehouse_name as string | undefined,
+            inputCode: r.input_code as string,
+            inputDescription: r.input_description as string,
+            inputUnit: r.input_unit as string,
+            balanceQty: Number(r.balance_qty),
+            inTransitQty: Number(r.in_transit_qty),
+            reservedQty: Number(r.reserved_qty),
+            netQty: Number(r.net_qty),
+            avgUnitCost: Number(r.avg_unit_cost),
+            totalValue: Number(r.total_value),
+            minQuantity: r.min_quantity != null ? Number(r.min_quantity) : undefined,
+            isBelowMin: r.is_below_min as boolean,
+        }));
+    },
+
+    // Versão simplificada para o Plano de Aquisições: net_qty de um insumo específico
+    async getNetQty(
+        organizationId: string,
+        inputCode: string,
+        warehouseId?: string
+    ): Promise<number> {
+        const positions = await this.getNetPositions(organizationId, { inputCode, warehouseId });
+        return positions.reduce((sum, p) => sum + p.netQty, 0);
+    },
+
+    // ─── INDICADORES DE GIRO (Fase 3) ──────────────────────────────────────────
+
+    async getStockSummary(
+        organizationId: string,
+        warehouseId?: string
+    ): Promise<StockSummary[]> {
+        const { data, error } = await supabase.rpc('fn_stock_summary', {
+            p_organization_id: organizationId,
+            p_warehouse_id: warehouseId ?? null,
+        });
+        if (error) throw error;
+        return ((data as Record<string, unknown>[]) ?? []).map(r => ({
+            warehouseId: r.warehouse_id as string,
+            warehouseName: r.warehouse_name as string | undefined,
+            inputCode: r.input_code as string,
+            inputDescription: r.input_description as string,
+            inputUnit: r.input_unit as string,
+            balanceQty: Number(r.balance_qty),
+            avgUnitCost: Number(r.avg_unit_cost),
+            outflow30d: Number(r.outflow_30d),
+            inflow30d: Number(r.inflow_30d),
+            lastMovementDate: r.last_movement_date as string | undefined,
+            turnoverRate: Number(r.turnover_rate),
+            isRupture: r.is_rupture as boolean,
+            isExcess: r.is_excess as boolean,
+            isBelowMin: r.is_below_min as boolean,
+        }));
+    },
+
+    // ─── ESTOQUE MÍNIMO (Fase 3) ────────────────────────────────────────────────
+
+    async listMinLevels(organizationId: string, warehouseId?: string): Promise<StockMinLevel[]> {
+        let query = supabase
+            .from('stock_min_levels')
+            .select('id, organization_id, warehouse_id, input_code, input_description, input_unit, min_quantity, notes, created_at, updated_at, warehouse:warehouses(name)')
+            .eq('organization_id', organizationId)
+            .order('input_description');
+        if (warehouseId) query = query.eq('warehouse_id', warehouseId);
+        const { data, error } = await query;
+        if (error) throw error;
+        return ((data ?? []) as Record<string, unknown>[]).map(r => ({
+            id: r.id as string,
+            organizationId: r.organization_id as string,
+            warehouseId: r.warehouse_id as string,
+            warehouseName: (r.warehouse as Record<string, unknown> | null)?.name as string | undefined,
+            inputCode: r.input_code as string,
+            inputDescription: r.input_description as string,
+            inputUnit: r.input_unit as string,
+            minQuantity: Number(r.min_quantity),
+            notes: r.notes as string | undefined,
+            created_at: r.created_at as string,
+            updated_at: r.updated_at as string,
+        }));
+    },
+
+    async upsertMinLevel(organizationId: string, input: CreateStockMinLevelInput): Promise<StockMinLevel> {
+        const { data, error } = await supabase
+            .from('stock_min_levels')
+            .upsert(
+                {
+                    organization_id: organizationId,
+                    warehouse_id: input.warehouseId,
+                    input_code: input.inputCode,
+                    input_description: input.inputDescription,
+                    input_unit: input.inputUnit,
+                    min_quantity: input.minQuantity,
+                    notes: input.notes ?? null,
+                },
+                { onConflict: 'warehouse_id,input_code' }
+            )
+            .select('id, organization_id, warehouse_id, input_code, input_description, input_unit, min_quantity, notes, created_at, updated_at')
+            .single();
+        if (error) throw error;
+        const r = data as Record<string, unknown>;
+        return {
+            id: r.id as string,
+            organizationId: r.organization_id as string,
+            warehouseId: r.warehouse_id as string,
+            inputCode: r.input_code as string,
+            inputDescription: r.input_description as string,
+            inputUnit: r.input_unit as string,
+            minQuantity: Number(r.min_quantity),
+            notes: r.notes as string | undefined,
+            created_at: r.created_at as string,
+            updated_at: r.updated_at as string,
+        };
+    },
+
+    async deleteMinLevel(id: string): Promise<void> {
+        const { error } = await supabase.from('stock_min_levels').delete().eq('id', id);
         if (error) throw error;
     },
 };

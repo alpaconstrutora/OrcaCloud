@@ -414,48 +414,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     </div>
 
-                    {/* Previsão do Tempo */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <h3 className="text-gray-900 font-bold flex items-center gap-2 mb-4">
-                            <CloudSun className="w-5 h-5 text-indigo-400" />
-                            Previsão do Tempo
-                        </h3>
-
-                        <div className="mb-4">
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl text-white">
-                                        <Sun className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Agora</div>
-                                        <div className="flex items-end gap-1">
-                                            <span className="text-2xl font-black text-gray-900">28°</span>
-                                            <span className="text-sm font-bold text-gray-400">/18°</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-bold">Praticável</div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-4 gap-2">
-                                {[
-                                    { day: 'QUA', temp: '30°', icon: <Sun className="w-4 h-4 text-amber-500" /> },
-                                    { day: 'QUI', temp: '28°', icon: <CloudSun className="w-4 h-4 text-amber-400" /> },
-                                    { day: 'SEX', temp: '26°', icon: <CloudRain className="w-4 h-4 text-blue-400" /> },
-                                    { day: 'SÁB', temp: '24°', icon: <CloudRain className="w-4 h-4 text-blue-500" /> },
-                                ].map((d, i) => (
-                                    <div key={i} className="bg-gray-50/50 p-2 rounded-xl flex flex-col items-center gap-1 border border-transparent hover:border-gray-100 transition-all">
-                                        <span className="text-[9px] font-bold text-gray-500">{d.day}</span>
-                                        {d.icon}
-                                        <span className="text-[9px] font-black text-gray-900">{d.temp}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         );

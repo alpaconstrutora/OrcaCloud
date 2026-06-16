@@ -310,6 +310,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <button onClick={() => setActiveTab('manutencao')} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white" title="Manutenção">
                                 <Wrench className="w-3.5 h-3.5" />
                             </button>
+                            {portalToken && (
+                                <button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white" title="Notificações">
+                                    <Bell className="w-3.5 h-3.5" />
+                                    {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[7px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+                                </button>
+                            )}
                             <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-600 font-black text-sm shadow">
                                 {(clientProfile?.name || '?').charAt(0)}
                             </div>
@@ -458,8 +464,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5">
                             <span className="text-[10px] font-black text-white uppercase tracking-widest">Serviços</span>
                         </div>
-                        <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-indigo-600 font-black text-sm shadow">
-                            {(clientProfile?.name || '?').charAt(0)}
+                        <div className="flex items-center gap-2">
+                            {portalToken && (
+                                <button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white" title="Notificações">
+                                    <Bell className="w-3.5 h-3.5" />
+                                    {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[7px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+                                </button>
+                            )}
+                            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-indigo-600 font-black text-sm shadow">
+                                {(clientProfile?.name || '?').charAt(0)}
+                            </div>
                         </div>
                     </div>
                     <h2 className="text-2xl font-black text-white leading-tight">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
@@ -3130,8 +3144,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 </MobilePreviewFrame>
             )}
 
-            {/* Main Header */}
-            <div className="bg-white md:rounded-3xl p-4 md:p-10 shadow-sm border-b md:border border-gray-100 relative overflow-hidden">
+            {/* Main Header — escondido no mobile quando dashboard tem hero próprio (Locação/Serviços) */}
+            <div className={`bg-white md:rounded-3xl p-4 md:p-10 shadow-sm border-b md:border border-gray-100 relative overflow-hidden ${activeTab === 'dashboard' && (clientCategory === 'Locação' || clientCategory === 'Serviços') ? 'hidden md:block' : ''}`}>
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
 
                 <div className="relative flex items-center justify-between gap-4">

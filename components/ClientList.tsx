@@ -1,7 +1,8 @@
 import React from 'react';
 import { clientService } from '../services/clientService';
+import { clientPortalService, ClientPortalToken } from '../services/clientPortalService';
 import { supabase } from '../lib/supabase';
-import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, LayoutDashboard, Table2, Building2 } from 'lucide-react';
+import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X } from 'lucide-react';
 import { Client } from '../types';
 import ClientModal from './ClientModal';
 import { useServicesToast } from './services/useServicestoast';
@@ -79,6 +80,60 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     };
 
     const [sortBy, setSortBy] = React.useState<string>('name-asc');
+    const [tokenModal, setTokenModal] = React.useState<{ client: Client; token: ClientPortalToken | null } | null>(null);
+    const [tokenLoading, setTokenLoading] = React.useState(false);
+    const [tokenCopied, setTokenCopied] = React.useState(false);
+
+    const openTokenModal = async (client: Client) => {
+        setTokenModal({ client, token: null });
+        setTokenLoading(true);
+        try {
+            const tok = await clientPortalService.getTokenForClient(client.id);
+            setTokenModal({ client, token: tok });
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setTokenLoading(false);
+        }
+    };
+
+    const handleGenerateToken = async () => {
+        if (!tokenModal || !organizationId) return;
+        setTokenLoading(true);
+        try {
+            const rawToken = await clientPortalService.generateToken(tokenModal.client.id, organizationId);
+            const tok = await clientPortalService.getTokenForClient(tokenModal.client.id);
+            setTokenModal(prev => prev ? { ...prev, token: tok } : null);
+            showToast('Link gerado com sucesso!', 'success');
+        } catch (e) {
+            showToast('Erro ao gerar link.', 'error');
+        } finally {
+            setTokenLoading(false);
+        }
+    };
+
+    const handleCopyLink = async () => {
+        if (!tokenModal?.token) return;
+        const url = clientPortalService.buildPortalUrl(tokenModal.token.token);
+        await navigator.clipboard.writeText(url);
+        setTokenCopied(true);
+        setTimeout(() => setTokenCopied(false), 2000);
+    };
+
+    const handleRevokeToken = async () => {
+        if (!tokenModal) return;
+        if (!confirm('Revogar acesso deste cliente ao portal?')) return;
+        setTokenLoading(true);
+        try {
+            await clientPortalService.revokeToken(tokenModal.client.id);
+            setTokenModal(prev => prev ? { ...prev, token: null } : null);
+            showToast('Acesso revogado.', 'success');
+        } catch (e) {
+            showToast('Erro ao revogar.', 'error');
+        } finally {
+            setTokenLoading(false);
+        }
+    };
 
     const filteredClients = React.useMemo(() => {
         return clients
@@ -290,6 +345,13 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                     </button>
                                                 )}
                                                 <button
+                                                    onClick={() => openTokenModal(client)}
+                                                    className="p-2 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-lg transition-colors"
+                                                    title="Link de Acesso ao Portal"
+                                                >
+                                                    <Link2 className="w-4 h-4" />
+                                                </button>
+                                                <button
                                                     onClick={() => handleOpenModal(client)}
                                                     className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                 >
@@ -413,6 +475,13 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         </button>
                                     )}
                                     <button
+                                        onClick={() => openTokenModal(client)}
+                                        className="p-2 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-xl transition-all shadow-sm border border-transparent hover:border-emerald-100"
+                                        title="Link de Acesso ao Portal"
+                                    >
+                                        <Link2 className="w-4 h-4" />
+                                    </button>
+                                    <button
                                         onClick={() => handleOpenModal(client)}
                                         className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-blue-100"
                                         title="Editar"
@@ -433,6 +502,81 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 )
             )
             }
+
+            {/* Token Modal */}
+            {tokenModal && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setTokenModal(null)}>
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-8 space-y-6" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-xl font-black text-gray-900">Link de Acesso</h3>
+                                <p className="text-sm text-gray-400 font-medium mt-0.5">{tokenModal.client.name}</p>
+                            </div>
+                            <button onClick={() => setTokenModal(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {tokenLoading ? (
+                            <div className="flex justify-center py-8">
+                                <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+                            </div>
+                        ) : tokenModal.token && tokenModal.token.is_active ? (
+                            <div className="space-y-4">
+                                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
+                                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Link ativo</p>
+                                    <p className="text-xs text-gray-700 font-mono break-all leading-relaxed">
+                                        {clientPortalService.buildPortalUrl(tokenModal.token.token)}
+                                    </p>
+                                    <p className="text-[10px] text-gray-400 mt-2">
+                                        Expira em: {new Date(tokenModal.token.expires_at).toLocaleDateString('pt-BR')}
+                                        {tokenModal.token.last_used_at && ` · Último acesso: ${new Date(tokenModal.token.last_used_at).toLocaleDateString('pt-BR')}`}
+                                    </p>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={handleCopyLink}
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
+                                    >
+                                        {tokenCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                        {tokenCopied ? 'Copiado!' : 'Copiar Link'}
+                                    </button>
+                                    <button
+                                        onClick={handleGenerateToken}
+                                        className="flex items-center justify-center gap-2 px-4 py-3 border border-gray-200 text-gray-500 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-all"
+                                        title="Gerar novo link (invalida o anterior)"
+                                    >
+                                        <RefreshCw className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={handleRevokeToken}
+                                        className="flex items-center justify-center gap-2 px-4 py-3 border border-red-100 text-red-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-red-300 hover:text-red-600 transition-all"
+                                        title="Revogar acesso"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 text-center">
+                                    <Link2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                                    <p className="text-sm font-bold text-gray-700">Nenhum link ativo</p>
+                                    <p className="text-xs text-gray-400 mt-1">Gere um link para que o cliente acesse o portal sem precisar de cadastro.</p>
+                                </div>
+                                <button
+                                    onClick={handleGenerateToken}
+                                    disabled={!organizationId}
+                                    className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-50 transition-all active:scale-95"
+                                >
+                                    <Link2 className="w-4 h-4" />
+                                    Gerar Link de Acesso
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             <ClientModal
                 isOpen={isModalOpen}

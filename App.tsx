@@ -55,8 +55,93 @@ const PortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
     </div>
   );
 };
+// Portal do Cliente via token público
+const ClientPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
+  const [state, setState] = React.useState<'loading' | 'ok' | 'error'>('loading');
+  const [clientData, setClientData] = React.useState<any>(null);
+  const [projectSettings, setProjectSettings] = React.useState<any>(null);
+  const [orgId, setOrgId] = React.useState('');
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await clientPortalService.getPortalData(token);
+        if (!res.valid || !res.client) { setState('error'); return; }
+        const cli = res.client;
+        setOrgId(cli.organization_id);
+        // Mapeia campos snake_case → camelCase que ClientArea espera
+        setClientData({
+          id: cli.id,
+          name: cli.name,
+          email: cli.email,
+          phone: cli.phone,
+          document: cli.document,
+          type: cli.type,
+          address: cli.address,
+          address_number: cli.address_number,
+          neighborhood: cli.neighborhood,
+          zip_code: cli.zip_code,
+          city: cli.city,
+          state: cli.state,
+          category: cli.category,
+          organization_id: cli.organization_id,
+          clientDocuments: cli.client_documents ?? cli.clientDocuments ?? [],
+          financialInfo: cli.financial_info ?? cli.financialInfo ?? null,
+          diaryEntries: cli.diary_entries ?? cli.diaryEntries ?? [],
+          scheduleInfo: cli.schedule_info ?? cli.scheduleInfo ?? null,
+          aiInsight: cli.ai_insight ?? cli.aiInsight ?? null,
+          visualGallery: cli.visual_gallery ?? cli.visualGallery ?? [],
+        });
+        if (res.project) {
+          setProjectSettings({ ...res.project.settings, id: res.project.id, name: res.project.name });
+        }
+        setState('ok');
+      } catch {
+        setState('error');
+      }
+    })();
+  }, [token]);
+
+  if (state === 'loading') return (
+    <div className="h-screen flex items-center justify-center bg-blue-50">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-black text-blue-700 uppercase tracking-widest">Carregando portal...</p>
+      </div>
+    </div>
+  );
+
+  if (state === 'error') return (
+    <div className="h-screen flex items-center justify-center bg-slate-50">
+      <div className="text-center space-y-3 p-8">
+        <p className="text-4xl">🔒</p>
+        <p className="text-lg font-black text-slate-800">Link inválido ou expirado</p>
+        <p className="text-sm text-slate-500">Solicite um novo link à construtora.</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
+        <ClientArea
+          settings={projectSettings || { name: '', location: '', standard: '', cubRate: 0, area: 0, bdi: 0, ls: 0, database: '', referenceMonth: '', socialChargesMode: '', wbs: [] }}
+          budget={[]}
+          profile={{ group: 'CLIENTE', role: '' }}
+          clientProfile={clientData}
+          organizationId={orgId}
+          onClientSelect={() => {}}
+          isPreview
+        />
+      </React.Suspense>
+    </div>
+  );
+};
+
 import PublicOrderView from './components/PublicOrderView';
 import { PublicEspecificacoesView } from './components/PublicEspecificacoesView';
+import { clientPortalService } from './services/clientPortalService';
+const ClientArea = React.lazy(() => import('./components/ClientArea').then(m => ({ default: m.ClientArea })));
 import { ContractModal } from './components/ContractModal';
 import SupplyChainQuotationForm from './components/SupplyChainQuotationForm';
 import SupplyChainOrderForm from './components/SupplyChainOrderForm';
@@ -248,6 +333,16 @@ const App: React.FC = () => {
     return null;
   }, []);
   if (portalToken) return <PortalTokenGate token={portalToken} />;
+
+  // ── Guard público: portal do cliente via token ────────────────────────────────
+  const clientPortalToken = React.useMemo(() => {
+    if (window.location.pathname === '/portal-cliente') {
+      return new URLSearchParams(window.location.search).get('token');
+    }
+    return null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (clientPortalToken) return <ClientPortalTokenGate token={clientPortalToken} />;
 
   // ── Guard público: pedido de compra via share_token ──────────────────────────
   const orderShareToken = React.useMemo(() => {

@@ -570,10 +570,22 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 onChange={(e) => handleUpdatePredecessorField(node.id, 'uid', e.target.value)}
                                                 placeholder="-"
                                             />
+                                            {(nodeSchedule?.predecessors?.length || 0) > 1 && (
+                                                <span className="absolute -right-1 -top-1 bg-blue-500 text-white text-[12px] w-3 h-3 flex items-center justify-center rounded-full border border-white shadow-sm font-medium z-10">
+                                                    +{nodeSchedule!.predecessors!.length - 1}
+                                                </span>
+                                            )}
+                                            <button onClick={() => setPredecessorModalTask(node.id)} className="absolute right-0 opacity-0 group-hover/pred:opacity-100 p-0.5 text-blue-500 hover:bg-blue-50 rounded transition-opacity">
+                                                <Link2 className="w-3 h-3" />
+                                            </button>
                                         </td>
-                                        <td className="px-1 py-3"></td>
-                                        <td className="px-1 py-3"></td>
-                                        <td className="px-1 py-3"></td>
+                                        <td className="px-1 py-3 text-center text-[12px] text-gray-400">—</td>
+                                        <td className="px-1 py-2 text-center">
+                                            <div className="text-[12px] font-medium text-gray-500">{formatDateDisplay(node.earlyStart)}</div>
+                                        </td>
+                                        <td className="px-1 py-2 text-center">
+                                            <div className="text-[12px] font-medium text-gray-500">{formatDateDisplay(node.earlyFinish)}</div>
+                                        </td>
                                         <td className="px-1 py-3"></td>
                                         <td className="px-1 py-3"></td>
                                         <td className="px-1 py-3"></td>

@@ -136,6 +136,7 @@ const ClientPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
           profile={{ group: 'CLIENTE', role: '' }}
           clientProfile={clientData}
           organizationId={orgId}
+          portalToken={token}
           onClientSelect={() => {}}
           isPreview
         />

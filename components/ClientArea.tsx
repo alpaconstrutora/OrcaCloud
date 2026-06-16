@@ -53,6 +53,7 @@ import AIInsightCard from './AIInsightCard';
 import FinishSelection from './FinishSelection';
 import ClientList from './ClientList';
 import { clientService } from '../services/clientService';
+import { clientRequestsService, ClientRequest, ClientServiceOrder } from '../services/clientRequestsService';
 import { exportService } from '../services/exportService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { contractService } from '../services/contractService';
@@ -70,6 +71,7 @@ interface ClientAreaProps {
     clients?: Client[]; // For admin selection
     organizationId?: string | null; // Fallback quando settings não traz organizationId (ex.: portal sem projeto aberto)
     activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao' | 'os';
+    portalToken?: string;
     onUpdateSettings?: (settings: ProjectSettings) => void;
     onClientSelect?: (client: Client) => void;
     /** Renderiza a área como o cliente a vê (sem chrome de admin), usado na prévia mobile. */
@@ -78,7 +80,7 @@ interface ClientAreaProps {
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'];
 
-export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, onUpdateSettings, onClientSelect, isPreview = false }) => {
+export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false }) => {
     const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao' | 'os'>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
@@ -108,20 +110,37 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [globalClientInstallments, setGlobalClientInstallments] = React.useState<PaymentInstallment[]>([]);
     const [clientContracts, setClientContracts] = React.useState<Contract[]>([]);
     const [viewingContract, setViewingContract] = React.useState<Contract | null>(null);
+    const [clientRequests, setClientRequests] = React.useState<ClientRequest[]>([]);
+    const [clientServiceOrders, setClientServiceOrders] = React.useState<ClientServiceOrder[]>([]);
+    const [requestsLoading, setRequestsLoading] = React.useState(false);
+    const [showNewRequestForm, setShowNewRequestForm] = React.useState(false);
+    const [newRequestForm, setNewRequestForm] = React.useState({ title: '', description: '', category: 'Geral', priority: 'Média' });
 
     React.useEffect(() => {
         const orgId = settings.organizationId || (settings as any).organization_id || organizationId;
         if (clientProfile && (activeTab === 'financeiro' || activeTab === 'contratos')) {
-            // Parcelas globais dependem da org (busca em projetos de Gestão Comercial)
             if (orgId) {
                 commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId).then(installments => {
                     setGlobalClientInstallments(installments);
                 }).catch(console.error);
             }
-            // Contratos: busca por client_id (RLS já restringe às orgs acessíveis); org é filtro opcional
             contractService.listContractsByClientId(clientProfile.id, orgId || undefined).then(contracts => {
                 setClientContracts(contracts);
             }).catch(console.error);
+        }
+        if (activeTab === 'manutencao') {
+            setRequestsLoading(true);
+            const load = portalToken
+                ? clientRequestsService.getRequestsByToken(portalToken)
+                : (clientProfile && orgId ? clientRequestsService.listRequests(orgId, clientProfile.id) : Promise.resolve([]));
+            load.then(setClientRequests).catch(console.error).finally(() => setRequestsLoading(false));
+        }
+        if (activeTab === 'os') {
+            setRequestsLoading(true);
+            const load = portalToken
+                ? clientRequestsService.getServiceOrdersByToken(portalToken)
+                : (clientProfile && orgId ? clientRequestsService.listServiceOrders(orgId, clientProfile.id) : Promise.resolve([]));
+            load.then(setClientServiceOrders).catch(console.error).finally(() => setRequestsLoading(false));
         }
     }, [clientProfile, activeTab, settings, organizationId]);
 
@@ -3243,76 +3262,226 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </button>
                     </div>
                 )}
-                {activeTab === 'manutencao' && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="w-1.5 h-6 bg-amber-500 rounded-full" />
-                            <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Manutenção do Imóvel</h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {[
-                                { label: 'Chamados Abertos', value: '0', color: 'amber', icon: <Wrench className="w-5 h-5" /> },
-                                { label: 'Em Andamento', value: '0', color: 'blue', icon: <Clock className="w-5 h-5" /> },
-                                { label: 'Concluídos', value: '0', color: 'emerald', icon: <CheckCircle2 className="w-5 h-5" /> },
-                            ].map(card => (
-                                <div key={card.label} className={`bg-white border border-gray-100 rounded-3xl p-6 flex items-center gap-4 shadow-sm`}>
-                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500`}>
-                                        {card.icon}
+                {activeTab === 'manutencao' && (() => {
+                    const abertos    = clientRequests.filter(r => r.status === 'Aberto').length;
+                    const emAndamento = clientRequests.filter(r => r.status === 'Em Andamento').length;
+                    const resolvidos  = clientRequests.filter(r => r.status === 'Resolvido').length;
+                    const PRIORITY_COLOR: Record<string, string> = { Urgente: 'bg-red-100 text-red-600', Alta: 'bg-orange-100 text-orange-600', Média: 'bg-amber-100 text-amber-700', Baixa: 'bg-gray-100 text-gray-500' };
+                    const STATUS_COLOR: Record<string, string> = { Aberto: 'bg-amber-100 text-amber-700', 'Em Andamento': 'bg-blue-100 text-blue-700', Aguardando: 'bg-purple-100 text-purple-700', Resolvido: 'bg-emerald-100 text-emerald-700', Cancelado: 'bg-gray-100 text-gray-400' };
+                    return (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-1.5 h-6 bg-amber-500 rounded-full" />
+                                    <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Manutenção do Imóvel</h3>
+                                </div>
+                                <button
+                                    onClick={() => setShowNewRequestForm(true)}
+                                    className="flex items-center gap-2 px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-amber-100 active:scale-95"
+                                >
+                                    <Plus className="w-4 h-4" /> Abrir Chamado
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {[
+                                    { label: 'Abertos', value: abertos, icon: <Wrench className="w-5 h-5" />, cls: 'bg-amber-50 text-amber-500' },
+                                    { label: 'Em Andamento', value: emAndamento, icon: <Clock className="w-5 h-5" />, cls: 'bg-blue-50 text-blue-500' },
+                                    { label: 'Resolvidos', value: resolvidos, icon: <CheckCircle2 className="w-5 h-5" />, cls: 'bg-emerald-50 text-emerald-500' },
+                                ].map(card => (
+                                    <div key={card.label} className="bg-white border border-gray-100 rounded-3xl p-6 flex items-center gap-4 shadow-sm">
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${card.cls}`}>{card.icon}</div>
+                                        <div>
+                                            <p className="text-3xl font-black text-gray-900">{card.value}</p>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-3xl font-black text-gray-900">{card.value}</p>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
+                                ))}
+                            </div>
+
+                            {requestsLoading ? (
+                                <div className="flex justify-center py-12"><div className="w-6 h-6 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
+                            ) : clientRequests.length === 0 ? (
+                                <div className="bg-white border border-gray-100 rounded-[2.5rem] p-12 flex flex-col items-center text-center shadow-sm">
+                                    <Wrench className="w-12 h-12 text-gray-200 mb-4" />
+                                    <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Nenhum chamado aberto</p>
+                                    <p className="text-xs text-gray-400 mt-1">Clique em "Abrir Chamado" para solicitar manutenção</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {clientRequests.map(req => (
+                                        <div key={req.id} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-amber-200 transition-all">
+                                            <div className="flex flex-col gap-1.5 min-w-0">
+                                                <span className="text-sm font-black text-gray-900 uppercase tracking-tight">{req.title}</span>
+                                                <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                    <span>{req.category}</span>
+                                                    <span>·</span>
+                                                    <span>{new Date(req.opened_at + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                                    {req.assigned_to && <><span>·</span><span>{req.assigned_to}</span></>}
+                                                </div>
+                                                {req.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{req.description}</p>}
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${PRIORITY_COLOR[req.priority] ?? 'bg-gray-100 text-gray-500'}`}>{req.priority}</span>
+                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span>
+                                                {isAdmin && (
+                                                    <select
+                                                        value={req.status}
+                                                        onChange={async e => {
+                                                            const newStatus = e.target.value as ClientRequest['status'];
+                                                            await clientRequestsService.updateRequest(req.id, { status: newStatus, resolved_at: newStatus === 'Resolvido' ? new Date().toISOString().split('T')[0] : undefined });
+                                                            setClientRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: newStatus } : r));
+                                                        }}
+                                                        className="text-[9px] font-black uppercase bg-gray-50 border border-gray-200 rounded-xl px-2 py-1 cursor-pointer"
+                                                        onClick={e => e.stopPropagation()}
+                                                    >
+                                                        {['Aberto','Em Andamento','Aguardando','Resolvido','Cancelado'].map(s => <option key={s} value={s}>{s}</option>)}
+                                                    </select>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Modal: novo chamado */}
+                            {showNewRequestForm && (
+                                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setShowNewRequestForm(false)}>
+                                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                                    <div className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-lg animate-in zoom-in-95 fade-in duration-200" onClick={e => e.stopPropagation()}>
+                                        <div className="flex items-center justify-between p-7 border-b border-gray-100">
+                                            <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Novo Chamado de Manutenção</h2>
+                                            <button onClick={() => setShowNewRequestForm(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"><X className="w-5 h-5" /></button>
+                                        </div>
+                                        <div className="p-7 space-y-4">
+                                            <div>
+                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Título *</label>
+                                                <input type="text" value={newRequestForm.title} onChange={e => setNewRequestForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex: Torneira com vazamento" className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400" />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Categoria</label>
+                                                    <select value={newRequestForm.category} onChange={e => setNewRequestForm(f => ({ ...f, category: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
+                                                        {['Elétrica','Hidráulica','Estrutural','Pintura','Serralheria','Geral','Outro'].map(c => <option key={c}>{c}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Prioridade</label>
+                                                    <select value={newRequestForm.priority} onChange={e => setNewRequestForm(f => ({ ...f, priority: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
+                                                        {['Baixa','Média','Alta','Urgente'].map(p => <option key={p}>{p}</option>)}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Descrição</label>
+                                                <textarea value={newRequestForm.description} onChange={e => setNewRequestForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o problema com detalhes..." rows={3} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400 resize-none" />
+                                            </div>
+                                            <button
+                                                disabled={!newRequestForm.title.trim()}
+                                                onClick={async () => {
+                                                    if (!newRequestForm.title.trim()) return;
+                                                    const orgId = settings.organizationId || (settings as any).organization_id || organizationId || '';
+                                                    if (portalToken) {
+                                                        await clientRequestsService.createRequestByToken(portalToken, { title: newRequestForm.title, description: newRequestForm.description, category: newRequestForm.category, priority: newRequestForm.priority });
+                                                        const updated = await clientRequestsService.getRequestsByToken(portalToken);
+                                                        setClientRequests(updated);
+                                                    } else if (clientProfile && orgId) {
+                                                        const created = await clientRequestsService.createRequest(orgId, clientProfile.id, { title: newRequestForm.title, description: newRequestForm.description, category: newRequestForm.category, priority: newRequestForm.priority as ClientRequest['priority'], status: 'Aberto', opened_at: new Date().toISOString().split('T')[0] });
+                                                        setClientRequests(prev => [created, ...prev]);
+                                                    }
+                                                    setShowNewRequestForm(false);
+                                                    setNewRequestForm({ title: '', description: '', category: 'Geral', priority: 'Média' });
+                                                }}
+                                                className="w-full py-4 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-2xl font-black uppercase tracking-widest transition-all active:scale-95"
+                                            >
+                                                Enviar Chamado
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                            ))}
+                            )}
                         </div>
-                        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 md:p-12 flex flex-col items-center text-center shadow-sm">
-                            <div className="w-16 h-16 bg-amber-50 rounded-3xl flex items-center justify-center text-amber-500 mb-5">
-                                <Wrench className="w-8 h-8" />
+                    );
+                })()}
+                {activeTab === 'os' && (() => {
+                    const abertas     = clientServiceOrders.filter(o => o.status === 'Aberta').length;
+                    const emExecucao  = clientServiceOrders.filter(o => o.status === 'Em Execução').length;
+                    const concluidas  = clientServiceOrders.filter(o => o.status === 'Concluída').length;
+                    const STATUS_COLOR: Record<string, string> = { Aberta: 'bg-blue-100 text-blue-700', 'Em Execução': 'bg-amber-100 text-amber-700', Concluída: 'bg-emerald-100 text-emerald-700', Cancelada: 'bg-gray-100 text-gray-400' };
+                    const PRIORITY_COLOR: Record<string, string> = { Urgente: 'bg-red-100 text-red-600', Alta: 'bg-orange-100 text-orange-600', Média: 'bg-amber-100 text-amber-700', Baixa: 'bg-gray-100 text-gray-500' };
+                    return (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-1.5 h-6 bg-blue-500 rounded-full" />
+                                <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Ordens de Serviço</h3>
                             </div>
-                            <h4 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-2">Solicitar Manutenção</h4>
-                            <p className="text-gray-500 max-w-sm mx-auto mb-6 text-sm font-medium">Abra chamados para reparos, ajustes e serviços no seu imóvel. Nossa equipe técnica será acionada rapidamente.</p>
-                            <button className="px-8 py-4 bg-gray-100 text-gray-400 rounded-2xl text-[10px] font-black uppercase tracking-widest cursor-not-allowed">
-                                Abrir Chamado (Em breve)
-                            </button>
-                        </div>
-                    </div>
-                )}
-                {activeTab === 'os' && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="w-1.5 h-6 bg-blue-500 rounded-full" />
-                            <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Ordens de Serviço</h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {[
-                                { label: 'OS Abertas', value: '0', color: 'blue', icon: <ClipboardList className="w-5 h-5" /> },
-                                { label: 'Em Execução', value: '0', color: 'amber', icon: <Clock className="w-5 h-5" /> },
-                                { label: 'Finalizadas', value: '0', color: 'emerald', icon: <CheckCircle2 className="w-5 h-5" /> },
-                            ].map(card => (
-                                <div key={card.label} className={`bg-white border border-gray-100 rounded-3xl p-6 flex items-center gap-4 shadow-sm`}>
-                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500`}>
-                                        {card.icon}
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {[
+                                    { label: 'Abertas', value: abertas, icon: <ClipboardList className="w-5 h-5" />, cls: 'bg-blue-50 text-blue-500' },
+                                    { label: 'Em Execução', value: emExecucao, icon: <Clock className="w-5 h-5" />, cls: 'bg-amber-50 text-amber-500' },
+                                    { label: 'Concluídas', value: concluidas, icon: <CheckCircle2 className="w-5 h-5" />, cls: 'bg-emerald-50 text-emerald-500' },
+                                ].map(card => (
+                                    <div key={card.label} className="bg-white border border-gray-100 rounded-3xl p-6 flex items-center gap-4 shadow-sm">
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${card.cls}`}>{card.icon}</div>
+                                        <div>
+                                            <p className="text-3xl font-black text-gray-900">{card.value}</p>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-3xl font-black text-gray-900">{card.value}</p>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
-                                    </div>
+                                ))}
+                            </div>
+
+                            {requestsLoading ? (
+                                <div className="flex justify-center py-12"><div className="w-6 h-6 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>
+                            ) : clientServiceOrders.length === 0 ? (
+                                <div className="bg-white border border-gray-100 rounded-[2.5rem] p-12 flex flex-col items-center text-center shadow-sm">
+                                    <ClipboardList className="w-12 h-12 text-gray-200 mb-4" />
+                                    <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Nenhuma ordem de serviço</p>
+                                    <p className="text-xs text-gray-400 mt-1">As ordens serão criadas pela equipe e aparecerão aqui</p>
                                 </div>
-                            ))}
+                            ) : (
+                                <div className="space-y-3">
+                                    {clientServiceOrders.map(os => (
+                                        <div key={os.id} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-blue-200 transition-all">
+                                            <div className="flex flex-col gap-1.5 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-lg shrink-0">{os.number}</span>
+                                                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight truncate">{os.title}</span>
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                    {os.scheduled_date && <span>Agendada: {new Date(os.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
+                                                    {os.completed_date && <><span>·</span><span>Concluída: {new Date(os.completed_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span></>}
+                                                    {os.assigned_to && <><span>·</span><span>{os.assigned_to}</span></>}
+                                                    {os.value != null && <><span>·</span><span>R$ {os.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></>}
+                                                </div>
+                                                {os.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{os.description}</p>}
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${PRIORITY_COLOR[os.priority] ?? 'bg-gray-100 text-gray-500'}`}>{os.priority}</span>
+                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLOR[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span>
+                                                {isAdmin && (
+                                                    <select
+                                                        value={os.status}
+                                                        onChange={async e => {
+                                                            const newStatus = e.target.value as ClientServiceOrder['status'];
+                                                            await clientRequestsService.updateServiceOrder(os.id, { status: newStatus, completed_date: newStatus === 'Concluída' ? new Date().toISOString().split('T')[0] : undefined });
+                                                            setClientServiceOrders(prev => prev.map(o => o.id === os.id ? { ...o, status: newStatus } : o));
+                                                        }}
+                                                        className="text-[9px] font-black uppercase bg-gray-50 border border-gray-200 rounded-xl px-2 py-1 cursor-pointer"
+                                                        onClick={e => e.stopPropagation()}
+                                                    >
+                                                        {['Aberta','Em Execução','Concluída','Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}
+                                                    </select>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 md:p-12 flex flex-col items-center text-center shadow-sm">
-                            <div className="w-16 h-16 bg-blue-50 rounded-3xl flex items-center justify-center text-blue-500 mb-5">
-                                <ClipboardList className="w-8 h-8" />
-                            </div>
-                            <h4 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-2">Acompanhe seus Serviços</h4>
-                            <p className="text-gray-500 max-w-sm mx-auto mb-6 text-sm font-medium">Visualize o status de todas as ordens de serviço contratadas, laudos técnicos emitidos e histórico de atendimentos.</p>
-                            <button className="px-8 py-4 bg-gray-100 text-gray-400 rounded-2xl text-[10px] font-black uppercase tracking-widest cursor-not-allowed">
-                                Ver Minhas OS (Em breve)
-                            </button>
-                        </div>
-                    </div>
-                )}
+                    );
+                })()}
             </div>
 
             {/* Decorative footer message */}

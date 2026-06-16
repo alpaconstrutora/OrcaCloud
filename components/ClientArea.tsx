@@ -36,7 +36,8 @@ import {
     Mail,
     Hash,
     Home,
-    Save
+    Save,
+    Smartphone
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
@@ -54,6 +55,7 @@ import { projectService } from '../services/projectService';
 import { orderService } from '../services/orderService';
 import { storageService } from '../services/storageService';
 import { PurchaseOrder } from '../types';
+import MobilePreviewFrame from './MobilePreviewFrame';
 
 interface ClientAreaProps {
     settings: ProjectSettings;
@@ -65,11 +67,13 @@ interface ClientAreaProps {
     activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte';
     onUpdateSettings?: (settings: ProjectSettings) => void;
     onClientSelect?: (client: Client) => void;
+    /** Renderiza a área como o cliente a vê (sem chrome de admin), usado na prévia mobile. */
+    isPreview?: boolean;
 }
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'];
 
-export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, onUpdateSettings, onClientSelect }) => {
+export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, onUpdateSettings, onClientSelect, isPreview = false }) => {
     const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte'>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
@@ -88,9 +92,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         startDate: new Date().toISOString().split('T')[0]
     });
     const fileInputRef = React.useRef<HTMLInputElement>(null);
-    const isAdmin = profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER || profile?.group === 'DESENVOLVEDOR';
+    // Na prévia mobile, renderiza exatamente o que o cliente vê (sem permissões de admin).
+    const isAdmin = !isPreview && (profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER || profile?.group === 'DESENVOLVEDOR');
 
     const [showTabConfig, setShowTabConfig] = React.useState(false);
+    const [showMobilePreview, setShowMobilePreview] = React.useState(false);
     const [showMeusDados, setShowMeusDados] = React.useState(false);
     const [meusDadosForm, setMeusDadosForm] = React.useState<Partial<Client>>({});
     const [savingDados, setSavingDados] = React.useState(false);
@@ -1965,6 +1971,21 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
     return (
         <div className="min-h-screen bg-gray-50/30 pb-24 md:pb-0 space-y-4 md:space-y-8">
+            {/* Prévia Mobile — renderiza o portal como o cliente vê, dentro de um iframe estreito */}
+            {showMobilePreview && !isPreview && (
+                <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Portal do Cliente">
+                    <ClientArea
+                        settings={settings}
+                        budget={budget}
+                        profile={profile}
+                        clientProfile={clientProfile}
+                        organizationId={organizationId}
+                        onClientSelect={onClientSelect}
+                        isPreview
+                    />
+                </MobilePreviewFrame>
+            )}
+
             {/* Main Header */}
             <div className="bg-white md:rounded-3xl p-4 md:p-10 shadow-sm border-b md:border border-gray-100 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
@@ -1992,6 +2013,15 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             >
                                 <UserCircle className="w-4 h-4" />
                                 <span className="hidden sm:inline">Meus Dados</span>
+                            </button>
+                        )}
+                        {isAdmin && clientProfile && (
+                            <button
+                                onClick={() => setShowMobilePreview(true)}
+                                title="Visualizar como o cliente vê no celular"
+                                className="hidden md:flex p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
+                            >
+                                <Smartphone className="w-4 h-4" />
                             </button>
                         )}
                         {isAdmin && onUpdateSettings && (

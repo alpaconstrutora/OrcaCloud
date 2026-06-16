@@ -7,6 +7,7 @@ import { Client } from '../types';
 import ClientModal from './ClientModal';
 import { useServicesToast } from './services/useServicestoast';
 import ServicesToast from './services/ServicesToast';
+import { useStore } from '../store/useStore';
 
 interface ClientListProps {
     onClientsChange?: () => void;
@@ -15,6 +16,7 @@ interface ClientListProps {
 }
 
 const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient, organizationId }) => {
+    const { activeOrganizationId } = useStore();
     const [clients, setClients] = React.useState<Client[]>([]);
     const [projects, setProjects] = React.useState<any[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -98,9 +100,9 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     };
 
     const handleGenerateToken = async () => {
-        const orgId = organizationId || tokenModal?.client.organization_id;
+        const orgId = organizationId || activeOrganizationId || tokenModal?.client.organization_id;
         if (!tokenModal || !orgId) {
-            console.error('[ClientPortal] organizationId ausente', { organizationId, clientOrgId: tokenModal?.client.organization_id });
+            console.error('[ClientPortal] organizationId ausente', { organizationId, activeOrganizationId, clientOrgId: tokenModal?.client.organization_id });
             showToast('Erro: organização não identificada.', 'error');
             return;
         }

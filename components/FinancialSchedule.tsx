@@ -450,7 +450,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
     // Pin pendente do rebase — garante que basedOnBudgetVersionId não seja apagado pelo
     // persistSchedule que roda logo após o rebase (closure stale do settings).
-    const pendingPinRef = React.useRef<{ basedOnBudgetVersionId?: string; basedOnBudgetVersionItem?: number }>({});
+    const pendingPinRef = React.useRef<{ basedOnBudgetVersionId?: string; basedOnBudgetVersionItem?: number; basedOnBudgetSnapshot?: BudgetEntry[] }>({});
 
     // ── Safe Persistence Wrapper ──
     const persistSchedule = (newSchedule: ProjectSchedule) => {
@@ -1331,13 +1331,14 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         );
         const newBudget: BudgetEntry[] = JSON.parse(JSON.stringify(target.budget));
         // Grava o pin no ref ANTES de qualquer persistSchedule (evita closure stale apagar o pin)
-        pendingPinRef.current = { basedOnBudgetVersionId: target.id, basedOnBudgetVersionItem: target.item };
+        pendingPinRef.current = { basedOnBudgetVersionId: target.id, basedOnBudgetVersionItem: target.item, basedOnBudgetSnapshot: newBudget };
         onUpdateBudget(newBudget);
         const newSettings: ProjectSettings = {
             ...settings,
             planningVersions: [...(settings.planningVersions || []), archived],
             basedOnBudgetVersionId: target.id,
-            basedOnBudgetVersionItem: target.item
+            basedOnBudgetVersionItem: target.item,
+            basedOnBudgetSnapshot: newBudget
         };
         onUpdateSettings(newSettings);
         // Reconcilia o cronograma com o novo orçamento assim que o budget atualizar (ver effect abaixo)
@@ -1387,7 +1388,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             ...settings,
             schedule: restoredSchedule,
             basedOnBudgetVersionId: version.budgetVersionId ?? undefined,
-            basedOnBudgetVersionItem: version.budgetVersionItem ?? undefined
+            basedOnBudgetVersionItem: version.budgetVersionItem ?? undefined,
+            basedOnBudgetSnapshot: resolvedBudget ?? undefined
         };
         onUpdateSettings(newSettings);
         setVersionPanelOpen(false);

@@ -130,6 +130,7 @@ export interface ProjectSettings {
     // Versionamento orçamento × planejamento (Opção 2)
     basedOnBudgetVersionId?: string;   // versão do orçamento à qual ESTE planejamento está fixado
     basedOnBudgetVersionItem?: number; // rótulo da versão fixada
+    basedOnBudgetSnapshot?: BudgetEntry[]; // cópia imutável do orçamento no momento da fixação
     planningVersions?: PlanningVersion[];
     budgetStatus?: 'Em Andamento' | 'Fechado';
     status?: 'Em Andamento' | 'Finalizado' | 'Aprovado' | 'Proposta';

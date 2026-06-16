@@ -273,17 +273,22 @@ export const useProjectOperations = ({
               const pinId = loadedSettings.basedOnBudgetVersionId;
               const pinnedVersion = pinId ? linkedVersions.find((v: { id: string }) => v.id === pinId) : undefined;
 
-              if (pinnedVersion && (pinnedVersion.budget?.length || 0) > 0) {
-                // Fixado: carrega a versão congelada do orçamento
+              if ((loadedSettings.basedOnBudgetSnapshot?.length ?? 0) > 0) {
+                // Snapshot imutável já gravado — usa diretamente, sem tocar no orçamento vinculado
+                projectBudget = loadedSettings.basedOnBudgetSnapshot!;
+              } else if (pinnedVersion && (pinnedVersion.budget?.length || 0) > 0) {
+                // Sem snapshot ainda: migração — congela agora
                 projectBudget = pinnedVersion.budget;
+                loadedSettings.basedOnBudgetSnapshot = JSON.parse(JSON.stringify(pinnedVersion.budget));
               } else if (linkedVersions.length > 0) {
-                // Primeira abertura (ou versão fixada removida): fixa na versão ativa do orçamento
+                // Primeira abertura: fixa na versão ativa e grava snapshot
                 const activeVersion = linkedVersions.find((v: { id: string }) => v.id === linkedData?.settings?.activeVersionId)
                   || linkedVersions[linkedVersions.length - 1];
                 if (activeVersion && (activeVersion.budget?.length || 0) > 0) {
                   projectBudget = activeVersion.budget;
                   loadedSettings.basedOnBudgetVersionId = activeVersion.id;
                   loadedSettings.basedOnBudgetVersionItem = activeVersion.item;
+                  loadedSettings.basedOnBudgetSnapshot = JSON.parse(JSON.stringify(activeVersion.budget));
                 } else if (linkedData?.budget && linkedData.budget.length > 0) {
                   projectBudget = linkedData.budget;
                 }

@@ -1211,6 +1211,271 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         );
     };
 
+    // ─── Financeiro: Locação ───────────────────────────────────────────────────
+    const renderFinanceiroLocacao = () => {
+        const finInfo = currentFinancialInfo || { totalValue: 0, paymentMethod: 'Não Definido', installments: [], transactions: [] };
+        const installments = [...(finInfo.installments || []), ...(clientProfile ? globalClientInstallments : [])];
+        const uniqueMap = new Map<string, PaymentInstallment>();
+        installments.forEach(i => { if (i.id) uniqueMap.set(i.id, i); });
+        const charges = Array.from(uniqueMap.values()).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+        const totalPaid    = charges.filter(i => i.status === 'PAID').reduce((s, i) => s + i.value, 0);
+        const totalPending = charges.filter(i => i.status !== 'PAID').reduce((s, i) => s + i.value, 0);
+        const nextDue      = charges.find(i => i.status !== 'PAID');
+
+        const handleUpdateCharges = async (next: PaymentInstallment[]) => {
+            const newFinInfo = { ...finInfo, installments: next, transactions: finInfo.transactions || [] };
+            if (clientProfile) updateClientData({ financialInfo: newFinInfo });
+            else onUpdateSettings?.({ ...settings, financialInfo: newFinInfo });
+        };
+
+        return (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {[
+                        { label: 'Próximo Vencimento', value: nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—', sub: nextDue ? new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Em dia', color: 'text-amber-600', icon: <Bell className="w-5 h-5 text-amber-500" /> },
+                        { label: 'Total Pago', value: `R$ ${totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: `${charges.filter(i => i.status === 'PAID').length} cobranças`, color: 'text-emerald-600', icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" /> },
+                        { label: 'Pendente', value: `R$ ${totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: `${charges.filter(i => i.status !== 'PAID').length} cobranças`, color: 'text-gray-900', icon: <Clock className="w-5 h-5 text-indigo-500" /> },
+                    ].map((card, i) => (
+                        <div key={i} className="bg-white p-7 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
+                            <div className="p-3 bg-gray-50 rounded-xl shrink-0">{card.icon}</div>
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{card.label}</p>
+                                <p className={`text-2xl font-black ${card.color} tracking-tight`}>{card.value}</p>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{card.sub}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-8 py-6 border-b border-gray-50">
+                        <div>
+                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Cobranças do Imóvel</h3>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Aluguel, condomínio, IPTU e demais encargos</p>
+                        </div>
+                        {isAdmin && (
+                            <button
+                                onClick={() => {
+                                    const desc = prompt('Descrição (ex: Aluguel Jan/2026):');
+                                    const val = prompt('Valor (R$):');
+                                    const date = prompt('Vencimento (AAAA-MM-DD):');
+                                    if (desc && val && date) {
+                                        const newCharge: PaymentInstallment = { id: Math.random().toString(36).substr(2, 9), description: desc, value: parseFloat(val), dueDate: date, status: 'PENDING' };
+                                        handleUpdateCharges([...charges, newCharge]);
+                                    }
+                                }}
+                                className="p-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
+                            >
+                                <Plus className="w-5 h-5" />
+                            </button>
+                        )}
+                    </div>
+                    {charges.length === 0 ? (
+                        <div className="flex flex-col items-center py-16 text-center">
+                            <DollarSign className="w-12 h-12 text-gray-200 mb-4" />
+                            <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Nenhuma cobrança cadastrada</p>
+                        </div>
+                    ) : (
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50/50 border-b border-gray-100">
+                                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                    <th className="px-8 py-4">Descrição</th>
+                                    <th className="px-8 py-4">Vencimento</th>
+                                    <th className="px-8 py-4">Valor</th>
+                                    <th className="px-8 py-4 text-center">Status</th>
+                                    {isAdmin && <th className="px-8 py-4 text-right">Ações</th>}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {charges.map(charge => {
+                                    const overdue = charge.status !== 'PAID' && new Date(charge.dueDate + 'T12:00:00') < new Date();
+                                    return (
+                                        <tr key={charge.id} className="hover:bg-blue-50/30 transition-colors group">
+                                            <td className="px-8 py-4">
+                                                <span className="text-sm font-bold text-gray-900 uppercase tracking-tight">{charge.description}</span>
+                                            </td>
+                                            <td className="px-8 py-4">
+                                                <div className={`flex items-center gap-2 text-xs font-bold tabular-nums ${overdue ? 'text-red-500' : 'text-gray-400'}`}>
+                                                    <Calendar className="w-3.5 h-3.5" />
+                                                    {new Date(charge.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                    {overdue && <span className="text-[9px] bg-red-100 text-red-500 px-2 py-0.5 rounded-full font-black uppercase">Vencido</span>}
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-4">
+                                                <span className="text-base font-black text-gray-900 tabular-nums">R$ {charge.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                            </td>
+                                            <td className="px-8 py-4 text-center">
+                                                <button
+                                                    disabled={!isAdmin}
+                                                    onClick={() => {
+                                                        if (!isAdmin) return;
+                                                        const next = charges.map(c => c.id === charge.id ? { ...c, status: (c.status === 'PAID' ? 'PENDING' : 'PAID') as 'PAID' | 'PENDING' } : c);
+                                                        handleUpdateCharges(next);
+                                                    }}
+                                                    className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${charge.status === 'PAID' ? 'bg-emerald-600 text-white' : overdue ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'} ${isAdmin ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
+                                                >
+                                                    {charge.status === 'PAID' ? 'PAGO' : overdue ? 'VENCIDO' : 'PENDENTE'}
+                                                </button>
+                                            </td>
+                                            {isAdmin && (
+                                                <td className="px-8 py-4 text-right">
+                                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                        {charge.status === 'PAID' && (
+                                                            <button onClick={() => exportService.generateReceiptPDF(charge, settings, { name: clientProfile?.name || 'OPURA' })} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-all" title="Recibo PDF">
+                                                                <FileDown className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <button onClick={() => { const d = prompt('Descrição:', charge.description); const v = prompt('Valor:', charge.value.toString()); if (d !== null || v !== null) handleUpdateCharges(charges.map(c => c.id === charge.id ? { ...c, description: d ?? c.description, value: v ? parseFloat(v) : c.value } : c)); }} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Pencil className="w-4 h-4" /></button>
+                                                        <button onClick={() => { if (confirm('Remover cobrança?')) handleUpdateCharges(charges.filter(c => c.id !== charge.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><X className="w-4 h-4" /></button>
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    // ─── Financeiro: Serviços ──────────────────────────────────────────────────
+    const renderFinanceiroServicos = () => {
+        const finInfo = currentFinancialInfo || { totalValue: 0, paymentMethod: 'Não Definido', installments: [], transactions: [] };
+        const installments = [...(finInfo.installments || []), ...(clientProfile ? globalClientInstallments : [])];
+        const uniqueMap = new Map<string, PaymentInstallment>();
+        installments.forEach(i => { if (i.id) uniqueMap.set(i.id, i); });
+        const medicoes = Array.from(uniqueMap.values()).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+        const totalContrato  = medicoes.reduce((s, m) => s + m.value, 0);
+        const totalMedido    = medicoes.filter(m => m.status === 'PAID').reduce((s, m) => s + m.value, 0);
+        const pctMedido      = totalContrato > 0 ? (totalMedido / totalContrato) * 100 : 0;
+        const totalAMedir    = totalContrato - totalMedido;
+
+        const handleUpdateMedicoes = async (next: PaymentInstallment[]) => {
+            const newFinInfo = { ...finInfo, installments: next, transactions: finInfo.transactions || [] };
+            if (clientProfile) updateClientData({ financialInfo: newFinInfo });
+            else onUpdateSettings?.({ ...settings, financialInfo: newFinInfo });
+        };
+
+        return (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {[
+                        { label: 'Total Contratado', value: totalContrato, sub: finInfo.paymentMethod || '—', color: 'text-gray-900', icon: <DollarSign className="w-5 h-5 text-indigo-500" /> },
+                        { label: 'Medido / Faturado', value: totalMedido, sub: `${pctMedido.toFixed(1)}% do contrato`, color: 'text-emerald-600', icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />, progress: pctMedido },
+                        { label: 'A Medir', value: totalAMedir, sub: `${medicoes.filter(m => m.status !== 'PAID').length} medições pendentes`, color: 'text-amber-600', icon: <Clock className="w-5 h-5 text-amber-500" /> },
+                    ].map((card, i) => (
+                        <div key={i} className="bg-white p-7 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
+                            <div className="p-3 bg-gray-50 rounded-xl shrink-0">{card.icon}</div>
+                            <div className="flex-1">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{card.label}</p>
+                                <p className={`text-2xl font-black ${card.color} tracking-tight`}>R$ {card.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{card.sub}</p>
+                                {'progress' in card && (
+                                    <div className="mt-2 w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                                        <div className="bg-emerald-500 h-full transition-all duration-1000" style={{ width: `${card.progress}%` }} />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-8 py-6 border-b border-gray-50">
+                        <div>
+                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Medições e Faturas</h3>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Etapas medidas, aprovadas e faturadas</p>
+                        </div>
+                        {isAdmin && (
+                            <button
+                                onClick={() => {
+                                    const desc = prompt('Etapa / descrição da medição:');
+                                    const val = prompt('Valor (R$):');
+                                    const date = prompt('Data da medição (AAAA-MM-DD):');
+                                    if (desc && val && date) {
+                                        const newMed: PaymentInstallment = { id: Math.random().toString(36).substr(2, 9), description: desc, value: parseFloat(val), dueDate: date, status: 'PENDING' };
+                                        handleUpdateMedicoes([...medicoes, newMed]);
+                                    }
+                                }}
+                                className="p-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                            >
+                                <Plus className="w-5 h-5" />
+                            </button>
+                        )}
+                    </div>
+                    {medicoes.length === 0 ? (
+                        <div className="flex flex-col items-center py-16 text-center">
+                            <ClipboardList className="w-12 h-12 text-gray-200 mb-4" />
+                            <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Nenhuma medição cadastrada</p>
+                        </div>
+                    ) : (
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50/50 border-b border-gray-100">
+                                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                    <th className="px-8 py-4">Etapa / Medição</th>
+                                    <th className="px-8 py-4">Data</th>
+                                    <th className="px-8 py-4">Valor</th>
+                                    <th className="px-8 py-4 text-center">Status</th>
+                                    {isAdmin && <th className="px-8 py-4 text-right">Ações</th>}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {medicoes.map((med, idx) => (
+                                    <tr key={med.id} className="hover:bg-indigo-50/30 transition-colors group">
+                                        <td className="px-8 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <span className="w-6 h-6 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black shrink-0">{idx + 1}</span>
+                                                <span className="text-sm font-bold text-gray-900 uppercase tracking-tight">{med.description}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-4">
+                                            <div className="flex items-center gap-2 text-xs font-bold text-gray-400 tabular-nums">
+                                                <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                                                {new Date(med.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-4">
+                                            <span className="text-base font-black text-gray-900 tabular-nums">R$ {med.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                        </td>
+                                        <td className="px-8 py-4 text-center">
+                                            <button
+                                                disabled={!isAdmin}
+                                                onClick={() => {
+                                                    if (!isAdmin) return;
+                                                    const next = medicoes.map(m => m.id === med.id ? { ...m, status: (m.status === 'PAID' ? 'PENDING' : 'PAID') as 'PAID' | 'PENDING' } : m);
+                                                    handleUpdateMedicoes(next);
+                                                }}
+                                                className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${med.status === 'PAID' ? 'bg-emerald-600 text-white' : 'bg-amber-100 text-amber-600'} ${isAdmin ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
+                                            >
+                                                {med.status === 'PAID' ? 'APROVADA' : 'PENDENTE'}
+                                            </button>
+                                        </td>
+                                        {isAdmin && (
+                                            <td className="px-8 py-4 text-right">
+                                                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                    {med.status === 'PAID' && (
+                                                        <button onClick={() => exportService.generateReceiptPDF(med, settings, { name: clientProfile?.name || 'OPURA' })} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-all" title="Recibo PDF"><FileDown className="w-4 h-4" /></button>
+                                                    )}
+                                                    <button onClick={() => { const d = prompt('Descrição:', med.description); const v = prompt('Valor:', med.value.toString()); if (d !== null || v !== null) handleUpdateMedicoes(medicoes.map(m => m.id === med.id ? { ...m, description: d ?? m.description, value: v ? parseFloat(v) : m.value } : m)); }} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"><Pencil className="w-4 h-4" /></button>
+                                                    <button onClick={() => { if (confirm('Remover medição?')) handleUpdateMedicoes(medicoes.filter(m => m.id !== med.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><X className="w-4 h-4" /></button>
+                                                </div>
+                                            </td>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     const renderJornada = () => {
         const schedule = getPhaseSchedule(settings, budget);
 
@@ -2836,8 +3101,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {activeTab === 'contratos' && renderContratos()}
                 {activeTab === 'financeiro' && (
                     <>
-                        <div className="md:hidden">{renderMobileFinanceiro()}</div>
-                        <div className="hidden md:block">{renderFinanceiro()}</div>
+                        {clientCategory === 'Locação' && renderFinanceiroLocacao()}
+                        {clientCategory === 'Serviços' && renderFinanceiroServicos()}
+                        {clientCategory !== 'Locação' && clientCategory !== 'Serviços' && (
+                            <>
+                                <div className="md:hidden">{renderMobileFinanceiro()}</div>
+                                <div className="hidden md:block">{renderFinanceiro()}</div>
+                            </>
+                        )}
                     </>
                 )}
                 {activeTab === 'suporte' && (

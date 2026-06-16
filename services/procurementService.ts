@@ -3,6 +3,8 @@ import { BudgetEntry, SinapiCategory } from '../types/budget';
 import { SchedulePeriod, ItemDistribution } from '../types/schedule';
 import { ProjectSchedule } from '../types/project';
 import { inventoryService } from './inventoryService';
+import { quotationService } from './quotationService';
+import { orderService } from './orderService';
 import {
     ProcurementPlanItem,
     ProcurementStatus,
@@ -384,6 +386,104 @@ export const procurementService = {
             staleItems,
             backlogItems,
         };
+    },
+
+    /**
+     * Gera uma Solicitação de Cotação (RFQ) a partir de itens selecionados do plano.
+     * Cria quotation_request com status 'Aberta' e marca os itens como 'quoted'.
+     */
+    async generateQuotationFromItems(
+        itemIds: string[],
+        projectId: string,
+        organizationId: string,
+        options?: { title?: string; deadline?: string; description?: string },
+    ): Promise<{ quotationId: string; quotationNumber: string }> {
+        // Carrega os itens selecionados
+        const { data: rows, error } = await supabase
+            .from('procurement_plan_items')
+            .select('id, input_code, input_description, input_unit, net_required_qty, estimated_unit_cost')
+            .in('id', itemIds)
+            .eq('organization_id', organizationId);
+        if (error) throw error;
+        if (!rows || rows.length === 0) throw new Error('Nenhum item válido selecionado.');
+
+        const qrItems = rows.map(r => ({
+            code:        r.input_code ?? '',
+            description: r.input_description as string,
+            unit:        r.input_unit as string,
+            quantity:    Number(r.net_required_qty ?? 0),
+            unitPrice:   Number(r.estimated_unit_cost ?? 0),
+        }));
+
+        const deadline = options?.deadline ?? toIso(new Date(Date.now() + 7 * 86400000));
+        const title    = options?.title ?? `Plano de Aquisições — ${new Date().toLocaleDateString('pt-BR')}`;
+
+        const qr = await quotationService.createRequest({
+            projectId,
+            title,
+            description:        options?.description,
+            deadline,
+            status:             'Aberta',
+            items:              qrItems,
+            invitedSupplierIds: [],
+        });
+
+        // Marca itens como quoted e grava o ID da cotação
+        await supabase
+            .from('procurement_plan_items')
+            .update({ status: 'quoted', generated_quotation_id: qr.id })
+            .in('id', itemIds)
+            .eq('organization_id', organizationId);
+
+        return { quotationId: qr.id, quotationNumber: qr.number };
+    },
+
+    /**
+     * Gera um Pedido de Compra direto (sem cotação) em status Rascunho.
+     * Marca os itens como 'ordered'.
+     */
+    async generateOrderFromItems(
+        itemIds: string[],
+        projectId: string,
+        supplierId: string,
+        organizationId: string,
+        options?: { deliveryDate?: string; notes?: string },
+    ): Promise<{ orderId: string; orderNumber: string }> {
+        const { data: rows, error } = await supabase
+            .from('procurement_plan_items')
+            .select('id, input_code, input_description, input_unit, net_required_qty, estimated_unit_cost')
+            .in('id', itemIds)
+            .eq('organization_id', organizationId);
+        if (error) throw error;
+        if (!rows || rows.length === 0) throw new Error('Nenhum item válido selecionado.');
+
+        const poItems = rows.map(r => ({
+            code:        r.input_code ?? '',
+            description: r.input_description as string,
+            unit:        r.input_unit as string,
+            quantity:    Number(r.net_required_qty ?? 0),
+            unitPrice:   Number(r.estimated_unit_cost ?? 0),
+            total:       Number(r.net_required_qty ?? 0) * Number(r.estimated_unit_cost ?? 0),
+        }));
+
+        const deliveryDate = options?.deliveryDate ?? toIso(new Date(Date.now() + 14 * 86400000));
+
+        const order = await orderService.createOrder({
+            projectId,
+            supplierId,
+            deliveryDate,
+            status:  'Rascunho',
+            notes:   options?.notes,
+            items:   poItems,
+        });
+
+        await supabase
+            .from('procurement_plan_items')
+            .update({ status: 'ordered', generated_order_id: order.id })
+            .in('id', itemIds)
+            .eq('organization_id', organizationId);
+
+        return { orderId: order.id, orderNumber: order.number ?? '' };
     },
 
     // Refresh posição líquida para itens de um projeto sem regenerar todo o plano

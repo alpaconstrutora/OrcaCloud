@@ -36,7 +36,7 @@ export const clientPortalService = {
         return data as ClientPortalValidation;
     },
 
-    async getPortalData(token: string): Promise<{ valid: boolean; client?: any; project?: any; error?: string }> {
+    async getPortalData(token: string): Promise<{ valid: boolean; client?: any; project?: any; portal_tabs?: string[] | null; error?: string }> {
         const { data, error } = await supabase.rpc('client_portal_get_data', { p_token: token });
         if (error) throw error;
         return data as { valid: boolean; client?: any; project?: any; error?: string };

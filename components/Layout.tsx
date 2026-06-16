@@ -310,7 +310,7 @@ const Layout: React.FC<LayoutProps> = ({
   const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','operacional','estrutural','quality','pos-obra','explorer','eng-planejamento','project-diary','reports','project-settings','eng-obra-types','org-type-templates'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
-  const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes'];
+  const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
   const financeiroViews = ['project-financial','controladoria','fiscal-nfe','automation','compliance-dashboard','opura-cno'];
@@ -508,7 +508,6 @@ const Layout: React.FC<LayoutProps> = ({
               {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" />}
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" />
               <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" />
-              <NavItem id="almoxarifado" icon={Warehouse} label="Almoxarifado" />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
@@ -675,6 +674,7 @@ const Layout: React.FC<LayoutProps> = ({
                     }}
                     hasActiveChild={suprimentosViews.includes(activeView)}
                   >
+                    <DropdownItem id="almoxarifado" label="Almoxarifado" icon={Warehouse} />
                     <DropdownItem id="plano-aquisicoes" label="Plano de Aquisições" icon={ClipboardList} />
                     <DropdownItem id="supplies-contracts" label="Contratos" icon={FileText} />
                     <DropdownItem id="supplies-quotations" label="Cotações" icon={FileText} />
@@ -903,7 +903,6 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="reformas-dashboard" icon={Hammer} label="ÒPURA Reformas" forceFull />
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" forceFull />
               <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" forceFull />
-              <NavItem id="almoxarifado" icon={Warehouse} label="Almoxarifado" forceFull />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
                 <div className="space-y-1 mb-4">
@@ -931,6 +930,7 @@ const Layout: React.FC<LayoutProps> = ({
               )}
 
               <NavGroup label="Suprimentos" />
+              <NavItem id="almoxarifado" icon={Warehouse} label="Almoxarifado" forceFull />
               <NavItem id="plano-aquisicoes" icon={ClipboardList} label="Plano de Aquisições" forceFull />
               <NavItem id="supplies-orders" icon={Package} label="Pedidos" forceFull />
               <NavItem id="supplies-receipts" icon={Truck} label="Recebimento" forceFull />

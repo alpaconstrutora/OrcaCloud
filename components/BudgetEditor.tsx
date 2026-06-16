@@ -889,7 +889,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       group: newGroupName
     }));
 
-    // Renumera todos os grupos sequencialmente inline (evita conflito de state)
+    // Renumera todos os grupos sequencialmente inline (evita conflito de state).
+    // As chaves de fase/subfase são compostas (grupo|fase) porque o grupo
+    // duplicado tem fases com nomes idênticos ao original — usar só o nome da
+    // fase faria a cópia sobrescrever o mapeamento do original (last-write-wins),
+    // transformando os itens do grupo original em "fantasmas".
     const oldToNewGroup: Record<string, string> = {};
     const oldToNewPhase: Record<string, string> = {};
     const oldToNewSubByOldPhase: Record<string, Record<string, string>> = {};
@@ -902,11 +906,12 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
       const newPhases = g.phases.map((phase, pIdx) => {
         const oldPName = phase.name;
+        const phaseKey = `${g.name}|${oldPName}`;
         const pNum = (pIdx + 1).toString().padStart(2, '0');
         const pId = `${newGId}.${pNum}`;
         const cleanP = phase.name.replace(/^[\d\.]+\s+/, '');
         const newPName = `${pId}. ${cleanP}`;
-        oldToNewPhase[oldPName] = newPName;
+        oldToNewPhase[phaseKey] = newPName;
 
         const oldToNewSub: Record<string, string> = {};
         const newSubPhases = phase.subPhases.map((sub, sIdx) => {
@@ -916,7 +921,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           oldToNewSub[sub] = newSubName;
           return newSubName;
         });
-        oldToNewSubByOldPhase[oldPName] = oldToNewSub;
+        oldToNewSubByOldPhase[phaseKey] = oldToNewSub;
         return { ...phase, id: pId, name: newPName, subPhases: newSubPhases };
       });
 
@@ -926,9 +931,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     // Aplica renumeração ao budget combinado (existente + novos itens)
     const allBudget = newItems.length > 0 ? [...budget, ...newItems] : [...budget];
     const updatedBudget = allBudget.map(item => {
+      const phaseKey = `${item.group}|${item.phase}`;
       const newG = oldToNewGroup[item.group] || item.group;
-      const newP = oldToNewPhase[item.phase] || item.phase;
-      const subMap = oldToNewSubByOldPhase[item.phase] || {};
+      const newP = oldToNewPhase[phaseKey] || item.phase;
+      const subMap = oldToNewSubByOldPhase[phaseKey] || {};
       const newSub = (item.subPhase && subMap[item.subPhase]) ? subMap[item.subPhase] : item.subPhase;
       return { ...item, group: newG, phase: newP, subPhase: newSub };
     });

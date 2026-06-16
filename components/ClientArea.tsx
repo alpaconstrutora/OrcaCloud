@@ -1962,8 +1962,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             .sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime())
             .slice(0, 4);
 
-        // quick action tabs (excluindo dashboard)
-        const quickTabs = ALL_TABS.filter(t => t.id !== 'dashboard').slice(0, 4);
+        // quick action tabs — usa `tabs` (já filtrado por enabledTabIds) excluindo dashboard
+        const quickTabs = tabs.filter(t => t.id !== 'dashboard').slice(0, 4);
 
         return (
             <div className="space-y-0 -mx-4">
@@ -2004,6 +2004,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 </p>
                             </div>
                         </div>
+                        {enabledTabIds.includes('financeiro') && (
                         <button
                             onClick={() => setActiveTab('financeiro')}
                             className="w-full py-2.5 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
@@ -2012,6 +2013,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             Ver Financeiro
                             <ArrowRight className="w-3 h-3" />
                         </button>
+                        )}
                     </div>
                 </div>
 

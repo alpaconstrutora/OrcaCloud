@@ -227,7 +227,12 @@ export const customDatabaseService = {
         }
 
         if (filters?.type) {
-            query = query.eq('type', filters.type);
+            // Espelha o SINAPI: "Serviços / Composições" (SERVICE) inclui composições próprias.
+            if (filters.type === 'SERVICE') {
+                query = query.in('type', ['SERVICE', 'COMPOSITION']);
+            } else {
+                query = query.eq('type', filters.type);
+            }
         }
 
         if (filters?.code) {
@@ -272,13 +277,19 @@ export const customDatabaseService = {
 
     // --- Group Management ---
 
-    async renameGroup(oldName: string, newName: string) {
+    async renameGroup(oldName: string, newName: string, databaseId?: string) {
         if (!oldName || !newName) throw new Error("Nomes antigo e novo são obrigatórios.");
 
-        const { error } = await supabase
+        // Escopa à base selecionada (databaseId) ou aos itens avulsos (null).
+        // Sem escopo, o rename atingia grupos homônimos em TODAS as bases.
+        let query = supabase
             .from('custom_items')
             .update({ category: newName })
             .eq('category', oldName);
+
+        query = databaseId ? query.eq('database_id', databaseId) : query.is('database_id', null);
+
+        const { error } = await query;
 
         if (error) {
             console.error('Error renaming group:', error);
@@ -286,27 +297,23 @@ export const customDatabaseService = {
         }
     },
 
-    async deleteGroup(name: string, deleteItems: boolean = false) {
+    async deleteGroup(name: string, deleteItems: boolean = false, databaseId?: string) {
         if (!name) throw new Error("Nome do grupo é obrigatório.");
 
-        let result;
-        if (deleteItems) {
+        let query = deleteItems
             // Deleta os itens permanentemente
-            result = await supabase
-                .from('custom_items')
-                .delete()
-                .eq('category', name);
-        } else {
+            ? supabase.from('custom_items').delete().eq('category', name)
             // Apenas remove o rótulo do grupo (move para Itens Avulsos)
-            result = await supabase
-                .from('custom_items')
-                .update({ category: null })
-                .eq('category', name);
-        }
+            : supabase.from('custom_items').update({ category: null }).eq('category', name);
 
-        if (result.error) {
-            console.error('Error deleting group:', result.error);
-            throw result.error;
+        // Escopa à base selecionada ou aos avulsos — evita afetar outras bases.
+        query = databaseId ? query.eq('database_id', databaseId) : query.is('database_id', null);
+
+        const { error } = await query;
+
+        if (error) {
+            console.error('Error deleting group:', error);
+            throw error;
         }
     },
 

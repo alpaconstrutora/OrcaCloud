@@ -180,14 +180,14 @@ class SinapiDatabaseService {
 
     // Unique codes only
     const uniqueCodes = Array.from(new Set(codes));
+    // Colunas reais de sinapi_items (verificado via REST): id/database_id/created_at/updated_at
+    // NÃO existem — pedi-las fazia o PostgREST abortar com 42703 e a query retornar [],
+    // zerando auxiliaryItems (Natureza "—", drill-down e fallback de preço quebrados na CPU).
     const { data, error } = await supabase
       .from('sinapi_items')
-      .select('id, code, description, unit, price, prices, category, nature, type, source, database_id, created_at, updated_at')
+      .select('code, description, unit, price, prices, category, nature, type, origin, source')
       .in('code', uniqueCodes)
-      //.eq('database_id', 'SINAPI') // Assuming database_id column exists or similar. Wait, sinapi_items is usually just SINAPI. 
-      // Let's check if there is a 'reference_date' or similar. 
-      // If the query returns multiple items for the same code, we might be getting one with 0 price. 
-      // Let's try to order by price desc to get non-zero prices first if multiple exist.
+      // Se houver múltiplas linhas para o mesmo código, prioriza preço não-zero.
       .order('price', { ascending: false });
 
     if (error) {

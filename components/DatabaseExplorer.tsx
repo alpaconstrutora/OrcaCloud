@@ -166,7 +166,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
 
     const handleRenameGroup = async (oldName: string, newName: string) => {
         try {
-            await customDatabaseService.renameGroup(oldName, newName);
+            await customDatabaseService.renameGroup(oldName, newName, currentDatabase?.id);
             // Atualiza o estado local das categorias
             setCategories(prev => prev.map(c => c === oldName ? newName : c).sort());
             if (customCategories.has(oldName)) {
@@ -185,7 +185,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
 
     const handleDeleteGroup = async (name: string, deleteItems: boolean) => {
         try {
-            await customDatabaseService.deleteGroup(name, deleteItems);
+            await customDatabaseService.deleteGroup(name, deleteItems, currentDatabase?.id);
             // Atualiza o estado local
             setCategories(prev => prev.filter(c => c !== name));
             const newCustom = new Set(customCategories);

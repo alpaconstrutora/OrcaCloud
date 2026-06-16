@@ -448,13 +448,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const timeScaleRef = useRef(timeScale);
     useEffect(() => { timeScaleRef.current = timeScale; }, [timeScale]);
 
+    // Pin pendente do rebase — garante que basedOnBudgetVersionId não seja apagado pelo
+    // persistSchedule que roda logo após o rebase (closure stale do settings).
+    const pendingPinRef = React.useRef<{ basedOnBudgetVersionId?: string; basedOnBudgetVersionItem?: number }>({});
+
     // ── Safe Persistence Wrapper ──
     const persistSchedule = (newSchedule: ProjectSchedule) => {
         if (isSimulationMode) {
             console.log('[FinancialSchedule] SIMULATION MODE ACTIVE. Persist blocked.');
             return;
         }
-        onUpdateSettings({ ...settings, schedule: newSchedule });
+        onUpdateSettings({ ...settings, ...pendingPinRef.current, schedule: newSchedule });
     };
 
     // ── Column Resize State ──
@@ -1299,6 +1303,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             `Auto-arquivada ao migrar p/ v${target.item} (baseada em v${settings.basedOnBudgetVersionItem ?? '—'})`
         );
         const newBudget: BudgetEntry[] = JSON.parse(JSON.stringify(target.budget));
+        // Grava o pin no ref ANTES de qualquer persistSchedule (evita closure stale apagar o pin)
+        pendingPinRef.current = { basedOnBudgetVersionId: target.id, basedOnBudgetVersionItem: target.item };
         onUpdateBudget(newBudget);
         const newSettings: ProjectSettings = {
             ...settings,
@@ -1312,10 +1318,13 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     }, [onUpdateBudget, snapshotCurrentPlanning, settings, onUpdateSettings]);
 
     // Dispara o recálculo pendente do rebase quando o budget já reflete a nova versão.
+    // pendingPinRef já foi setado antes — persistSchedule vai incluí-lo no save.
     React.useEffect(() => {
         if (pendingRebaseRecalcRef.current) {
             pendingRebaseRecalcRef.current = false;
             handleRecalculate();
+            // Após o save com o pin, limpa o ref para não contaminar saves futuros
+            setTimeout(() => { pendingPinRef.current = {}; }, 3000);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [budget]);

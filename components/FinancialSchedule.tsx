@@ -24,7 +24,9 @@ import {
     FinancialTransaction,
     Organization,
     DiaryEntry,
-    DiaryActivity
+    DiaryActivity,
+    BudgetVersion,
+    PlanningVersion
 } from '../types';
 import { BaselineModal } from './schedule/BaselineModal';
 import { ConfigModal } from './schedule/ConfigModal';
@@ -49,7 +51,10 @@ import {
     X,
     FileDown,
     Trash,
-    RefreshCw
+    RefreshCw,
+    GitBranch,
+    History,
+    ArrowUpCircle
 } from 'lucide-react';
 
 function getWeekNumber(d: Date): number {
@@ -110,6 +115,7 @@ interface FinancialScheduleProps {
     organizations?: Organization[];
     onLoadProject: (id: string, targetView?: string) => void;
     onUpdateSettings: (settings: ProjectSettings) => void;
+    onUpdateBudget?: (budget: BudgetEntry[]) => void;
     onBack?: () => void;
     organizationId?: string;
 }
@@ -307,8 +313,45 @@ function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetail
     return result;
 }
 
-
-
+// Modal simples para nomear uma versão do planejamento antes de salvar.
+const SavePlanningVersionModal: React.FC<{ onCancel: () => void; onSave: (description: string) => void }> = ({ onCancel, onSave }) => {
+    const [description, setDescription] = useState('');
+    return (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-[420px] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <h2 className="text-sm font-bold text-gray-900">Salvar Versão do Planejamento</h2>
+                    <button onClick={onCancel} className="p-1.5 hover:bg-gray-100 rounded-lg transition-all text-gray-400 hover:text-gray-600">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+                <div className="px-6 py-4">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Descrição</label>
+                    <input
+                        autoFocus
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && description.trim()) onSave(description); }}
+                        placeholder="Ex.: Cronograma aprovado pelo cliente"
+                        className="mt-1.5 w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+                    />
+                </div>
+                <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <button onClick={onCancel} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-all">
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={() => onSave(description)}
+                        disabled={!description.trim()}
+                        className="px-4 py-2 text-sm font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        Salvar Versão
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     settings,
@@ -317,6 +360,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     organizations,
     onLoadProject,
     onUpdateSettings,
+    onUpdateBudget,
     onBack
 }) => {
     const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
@@ -1210,6 +1254,108 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
         return { newItems, changedItems, total: newItems.length + changedItems.length };
     }, [budget, schedule.itemSchedules]);
+
+    // ── Versionamento orçamento × planejamento (Opção 2) ──
+    // Detecta se o orçamento vinculado tem uma versão mais nova que a fixada neste planejamento.
+    const [versionPanelOpen, setVersionPanelOpen] = React.useState(false);
+    const [savePlanningVersionOpen, setSavePlanningVersionOpen] = React.useState(false);
+    // Após um rebase, o budget (prop do pai) só atualiza no próximo render; este ref agenda o
+    // recálculo para rodar com o orçamento já novo (evita closure stale).
+    const pendingRebaseRecalcRef = React.useRef(false);
+
+    const budgetVersionStatus = React.useMemo(() => {
+        const linkedProject = projects.find(p => p.id === settings.linkedProjectId);
+        const linkedVersions: BudgetVersion[] = linkedProject?.settings?.versions || [];
+        const linkedActive = linkedVersions.find(v => v.id === linkedProject?.settings?.activeVersionId)
+            || (linkedVersions.length > 0 ? linkedVersions[linkedVersions.length - 1] : undefined);
+        const pinnedId = settings.basedOnBudgetVersionId;
+        const pinnedItem = settings.basedOnBudgetVersionItem ?? null;
+        const hasNewerVersion = !!linkedActive && linkedActive.id !== pinnedId;
+        return { linkedVersions, linkedActive, pinnedId, pinnedItem, hasNewerVersion };
+    }, [projects, settings.linkedProjectId, settings.basedOnBudgetVersionId, settings.basedOnBudgetVersionItem]);
+
+    // Arquiva o cronograma atual como uma PlanningVersion (snapshot completo + pin atual).
+    const snapshotCurrentPlanning = React.useCallback((description: string): PlanningVersion => {
+        const existing = settings.planningVersions || [];
+        const nextItem = existing.length > 0 ? Math.max(...existing.map(v => v.item)) + 1 : 1;
+        return {
+            id: crypto.randomUUID(),
+            item: nextItem,
+            date: new Date().toISOString(),
+            description,
+            budgetVersionId: settings.basedOnBudgetVersionId ?? null,
+            budgetVersionItem: settings.basedOnBudgetVersionItem ?? null,
+            schedule: JSON.parse(JSON.stringify(schedule))
+        };
+    }, [settings.planningVersions, settings.basedOnBudgetVersionId, settings.basedOnBudgetVersionItem, schedule]);
+
+    // Rebase: arquiva o planejamento atual, troca para a versão alvo do orçamento e reconcilia.
+    const handleRebaseToBudgetVersion = React.useCallback((target: BudgetVersion) => {
+        if (!onUpdateBudget) {
+            alert('Não foi possível trocar o orçamento (callback indisponível).');
+            return;
+        }
+        const archived = snapshotCurrentPlanning(
+            `Auto-arquivada ao migrar p/ v${target.item} (baseada em v${settings.basedOnBudgetVersionItem ?? '—'})`
+        );
+        const newBudget: BudgetEntry[] = JSON.parse(JSON.stringify(target.budget));
+        onUpdateBudget(newBudget);
+        const newSettings: ProjectSettings = {
+            ...settings,
+            planningVersions: [...(settings.planningVersions || []), archived],
+            basedOnBudgetVersionId: target.id,
+            basedOnBudgetVersionItem: target.item
+        };
+        onUpdateSettings(newSettings);
+        // Reconcilia o cronograma com o novo orçamento assim que o budget atualizar (ver effect abaixo)
+        pendingRebaseRecalcRef.current = true;
+    }, [onUpdateBudget, snapshotCurrentPlanning, settings, onUpdateSettings]);
+
+    // Dispara o recálculo pendente do rebase quando o budget já reflete a nova versão.
+    React.useEffect(() => {
+        if (pendingRebaseRecalcRef.current) {
+            pendingRebaseRecalcRef.current = false;
+            handleRecalculate();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [budget]);
+
+    // Salva manualmente uma versão do planejamento (sem trocar de orçamento).
+    const handleSavePlanningVersion = React.useCallback((description: string) => {
+        const version = snapshotCurrentPlanning(description.trim() || `Versão do planejamento`);
+        const newSettings: ProjectSettings = {
+            ...settings,
+            planningVersions: [...(settings.planningVersions || []), version]
+        };
+        onUpdateSettings(newSettings);
+        setSavePlanningVersionOpen(false);
+    }, [snapshotCurrentPlanning, settings, onUpdateSettings]);
+
+    // Restaura uma versão arquivada do planejamento (cronograma + pin + orçamento congelado).
+    const handleRestorePlanningVersion = React.useCallback((version: PlanningVersion) => {
+        if (!window.confirm(`Restaurar a versão ${version.item} do planejamento? O cronograma atual será substituído.`)) return;
+        // Resolve o orçamento daquela versão a partir do orçamento vinculado
+        let resolvedBudget: BudgetEntry[] | null = null;
+        if (version.budgetVersionId) {
+            const v = budgetVersionStatus.linkedVersions.find(lv => lv.id === version.budgetVersionId);
+            if (v?.budget?.length) resolvedBudget = JSON.parse(JSON.stringify(v.budget));
+        }
+        if (!resolvedBudget) {
+            alert('A versão do orçamento desta restauração não foi encontrada no orçamento vinculado. O orçamento atual será mantido.');
+        } else if (onUpdateBudget) {
+            onUpdateBudget(resolvedBudget);
+        }
+        const restoredSchedule: ProjectSchedule = JSON.parse(JSON.stringify(version.schedule));
+        setSchedule(restoredSchedule);
+        const newSettings: ProjectSettings = {
+            ...settings,
+            schedule: restoredSchedule,
+            basedOnBudgetVersionId: version.budgetVersionId ?? undefined,
+            basedOnBudgetVersionItem: version.budgetVersionItem ?? undefined
+        };
+        onUpdateSettings(newSettings);
+        setVersionPanelOpen(false);
+    }, [budgetVersionStatus.linkedVersions, onUpdateBudget, settings, onUpdateSettings]);
 
 
     const handleUpdateDistribution = (itemId: string, periodId: string, value: string) => {
@@ -2789,6 +2935,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 }}
                 syncDiffCount={syncDiff.total}
                 onSyncBudget={() => setSyncModalOpen(true)}
+                onOpenVersions={() => setVersionPanelOpen(true)}
+                planningVersionsCount={(settings.planningVersions || []).length}
+                hasNewerBudgetVersion={budgetVersionStatus.hasNewerVersion}
             />
 
             {/* ── Sync Budget Modal ── */}
@@ -2890,6 +3039,118 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             )}
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* ── Planning Versions Panel ── */}
+            {versionPanelOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-[560px] max-h-[78vh] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-indigo-100">
+                                    <History className="w-4 h-4 text-indigo-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-sm font-bold text-gray-900">Versões do Planejamento</h2>
+                                    <p className="text-[11px] text-gray-400">
+                                        Baseado no orçamento v{budgetVersionStatus.pinnedItem ?? '—'}
+                                        {budgetVersionStatus.hasNewerVersion && budgetVersionStatus.linkedActive
+                                            ? ` · orçamento atual: v${budgetVersionStatus.linkedActive.item}` : ''}
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={() => setVersionPanelOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-all text-gray-400 hover:text-gray-600">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="px-6 py-3 border-b border-gray-50 flex items-center gap-2">
+                            <button
+                                onClick={() => { setVersionPanelOpen(false); setSavePlanningVersionOpen(true); }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-gray-900 text-white hover:bg-gray-800 transition-all shadow-sm"
+                            >
+                                <Camera className="w-3.5 h-3.5" />
+                                Salvar versão atual
+                            </button>
+                            {budgetVersionStatus.hasNewerVersion && budgetVersionStatus.linkedActive && (
+                                <button
+                                    onClick={() => { const t = budgetVersionStatus.linkedActive!; setVersionPanelOpen(false); handleRebaseToBudgetVersion(t); }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600 transition-all shadow-sm"
+                                >
+                                    <GitBranch className="w-3.5 h-3.5" />
+                                    Migrar p/ orçamento v{budgetVersionStatus.linkedActive.item}
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Body */}
+                        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
+                            {(settings.planningVersions || []).length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center">
+                                        <History className="w-6 h-6 text-gray-400" />
+                                    </div>
+                                    <p className="text-sm font-semibold text-gray-700">Nenhuma versão arquivada</p>
+                                    <p className="text-xs text-gray-400 text-center">Salve uma versão para criar um histórico do cronograma.</p>
+                                </div>
+                            ) : (
+                                [...(settings.planningVersions || [])].sort((a, b) => b.item - a.item).map(v => (
+                                    <div key={v.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded-full">v{v.item}</span>
+                                                <span className="text-xs font-bold text-gray-800 truncate">{v.description}</span>
+                                            </div>
+                                            <p className="text-[10px] text-gray-400 mt-0.5">
+                                                {new Date(v.date).toLocaleDateString('pt-BR')} {new Date(v.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                {v.budgetVersionItem != null ? ` · orçamento v${v.budgetVersionItem}` : ' · orçamento ao vivo'}
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleRestorePlanningVersion(v)}
+                                            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                                        >
+                                            <RefreshCw className="w-3 h-3" />
+                                            Restaurar
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Save Planning Version Modal ── */}
+            {savePlanningVersionOpen && (
+                <SavePlanningVersionModal
+                    onCancel={() => setSavePlanningVersionOpen(false)}
+                    onSave={handleSavePlanningVersion}
+                />
+            )}
+
+            {/* ── Budget Version Banner (a newer budget version exists) ── */}
+            {budgetVersionStatus.hasNewerVersion && budgetVersionStatus.linkedActive && (
+                <div className="flex items-center justify-between gap-3 px-4 py-3 bg-indigo-50 border border-indigo-200/70 rounded-xl shadow-sm">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <ArrowUpCircle className="w-4 h-4 text-indigo-500 shrink-0" />
+                        <p className="text-[12px] text-indigo-800 font-medium truncate">
+                            Orçamento atualizado para{' '}
+                            <span className="font-bold">v{budgetVersionStatus.linkedActive.item}</span>
+                            {' '}— este planejamento está baseado em{' '}
+                            <span className="font-bold">v{budgetVersionStatus.pinnedItem ?? '—'}</span>.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => budgetVersionStatus.linkedActive && handleRebaseToBudgetVersion(budgetVersionStatus.linkedActive)}
+                        className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600 transition-all shadow-sm whitespace-nowrap"
+                    >
+                        <GitBranch className="w-3 h-3" />
+                        Criar nova versão do planejamento
+                    </button>
                 </div>
             )}
 

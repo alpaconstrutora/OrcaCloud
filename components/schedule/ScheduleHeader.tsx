@@ -12,7 +12,8 @@ import {
     Trash2,
     Loader2,
     ShieldAlert,
-    RefreshCw
+    RefreshCw,
+    History
 } from 'lucide-react';
 import { ProjectSchedule, ProjectSettings, ItemScheduleDetails } from '../../types';
 import ModernDateInput from '../ModernDateInput';
@@ -48,6 +49,9 @@ interface ScheduleHeaderProps {
     onClearAll: () => void;
     syncDiffCount: number;
     onSyncBudget: () => void;
+    onOpenVersions: () => void;
+    planningVersionsCount: number;
+    hasNewerBudgetVersion: boolean;
 }
 
 const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
@@ -80,7 +84,10 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     allAuto,
     onClearAll,
     syncDiffCount,
-    onSyncBudget
+    onSyncBudget,
+    onOpenVersions,
+    planningVersionsCount,
+    hasNewerBudgetVersion
 }) => {
     return (
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
@@ -289,6 +296,25 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     {syncDiffCount > 0 && (
                         <span className="bg-amber-200 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
                             {syncDiffCount}
+                        </span>
+                    )}
+                </button>
+
+                {/* ── Versions Button ── */}
+                <button
+                    onClick={onOpenVersions}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border ${
+                        hasNewerBudgetVersion
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 shadow-sm'
+                            : 'bg-gray-50/80 text-gray-400 border-gray-200/40 hover:bg-white hover:text-gray-600 hover:shadow-sm'
+                    }`}
+                    title="Versões do planejamento (orçamento × planejamento)"
+                >
+                    <History className={`w-3.5 h-3.5 ${hasNewerBudgetVersion ? 'text-indigo-500' : ''}`} />
+                    Versões
+                    {planningVersionsCount > 0 && (
+                        <span className="bg-indigo-200 text-indigo-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
+                            {planningVersionsCount}
                         </span>
                     )}
                 </button>

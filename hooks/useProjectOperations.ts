@@ -250,11 +250,10 @@ export const useProjectOperations = ({
       if (projectData) {
         const loadedSettings = { ...INITIAL_PROJECT_SETTINGS, ...projectData.settings, ...(projectData.code ? { code: projectData.code } : {}) };
         setProjectId(id);
-        setProjectSettings(loadedSettings);
         let projectBudget = projectData.budget || [];
         if (loadedSettings.classification === 'PLANEJAMENTO') {
-          // Always load budget from the linked orçamento/obra — the planning's own saved budget
-          // may be stale if items were added/removed from the linked project since last sync.
+          // Versionamento orçamento × planejamento: o planejamento é FIXADO a uma versão do
+          // orçamento (basedOnBudgetVersionId) e sempre carrega aquela versão congelada — não drifta.
           const linkedId = loadedSettings.linkedProjectId;
           const linkedName = loadedSettings.linkedProjectName;
 
@@ -270,7 +269,26 @@ export const useProjectOperations = ({
                 }
               }
 
-              if (linkedData?.budget && linkedData.budget.length > 0) {
+              const linkedVersions = linkedData?.settings?.versions || [];
+              const pinId = loadedSettings.basedOnBudgetVersionId;
+              const pinnedVersion = pinId ? linkedVersions.find((v: { id: string }) => v.id === pinId) : undefined;
+
+              if (pinnedVersion && (pinnedVersion.budget?.length || 0) > 0) {
+                // Fixado: carrega a versão congelada do orçamento
+                projectBudget = pinnedVersion.budget;
+              } else if (linkedVersions.length > 0) {
+                // Primeira abertura (ou versão fixada removida): fixa na versão ativa do orçamento
+                const activeVersion = linkedVersions.find((v: { id: string }) => v.id === linkedData?.settings?.activeVersionId)
+                  || linkedVersions[linkedVersions.length - 1];
+                if (activeVersion && (activeVersion.budget?.length || 0) > 0) {
+                  projectBudget = activeVersion.budget;
+                  loadedSettings.basedOnBudgetVersionId = activeVersion.id;
+                  loadedSettings.basedOnBudgetVersionItem = activeVersion.item;
+                } else if (linkedData?.budget && linkedData.budget.length > 0) {
+                  projectBudget = linkedData.budget;
+                }
+              } else if (linkedData?.budget && linkedData.budget.length > 0) {
+                // Orçamento sem versões: usa o budget ao vivo
                 projectBudget = linkedData.budget;
               }
             } catch (err) {
@@ -278,6 +296,7 @@ export const useProjectOperations = ({
             }
           }
         }
+        setProjectSettings(loadedSettings);
         setBudget(projectBudget);
 
         let finalView = targetView === 'schedule' ? null : targetView;

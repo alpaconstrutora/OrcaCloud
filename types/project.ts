@@ -127,6 +127,10 @@ export interface ProjectSettings {
     wbs: WBSGroup[];
     versions?: BudgetVersion[];
     activeVersionId?: string;
+    // Versionamento orçamento × planejamento (Opção 2)
+    basedOnBudgetVersionId?: string;   // versão do orçamento à qual ESTE planejamento está fixado
+    basedOnBudgetVersionItem?: number; // rótulo da versão fixada
+    planningVersions?: PlanningVersion[];
     budgetStatus?: 'Em Andamento' | 'Fechado';
     status?: 'Em Andamento' | 'Finalizado' | 'Aprovado' | 'Proposta';
     obraStatus?: 'Não Iniciado' | 'Em andamento' | 'Paralisada' | 'Concluída';
@@ -221,6 +225,18 @@ export interface BudgetVersion {
     description: string;
     budget: BudgetEntry[];
     settings: Partial<ProjectSettings>;
+}
+
+// Snapshot de uma versão do PLANEJAMENTO, vinculada a uma versão do orçamento.
+// Espelha BudgetVersion, mas congela o cronograma em vez do orçamento.
+export interface PlanningVersion {
+    id: string;
+    item: number;                      // sequencial (v1, v2…)
+    date: string;                      // ISO
+    description: string;
+    budgetVersionId: string | null;    // FK -> BudgetVersion.id do orçamento vinculado (null = orçamento ao vivo)
+    budgetVersionItem: number | null;  // rótulo para exibição (ex.: 2)
+    schedule: ProjectSchedule;         // snapshot COMPLETO (itemSchedules, datas, baselines, resources)
 }
 
 export interface EapPhase {

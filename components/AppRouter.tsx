@@ -503,6 +503,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           organizations={organizations}
           onLoadProject={handleLoadProject}
           onUpdateSettings={handleUpdateSettings}
+          onUpdateBudget={handleUpdateBudget}
           onBack={() => setActiveView('eng-planejamento')}
         />
       );

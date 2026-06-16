@@ -3087,38 +3087,80 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                         </div>
 
                         {/* Body */}
-                        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
-                            {(settings.planningVersions || []).length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-10 gap-3">
-                                    <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center">
-                                        <History className="w-6 h-6 text-gray-400" />
+                        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+
+                            {/* ── Versões do Orçamento (fixar pin) ── */}
+                            {budgetVersionStatus.linkedVersions.length > 0 && (
+                                <div>
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Versões do Orçamento</p>
+                                    <div className="space-y-1.5">
+                                        {[...budgetVersionStatus.linkedVersions].sort((a, b) => b.item - a.item).map(bv => {
+                                            const isPinned = bv.id === budgetVersionStatus.pinnedId;
+                                            return (
+                                                <div key={bv.id} className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border transition-all ${isPinned ? 'border-indigo-300 bg-indigo-50' : 'border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30'}`}>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${isPinned ? 'text-indigo-700 bg-indigo-200' : 'text-gray-500 bg-gray-100'}`}>v{bv.item}</span>
+                                                            <span className="text-xs font-bold text-gray-800 truncate">{bv.description}</span>
+                                                            {isPinned && <span className="text-[9px] font-black text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded-full uppercase tracking-wide">atual</span>}
+                                                        </div>
+                                                        <p className="text-[10px] text-gray-400 mt-0.5">
+                                                            {new Date(bv.date).toLocaleDateString('pt-BR')} · {bv.budget?.length ?? 0} itens
+                                                        </p>
+                                                    </div>
+                                                    {!isPinned && (
+                                                        <button
+                                                            onClick={() => { handleRebaseToBudgetVersion(bv); setVersionPanelOpen(false); }}
+                                                            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white text-indigo-700 border border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 transition-all"
+                                                        >
+                                                            <GitBranch className="w-3 h-3" />
+                                                            Fixar nesta versão
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                    <p className="text-sm font-semibold text-gray-700">Nenhuma versão arquivada</p>
-                                    <p className="text-xs text-gray-400 text-center">Salve uma versão para criar um histórico do cronograma.</p>
                                 </div>
-                            ) : (
-                                [...(settings.planningVersions || [])].sort((a, b) => b.item - a.item).map(v => (
-                                    <div key={v.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all">
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-black text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded-full">v{v.item}</span>
-                                                <span className="text-xs font-bold text-gray-800 truncate">{v.description}</span>
-                                            </div>
-                                            <p className="text-[10px] text-gray-400 mt-0.5">
-                                                {new Date(v.date).toLocaleDateString('pt-BR')} {new Date(v.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                {v.budgetVersionItem != null ? ` · orçamento v${v.budgetVersionItem}` : ' · orçamento ao vivo'}
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => handleRestorePlanningVersion(v)}
-                                            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:text-gray-900 transition-all"
-                                        >
-                                            <RefreshCw className="w-3 h-3" />
-                                            Restaurar
-                                        </button>
-                                    </div>
-                                ))
                             )}
+
+                            {/* ── Histórico do Planejamento ── */}
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Histórico do Planejamento</p>
+                                {(settings.planningVersions || []).length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-8 gap-2">
+                                        <div className="w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center">
+                                            <History className="w-5 h-5 text-gray-400" />
+                                        </div>
+                                        <p className="text-xs font-semibold text-gray-600">Nenhuma versão arquivada</p>
+                                        <p className="text-[11px] text-gray-400 text-center">Salve uma versão para criar um histórico do cronograma.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        {[...(settings.planningVersions || [])].sort((a, b) => b.item - a.item).map(v => (
+                                            <div key={v.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-gray-100 hover:border-gray-200 hover:bg-gray-50/50 transition-all">
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] font-black text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">p{v.item}</span>
+                                                        <span className="text-xs font-bold text-gray-800 truncate">{v.description}</span>
+                                                    </div>
+                                                    <p className="text-[10px] text-gray-400 mt-0.5">
+                                                        {new Date(v.date).toLocaleDateString('pt-BR')} {new Date(v.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                        {v.budgetVersionItem != null ? ` · orçamento v${v.budgetVersionItem}` : ' · orçamento ao vivo'}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleRestorePlanningVersion(v)}
+                                                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                                                >
+                                                    <RefreshCw className="w-3 h-3" />
+                                                    Restaurar
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

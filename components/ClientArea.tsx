@@ -3089,7 +3089,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         ? settings.clientPortalTabs
         : (categoryPreset ?? ALL_TABS.map(t => t.id));
 
-    const tabs = isAdmin ? ALL_TABS : ALL_TABS.filter(t => enabledTabIds.includes(t.id));
+    // tabs visíveis para o cliente (mobile + client desktop)
+    const tabs = ALL_TABS.filter(t => enabledTabIds.includes(t.id));
+    // admin vê todas no desktop para poder configurar; cliente vê só as habilitadas
+    const desktopNavTabs = isAdmin ? ALL_TABS : tabs;
 
     const toggleTabVisibility = (tabId: string) => {
         if (!onUpdateSettings) return;
@@ -3438,7 +3441,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             {/* Desktop Navigation Tabs */}
             <div className="hidden md:flex items-center gap-3 flex-wrap">
                 <div className="flex flex-wrap gap-2 md:gap-4 p-1.5 bg-white border border-gray-100 rounded-2xl shadow-sm">
-                    {tabs.map(tab => {
+                    {desktopNavTabs.map(tab => {
                         const isVisible = enabledTabIds.includes(tab.id);
                         return (
                             <button
@@ -3543,7 +3546,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                         <div className="px-8 pb-8">
                             <p className="text-[10px] font-bold text-gray-400 text-center uppercase tracking-widest">
-                                Clique em cada aba para alternar visibilidade • Administradores veem todas
+                                Clique em cada aba para alternar visibilidade do cliente
                             </p>
                         </div>
                     </div>

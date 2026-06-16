@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -508,6 +508,7 @@ const Layout: React.FC<LayoutProps> = ({
               {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" />}
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" />
               <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" />
+              <NavItem id="almoxarifado" icon={Warehouse} label="Almoxarifado" />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
@@ -901,6 +902,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="reformas-dashboard" icon={Hammer} label="ÒPURA Reformas" forceFull />
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" forceFull />
               <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" forceFull />
+              <NavItem id="almoxarifado" icon={Warehouse} label="Almoxarifado" forceFull />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
                 <div className="space-y-1 mb-4">

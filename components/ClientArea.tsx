@@ -37,9 +37,12 @@ import {
     Hash,
     Home,
     Save,
-    Smartphone
+    Smartphone,
+    Bell,
+    ArrowRight,
+    Wallet
 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
 import { calculateProjectProgress, calculateUpcomingPhases, getPhaseSchedule, calculateRealizedFinancialProgress, calculatePlannedFinancialProgress } from '../utils/projectUtils';
 import ProjectGallery from './ProjectGallery';
@@ -1932,6 +1935,446 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         );
     };
 
+    // ─── Mobile Home (Tela 1) ────────────────────────────────────────────────────
+    const renderMobileHome = () => {
+        const finInfo = currentFinancialInfo;
+        const allInsts = [
+            ...(finInfo?.installments || []),
+            ...globalClientInstallments,
+        ];
+        const uniqueInsts = Array.from(new Map(allInsts.filter(i => i.id).map(i => [i.id, i])).values());
+        const totalPaid = uniqueInsts.filter(i => i.status === 'PAID').reduce((s, i) => s + i.value, 0);
+        const totalValue = uniqueInsts.reduce((s, i) => s + i.value, 0) || finInfo?.totalValue || 0;
+        const balanceRemaining = Math.max(0, totalValue - totalPaid);
+        const paidPct = totalValue > 0 ? Math.round((totalPaid / totalValue) * 100) : 0;
+
+        const daysLeft = settings.schedule?.endDate
+            ? Math.max(0, Math.ceil((new Date(settings.schedule.endDate).getTime() - Date.now()) / 86400000))
+            : null;
+        const totalDays = settings.schedule?.startDate && settings.schedule?.endDate
+            ? Math.max(1, Math.ceil((new Date(settings.schedule.endDate).getTime() - new Date(settings.schedule.startDate).getTime()) / 86400000))
+            : null;
+        const daysPct = (daysLeft !== null && totalDays !== null)
+            ? Math.round(((totalDays - daysLeft) / totalDays) * 100)
+            : null;
+
+        const recentInsts = [...uniqueInsts]
+            .sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime())
+            .slice(0, 4);
+
+        // quick action tabs (excluindo dashboard)
+        const quickTabs = ALL_TABS.filter(t => t.id !== 'dashboard').slice(0, 4);
+
+        return (
+            <div className="space-y-0 -mx-4">
+                {/* ── Gradient Hero ── */}
+                <div className="bg-gradient-to-br from-indigo-600 via-indigo-500 to-blue-400 px-5 pt-3 pb-10">
+                    <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5 max-w-[180px]">
+                            <span className="text-[10px] font-black text-white uppercase tracking-widest truncate">{settings.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white">
+                                <Bell className="w-3.5 h-3.5" />
+                            </button>
+                            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-indigo-600 font-black text-sm shadow">
+                                {(clientProfile?.name || settings.name).charAt(0)}
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2 className="text-2xl font-black text-white leading-tight">
+                        Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}
+                    </h2>
+                    <p className="text-indigo-200 text-sm font-medium mt-1">Acompanhe sua obra em tempo real</p>
+
+                    {/* Balance card flutuante */}
+                    <div className="mt-5 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mb-1">Total Pago</p>
+                                <p className="text-lg font-black text-white">
+                                    R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                                </p>
+                            </div>
+                            <div className="border-l border-white/20 pl-3">
+                                <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mb-1">Saldo Restante</p>
+                                <p className="text-lg font-black text-white">
+                                    R$ {balanceRemaining.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setActiveTab('financeiro')}
+                            className="w-full py-2.5 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+                        >
+                            <Wallet className="w-3.5 h-3.5" />
+                            Ver Financeiro
+                            <ArrowRight className="w-3 h-3" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* ── Cards sobrepostos ao gradiente ── */}
+                <div className="px-4 -mt-4 space-y-4">
+                    {/* Card de progresso da obra */}
+                    <div className="bg-white rounded-2xl p-5 shadow-lg border border-gray-100">
+                        <div className="flex items-start justify-between mb-4">
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Progresso da Obra</p>
+                                <p className="text-sm font-black text-gray-900 mt-0.5 max-w-[160px] truncate">
+                                    {settings.obraPhase || 'Em andamento'}
+                                </p>
+                            </div>
+                            {daysLeft !== null && (
+                                <div className="text-right bg-indigo-50 rounded-xl px-3 py-1.5 border border-indigo-100">
+                                    <p className="text-base font-black text-indigo-600">{daysLeft}</p>
+                                    <p className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">dias</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                            {/* Donut */}
+                            <div className="relative shrink-0" style={{ width: 110, height: 110 }}>
+                                <ResponsiveContainer width={110} height={110}>
+                                    <PieChart>
+                                        <Pie
+                                            data={[
+                                                { value: calculatedProgress },
+                                                { value: Math.max(0, 100 - calculatedProgress) },
+                                            ]}
+                                            cx={50} cy={50}
+                                            innerRadius={35} outerRadius={50}
+                                            startAngle={90} endAngle={-270}
+                                            dataKey="value"
+                                            strokeWidth={0}
+                                        >
+                                            <Cell fill="#6366f1" />
+                                            <Cell fill="#e0e7ff" />
+                                        </Pie>
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span className="text-xl font-black text-indigo-600 leading-none">{calculatedProgress}%</span>
+                                    <span className="text-[8px] font-black text-gray-400 uppercase tracking-wide mt-0.5">obra</span>
+                                </div>
+                            </div>
+
+                            {/* Barras de sub-métricas */}
+                            <div className="flex-1 space-y-3">
+                                {daysPct !== null && (
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Prazo</span>
+                                            <span className="text-[9px] font-black text-indigo-500">{daysPct}%</span>
+                                        </div>
+                                        <div className="w-full bg-indigo-50 rounded-full h-1.5">
+                                            <div className="bg-indigo-400 h-1.5 rounded-full" style={{ width: `${daysPct}%` }} />
+                                        </div>
+                                    </div>
+                                )}
+                                <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Financeiro</span>
+                                        <span className="text-[9px] font-black text-emerald-500">{paidPct}%</span>
+                                    </div>
+                                    <div className="w-full bg-emerald-50 rounded-full h-1.5">
+                                        <div className="bg-emerald-400 h-1.5 rounded-full" style={{ width: `${paidPct}%` }} />
+                                    </div>
+                                </div>
+                                {plannedProgress > 0 && (
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Planejado</span>
+                                            <span className="text-[9px] font-black text-blue-400">{plannedProgress}%</span>
+                                        </div>
+                                        <div className="w-full bg-blue-50 rounded-full h-1.5">
+                                            <div className="bg-blue-300 h-1.5 rounded-full" style={{ width: `${plannedProgress}%` }} />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── Quick Actions ── */}
+                    <div className="grid grid-cols-4 gap-2">
+                        {quickTabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                                className="flex flex-col items-center gap-2 py-3 px-2 bg-white rounded-2xl shadow-sm border border-gray-100 active:scale-95 transition-all"
+                            >
+                                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+                                    {tab.icon}
+                                </div>
+                                <span className="text-[8px] font-black text-gray-500 uppercase tracking-wide text-center leading-tight line-clamp-1">
+                                    {tab.label.split(' ')[0]}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* ── Atividade Recente ── */}
+                    {recentInsts.length > 0 && (
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+                                <p className="text-sm font-black text-gray-900">Atividade Recente</p>
+                                <button
+                                    onClick={() => setActiveTab('financeiro')}
+                                    className="flex items-center gap-1 text-[10px] font-black text-indigo-500 uppercase tracking-widest"
+                                >
+                                    Ver tudo <ArrowRight className="w-3 h-3" />
+                                </button>
+                            </div>
+                            <div className="divide-y divide-gray-50">
+                                {recentInsts.map(inst => {
+                                    const isPaid = inst.status === 'PAID';
+                                    const isOverdue = !isPaid && new Date(inst.dueDate + 'T12:00:00') < new Date();
+                                    return (
+                                        <div key={inst.id} className="flex items-center gap-3 px-5 py-3.5">
+                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isPaid ? 'bg-emerald-50' : isOverdue ? 'bg-red-50' : 'bg-amber-50'}`}>
+                                                <DollarSign className={`w-4 h-4 ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-red-400' : 'text-amber-400'}`} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-black text-gray-900 truncate">{inst.description}</p>
+                                                <p className="text-[10px] text-gray-400 font-bold mt-0.5">
+                                                    {new Date(inst.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                </p>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <p className="text-sm font-black text-gray-900">
+                                                    R$ {inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                                                </p>
+                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${isPaid ? 'bg-emerald-50 text-emerald-600' : isOverdue ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-500'}`}>
+                                                    {isPaid ? 'Pago' : isOverdue ? 'Vencido' : 'Pendente'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    // ─── Mobile Financeiro (Tela 2 + 3) ─────────────────────────────────────────
+    const renderMobileFinanceiro = () => {
+        const finInfo = currentFinancialInfo;
+        const allInsts = Array.from(
+            new Map([...(finInfo?.installments || []), ...globalClientInstallments]
+                .filter(i => i.id).map(i => [i.id, i])).values()
+        );
+        const totalPaid = allInsts.filter(i => i.status === 'PAID').reduce((s, i) => s + i.value, 0);
+        const totalValue = allInsts.reduce((s, i) => s + i.value, 0) || finInfo?.totalValue || 0;
+        const paidPct = totalValue > 0 ? Math.round((totalPaid / totalValue) * 100) : 0;
+        const pendingInsts = allInsts.filter(i => i.status !== 'PAID');
+        const paidInsts = allInsts.filter(i => i.status === 'PAID');
+
+        // Monta série mensal para o gráfico de área
+        const monthlyMap: Record<string, { mes: string; pago: number; total: number }> = {};
+        allInsts.forEach(inst => {
+            const d = new Date(inst.dueDate + 'T12:00:00');
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const label = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
+            if (!monthlyMap[key]) monthlyMap[key] = { mes: label, pago: 0, total: 0 };
+            monthlyMap[key].total += inst.value;
+            if (inst.status === 'PAID') monthlyMap[key].pago += inst.value;
+        });
+        const chartData = Object.entries(monthlyMap)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .slice(-6)
+            .map(([, v]) => v);
+
+        const [mobileFinTab, setMobileFinTab] = React.useState<'detalhe' | 'historico'>('detalhe');
+
+        return (
+            <div className="-mx-4 space-y-0">
+                {/* ── Header com donut grande ── */}
+                <div className="bg-gradient-to-br from-indigo-600 to-blue-500 px-5 pt-4 pb-8">
+                    <div className="flex items-center gap-3 mb-5">
+                        <button onClick={() => setActiveTab('dashboard')} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white">
+                            <ChevronRight className="w-4 h-4 rotate-180" />
+                        </button>
+                        <p className="text-white font-black text-base uppercase tracking-widest">Financeiro</p>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest">Valor Total</p>
+                            <p className="text-3xl font-black text-white mt-1">
+                                R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                            </p>
+                            {finInfo?.paymentMethod && (
+                                <p className="text-[10px] text-indigo-200 font-bold mt-1 uppercase">{finInfo.paymentMethod}</p>
+                            )}
+                        </div>
+                        {/* Donut grande */}
+                        <div className="relative" style={{ width: 110, height: 110 }}>
+                            <ResponsiveContainer width={110} height={110}>
+                                <PieChart>
+                                    <Pie
+                                        data={[
+                                            { value: paidPct },
+                                            { value: Math.max(0, 100 - paidPct) },
+                                        ]}
+                                        cx={50} cy={50}
+                                        innerRadius={36} outerRadius={52}
+                                        startAngle={90} endAngle={-270}
+                                        dataKey="value"
+                                        strokeWidth={0}
+                                    >
+                                        <Cell fill="#ffffff" />
+                                        <Cell fill="rgba(255,255,255,0.2)" />
+                                    </Pie>
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-2xl font-black text-white leading-none">{paidPct}%</span>
+                                <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wide mt-0.5">pago</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Sub-métricas */}
+                    <div className="grid grid-cols-2 gap-3 mt-5">
+                        <div className="bg-white/15 rounded-2xl p-3 border border-white/20">
+                            <div className="flex items-center gap-2 mb-2">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+                                <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest">Parcelas Pagas</p>
+                            </div>
+                            <p className="text-lg font-black text-white">{paidInsts.length}</p>
+                            <div className="mt-2 w-full bg-white/20 rounded-full h-1.5">
+                                <div className="bg-emerald-300 h-1.5 rounded-full" style={{ width: `${allInsts.length > 0 ? (paidInsts.length / allInsts.length) * 100 : 0}%` }} />
+                            </div>
+                            <p className="text-[8px] text-indigo-200 font-bold mt-1">{paidInsts.length}/{allInsts.length} total</p>
+                        </div>
+                        <div className="bg-white/15 rounded-2xl p-3 border border-white/20">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Clock className="w-3.5 h-3.5 text-amber-300" />
+                                <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest">Pendentes</p>
+                            </div>
+                            <p className="text-lg font-black text-white">{pendingInsts.length}</p>
+                            <div className="mt-2 w-full bg-white/20 rounded-full h-1.5">
+                                <div className="bg-amber-300 h-1.5 rounded-full" style={{ width: `${allInsts.length > 0 ? (pendingInsts.length / allInsts.length) * 100 : 0}%` }} />
+                            </div>
+                            <p className="text-[8px] text-indigo-200 font-bold mt-1">
+                                R$ {(totalValue - totalPaid).toLocaleString('pt-BR', { minimumFractionDigits: 0 })} restante
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── Tabs Detalhe / Histórico ── */}
+                <div className="-mt-3 mx-4">
+                    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+                        <div className="flex border-b border-gray-100">
+                            {(['detalhe', 'historico'] as const).map(t => (
+                                <button
+                                    key={t}
+                                    onClick={() => setMobileFinTab(t)}
+                                    className={`flex-1 py-3.5 text-[10px] font-black uppercase tracking-widest transition-all
+                                        ${mobileFinTab === t ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400'}`}
+                                >
+                                    {t === 'detalhe' ? 'Parcelas' : 'Histórico'}
+                                </button>
+                            ))}
+                        </div>
+
+                        {mobileFinTab === 'detalhe' && (
+                            <div className="divide-y divide-gray-50 max-h-[55vh] overflow-y-auto">
+                                {allInsts.length === 0 ? (
+                                    <div className="flex flex-col items-center py-12 text-gray-300">
+                                        <DollarSign className="w-10 h-10 mb-3" />
+                                        <p className="text-xs font-black uppercase tracking-widest">Nenhuma parcela</p>
+                                    </div>
+                                ) : [...allInsts].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()).map(inst => {
+                                    const isPaid = inst.status === 'PAID';
+                                    const isOverdue = !isPaid && new Date(inst.dueDate + 'T12:00:00') < new Date();
+                                    return (
+                                        <div key={inst.id} className="flex items-center gap-3 px-5 py-4">
+                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isPaid ? 'bg-emerald-50' : isOverdue ? 'bg-red-50' : 'bg-amber-50'}`}>
+                                                <DollarSign className={`w-4 h-4 ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-red-400' : 'text-amber-400'}`} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-black text-gray-900 truncate">{inst.description}</p>
+                                                <p className="text-[10px] text-gray-400 font-bold mt-0.5">
+                                                    Venc. {new Date(inst.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                </p>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <p className="text-sm font-black text-gray-900">
+                                                    R$ {inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                                                </p>
+                                                <span className={`inline-block mt-0.5 text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${isPaid ? 'bg-emerald-50 text-emerald-600' : isOverdue ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-500'}`}>
+                                                    {isPaid ? 'Pago' : isOverdue ? 'Vencido' : 'Pendente'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {mobileFinTab === 'historico' && (
+                            <div className="p-5">
+                                {chartData.length < 2 ? (
+                                    <div className="flex flex-col items-center py-12 text-gray-300">
+                                        <TrendingUp className="w-10 h-10 mb-3" />
+                                        <p className="text-xs font-black uppercase tracking-widest">Histórico insuficiente</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <p className="text-xs font-black text-gray-900">Pagamentos por Mês</p>
+                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Últimos 6 meses</span>
+                                        </div>
+                                        <ResponsiveContainer width="100%" height={160}>
+                                            <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+                                                <defs>
+                                                    <linearGradient id="gradPago" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                                <XAxis dataKey="mes" tick={{ fontSize: 9, fontWeight: 700, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                                <YAxis hide />
+                                                <RechartsTooltip
+                                                    formatter={(v: unknown) => [`R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, 'Pago']}
+                                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: '11px', fontWeight: 700 }}
+                                                />
+                                                <Area type="monotone" dataKey="pago" stroke="#6366f1" strokeWidth={2} fill="url(#gradPago)" dot={{ fill: '#6366f1', strokeWidth: 0, r: 3 }} activeDot={{ r: 5 }} />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+
+                                        {/* Legenda / sumário */}
+                                        <div className="grid grid-cols-3 gap-3 mt-5">
+                                            {[
+                                                { label: 'Total Pago', value: `R$ ${totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, color: 'text-indigo-600' },
+                                                { label: 'Pagas', value: `${paidInsts.length} parcelas`, color: 'text-emerald-600' },
+                                                { label: 'Pendentes', value: `${pendingInsts.length} parcelas`, color: 'text-amber-500' },
+                                            ].map(item => (
+                                                <div key={item.label} className="bg-gray-50 rounded-xl p-3 text-center">
+                                                    <p className={`text-sm font-black ${item.color}`}>{item.value}</p>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">{item.label}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const ALL_TABS = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
         { id: 'jornada', label: 'Minha Jornada', icon: <Calendar className="w-4 h-4" /> },
@@ -2346,50 +2789,36 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             {/* Tab Content */}
             <div className="min-h-[500px] px-4 md:px-0">
                 {activeTab === 'dashboard' && (
-                    <div className="space-y-10">
-                        {/* AI Client Concierge Row */}
-                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                            <div className="lg:col-span-3">
-                                {renderDashboard()}
-                            </div>
-                            <div className="lg:col-span-1">
-                                {aiInsight && (
-                                    <div className="sticky top-8 space-y-6">
-                                        <div className="flex items-center gap-2 mb-4 px-2">
-                                            <Sparkles className="w-4 h-4 text-indigo-500" />
-                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Concierge Digital</span>
-                                        </div>
-                                        <AIInsightCard
-                                            title={aiInsight.title}
-                                            content={aiInsight.message}
-                                            type={aiInsight.type === 'alert' ? 'warning' : aiInsight.type === 'emotional' ? 'success' : 'info'}
-                                            onAction={() => setActiveTab(aiInsight.actionable?.target as typeof activeTab)}
-                                        />
-
-                                        {/* Smart Shortcuts */}
-                                        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                                            <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-widest mb-4">Acesso Rápido</h4>
-                                            <div className="space-y-2">
-                                                {[
-                                                    { label: 'Manual do Proprietário', tab: 'documentos' },
-                                                    { label: 'Assistência Técnica', tab: 'suporte' },
-                                                    { label: 'Escolha de Acabamentos', tab: 'jornada' }
-                                                ].map((link, idx) => (
-                                                    <button
-                                                        key={idx}
-                                                        onClick={() => setActiveTab(link.tab as typeof activeTab)}
-                                                        className="w-full text-left px-4 py-3 rounded-xl bg-gray-50 hover:bg-indigo-50 text-[11px] font-bold text-gray-600 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100"
-                                                    >
-                                                        {link.label}
-                                                    </button>
-                                                ))}
+                    <>
+                        {/* Mobile: nova home estilo telecom */}
+                        <div className="md:hidden">
+                            {renderMobileHome()}
+                        </div>
+                        {/* Desktop: dashboard original */}
+                        <div className="hidden md:block">
+                            <div className="space-y-10">
+                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                                    <div className="lg:col-span-3">{renderDashboard()}</div>
+                                    <div className="lg:col-span-1">
+                                        {aiInsight && (
+                                            <div className="sticky top-8 space-y-6">
+                                                <div className="flex items-center gap-2 mb-4 px-2">
+                                                    <Sparkles className="w-4 h-4 text-indigo-500" />
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Concierge Digital</span>
+                                                </div>
+                                                <AIInsightCard
+                                                    title={aiInsight.title}
+                                                    content={aiInsight.message}
+                                                    type={aiInsight.type === 'alert' ? 'warning' : aiInsight.type === 'emotional' ? 'success' : 'info'}
+                                                    onAction={() => setActiveTab(aiInsight.actionable?.target as typeof activeTab)}
+                                                />
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
-                                )}
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </>
                 )}
                 {activeTab === 'jornada' && renderJornada()}
                 {activeTab === 'personalizacao' && <FinishSelection />}
@@ -2432,7 +2861,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {activeTab === 'diario' && renderDiario()}
                 {activeTab === 'documentos' && renderDocumentos()}
                 {activeTab === 'contratos' && renderContratos()}
-                {activeTab === 'financeiro' && renderFinanceiro()}
+                {activeTab === 'financeiro' && (
+                    <>
+                        <div className="md:hidden">{renderMobileFinanceiro()}</div>
+                        <div className="hidden md:block">{renderFinanceiro()}</div>
+                    </>
+                )}
                 {activeTab === 'suporte' && (
                     <div className="bg-white p-12 rounded-[2.5rem] border border-gray-100 flex flex-col items-center text-center">
                         <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-600 mb-6">

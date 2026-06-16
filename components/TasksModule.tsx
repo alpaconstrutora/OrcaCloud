@@ -61,6 +61,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   const [taskDefaults, setTaskDefaults]   = useState<TaskDefaults>({})
   const [filterOrg, setFilterOrg]     = useState<string>(activeOrganizationId ?? '')
   const [employees, setEmployees]     = useState<EmployeeOption[]>([])
+  const [obrasLocal, setObrasLocal]   = useState<ProjectOption[]>([])
   const [statuses, setStatuses]       = useState<TaskStatus[]>([])
   const [parentTask, setParentTask]   = useState<TaskRecord | null>(null)
 
@@ -131,31 +132,31 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     }
   }, [])
 
+  const loadObras = useCallback(async (orgId: string) => {
+    let query = supabase
+      .from('projects')
+      .select('id, name, settings')
+      .filter('settings->>classification', 'eq', 'OBRA')
+      .neq('name', 'Gestão Comercial')
+      .order('name')
+    if (orgId) {
+      query = query.filter('settings->>organizationId', 'eq', orgId)
+    }
+    const { data } = await query
+    const filtered = (data ?? []).filter((p: { settings?: { isSystemProject?: boolean } | null }) => !p.settings?.isSystemProject)
+    setObrasLocal(filtered.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })))
+  }, [])
+
   useEffect(() => { load() }, [load])
   useEffect(() => {
     const orgId = filterOrg || activeOrganizationId || ''
     loadEmployees(orgId)
     loadStatuses(orgId)
+    loadObras(orgId)
     // loadSpaces recebe filterOrg diretamente: '' = todas as orgs (RLS filtra por membro)
     // Não usar o fallback activeOrganizationId aqui para respeitar "Todas as organizações"
     loadSpaces(filterOrg)
-  }, [filterOrg, activeOrganizationId, loadEmployees, loadStatuses, loadSpaces])
-
-  // Obras disponíveis filtradas pela org selecionada
-  const obras: ProjectOption[] = useMemo(() => {
-    const orgId = filterOrg || activeOrganizationId
-    return projects
-      .filter(p => {
-        const s = p.settings
-        if (!s) return false
-        if (s.classification !== 'OBRA') return false
-        if (s.isSystemProject) return false
-        if (p.name === 'Gestão Comercial') return false
-        if (orgId && s.organizationId && s.organizationId !== orgId) return false
-        return true
-      })
-      .map(p => ({ id: p.id, name: p.name }))
-  }, [projects, filterOrg, activeOrganizationId])
+  }, [filterOrg, activeOrganizationId, loadEmployees, loadStatuses, loadObras, loadSpaces])
 
   // ── Filtros e contadores ──────────────────────────────────────────────────
   const { today, overdue, visible, noSpaceCount } = useMemo(() => {
@@ -219,6 +220,23 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       visible: [...visibleParents, ...getAllDescendants(new Set(visibleParents.map(t => t.id)))],
     }
   }, [tasks, filterOrg, view, selectedSpaceId, selectedFolderId])
+
+  // obras: usa obrasLocal (carregado direto do DB) como fonte primária, com fallback no prop
+  const obras: ProjectOption[] = useMemo(() => {
+    if (obrasLocal.length > 0) return obrasLocal
+    const orgId = filterOrg || activeOrganizationId
+    return projects
+      .filter(p => {
+        const s = p.settings
+        if (!s) return false
+        if (s.classification !== 'OBRA') return false
+        if (s.isSystemProject) return false
+        if (p.name === 'Gestão Comercial') return false
+        if (orgId && s.organizationId && s.organizationId !== orgId) return false
+        return true
+      })
+      .map(p => ({ id: p.id, name: p.name }))
+  }, [obrasLocal, projects, filterOrg, activeOrganizationId])
 
   const orgForNew = filterOrg || activeOrganizationId || ''
 
@@ -444,6 +462,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
                 space_id: selectedSpaceId && selectedSpaceId !== '__none__' ? selectedSpaceId : null,
                 folder_id: selectedFolderId && selectedFolderId !== '__no_folder__' ? selectedFolderId : null,
               })
+              if (orgForNew) { loadEmployees(orgForNew); loadStatuses(orgForNew); loadObras(orgForNew) }
               setShowForm(true)
             }}
             disabled={!orgForNew}
@@ -569,8 +588,8 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               groupBy={groupBy}
               resetDragSignal={dragResetSignal}
               onToggleDone={toggleDone}
-              onEdit={(t) => { loadEmployees(t.org_id); loadSpaces(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
-              onAddSubtask={(parent) => { loadEmployees(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
+              onEdit={(t) => { loadEmployees(t.org_id); loadSpaces(t.org_id); loadObras(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
+              onAddSubtask={(parent) => { loadEmployees(parent.org_id); loadObras(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
               onMakeSubtask={makeSubtask}
               onAddTask={orgForNew ? (defaults) => {
                 setTaskDefaults({
@@ -578,6 +597,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
                   space_id: selectedSpaceId && selectedSpaceId !== '__none__' ? selectedSpaceId : null,
                   folder_id: selectedFolderId && selectedFolderId !== '__no_folder__' ? selectedFolderId : null,
                 })
+                loadEmployees(orgForNew); loadStatuses(orgForNew); loadObras(orgForNew)
                 setEditing(null)
                 setShowForm(true)
               } : undefined}
@@ -591,13 +611,14 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               statuses={statuses}
               groupBy={groupBy === 'none' ? 'status' : groupBy}
               onToggleDone={toggleDone}
-              onEdit={(t) => { loadEmployees(t.org_id); loadSpaces(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
+              onEdit={(t) => { loadEmployees(t.org_id); loadSpaces(t.org_id); loadObras(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
               onAddTask={orgForNew ? (defaults) => {
                 setTaskDefaults({
                   ...(defaults ?? {}),
                   space_id: selectedSpaceId && selectedSpaceId !== '__none__' ? selectedSpaceId : null,
                   folder_id: selectedFolderId && selectedFolderId !== '__no_folder__' ? selectedFolderId : null,
                 })
+                loadEmployees(orgForNew); loadStatuses(orgForNew); loadObras(orgForNew)
                 setEditing(null)
                 setShowForm(true)
               } : undefined}
@@ -623,8 +644,12 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           parentTaskId={parentTask?.id ?? null}
           parentTaskTitle={parentTask?.title ?? null}
           onClose={() => { setShowForm(false); setParentTask(null) }}
-          onOrgChange={(id) => { loadEmployees(id); loadStatuses(id); loadSpaces(id) }}
-          onSaved={() => { setShowForm(false); setParentTask(null); load(); loadSpaces(filterOrg || activeOrganizationId || '') }}
+          onOrgChange={(id) => { loadEmployees(id); loadStatuses(id); loadObras(id); loadSpaces(id) }}
+          onSaved={() => {
+            setShowForm(false); setParentTask(null)
+            const orgId = filterOrg || activeOrganizationId || ''
+            load(); loadEmployees(orgId); loadObras(orgId); loadSpaces(orgId)
+          }}
         />
       )}
 

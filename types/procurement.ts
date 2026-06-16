@@ -99,6 +99,44 @@ export interface UpdateProcurementItemInput {
     notes?: string;
 }
 
+// ── Fase 4 (parcial): Risco + Cenários ───────────────────────────────────────
+
+export type RiskFlag =
+    | 'overdue'         // data de compra vencida
+    | 'no_supplier'     // sem fornecedor sugerido
+    | 'no_stock'        // posição líquida = necessidade total (sem abatimento de estoque)
+    | 'high_value'      // item de alto valor (> 2× mediana)
+    | 'stale';          // plano desatualizado
+
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+export interface RiskItem extends ProcurementPlanItem {
+    riskScore: number;      // 0–100
+    riskLevel: RiskLevel;
+    riskFlags: RiskFlag[];
+    daysOverdue: number;    // < 0 = dias restantes, > 0 = dias vencidos
+}
+
+export interface MonthlyBreakdown {
+    month: string;          // YYYY-MM
+    planejado: number;
+    comprometido: number;   // quoted
+    pedido: number;         // ordered
+    realizado: number;      // received
+    // acumulados (para Curva S)
+    planejadoAcc: number;
+    comprometidoAcc: number;
+    pedidoAcc: number;
+    realizadoAcc: number;
+}
+
+export interface ScenarioResult {
+    delayDays: number;
+    monthlyBreakdown: MonthlyBreakdown[];
+    itemsMoved: number;       // qtd de itens com data alterada
+    newOverdueCount: number;  // itens que ficam vencidos com o cenário
+}
+
 // ── Fase 3: Consolidação Multi-Obra ──────────────────────────────────────────
 
 export type ConsolidationStatus = 'open' | 'quoted' | 'ordered' | 'cancelled';

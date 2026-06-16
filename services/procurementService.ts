@@ -15,9 +15,19 @@ import {
     ConsolidationOpportunity,
     Consolidation,
     ConsolidationItem,
+    RiskItem,
+    RiskFlag,
+    MonthlyBreakdown,
+    ScenarioResult,
 } from '../types/procurement';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
+
+function addDays(isoDate: string, days: number): string {
+    const d = new Date(isoDate);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+}
 
 function subtractDays(isoDate: string, days: number): string {
     const d = new Date(isoDate);
@@ -183,6 +193,130 @@ async function explodeNeeds(
     }
 
     return needs;
+}
+
+// ─── funções puras exportadas (Fase 4 parcial) ───────────────────────────────
+
+/**
+ * Computa scores e flags de risco para cada item do plano.
+ * Puramente client-side, sem acesso ao banco.
+ */
+export function computeRiskItems(items: ProcurementPlanItem[], today: string): RiskItem[] {
+    const active = items.filter(i => i.status !== 'cancelled' && i.status !== 'received');
+    if (active.length === 0) return [];
+
+    // mediana de estimated_total para detectar alto valor
+    const sorted = [...active].map(i => i.estimatedTotal).sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+
+    return active.map(item => {
+        const flags: RiskFlag[] = [];
+        let score = 0;
+
+        // Atraso
+        const todayMs = new Date(today).getTime();
+        const buyMs   = item.suggestedBuyDate ? new Date(item.suggestedBuyDate).getTime() : null;
+        const daysOverdue = buyMs ? Math.round((todayMs - buyMs) / 86400000) : 0;
+
+        if (item.status === 'pending' && daysOverdue > 0) {
+            flags.push('overdue');
+            score += Math.min(40, Math.round(40 * Math.min(daysOverdue / 30, 1)));
+        }
+
+        // Sem fornecedor
+        if (!item.suggestedSupplierId) {
+            flags.push('no_supplier');
+            score += 20;
+        }
+
+        // Sem abatimento de estoque (posição líquida = qty total → sem estoque disponível)
+        if (item.requiredQty > 0 && item.netRequiredQty >= item.requiredQty) {
+            flags.push('no_stock');
+            score += 15;
+        }
+
+        // Alto valor
+        if (median > 0 && item.estimatedTotal > median * 2) {
+            flags.push('high_value');
+            score += 15;
+        }
+
+        // Plano desatualizado
+        if (item.isStale) {
+            flags.push('stale');
+            score += 10;
+        }
+
+        const riskLevel: import('../types/procurement').RiskLevel = score >= 61 ? 'high' : score >= 26 ? 'medium' : 'low';
+
+        return { ...item, riskScore: Math.min(100, score), riskLevel, riskFlags: flags, daysOverdue };
+    }).sort((a, b) => b.riskScore - a.riskScore);
+}
+
+/**
+ * Computa curva S 4 séries a partir dos itens carregados.
+ * Retorna array ordenado de meses com valores absolutos e acumulados.
+ */
+export function computeMonthlyBreakdown(items: ProcurementPlanItem[]): MonthlyBreakdown[] {
+    const map: Record<string, { planejado: number; comprometido: number; pedido: number; realizado: number }> = {};
+
+    for (const item of items) {
+        if (!item.suggestedBuyDate || item.status === 'cancelled') continue;
+        const m = item.suggestedBuyDate.slice(0, 7);
+        if (!map[m]) map[m] = { planejado: 0, comprometido: 0, pedido: 0, realizado: 0 };
+        map[m].planejado += item.estimatedTotal;
+        if (item.status === 'quoted')   map[m].comprometido += item.estimatedTotal;
+        if (item.status === 'ordered')  map[m].pedido       += item.estimatedTotal;
+        if (item.status === 'received') map[m].realizado    += item.estimatedTotal;
+    }
+
+    const months = Object.keys(map).sort();
+    let accP = 0, accC = 0, accO = 0, accR = 0;
+
+    return months.map(m => {
+        accP += map[m].planejado;
+        accC += map[m].comprometido;
+        accO += map[m].pedido;
+        accR += map[m].realizado;
+        return {
+            month: m,
+            planejado:        map[m].planejado,
+            comprometido:     map[m].comprometido,
+            pedido:           map[m].pedido,
+            realizado:        map[m].realizado,
+            planejadoAcc:     accP,
+            comprometidoAcc:  accC,
+            pedidoAcc:        accO,
+            realizadoAcc:     accR,
+        };
+    });
+}
+
+/**
+ * Simula o impacto de um atraso de N dias no cronograma.
+ * Desloca need_date → recalcula suggested_buy_date.
+ */
+export function simulateScenario(items: ProcurementPlanItem[], delayDays: number): ScenarioResult {
+    const today = new Date().toISOString().slice(0, 10);
+    let itemsMoved = 0;
+    let newOverdueCount = 0;
+
+    const shifted = items
+        .filter(i => i.status !== 'cancelled' && i.status !== 'received')
+        .map(item => {
+            if (!item.suggestedBuyDate) return item;
+            itemsMoved++;
+            const newBuyDate = addDays(item.suggestedBuyDate, delayDays);
+            if (newBuyDate < today) newOverdueCount++;
+            return { ...item, suggestedBuyDate: newBuyDate };
+        });
+
+    return {
+        delayDays,
+        monthlyBreakdown: computeMonthlyBreakdown(shifted),
+        itemsMoved,
+        newOverdueCount,
+    };
 }
 
 // ─── service público ──────────────────────────────────────────────────────────

@@ -4,8 +4,9 @@ import {
     PackageSearch, ChevronDown, ChevronUp, CheckCircle2,
     BarChart2, ListFilter, Zap, FileText, Truck,
     Square, CheckSquare, Users, X, ChevronRight,
+    Shield, TrendingUp, Sliders,
 } from 'lucide-react';
-import { procurementService } from '../services/procurementService';
+import { procurementService, computeRiskItems, computeMonthlyBreakdown, simulateScenario } from '../services/procurementService';
 import { projectService, ProjectData } from '../services/projectService';
 import { supplierService } from '../services/supplierService';
 import {
@@ -16,6 +17,8 @@ import {
     ConsolidationOpportunity,
     Consolidation,
     ConsolidationStatus,
+    RiskItem,
+    MonthlyBreakdown,
 } from '../types/procurement';
 
 interface Props {
@@ -23,7 +26,7 @@ interface Props {
     onChangeView: (view: string) => void;
 }
 
-type Tab = 'plano' | 'backlog' | 'financeiro' | 'consolidacao';
+type Tab = 'plano' | 'backlog' | 'financeiro' | 'consolidacao' | 'risco';
 
 const STATUS_LABELS: Record<ProcurementStatus, string> = {
     pending:   'Pendente',
@@ -380,6 +383,7 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
     const sortedMonths = useMemo(() => Object.keys(byMonth).sort(), [byMonth]);
 
     // Curva S: planned = todos os meses; realized = status ordered/received
+    // mantido para backward compat com CurvaSChart legado — será substituído por monthlyBreakdown
     const realizadaByMonth = useMemo(() => {
         const map: Record<string, number> = {};
         for (const item of items) {
@@ -390,6 +394,12 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
         }
         return map;
     }, [items]);
+
+    // Curva S 4 séries (Fase 4)
+    const monthlyBreakdown = useMemo(() => computeMonthlyBreakdown(items), [items]);
+
+    // Análise de risco (Fase 4)
+    const riskItems = useMemo(() => computeRiskItems(items, today), [items, today]);
 
     function urgencyColor(buyDate?: string): string {
         if (!buyDate) return '';
@@ -568,10 +578,11 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
             <div className="border-b">
                 <div className="flex gap-1">
                     {([
-                        { id: 'plano',        label: 'Calendário de Compras', icon: Calendar      },
+                        { id: 'plano',        label: 'Calendário',            icon: Calendar      },
                         { id: 'backlog',      label: `Backlog (${backlogItems.length})`, icon: PackageSearch },
-                        { id: 'financeiro',   label: 'Curva de Desembolso',   icon: BarChart2     },
+                        { id: 'financeiro',   label: 'Curva S',               icon: TrendingUp    },
                         { id: 'consolidacao', label: `Multi-Obra${opportunities.length > 0 ? ` (${opportunities.length})` : ''}`, icon: Users },
+                        { id: 'risco',        label: `Risco & Cenários${riskItems.filter(r => r.riskLevel === 'high').length > 0 ? ` (${riskItems.filter(r => r.riskLevel === 'high').length})` : ''}`, icon: Shield },
                     ] as { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[]).map(t => (
                         <button
                             key={t.id}
@@ -776,44 +787,39 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                 </div>
             )}
 
-            {/* ── Tab Financeiro / Curva S ── */}
+            {/* ── Tab Curva S (4 séries) ── */}
             {tab === 'financeiro' && (
                 <div className="space-y-4">
-                    <p className="text-sm text-gray-500">
-                        <strong>Planejado</strong> = desembolso estimado total por mês.{' '}
-                        <strong>Realizado</strong> = itens já cotados/pedidos naquele mês.
-                    </p>
-                    {monthly.length === 0 ? (
+                    {monthlyBreakdown.length === 0 ? (
                         <div className="text-center py-12 text-gray-400">
-                            <BarChart2 className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                            <TrendingUp className="w-10 h-10 mx-auto mb-2 opacity-30" />
                             <p className="text-sm">Sem dados. Gere o plano primeiro.</p>
                         </div>
                     ) : (
                         <>
-                            <CurvaSChart monthly={monthly} realizadaByMonth={realizadaByMonth} />
+                            <CurvaSChart4 data={monthlyBreakdown} />
                             <div className="bg-white rounded-lg border overflow-hidden">
                                 <table className="w-full text-sm">
                                     <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                                         <tr>
                                             <th className="px-3 py-2 text-left">Mês</th>
-                                            <th className="px-3 py-2 text-right">Planejado</th>
-                                            <th className="px-3 py-2 text-right">Realizado</th>
-                                            <th className="px-3 py-2 text-right">Pendente</th>
-                                            <th className="px-3 py-2 text-right">Cotado</th>
-                                            <th className="px-3 py-2 text-right">Pedido</th>
+                                            <th className="px-3 py-2 text-right text-indigo-700">Planejado</th>
+                                            <th className="px-3 py-2 text-right text-blue-700">Comprometido</th>
+                                            <th className="px-3 py-2 text-right text-purple-700">Pedido</th>
+                                            <th className="px-3 py-2 text-right text-green-700">Recebido</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {monthly.map(row => {
-                                            const realizado = realizadaByMonth[row.monthDate?.slice(0, 7) ?? ''] ?? 0;
+                                        {monthlyBreakdown.map(row => {
+                                            const [y, m] = row.month.split('-');
+                                            const label = new Date(`${y}-${m}-01`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
                                             return (
-                                                <tr key={row.monthDate} className="border-t hover:bg-gray-50">
-                                                    <td className="px-3 py-2 font-medium capitalize">{row.monthLabel}</td>
-                                                    <td className="px-3 py-2 text-right font-semibold text-indigo-600">{fmtBrl(row.estimatedSpend)}</td>
-                                                    <td className={`px-3 py-2 text-right font-semibold ${realizado > 0 ? 'text-green-600' : 'text-gray-400'}`}>{fmtBrl(realizado)}</td>
-                                                    <td className="px-3 py-2 text-right text-yellow-700">{row.pendingCount}</td>
-                                                    <td className="px-3 py-2 text-right text-blue-700">{row.quotedCount}</td>
-                                                    <td className="px-3 py-2 text-right text-purple-700">{row.orderedCount}</td>
+                                                <tr key={row.month} className="border-t hover:bg-gray-50">
+                                                    <td className="px-3 py-2 font-medium capitalize">{label}</td>
+                                                    <td className="px-3 py-2 text-right font-semibold text-indigo-600">{fmtBrl(row.planejado)}</td>
+                                                    <td className={`px-3 py-2 text-right ${row.comprometido > 0 ? 'text-blue-600' : 'text-gray-300'}`}>{fmtBrl(row.comprometido)}</td>
+                                                    <td className={`px-3 py-2 text-right ${row.pedido > 0 ? 'text-purple-600' : 'text-gray-300'}`}>{fmtBrl(row.pedido)}</td>
+                                                    <td className={`px-3 py-2 text-right font-semibold ${row.realizado > 0 ? 'text-green-600' : 'text-gray-300'}`}>{fmtBrl(row.realizado)}</td>
                                                 </tr>
                                             );
                                         })}
@@ -821,11 +827,10 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                                     <tfoot className="bg-gray-50 font-semibold">
                                         <tr>
                                             <td className="px-3 py-2">Total</td>
-                                            <td className="px-3 py-2 text-right text-indigo-700">{fmtBrl(monthly.reduce((s, r) => s + r.estimatedSpend, 0))}</td>
-                                            <td className="px-3 py-2 text-right text-green-700">{fmtBrl(Object.values(realizadaByMonth).reduce((s, v) => s + v, 0))}</td>
-                                            <td className="px-3 py-2 text-right text-yellow-700">{monthly.reduce((s, r) => s + r.pendingCount, 0)}</td>
-                                            <td className="px-3 py-2 text-right text-blue-700">{monthly.reduce((s, r) => s + r.quotedCount, 0)}</td>
-                                            <td className="px-3 py-2 text-right text-purple-700">{monthly.reduce((s, r) => s + r.orderedCount, 0)}</td>
+                                            <td className="px-3 py-2 text-right text-indigo-700">{fmtBrl(monthlyBreakdown.reduce((s, r) => s + r.planejado, 0))}</td>
+                                            <td className="px-3 py-2 text-right text-blue-700">{fmtBrl(monthlyBreakdown.reduce((s, r) => s + r.comprometido, 0))}</td>
+                                            <td className="px-3 py-2 text-right text-purple-700">{fmtBrl(monthlyBreakdown.reduce((s, r) => s + r.pedido, 0))}</td>
+                                            <td className="px-3 py-2 text-right text-green-700">{fmtBrl(monthlyBreakdown.reduce((s, r) => s + r.realizado, 0))}</td>
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -904,6 +909,13 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                             </div>
                         </section>
                     )}
+                </div>
+            )}
+
+            {/* ── Tab Risco & Cenários ── */}
+            {tab === 'risco' && (
+                <div className="space-y-8">
+                    <RiscoPanel riskItems={riskItems} items={items} />
                 </div>
             )}
         </div>
@@ -1326,6 +1338,230 @@ function OrderModalConsolidation({
                     </button>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// ── CurvaSChart 4 séries ───────────────────────────────────────────────────────
+function CurvaSChart4({ data }: { data: MonthlyBreakdown[] }) {
+    const [mode, setMode] = useState<'mensal' | 'acumulado'>('acumulado');
+    if (data.length === 0) return null;
+
+    const vals = mode === 'acumulado'
+        ? data.map(d => Math.max(d.planejadoAcc, d.comprometidoAcc, d.pedidoAcc, d.realizadoAcc))
+        : data.map(d => d.planejado);
+    const maxVal = Math.max(...vals, 1);
+    const BAR_H  = 140;
+    const pct = (v: number) => Math.max(2, Math.round((v / maxVal) * BAR_H));
+
+    return (
+        <div className="bg-white rounded-lg border p-4">
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-wrap gap-3 text-xs">
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-indigo-300 rounded-sm" />Planejado</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-blue-400 rounded-sm" />Comprometido</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-purple-500 rounded-sm" />Pedido</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-green-500 rounded-sm" />Recebido</span>
+                </div>
+                <div className="flex gap-1">
+                    {(['mensal', 'acumulado'] as const).map(m => (
+                        <button
+                            key={m}
+                            onClick={() => setMode(m)}
+                            className={`text-xs px-2 py-0.5 rounded ${mode === m ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-gray-500 hover:bg-gray-100'}`}
+                        >
+                            {m === 'mensal' ? 'Mensal' : 'Acumulado'}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <div className="overflow-x-auto">
+                <div className="flex items-end gap-1.5" style={{ minWidth: data.length * 56 }}>
+                    {data.map(row => {
+                        const p = mode === 'acumulado' ? row.planejadoAcc    : row.planejado;
+                        const c = mode === 'acumulado' ? row.comprometidoAcc : row.comprometido;
+                        const o = mode === 'acumulado' ? row.pedidoAcc       : row.pedido;
+                        const r = mode === 'acumulado' ? row.realizadoAcc    : row.realizado;
+                        const [y, m] = row.month.split('-');
+                        const label  = new Date(`${y}-${m}-01`).toLocaleDateString('pt-BR', { month: 'short' });
+                        return (
+                            <div key={row.month} className="flex flex-col items-center gap-0.5 flex-1 min-w-[48px]">
+                                <div className="w-full flex gap-0.5 items-end" style={{ height: BAR_H }}>
+                                    <div className="flex-1 rounded-t bg-indigo-200" style={{ height: pct(p) }} title={`Planejado: ${fmtBrl(p)}`} />
+                                    <div className="flex-1 rounded-t bg-blue-400"   style={{ height: pct(c) }} title={`Comprometido: ${fmtBrl(c)}`} />
+                                    <div className="flex-1 rounded-t bg-purple-500" style={{ height: pct(o) }} title={`Pedido: ${fmtBrl(o)}`} />
+                                    <div className="flex-1 rounded-t bg-green-500"  style={{ height: pct(r) }} title={`Recebido: ${fmtBrl(r)}`} />
+                                </div>
+                                <span className="text-gray-400 text-center capitalize" style={{ fontSize: 9 }}>{label}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Painel Risco & Cenários ────────────────────────────────────────────────────
+const RISK_COLORS: Record<string, string> = {
+    low:    'bg-green-100 text-green-800',
+    medium: 'bg-yellow-100 text-yellow-800',
+    high:   'bg-red-100 text-red-800',
+};
+const FLAG_LABELS: Record<string, string> = {
+    overdue:     'Vencido',
+    no_supplier: 'Sem fornecedor',
+    no_stock:    'Sem estoque',
+    high_value:  'Alto valor',
+    stale:       'Obsoleto',
+};
+
+function RiscoPanel({ riskItems, items }: { riskItems: RiskItem[]; items: ProcurementPlanItem[] }) {
+    const [delayDays, setDelayDays]     = useState(30);
+    const [showScenario, setShowScenario] = useState(false);
+
+    const scenario = useMemo(
+        () => showScenario ? simulateScenario(items, delayDays) : null,
+        [showScenario, items, delayDays]
+    );
+
+    const highCount   = riskItems.filter(r => r.riskLevel === 'high').length;
+    const mediumCount = riskItems.filter(r => r.riskLevel === 'medium').length;
+
+    return (
+        <div className="space-y-6">
+            {/* Análise de Risco */}
+            <section>
+                <h2 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-red-500" />
+                    Análise de Risco
+                </h2>
+                {riskItems.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">
+                        <CheckCircle2 className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">Nenhum item para analisar. Gere o plano primeiro.</p>
+                    </div>
+                ) : (
+                    <>
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                                <p className="text-2xl font-bold text-red-700">{highCount}</p>
+                                <p className="text-xs text-red-600">Alto risco</p>
+                            </div>
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
+                                <p className="text-2xl font-bold text-yellow-700">{mediumCount}</p>
+                                <p className="text-xs text-yellow-600">Médio risco</p>
+                            </div>
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                                <p className="text-2xl font-bold text-green-700">{riskItems.length - highCount - mediumCount}</p>
+                                <p className="text-xs text-green-600">Baixo risco</p>
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-lg border overflow-hidden">
+                            <table className="w-full text-sm">
+                                <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                                    <tr>
+                                        <th className="px-3 py-2 text-left">Insumo</th>
+                                        <th className="px-3 py-2 text-center">Score</th>
+                                        <th className="px-3 py-2 text-left hidden md:table-cell">Fatores</th>
+                                        <th className="px-3 py-2 text-right hidden md:table-cell">Comprar até</th>
+                                        <th className="px-3 py-2 text-right">Estimado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {riskItems.slice(0, 50).map(item => (
+                                        <tr key={item.id} className="border-t hover:bg-gray-50">
+                                            <td className="px-3 py-2 max-w-xs">
+                                                <p className="font-medium text-gray-800 truncate">{item.inputDescription}</p>
+                                                {item.inputCode && <p className="text-xs text-gray-400">{item.inputCode}</p>}
+                                            </td>
+                                            <td className="px-3 py-2 text-center">
+                                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${RISK_COLORS[item.riskLevel]}`}>
+                                                    {item.riskScore}
+                                                </span>
+                                            </td>
+                                            <td className="px-3 py-2 hidden md:table-cell">
+                                                <div className="flex flex-wrap gap-1">
+                                                    {item.riskFlags.map(f => (
+                                                        <span key={f} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                                                            {FLAG_LABELS[f] ?? f}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-2 text-right text-xs hidden md:table-cell">
+                                                {item.daysOverdue > 0
+                                                    ? <span className="text-red-600 font-medium">{item.daysOverdue}d vencido</span>
+                                                    : <span className="text-gray-600">{fmtDate(item.suggestedBuyDate)}</span>}
+                                            </td>
+                                            <td className="px-3 py-2 text-right font-semibold text-indigo-700">{fmtBrl(item.estimatedTotal)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
+                )}
+            </section>
+
+            {/* Simulação de Cenário */}
+            <section>
+                <h2 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-indigo-500" />
+                    Simulação de Cenário
+                </h2>
+                <div className="bg-white rounded-lg border p-4 space-y-4">
+                    <p className="text-sm text-gray-500">
+                        Simule o impacto de um atraso no cronograma sobre as datas de compra e o desembolso mensal.
+                    </p>
+                    <div className="flex items-center gap-4">
+                        <div className="flex-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                                Atraso simulado: <strong>{delayDays} dias</strong>
+                            </label>
+                            <input
+                                type="range" min={7} max={180} step={7}
+                                value={delayDays}
+                                onChange={e => { setDelayDays(Number(e.target.value)); setShowScenario(false); }}
+                                className="w-full accent-indigo-600"
+                            />
+                            <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+                                <span>7d</span><span>1 mês</span><span>3 meses</span><span>6 meses</span>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setShowScenario(true)}
+                            className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-indigo-700 whitespace-nowrap"
+                        >
+                            <Zap className="w-4 h-4" /> Simular
+                        </button>
+                    </div>
+                    {scenario && (
+                        <div className="space-y-3 border-t pt-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <div className="bg-indigo-50 rounded p-3 text-center">
+                                    <p className="text-xl font-bold text-indigo-700">+{scenario.delayDays}d</p>
+                                    <p className="text-xs text-indigo-600">atraso simulado</p>
+                                </div>
+                                <div className="bg-orange-50 rounded p-3 text-center">
+                                    <p className="text-xl font-bold text-orange-700">{scenario.itemsMoved}</p>
+                                    <p className="text-xs text-orange-600">itens com datas alteradas</p>
+                                </div>
+                                <div className={`rounded p-3 text-center ${scenario.newOverdueCount > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
+                                    <p className={`text-xl font-bold ${scenario.newOverdueCount > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                                        {scenario.newOverdueCount}
+                                    </p>
+                                    <p className={`text-xs ${scenario.newOverdueCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                        novas compras vencidas
+                                    </p>
+                                </div>
+                            </div>
+                            <p className="text-xs font-medium text-gray-600">Curva de desembolso com +{delayDays} dias:</p>
+                            <CurvaSChart4 data={scenario.monthlyBreakdown} />
+                        </div>
+                    )}
+                </div>
+            </section>
         </div>
     );
 }

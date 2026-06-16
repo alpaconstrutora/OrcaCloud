@@ -12,6 +12,9 @@ import {
     ProcurementMonthlySpend,
     ProcurementKPIs,
     UpdateProcurementItemInput,
+    ConsolidationOpportunity,
+    Consolidation,
+    ConsolidationItem,
 } from '../types/procurement';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -60,6 +63,27 @@ function rowToItem(row: Record<string, unknown>): ProcurementPlanItem {
         notes:                  row.notes as string | undefined,
         created_at:             row.created_at as string,
         updated_at:             row.updated_at as string,
+    };
+}
+
+// Converte row de procurement_consolidations → Consolidation
+function pcToConsolidation(row: Record<string, unknown>, items: ConsolidationItem[]): Consolidation {
+    return {
+        id:                row.id as string,
+        organizationId:    row.organization_id as string,
+        inputCode:         row.input_code as string | undefined,
+        inputDescription:  row.input_description as string,
+        inputUnit:         row.input_unit as string,
+        periodMonth:       row.period_month as string,
+        totalRequiredQty:  Number(row.total_required_qty ?? 0),
+        totalEstimated:    Number(row.total_estimated ?? 0),
+        status:            row.status as Consolidation['status'],
+        generatedQuotationId: row.generated_quotation_id as string | undefined,
+        generatedOrderId:     row.generated_order_id as string | undefined,
+        notes:             row.notes as string | undefined,
+        items,
+        created_at:        row.created_at as string,
+        updated_at:        row.updated_at as string,
     };
 }
 
@@ -518,5 +542,222 @@ export const procurementService = {
                 .upsert(updates.slice(i, i + BATCH), { onConflict: 'id' });
             if (upErr) throw upErr;
         }
+    },
+
+    // ── Fase 3: Consolidação Multi-Obra ──────────────────────────────────────
+
+    async getConsolidationOpportunities(organizationId: string): Promise<ConsolidationOpportunity[]> {
+        const { data, error } = await supabase.rpc('fn_consolidation_opportunities', {
+            p_organization_id: organizationId,
+        });
+        if (error) throw error;
+        return (data ?? []).map((r: Record<string, unknown>) => ({
+            inputCode:        r.input_code as string | undefined,
+            inputDescription: r.input_description as string,
+            inputUnit:        r.input_unit as string,
+            periodMonth:      r.period_month as string,
+            projectCount:     Number(r.project_count ?? 0),
+            totalQty:         Number(r.total_qty ?? 0),
+            totalEstimated:   Number(r.total_estimated ?? 0),
+            itemIds:          r.item_ids as string[],
+        }));
+    },
+
+    async createConsolidation(
+        organizationId: string,
+        opportunity: ConsolidationOpportunity,
+        notes?: string,
+    ): Promise<Consolidation> {
+        // 1. Cria o grupo
+        const { data: pc, error: pcErr } = await supabase
+            .from('procurement_consolidations')
+            .insert({
+                organization_id:    organizationId,
+                input_code:         opportunity.inputCode ?? null,
+                input_description:  opportunity.inputDescription,
+                input_unit:         opportunity.inputUnit,
+                period_month:       opportunity.periodMonth,
+                total_required_qty: opportunity.totalQty,
+                total_estimated:    opportunity.totalEstimated,
+                status:             'open',
+                notes:              notes ?? null,
+            })
+            .select()
+            .single();
+        if (pcErr) throw pcErr;
+
+        // 2. Carrega os itens do plano para montar os links com project_name
+        const { data: planItems, error: piErr } = await supabase
+            .from('procurement_plan_items')
+            .select('id, project_id, net_required_qty, estimated_total')
+            .in('id', opportunity.itemIds);
+        if (piErr) throw piErr;
+
+        // 3. Busca nomes dos projetos
+        const projectIds = [...new Set((planItems ?? []).map(i => i.project_id as string))];
+        const { data: projects } = await supabase
+            .from('projects')
+            .select('id, name')
+            .in('id', projectIds);
+        const nameMap: Record<string, string> = {};
+        for (const p of projects ?? []) nameMap[p.id] = p.name;
+
+        // 4. Insere os itens de consolidação
+        const ciRows = (planItems ?? []).map(i => ({
+            consolidation_id: pc.id,
+            plan_item_id:     i.id,
+            project_id:       i.project_id,
+            project_name:     nameMap[i.project_id as string] ?? '',
+            required_qty:     Number(i.net_required_qty ?? 0),
+            estimated_total:  Number(i.estimated_total ?? 0),
+        }));
+
+        const { error: ciErr } = await supabase
+            .from('procurement_consolidation_items')
+            .insert(ciRows);
+        if (ciErr) throw ciErr;
+
+        return pcToConsolidation(pc, ciRows.map((ci, idx) => ({
+            id:              String(idx),
+            consolidationId: pc.id,
+            planItemId:      ci.plan_item_id,
+            projectId:       ci.project_id,
+            projectName:     ci.project_name,
+            requiredQty:     ci.required_qty,
+            estimatedTotal:  ci.estimated_total,
+            created_at:      new Date().toISOString(),
+        })));
+    },
+
+    async listConsolidations(organizationId: string): Promise<Consolidation[]> {
+        const { data, error } = await supabase
+            .from('procurement_consolidations')
+            .select(`
+                id, organization_id, input_code, input_description, input_unit,
+                period_month, total_required_qty, total_estimated,
+                status, generated_quotation_id, generated_order_id,
+                notes, created_at, updated_at,
+                procurement_consolidation_items (
+                    id, consolidation_id, plan_item_id, project_id,
+                    project_name, required_qty, estimated_total, created_at
+                )
+            `)
+            .eq('organization_id', organizationId)
+            .order('period_month', { ascending: true });
+        if (error) throw error;
+        return (data ?? []).map(r => pcToConsolidation(r, (r.procurement_consolidation_items ?? []) as any));
+    },
+
+    async generateQuotationFromConsolidation(
+        consolidationId: string,
+        organizationId: string,
+        projectId: string,
+        options?: { title?: string; deadline?: string },
+    ): Promise<{ quotationId: string; quotationNumber: string }> {
+        // Busca o grupo e seus itens
+        const { data: pc, error } = await supabase
+            .from('procurement_consolidations')
+            .select('*, procurement_consolidation_items(*)')
+            .eq('id', consolidationId)
+            .single();
+        if (error || !pc) throw new Error('Consolidação não encontrada.');
+
+        const ciItems = (pc.procurement_consolidation_items ?? []) as Record<string, unknown>[];
+        const totalQty   = ciItems.reduce((s, i) => s + Number(i.required_qty ?? 0), 0);
+        const unitCost   = totalQty > 0 ? Number(pc.total_estimated ?? 0) / totalQty : 0;
+
+        const deadline = options?.deadline ?? toIso(new Date(Date.now() + 7 * 86400000));
+        const title    = options?.title
+            ?? `Consolidação ${pc.input_description} — ${new Date(pc.period_month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+
+        const qrItems = [{
+            code:        pc.input_code ?? '',
+            description: pc.input_description as string,
+            unit:        pc.input_unit as string,
+            quantity:    totalQty,
+            unitPrice:   unitCost,
+        }];
+
+        const qr = await quotationService.createRequest({
+            projectId,
+            title,
+            deadline,
+            status: 'Aberta',
+            items:  qrItems,
+            invitedSupplierIds: [],
+        });
+
+        // Atualiza o grupo e os itens do plano
+        await supabase
+            .from('procurement_consolidations')
+            .update({ status: 'quoted', generated_quotation_id: qr.id })
+            .eq('id', consolidationId);
+
+        const planItemIds = ciItems.map(i => i.plan_item_id as string);
+        await supabase
+            .from('procurement_plan_items')
+            .update({ status: 'quoted', generated_quotation_id: qr.id })
+            .in('id', planItemIds)
+            .eq('organization_id', organizationId);
+
+        return { quotationId: qr.id, quotationNumber: qr.number };
+    },
+
+    async generateOrderFromConsolidation(
+        consolidationId: string,
+        supplierId: string,
+        organizationId: string,
+        projectId: string,
+        options?: { deliveryDate?: string; notes?: string },
+    ): Promise<{ orderId: string; orderNumber: string }> {
+        const { data: pc, error } = await supabase
+            .from('procurement_consolidations')
+            .select('*, procurement_consolidation_items(*)')
+            .eq('id', consolidationId)
+            .single();
+        if (error || !pc) throw new Error('Consolidação não encontrada.');
+
+        const ciItems = (pc.procurement_consolidation_items ?? []) as Record<string, unknown>[];
+        const totalQty  = ciItems.reduce((s, i) => s + Number(i.required_qty ?? 0), 0);
+        const unitCost  = totalQty > 0 ? Number(pc.total_estimated ?? 0) / totalQty : 0;
+        const deliveryDate = options?.deliveryDate ?? toIso(new Date(Date.now() + 14 * 86400000));
+
+        const order = await orderService.createOrder({
+            projectId,
+            supplierId,
+            deliveryDate,
+            status: 'Rascunho',
+            notes:  options?.notes,
+            items:  [{
+                code:        pc.input_code ?? '',
+                description: pc.input_description as string,
+                unit:        pc.input_unit as string,
+                quantity:    totalQty,
+                unitPrice:   unitCost,
+                total:       Number(pc.total_estimated ?? 0),
+            }],
+        });
+
+        await supabase
+            .from('procurement_consolidations')
+            .update({ status: 'ordered', generated_order_id: order.id })
+            .eq('id', consolidationId);
+
+        const planItemIds = ciItems.map(i => i.plan_item_id as string);
+        await supabase
+            .from('procurement_plan_items')
+            .update({ status: 'ordered', generated_order_id: order.id })
+            .in('id', planItemIds)
+            .eq('organization_id', organizationId);
+
+        return { orderId: order.id, orderNumber: order.number ?? '' };
+    },
+
+    async cancelConsolidation(consolidationId: string): Promise<void> {
+        const { error } = await supabase
+            .from('procurement_consolidations')
+            .update({ status: 'cancelled' })
+            .eq('id', consolidationId);
+        if (error) throw error;
     },
 };

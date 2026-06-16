@@ -98,3 +98,47 @@ export interface UpdateProcurementItemInput {
     status?: ProcurementStatus;
     notes?: string;
 }
+
+// ── Fase 3: Consolidação Multi-Obra ──────────────────────────────────────────
+
+export type ConsolidationStatus = 'open' | 'quoted' | 'ordered' | 'cancelled';
+
+export interface ConsolidationOpportunity {
+    inputCode?: string;
+    inputDescription: string;
+    inputUnit: string;
+    periodMonth: string;        // ISO date (1º do mês)
+    projectCount: number;
+    totalQty: number;
+    totalEstimated: number;
+    itemIds: string[];          // procurement_plan_items.id[]
+}
+
+export interface ConsolidationItem {
+    id: string;
+    consolidationId: string;
+    planItemId: string;
+    projectId: string;
+    projectName: string;
+    requiredQty: number;
+    estimatedTotal: number;
+    created_at: string;
+}
+
+export interface Consolidation {
+    id: string;
+    organizationId: string;
+    inputCode?: string;
+    inputDescription: string;
+    inputUnit: string;
+    periodMonth: string;
+    totalRequiredQty: number;
+    totalEstimated: number;
+    status: ConsolidationStatus;
+    generatedQuotationId?: string;
+    generatedOrderId?: string;
+    notes?: string;
+    items?: ConsolidationItem[];
+    created_at: string;
+    updated_at: string;
+}

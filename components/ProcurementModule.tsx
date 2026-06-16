@@ -13,6 +13,9 @@ import {
     ProcurementKPIs,
     ProcurementMonthlySpend,
     ProcurementStatus,
+    ConsolidationOpportunity,
+    Consolidation,
+    ConsolidationStatus,
 } from '../types/procurement';
 
 interface Props {
@@ -20,7 +23,7 @@ interface Props {
     onChangeView: (view: string) => void;
 }
 
-type Tab = 'plano' | 'backlog' | 'financeiro';
+type Tab = 'plano' | 'backlog' | 'financeiro' | 'consolidacao';
 
 const STATUS_LABELS: Record<ProcurementStatus, string> = {
     pending:   'Pendente',
@@ -226,9 +229,15 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
     const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [selected, setSelected] = useState<Set<string>>(new Set());
-    const [modal, setModal] = useState<'quotation' | 'order' | null>(null);
+    const [modal, setModal] = useState<'quotation' | 'order' | 'consolidation-quotation' | 'consolidation-order' | null>(null);
     const [toast, setToast] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    // Consolidação multi-obra
+    const [opportunities, setOpportunities] = useState<ConsolidationOpportunity[]>([]);
+    const [consolidations, setConsolidations] = useState<Consolidation[]>([]);
+    const [activeConsolidation, setActiveConsolidation] = useState<Consolidation | null>(null);
+    const [loadingConsolidation, setLoadingConsolidation] = useState(false);
 
     // load projects
     useEffect(() => {
@@ -269,7 +278,22 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
         finally { setLoading(false); }
     }, [activeOrganizationId, selectedProjectId]);
 
+    const loadConsolidation = useCallback(async () => {
+        if (!activeOrganizationId) return;
+        setLoadingConsolidation(true);
+        try {
+            const [opps, cons] = await Promise.all([
+                procurementService.getConsolidationOpportunities(activeOrganizationId),
+                procurementService.listConsolidations(activeOrganizationId),
+            ]);
+            setOpportunities(opps);
+            setConsolidations(cons);
+        } catch (e: any) { setError(e.message); }
+        finally { setLoadingConsolidation(false); }
+    }, [activeOrganizationId]);
+
     useEffect(() => { loadData(); }, [loadData]);
+    useEffect(() => { if (tab === 'consolidacao') loadConsolidation(); }, [tab, loadConsolidation]);
 
     const showToast = (msg: string) => {
         setToast(msg);
@@ -544,9 +568,10 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
             <div className="border-b">
                 <div className="flex gap-1">
                     {([
-                        { id: 'plano',      label: 'Calendário de Compras', icon: Calendar      },
-                        { id: 'backlog',    label: `Backlog (${backlogItems.length})`, icon: PackageSearch },
-                        { id: 'financeiro', label: 'Curva de Desembolso',   icon: BarChart2     },
+                        { id: 'plano',        label: 'Calendário de Compras', icon: Calendar      },
+                        { id: 'backlog',      label: `Backlog (${backlogItems.length})`, icon: PackageSearch },
+                        { id: 'financeiro',   label: 'Curva de Desembolso',   icon: BarChart2     },
+                        { id: 'consolidacao', label: `Multi-Obra${opportunities.length > 0 ? ` (${opportunities.length})` : ''}`, icon: Users },
                     ] as { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[]).map(t => (
                         <button
                             key={t.id}
@@ -809,6 +834,78 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                     )}
                 </div>
             )}
+
+            {/* ── Tab Multi-Obra ── */}
+            {tab === 'consolidacao' && (
+                <div className="space-y-6">
+
+                    {/* Oportunidades detectadas */}
+                    <section>
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                                <Zap className="w-4 h-4 text-yellow-500" />
+                                Oportunidades de Consolidação Detectadas
+                            </h2>
+                            <button
+                                onClick={loadConsolidation}
+                                disabled={loadingConsolidation}
+                                className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                            >
+                                <RefreshCw className={`w-3.5 h-3.5 ${loadingConsolidation ? 'animate-spin' : ''}`} />
+                                Atualizar
+                            </button>
+                        </div>
+
+                        {loadingConsolidation ? (
+                            <div className="text-center py-8 text-gray-400 text-sm">Buscando oportunidades…</div>
+                        ) : opportunities.length === 0 ? (
+                            <div className="text-center py-8 text-gray-400">
+                                <CheckCircle2 className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                                <p className="text-sm">Nenhuma oportunidade encontrada.</p>
+                                <p className="text-xs mt-1">Gere o plano em pelo menos 2 projetos com o mesmo insumo no mesmo mês.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {opportunities.map((opp, idx) => (
+                                    <OpportunityCard
+                                        key={`${opp.inputCode}-${opp.periodMonth}-${idx}`}
+                                        opportunity={opp}
+                                        projects={projects}
+                                        suppliers={suppliers}
+                                        organizationId={activeOrganizationId ?? ''}
+                                        onConsolidated={() => { loadConsolidation(); loadData(); showToast('Consolidação criada com sucesso!'); }}
+                                        onError={msg => setError(msg)}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </section>
+
+                    {/* Consolidações existentes */}
+                    {consolidations.length > 0 && (
+                        <section>
+                            <h2 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                <Users className="w-4 h-4 text-indigo-500" />
+                                Consolidações Criadas
+                            </h2>
+                            <div className="space-y-2">
+                                {consolidations.map(c => (
+                                    <ConsolidationCard
+                                        key={c.id}
+                                        consolidation={c}
+                                        projects={projects}
+                                        suppliers={suppliers}
+                                        organizationId={activeOrganizationId ?? ''}
+                                        onUpdated={() => { loadConsolidation(); loadData(); }}
+                                        onError={msg => setError(msg)}
+                                        showToast={showToast}
+                                    />
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
@@ -924,6 +1021,310 @@ function CurvaSChart({
             <div className="flex gap-4 text-xs text-gray-500 justify-end mt-1">
                 <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-indigo-200 rounded-sm" /> Planejado</span>
                 <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-green-500 rounded-sm" /> Realizado</span>
+            </div>
+        </div>
+    );
+}
+
+// ── Opportunity Card ───────────────────────────────────────────────────────────
+const CONSOL_STATUS_COLORS: Record<ConsolidationStatus, string> = {
+    open:      'bg-yellow-100 text-yellow-800',
+    quoted:    'bg-blue-100 text-blue-800',
+    ordered:   'bg-purple-100 text-purple-800',
+    cancelled: 'bg-gray-100 text-gray-500',
+};
+
+function OpportunityCard({
+    opportunity, projects, suppliers, organizationId, onConsolidated, onError,
+}: {
+    opportunity: ConsolidationOpportunity;
+    projects: Pick<{ id?: string; name: string }, 'id' | 'name'>[];
+    suppliers: { id: string; name: string }[];
+    organizationId: string;
+    onConsolidated: () => void;
+    onError: (msg: string) => void;
+}) {
+    const [loading, setLoading] = useState(false);
+
+    const handleConsolidate = async () => {
+        setLoading(true);
+        try {
+            await procurementService.createConsolidation(organizationId, opportunity);
+            onConsolidated();
+        } catch (e: any) { onError(e.message); }
+        finally { setLoading(false); }
+    };
+
+    const monthLabel = (() => {
+        try {
+            const [y, m] = opportunity.periodMonth.slice(0, 7).split('-');
+            return new Date(`${y}-${m}-01`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        } catch { return opportunity.periodMonth; }
+    })();
+
+    return (
+        <div className="bg-white border rounded-lg p-4 flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">
+                        {opportunity.projectCount} obras
+                    </span>
+                    <span className="text-xs text-gray-500 capitalize">{monthLabel}</span>
+                </div>
+                <p className="font-semibold text-gray-900 truncate">{opportunity.inputDescription}</p>
+                {opportunity.inputCode && <p className="text-xs text-gray-400">{opportunity.inputCode}</p>}
+                <p className="text-sm text-gray-600 mt-1">
+                    {fmtQty(opportunity.totalQty)} {opportunity.inputUnit} ·{' '}
+                    <span className="font-medium text-indigo-700">{fmtBrl(opportunity.totalEstimated)}</span>
+                </p>
+            </div>
+            <button
+                onClick={handleConsolidate}
+                disabled={loading}
+                className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded text-sm font-medium disabled:opacity-50 hover:bg-indigo-700 whitespace-nowrap"
+            >
+                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                Consolidar
+            </button>
+        </div>
+    );
+}
+
+// ── Consolidation Card ─────────────────────────────────────────────────────────
+function ConsolidationCard({
+    consolidation, projects, suppliers, organizationId, onUpdated, onError, showToast,
+}: {
+    consolidation: Consolidation;
+    projects: Pick<{ id?: string; name: string }, 'id' | 'name'>[];
+    suppliers: { id: string; name: string }[];
+    organizationId: string;
+    onUpdated: () => void;
+    onError: (msg: string) => void;
+    showToast: (msg: string) => void;
+}) {
+    const [expanded, setExpanded] = useState(false);
+    const [modal, setModal]       = useState<'quotation' | 'order' | null>(null);
+
+    const monthLabel = (() => {
+        try {
+            const [y, m] = consolidation.periodMonth.slice(0, 7).split('-');
+            return new Date(`${y}-${m}-01`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        } catch { return consolidation.periodMonth; }
+    })();
+
+    // pick any project that has items in this consolidation for the PO
+    const representativeProjectId = consolidation.items?.[0]?.projectId
+        ?? projects[0]?.id
+        ?? '';
+
+    return (
+        <>
+            {modal === 'quotation' && (
+                <QuotationModalConsolidation
+                    consolidation={consolidation}
+                    projectId={representativeProjectId}
+                    organizationId={organizationId}
+                    onClose={() => setModal(null)}
+                    onSuccess={num => { setModal(null); onUpdated(); showToast(`Cotação ${num} criada!`); }}
+                />
+            )}
+            {modal === 'order' && (
+                <OrderModalConsolidation
+                    consolidation={consolidation}
+                    projectId={representativeProjectId}
+                    organizationId={organizationId}
+                    suppliers={suppliers}
+                    onClose={() => setModal(null)}
+                    onSuccess={num => { setModal(null); onUpdated(); showToast(`Pedido ${num} criado!`); }}
+                />
+            )}
+
+            <div className="bg-white border rounded-lg overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3">
+                    <button onClick={() => setExpanded(v => !v)} className="shrink-0">
+                        {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CONSOL_STATUS_COLORS[consolidation.status]}`}>
+                                {consolidation.status === 'open' ? 'Aberta' : consolidation.status === 'quoted' ? 'Cotada' : consolidation.status === 'ordered' ? 'Pedido' : 'Cancelada'}
+                            </span>
+                            <span className="text-xs text-gray-500 capitalize">{monthLabel}</span>
+                            <span className="text-xs text-gray-400">{consolidation.items?.length ?? 0} obras</span>
+                        </div>
+                        <p className="font-semibold text-gray-900 truncate">{consolidation.inputDescription}</p>
+                        <p className="text-sm text-gray-600">
+                            {fmtQty(consolidation.totalRequiredQty)} {consolidation.inputUnit} ·{' '}
+                            <span className="font-medium text-indigo-700">{fmtBrl(consolidation.totalEstimated)}</span>
+                        </p>
+                    </div>
+                    {consolidation.status === 'open' && (
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setModal('quotation')}
+                                className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-1.5 rounded hover:bg-blue-100 font-medium"
+                            >
+                                <FileText className="w-3.5 h-3.5" /> Cotar
+                            </button>
+                            <button
+                                onClick={() => setModal('order')}
+                                className="flex items-center gap-1 text-xs bg-purple-50 text-purple-700 px-2 py-1.5 rounded hover:bg-purple-100 font-medium"
+                            >
+                                <Truck className="w-3.5 h-3.5" /> Pedir
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {expanded && consolidation.items && consolidation.items.length > 0 && (
+                    <div className="border-t">
+                        <table className="w-full text-xs">
+                            <thead className="bg-gray-50 text-gray-500 uppercase">
+                                <tr>
+                                    <th className="px-3 py-2 text-left">Obra</th>
+                                    <th className="px-3 py-2 text-right">Qtd</th>
+                                    <th className="px-3 py-2 text-right">Estimado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {consolidation.items.map(ci => (
+                                    <tr key={ci.id} className="border-t hover:bg-gray-50">
+                                        <td className="px-3 py-1.5 font-medium text-gray-700">{ci.projectName}</td>
+                                        <td className="px-3 py-1.5 text-right">{fmtQty(ci.requiredQty)} {consolidation.inputUnit}</td>
+                                        <td className="px-3 py-1.5 text-right text-indigo-700 font-medium">{fmtBrl(ci.estimatedTotal)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        </>
+    );
+}
+
+// ── Consolidation modals ───────────────────────────────────────────────────────
+function QuotationModalConsolidation({
+    consolidation, projectId, organizationId, onClose, onSuccess,
+}: {
+    consolidation: Consolidation; projectId: string; organizationId: string;
+    onClose: () => void; onSuccess: (num: string) => void;
+}) {
+    const monthLabel = new Date(consolidation.periodMonth).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const [title, setTitle] = useState(`Consolidação ${consolidation.inputDescription} — ${monthLabel}`);
+    const [deadline, setDeadline] = useState(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const submit = async () => {
+        setLoading(true); setError('');
+        try {
+            const { quotationNumber } = await procurementService.generateQuotationFromConsolidation(
+                consolidation.id, organizationId, projectId, { title, deadline }
+            );
+            onSuccess(quotationNumber);
+        } catch (e: any) { setError(e.message); }
+        finally { setLoading(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
+                <div className="flex items-center justify-between p-4 border-b">
+                    <div className="flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-blue-600" />
+                        <h2 className="font-semibold">Cotação Consolidada</h2>
+                    </div>
+                    <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
+                </div>
+                <div className="p-4 space-y-3">
+                    <p className="text-sm text-gray-600">
+                        Volume total: <strong>{fmtQty(consolidation.totalRequiredQty)} {consolidation.inputUnit}</strong>{' '}
+                        ({consolidation.items?.length ?? 0} obras) · {fmtBrl(consolidation.totalEstimated)}
+                    </p>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Título</label>
+                        <input className="w-full border rounded px-3 py-1.5 text-sm" value={title} onChange={e => setTitle(e.target.value)} />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Prazo de resposta</label>
+                        <input type="date" className="w-full border rounded px-3 py-1.5 text-sm" value={deadline} onChange={e => setDeadline(e.target.value)} />
+                    </div>
+                    {error && <p className="text-red-600 text-sm">{error}</p>}
+                </div>
+                <div className="flex gap-2 justify-end p-4 border-t">
+                    <button onClick={onClose} className="px-3 py-1.5 text-sm border rounded">Cancelar</button>
+                    <button onClick={submit} disabled={loading} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded disabled:opacity-50">
+                        {loading ? 'Gerando…' : 'Gerar Cotação'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function OrderModalConsolidation({
+    consolidation, projectId, organizationId, suppliers, onClose, onSuccess,
+}: {
+    consolidation: Consolidation; projectId: string; organizationId: string;
+    suppliers: { id: string; name: string }[];
+    onClose: () => void; onSuccess: (num: string) => void;
+}) {
+    const [supplierId, setSupplierId] = useState('');
+    const [deliveryDate, setDeliveryDate] = useState(new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10));
+    const [notes, setNotes] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const submit = async () => {
+        if (!supplierId) { setError('Selecione o fornecedor.'); return; }
+        setLoading(true); setError('');
+        try {
+            const { orderNumber } = await procurementService.generateOrderFromConsolidation(
+                consolidation.id, supplierId, organizationId, projectId, { deliveryDate, notes }
+            );
+            onSuccess(orderNumber);
+        } catch (e: any) { setError(e.message); }
+        finally { setLoading(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
+                <div className="flex items-center justify-between p-4 border-b">
+                    <div className="flex items-center gap-2">
+                        <Truck className="w-5 h-5 text-purple-600" />
+                        <h2 className="font-semibold">Pedido Consolidado</h2>
+                    </div>
+                    <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
+                </div>
+                <div className="p-4 space-y-3">
+                    <p className="text-sm text-gray-600">
+                        Volume: <strong>{fmtQty(consolidation.totalRequiredQty)} {consolidation.inputUnit}</strong> · {fmtBrl(consolidation.totalEstimated)}
+                    </p>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Fornecedor *</label>
+                        <select className="w-full border rounded px-3 py-1.5 text-sm" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
+                            <option value="">Selecione…</option>
+                            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Data de entrega</label>
+                        <input type="date" className="w-full border rounded px-3 py-1.5 text-sm" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Observações</label>
+                        <textarea className="w-full border rounded px-3 py-1.5 text-sm" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
+                    </div>
+                    {error && <p className="text-red-600 text-sm">{error}</p>}
+                </div>
+                <div className="flex gap-2 justify-end p-4 border-t">
+                    <button onClick={onClose} className="px-3 py-1.5 text-sm border rounded">Cancelar</button>
+                    <button onClick={submit} disabled={loading || !supplierId} className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded disabled:opacity-50">
+                        {loading ? 'Gerando…' : 'Gerar Pedido'}
+                    </button>
+                </div>
             </div>
         </div>
     );

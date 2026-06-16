@@ -82,7 +82,7 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.fn_portal_mark_message_read(UUID, UUID) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_portal_mark_message_read(TEXT, UUID) TO anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.fn_portal_mark_all_read(p_token TEXT)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$

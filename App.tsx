@@ -92,9 +92,15 @@ const ClientPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
           aiInsight: cli.ai_insight ?? cli.aiInsight ?? null,
           visualGallery: cli.visual_gallery ?? cli.visualGallery ?? [],
         });
-        if (res.project) {
-          setProjectSettings({ ...res.project.settings, id: res.project.id, name: res.project.name });
+        // Monta settings: usa projeto vinculado se disponível, e injeta portal_tabs em qualquer caso
+        const baseSettings = res.project
+          ? { ...res.project.settings, id: res.project.id, name: res.project.name }
+          : {};
+        // portal_tabs da RPC tem precedência (busca também em outros projetos da org como fallback)
+        if (res.portal_tabs !== undefined && res.portal_tabs !== null) {
+          (baseSettings as any).clientPortalTabs = res.portal_tabs;
         }
+        setProjectSettings(baseSettings);
         setState('ok');
       } catch {
         setState('error');

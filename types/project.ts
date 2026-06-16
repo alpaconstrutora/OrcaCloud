@@ -182,6 +182,7 @@ export interface ProjectSettings {
         opportunities?: Array<{ title: string; subtitle: string; yield: string; link: string }>;
         reports?: Array<{ name: string; date: string; type: string }>;
     };
+    clientPortalTabs?: string[];
 }
 
 export interface ProjectDocument {

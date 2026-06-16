@@ -27,7 +27,10 @@ import {
     Sparkles,
     Palette,
     Users,
-    FileDown
+    FileDown,
+    Settings2,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
@@ -81,6 +84,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const isAdmin = profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER || profile?.group === 'DESENVOLVEDOR';
 
+    const [showTabConfig, setShowTabConfig] = React.useState(false);
     const [globalClientInstallments, setGlobalClientInstallments] = React.useState<PaymentInstallment[]>([]);
     const [clientContracts, setClientContracts] = React.useState<Contract[]>([]);
     const [viewingContract, setViewingContract] = React.useState<Contract | null>(null);
@@ -1913,7 +1917,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         );
     };
 
-    const tabs = [
+    const ALL_TABS = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
         { id: 'jornada', label: 'Minha Jornada', icon: <Calendar className="w-4 h-4" /> },
         { id: 'visual', label: 'Visual', icon: <Camera className="w-4 h-4" /> },
@@ -1924,6 +1928,23 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         { id: 'financeiro', label: 'Financeiro', icon: <DollarSign className="w-4 h-4" /> },
         { id: 'suporte', label: 'Suporte', icon: <ShieldCheck className="w-4 h-4" /> },
     ];
+
+    const enabledTabIds = settings.clientPortalTabs && settings.clientPortalTabs.length > 0
+        ? settings.clientPortalTabs
+        : ALL_TABS.map(t => t.id);
+
+    const tabs = isAdmin ? ALL_TABS : ALL_TABS.filter(t => enabledTabIds.includes(t.id));
+
+    const toggleTabVisibility = (tabId: string) => {
+        if (!onUpdateSettings) return;
+        const current = settings.clientPortalTabs && settings.clientPortalTabs.length > 0
+            ? settings.clientPortalTabs
+            : ALL_TABS.map(t => t.id);
+        const next = current.includes(tabId)
+            ? current.filter(id => id !== tabId)
+            : [...current, tabId];
+        onUpdateSettings({ ...settings, clientPortalTabs: next });
+    };
 
     if (isAdmin && !clientProfile) {
         return (
@@ -2009,24 +2030,96 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             </div>
 
             {/* Navigation Tabs */}
-            <div className="flex flex-wrap gap-2 md:gap-4 p-1.5 bg-white border border-gray-100 rounded-2xl w-fit shadow-sm">
-                {tabs.map(tab => (
+            <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex flex-wrap gap-2 md:gap-4 p-1.5 bg-white border border-gray-100 rounded-2xl shadow-sm">
+                    {tabs.map(tab => {
+                        const isVisible = enabledTabIds.includes(tab.id);
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                                className={`
+                                    flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all duration-300
+                                    ${activeTab === tab.id
+                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-105'
+                                        : isAdmin && !isVisible
+                                            ? 'text-gray-300 hover:bg-gray-50 hover:text-gray-400 opacity-50'
+                                            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                                    }
+                                `}
+                            >
+                                {tab.icon}
+                                {tab.label}
+                                {isAdmin && !isVisible && <EyeOff className="w-3 h-3 ml-1 text-gray-300" />}
+                            </button>
+                        );
+                    })}
+                </div>
+                {isAdmin && onUpdateSettings && (
                     <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                        className={`
-                            flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all duration-300
-                            ${activeTab === tab.id
-                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-105'
-                                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-                            }
-                        `}
+                        onClick={() => setShowTabConfig(true)}
+                        title="Configurar abas visíveis no portal do cliente"
+                        className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
                     >
-                        {tab.icon}
-                        {tab.label}
+                        <Settings2 className="w-4 h-4" />
                     </button>
-                ))}
+                )}
             </div>
+
+            {/* Tab Visibility Config Modal */}
+            {showTabConfig && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowTabConfig(false)}>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <div
+                        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between p-8 border-b border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+                                    <Settings2 className="w-5 h-5 text-indigo-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Portal do Cliente</h2>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para o cliente</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowTabConfig(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-3">
+                            {ALL_TABS.map(tab => {
+                                const isVisible = enabledTabIds.includes(tab.id);
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => toggleTabVisibility(tab.id)}
+                                        className={`w-full flex items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
+                                            isVisible
+                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                : 'bg-gray-50 border-gray-100 text-gray-400'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <span className={isVisible ? 'text-indigo-500' : 'text-gray-300'}>{tab.icon}</span>
+                                            <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
+                                        </div>
+                                        <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${isVisible ? 'text-indigo-500' : 'text-gray-300'}`}>
+                                            {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="px-8 pb-8">
+                            <p className="text-[10px] font-bold text-gray-400 text-center uppercase tracking-widest">
+                                Clique em cada aba para alternar visibilidade • Administradores veem todas
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Tab Content */}
             <div className="min-h-[500px]">

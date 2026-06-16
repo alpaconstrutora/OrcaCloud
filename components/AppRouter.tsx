@@ -300,6 +300,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         clients={clients}
         organizationId={activeOrganizationId}
         onClientSelect={(c: Client) => setClientProfile(c)}
+        onUpdateSettings={handleUpdateSettings}
         activeTab={activeView as 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'financeiro' | 'suporte'}
       />
     );
@@ -801,6 +802,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           clients={clients}
           organizationId={activeOrganizationId}
           onClientSelect={(c: Client) => setClientProfile(c)}
+          onUpdateSettings={handleUpdateSettings}
           activeTab={activeView === 'documentos' ? 'documentos' : 'dashboard'}
         />
       );

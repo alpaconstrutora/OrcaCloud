@@ -1301,9 +1301,24 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             || (linkedVersions.length > 0 ? linkedVersions[linkedVersions.length - 1] : undefined);
         const pinnedId = settings.basedOnBudgetVersionId;
         const pinnedItem = settings.basedOnBudgetVersionItem ?? null;
-        const hasNewerVersion = !!linkedActive && linkedActive.id !== pinnedId;
-        return { linkedVersions, linkedActive, pinnedId, pinnedItem, hasNewerVersion };
-    }, [projects, settings.linkedProjectId, settings.basedOnBudgetVersionId, settings.basedOnBudgetVersionItem]);
+
+        // Detecta nova versão OU mudança de conteúdo dentro da mesma versão
+        const newVersionId = !!linkedActive && linkedActive.id !== pinnedId;
+        let contentChanged = false;
+        if (!newVersionId && linkedActive && (settings.basedOnBudgetSnapshot?.length ?? 0) > 0) {
+            const snapshot = settings.basedOnBudgetSnapshot!;
+            const live: BudgetEntry[] = linkedActive.budget || [];
+            if (snapshot.length !== live.length) {
+                contentChanged = true;
+            } else {
+                const snapTotal = snapshot.reduce((s, b) => s + b.quantity * b.sinapiItem.price, 0);
+                const liveTotal = live.reduce((s: number, b: BudgetEntry) => s + b.quantity * b.sinapiItem.price, 0);
+                contentChanged = Math.abs(snapTotal - liveTotal) > 0.005;
+            }
+        }
+        const hasNewerVersion = newVersionId || contentChanged;
+        return { linkedVersions, linkedActive, pinnedId, pinnedItem, hasNewerVersion, newVersionId, contentChanged };
+    }, [projects, settings.linkedProjectId, settings.basedOnBudgetVersionId, settings.basedOnBudgetVersionItem, settings.basedOnBudgetSnapshot]);
 
     // Arquiva o cronograma atual como uma PlanningVersion (snapshot completo + pin atual).
     const snapshotCurrentPlanning = React.useCallback((description: string): PlanningVersion => {
@@ -3218,10 +3233,10 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     <div className="flex items-center gap-2.5 min-w-0">
                         <ArrowUpCircle className="w-4 h-4 text-indigo-500 shrink-0" />
                         <p className="text-[12px] text-indigo-800 font-medium truncate">
-                            Orçamento atualizado para{' '}
-                            <span className="font-bold">v{budgetVersionStatus.linkedActive.item}</span>
-                            {' '}— este planejamento está baseado em{' '}
-                            <span className="font-bold">v{budgetVersionStatus.pinnedItem ?? '—'}</span>.
+                            {budgetVersionStatus.newVersionId
+                                ? <>Orçamento atualizado para{' '}<span className="font-bold">v{budgetVersionStatus.linkedActive.item}</span>{' '}— planejamento baseado em{' '}<span className="font-bold">v{budgetVersionStatus.pinnedItem ?? '—'}</span>.</>
+                                : <>Orçamento <span className="font-bold">v{budgetVersionStatus.linkedActive.item}</span> foi modificado — planejamento usa snapshot anterior.</>
+                            }
                         </p>
                     </div>
                     <button
@@ -3229,7 +3244,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                         className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600 transition-all shadow-sm whitespace-nowrap"
                     >
                         <GitBranch className="w-3 h-3" />
-                        Criar nova versão do planejamento
+                        {budgetVersionStatus.newVersionId ? 'Criar nova versão do planejamento' : 'Sincronizar com orçamento atual'}
                     </button>
                 </div>
             )}

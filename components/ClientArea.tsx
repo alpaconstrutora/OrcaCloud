@@ -54,6 +54,7 @@ import FinishSelection from './FinishSelection';
 import ClientList from './ClientList';
 import { clientService } from '../services/clientService';
 import { clientRequestsService, ClientRequest, ClientServiceOrder } from '../services/clientRequestsService';
+import { clientMessagesService, ClientPortalMessage } from '../services/clientMessagesService';
 import { exportService } from '../services/exportService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { contractService } from '../services/contractService';
@@ -115,6 +116,15 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [requestsLoading, setRequestsLoading] = React.useState(false);
     const [showNewRequestForm, setShowNewRequestForm] = React.useState(false);
     const [newRequestForm, setNewRequestForm] = React.useState({ title: '', description: '', category: 'Geral', priority: 'Média' });
+    const [portalMessages, setPortalMessages] = React.useState<ClientPortalMessage[]>([]);
+    const [unreadCount, setUnreadCount] = React.useState(0);
+    const [showNotifications, setShowNotifications] = React.useState(false);
+    React.useEffect(() => {
+        if (!showNotifications) return;
+        const close = () => setShowNotifications(false);
+        document.addEventListener('click', close);
+        return () => document.removeEventListener('click', close);
+    }, [showNotifications]);
 
     React.useEffect(() => {
         const orgId = settings.organizationId || (settings as any).organization_id || organizationId;
@@ -150,6 +160,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId)
                     .then(setGlobalClientInstallments).catch(console.error);
             }
+        }
+        // Mensagens do portal (carrega na montagem quando há token)
+        if (portalToken) {
+            clientMessagesService.getMessagesByToken(portalToken)
+                .then(({ messages, unread }) => { setPortalMessages(messages); setUnreadCount(unread); })
+                .catch(console.error);
         }
     }, [clientProfile, activeTab, settings, organizationId]);
 
@@ -3131,6 +3147,72 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-2 shrink-0">
+                        {/* Notification bell — portal real only */}
+                        {portalToken && (
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowNotifications(n => !n)}
+                                    className="relative p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-orange-500 hover:border-orange-200 hover:bg-orange-50 transition-all shadow-sm"
+                                    title="Notificações"
+                                >
+                                    <Bell className="w-4 h-4" />
+                                    {unreadCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                                            {unreadCount > 9 ? '9+' : unreadCount}
+                                        </span>
+                                    )}
+                                </button>
+                                {/* Notification dropdown */}
+                                {showNotifications && (
+                                    <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden" onClick={e => e.stopPropagation()}>
+                                        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                                            <span className="text-sm font-black text-gray-900 uppercase tracking-tight">Notificações</span>
+                                            {unreadCount > 0 && portalToken && (
+                                                <button
+                                                    onClick={async () => {
+                                                        await clientMessagesService.markAllReadByToken(portalToken).catch(console.error);
+                                                        setPortalMessages(prev => prev.map(m => ({ ...m, is_read: true })));
+                                                        setUnreadCount(0);
+                                                    }}
+                                                    className="text-[9px] font-black text-orange-500 uppercase tracking-widest hover:underline"
+                                                >
+                                                    Marcar todas lidas
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+                                            {portalMessages.length === 0 ? (
+                                                <div className="py-10 text-center">
+                                                    <Bell className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                                                    <p className="text-xs font-bold text-gray-400">Nenhuma notificação</p>
+                                                </div>
+                                            ) : portalMessages.map(msg => (
+                                                <button
+                                                    key={msg.id}
+                                                    onClick={async () => {
+                                                        if (!msg.is_read && portalToken) {
+                                                            await clientMessagesService.markReadByToken(portalToken, msg.id).catch(console.error);
+                                                            setPortalMessages(prev => prev.map(m => m.id === msg.id ? { ...m, is_read: true } : m));
+                                                            setUnreadCount(n => Math.max(0, n - 1));
+                                                        }
+                                                    }}
+                                                    className={`w-full text-left px-5 py-4 transition-colors hover:bg-gray-50 ${!msg.is_read ? 'bg-orange-50/40' : ''}`}
+                                                >
+                                                    <div className="flex items-start gap-3">
+                                                        <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${!msg.is_read ? 'bg-orange-400' : 'bg-gray-200'}`} />
+                                                        <div className="min-w-0">
+                                                            <p className="text-xs font-black text-gray-900 leading-tight truncate">{msg.title}</p>
+                                                            {msg.body && <p className="text-[10px] text-gray-500 mt-0.5 leading-snug line-clamp-2">{msg.body}</p>}
+                                                            <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-1">{new Date(msg.created_at).toLocaleDateString('pt-BR')} · {msg.sender_name}</p>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         {clientProfile && (
                             <button
                                 onClick={() => { setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}

@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, Loader2, Plus, Wrench, ClipboardList, ChevronDown, AlertCircle, CheckCircle2, Clock, Save } from 'lucide-react';
+import { X, Loader2, Plus, Wrench, ClipboardList, ChevronDown, AlertCircle, Clock, Save, Bell } from 'lucide-react';
 import { Client } from '../types';
 import { clientRequestsService, ClientRequest, ClientServiceOrder } from '../services/clientRequestsService';
+import { clientMessagesService } from '../services/clientMessagesService';
 
 interface Props {
     client: Client;
@@ -49,6 +50,8 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
     const [error, setError]       = React.useState<string | null>(null);
 
     // inline edit state
+    const [notifyClient, setNotifyClient] = React.useState(false);
+
     const [editingReqId, setEditingReqId]   = React.useState<string | null>(null);
     const [editingReqData, setEditingReqData] = React.useState<Partial<ClientRequest>>({});
     const [editingOsId, setEditingOsId]     = React.useState<string | null>(null);
@@ -90,8 +93,20 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
         setSaving(true);
         try {
             await clientRequestsService.updateRequest(id, editingReqData);
+            const updated = requests.find(r => r.id === id);
+            if (notifyClient && editingReqData.status && updated) {
+                await clientMessagesService.sendMessage(organizationId, client.id, {
+                    sender_name: 'Equipe',
+                    type: 'status_update',
+                    title: `Chamado atualizado: ${editingReqData.status}`,
+                    body: `Seu chamado "${updated.title}" foi atualizado para: ${editingReqData.status}.${editingReqData.admin_notes ? `\n\n${editingReqData.admin_notes}` : ''}`,
+                    reference_type: 'chamado',
+                    reference_id: id,
+                });
+            }
             setRequests(prev => prev.map(r => r.id === id ? { ...r, ...editingReqData } : r));
             setEditingReqId(null);
+            setNotifyClient(false);
         } catch (e: any) {
             setError(e?.message ?? 'Erro ao salvar');
         } finally {
@@ -133,8 +148,20 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
         setSaving(true);
         try {
             await clientRequestsService.updateServiceOrder(id, editingOsData);
+            const updated = orders.find(o => o.id === id);
+            if (notifyClient && editingOsData.status && updated) {
+                await clientMessagesService.sendMessage(organizationId, client.id, {
+                    sender_name: 'Equipe',
+                    type: 'status_update',
+                    title: `OS atualizada: ${editingOsData.status}`,
+                    body: `Sua ordem de serviço "${updated.title}" (${updated.number}) foi atualizada para: ${editingOsData.status}.${editingOsData.scheduled_date ? `\nAgendada para: ${new Date(editingOsData.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}${editingOsData.admin_notes ? `\n\n${editingOsData.admin_notes}` : ''}`,
+                    reference_type: 'os',
+                    reference_id: id,
+                });
+            }
             setOrders(prev => prev.map(o => o.id === id ? { ...o, ...editingOsData } : o));
             setEditingOsId(null);
+            setNotifyClient(false);
         } catch (e: any) {
             setError(e?.message ?? 'Erro ao salvar');
         } finally {
@@ -299,11 +326,17 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Notas Internas</label>
                                                 <textarea className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300 resize-none" rows={2} value={editingReqData.admin_notes ?? ''} onChange={e => setEditingReqData(p => ({ ...p, admin_notes: e.target.value }))} />
                                             </div>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => saveReq(req.id)} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all">
-                                                    <Save className="w-3.5 h-3.5" />{saving ? 'Salvando...' : 'Salvar'}
-                                                </button>
-                                                <button onClick={() => setEditingReqId(null)} className="px-4 py-2 border border-gray-200 text-gray-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
+                                            <div className="flex items-center justify-between">
+                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                    <input type="checkbox" checked={notifyClient} onChange={e => setNotifyClient(e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
+                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1"><Bell className="w-3 h-3" /> Notificar cliente</span>
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => saveReq(req.id)} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all">
+                                                        <Save className="w-3.5 h-3.5" />{saving ? 'Salvando...' : 'Salvar'}
+                                                    </button>
+                                                    <button onClick={() => { setEditingReqId(null); setNotifyClient(false); }} className="px-4 py-2 border border-gray-200 text-gray-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
+                                                </div>
                                             </div>
                                         </div>
                                     ) : (
@@ -407,11 +440,17 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Notas Internas</label>
                                                 <textarea className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300 resize-none" rows={2} value={editingOsData.admin_notes ?? ''} onChange={e => setEditingOsData(p => ({ ...p, admin_notes: e.target.value }))} />
                                             </div>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => saveOs(os.id)} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all">
-                                                    <Save className="w-3.5 h-3.5" />{saving ? 'Salvando...' : 'Salvar'}
-                                                </button>
-                                                <button onClick={() => setEditingOsId(null)} className="px-4 py-2 border border-gray-200 text-gray-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
+                                            <div className="flex items-center justify-between">
+                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                    <input type="checkbox" checked={notifyClient} onChange={e => setNotifyClient(e.target.checked)} className="w-4 h-4 rounded accent-indigo-600" />
+                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1"><Bell className="w-3 h-3" /> Notificar cliente</span>
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => saveOs(os.id)} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all">
+                                                        <Save className="w-3.5 h-3.5" />{saving ? 'Salvando...' : 'Salvar'}
+                                                    </button>
+                                                    <button onClick={() => { setEditingOsId(null); setNotifyClient(false); }} className="px-4 py-2 border border-gray-200 text-gray-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
+                                                </div>
                                             </div>
                                         </div>
                                     ) : (

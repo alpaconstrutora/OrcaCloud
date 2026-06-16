@@ -2,10 +2,11 @@ import React from 'react';
 import { clientService } from '../services/clientService';
 import { clientPortalService, ClientPortalToken } from '../services/clientPortalService';
 import { supabase } from '../lib/supabase';
-import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList } from 'lucide-react';
+import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send } from 'lucide-react';
 import { Client } from '../types';
 import ClientModal from './ClientModal';
 import ClientRequestsAdminModal from './ClientRequestsAdminModal';
+import { clientMessagesService } from '../services/clientMessagesService';
 import { useServicesToast } from './services/useServicestoast';
 import ServicesToast from './services/ServicesToast';
 import { useStore } from '../store/useStore';
@@ -87,6 +88,9 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const [tokenLoading, setTokenLoading] = React.useState(false);
     const [tokenCopied, setTokenCopied] = React.useState(false);
     const [requestsModal, setRequestsModal] = React.useState<Client | null>(null);
+    const [comunicadoModal, setComunicadoModal] = React.useState<Client | null>(null);
+    const [comunicadoForm, setComunicadoForm] = React.useState({ title: '', body: '' });
+    const [comunicadoSending, setComunicadoSending] = React.useState(false);
 
     const openTokenModal = async (client: Client) => {
         setTokenModal({ client, token: null });
@@ -160,6 +164,28 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 return 0;
             });
     }, [clients, searchTerm, sortBy, categoryFilter]);
+
+    const handleSendComunicado = async () => {
+        if (!comunicadoModal || !comunicadoForm.title.trim()) return;
+        const orgId = organizationId || activeOrganizationId || comunicadoModal.organization_id;
+        if (!orgId) { showToast('Organização não identificada.', 'error'); return; }
+        setComunicadoSending(true);
+        try {
+            await clientMessagesService.sendMessage(orgId, comunicadoModal.id, {
+                sender_name: 'Equipe',
+                type: 'comunicado',
+                title: comunicadoForm.title,
+                body: comunicadoForm.body || undefined,
+            });
+            showToast('Comunicado enviado!', 'success');
+            setComunicadoModal(null);
+            setComunicadoForm({ title: '', body: '' });
+        } catch (e) {
+            showToast('Erro ao enviar comunicado.', 'error');
+        } finally {
+            setComunicadoSending(false);
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -371,6 +397,13 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                     </button>
                                                 )}
                                                 <button
+                                                    onClick={() => { setComunicadoModal(client); setComunicadoForm({ title: '', body: '' }); }}
+                                                    className="p-2 text-orange-400 hover:text-white hover:bg-orange-400 rounded-lg transition-colors"
+                                                    title="Enviar Comunicado"
+                                                >
+                                                    <Bell className="w-4 h-4" />
+                                                </button>
+                                                <button
                                                     onClick={() => handleOpenModal(client)}
                                                     className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                 >
@@ -510,6 +543,13 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         </button>
                                     )}
                                     <button
+                                        onClick={() => { setComunicadoModal(client); setComunicadoForm({ title: '', body: '' }); }}
+                                        className="p-2 text-orange-400 hover:text-white hover:bg-orange-400 rounded-xl transition-all shadow-sm border border-transparent hover:border-orange-100"
+                                        title="Enviar Comunicado"
+                                    >
+                                        <Bell className="w-4 h-4" />
+                                    </button>
+                                    <button
                                         onClick={() => handleOpenModal(client)}
                                         className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-blue-100"
                                         title="Editar"
@@ -601,6 +641,54 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 </button>
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Comunicado */}
+            {comunicadoModal && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setComunicadoModal(null)}>
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-8 space-y-5" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-xl font-black text-gray-900 flex items-center gap-2"><Bell className="w-5 h-5 text-orange-400" /> Enviar Comunicado</h3>
+                                <p className="text-sm text-gray-400 font-medium mt-0.5">{comunicadoModal.name}</p>
+                            </div>
+                            <button onClick={() => setComunicadoModal(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Título *</label>
+                                <input
+                                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-300"
+                                    placeholder="Ex: Informação sobre manutenção"
+                                    value={comunicadoForm.title}
+                                    onChange={e => setComunicadoForm(p => ({ ...p, title: e.target.value }))}
+                                    autoFocus
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Mensagem</label>
+                                <textarea
+                                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+                                    rows={4}
+                                    placeholder="Detalhes do comunicado..."
+                                    value={comunicadoForm.body}
+                                    onChange={e => setComunicadoForm(p => ({ ...p, body: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-3 pt-1">
+                            <button
+                                onClick={handleSendComunicado}
+                                disabled={comunicadoSending || !comunicadoForm.title.trim()}
+                                className="flex-1 flex items-center justify-center gap-2 py-3 bg-orange-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 disabled:opacity-50 transition-all active:scale-95"
+                            >
+                                {comunicadoSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                {comunicadoSending ? 'Enviando...' : 'Enviar'}
+                            </button>
+                            <button onClick={() => setComunicadoModal(null)} className="px-5 py-3 border border-gray-200 text-gray-500 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
+                        </div>
                     </div>
                 </div>
             )}

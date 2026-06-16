@@ -2,9 +2,10 @@ import React from 'react';
 import { clientService } from '../services/clientService';
 import { clientPortalService, ClientPortalToken } from '../services/clientPortalService';
 import { supabase } from '../lib/supabase';
-import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X } from 'lucide-react';
+import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList } from 'lucide-react';
 import { Client } from '../types';
 import ClientModal from './ClientModal';
+import ClientRequestsAdminModal from './ClientRequestsAdminModal';
 import { useServicesToast } from './services/useServicestoast';
 import ServicesToast from './services/ServicesToast';
 import { useStore } from '../store/useStore';
@@ -85,6 +86,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const [tokenModal, setTokenModal] = React.useState<{ client: Client; token: ClientPortalToken | null } | null>(null);
     const [tokenLoading, setTokenLoading] = React.useState(false);
     const [tokenCopied, setTokenCopied] = React.useState(false);
+    const [requestsModal, setRequestsModal] = React.useState<Client | null>(null);
 
     const openTokenModal = async (client: Client) => {
         setTokenModal({ client, token: null });
@@ -359,6 +361,15 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                 >
                                                     <Link2 className="w-4 h-4" />
                                                 </button>
+                                                {(client.category === 'Locação' || client.category === 'Serviços') && (
+                                                    <button
+                                                        onClick={() => setRequestsModal(client)}
+                                                        className="p-2 text-violet-500 hover:text-white hover:bg-violet-500 rounded-lg transition-colors"
+                                                        title={client.category === 'Serviços' ? 'Ordens de Serviço' : 'Chamados de Manutenção'}
+                                                    >
+                                                        {client.category === 'Serviços' ? <ClipboardList className="w-4 h-4" /> : <Wrench className="w-4 h-4" />}
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => handleOpenModal(client)}
                                                     className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -489,6 +500,15 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                     >
                                         <Link2 className="w-4 h-4" />
                                     </button>
+                                    {(client.category === 'Locação' || client.category === 'Serviços') && (
+                                        <button
+                                            onClick={() => setRequestsModal(client)}
+                                            className="p-2 text-violet-500 hover:text-white hover:bg-violet-500 rounded-xl transition-all shadow-sm border border-transparent hover:border-violet-100"
+                                            title={client.category === 'Serviços' ? 'Ordens de Serviço' : 'Chamados de Manutenção'}
+                                        >
+                                            {client.category === 'Serviços' ? <ClipboardList className="w-4 h-4" /> : <Wrench className="w-4 h-4" />}
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => handleOpenModal(client)}
                                         className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-blue-100"
@@ -583,6 +603,14 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                         )}
                     </div>
                 </div>
+            )}
+
+            {requestsModal && (
+                <ClientRequestsAdminModal
+                    client={requestsModal}
+                    organizationId={organizationId || activeOrganizationId || requestsModal.organization_id || ''}
+                    onClose={() => setRequestsModal(null)}
+                />
             )}
 
             <ClientModal

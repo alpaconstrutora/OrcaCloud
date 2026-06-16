@@ -5,6 +5,7 @@ import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, Mo
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
 import { BudgetRow } from './BudgetRow';
+import SinapiRebaseModal from './SinapiRebaseModal';
 import { WBSImportModal } from './WBSImportModal';
 import { WBSTemplateModal } from './WBSTemplateModal';
 import * as XLSX from 'xlsx';
@@ -1573,6 +1574,23 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Banner de nova competência SINAPI + rebase */}
+      <SinapiRebaseModal
+        budget={budget}
+        references={references}
+        pinnedRaw={settings.referenceMonth}
+        location={searchLocation}
+        chargeType={searchCharges}
+        isLocked={isLocked}
+        onApply={(newBudget, targetRef) => {
+          onUpdateBudget(newBudget);
+          onUpdateSettings({ ...settings, referenceMonth: targetRef });
+          setSearchReference(targetRef);
+          setNotification({ message: `Orçamento atualizado para a competência ${references.find(r => r.referenceDate === targetRef)?.label || targetRef}.`, type: 'success' });
+          setTimeout(() => setNotification(null), 5000);
+        }}
+      />
 
       {/* Main Toolbar */}
       <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex flex-wrap gap-3 items-center justify-between">

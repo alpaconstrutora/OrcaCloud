@@ -99,19 +99,26 @@ function expandGroupPredecessors(
             groupPredMap.set(s.id, s.predecessors!);
         }
     });
-    if (groupPredMap.size === 0) return items;
+    // Also collect group start-date constraints to propagate as SNET to child items
+    const groupConstraintMap = new Map<string, { constraintType: ConstraintType; constraintDate: string }>();
+    items.forEach(s => {
+        if (nodeToLeaves.has(s.id) && s.constraintDate && s.constraintType) {
+            groupConstraintMap.set(s.id, { constraintType: s.constraintType, constraintDate: s.constraintDate });
+        }
+    });
+
+    if (groupPredMap.size === 0 && groupConstraintMap.size === 0) return items;
 
     return items.map(item => {
         // Non-item nodes (groups/phases): keep as-is (they act as relay nodes in the graph)
         if (nodeToLeaves.has(item.id)) return item;
 
-        // For each leaf item, find ancestor groups that have predecessors and inherit them
+        // Inherit predecessors from ancestor groups
         const inherited: Predecessor[] = [];
         groupPredMap.forEach((preds, groupId) => {
             const leaves = nodeToLeaves.get(groupId) || [];
             if (!leaves.includes(item.id)) return;
             preds.forEach(pred => {
-                // If the predecessor is itself a group, expand to its leaf items
                 const predLeaves = nodeToLeaves.get(pred.id);
                 if (predLeaves) {
                     predLeaves.forEach(leafId => {
@@ -130,8 +137,27 @@ function expandGroupPredecessors(
             });
         });
 
-        if (inherited.length === 0) return item;
-        return { ...item, predecessors: [...(item.predecessors || []), ...inherited] };
+        // Inherit start-date constraint from the most restrictive ancestor group (latest SNET date)
+        let inheritedConstraintDate: string | undefined;
+        groupConstraintMap.forEach(({ constraintDate }, groupId) => {
+            const leaves = nodeToLeaves.get(groupId) || [];
+            if (!leaves.includes(item.id)) return;
+            if (!inheritedConstraintDate || constraintDate > inheritedConstraintDate) {
+                inheritedConstraintDate = constraintDate;
+            }
+        });
+        const hasGroupConstraint = !!inheritedConstraintDate &&
+            (!item.constraintDate || inheritedConstraintDate > item.constraintDate);
+
+        if (inherited.length === 0 && !hasGroupConstraint) return item;
+        return {
+            ...item,
+            predecessors: inherited.length > 0 ? [...(item.predecessors || []), ...inherited] : item.predecessors,
+            ...(hasGroupConstraint ? {
+                constraintType: ConstraintType.SNET,
+                constraintDate: inheritedConstraintDate
+            } : {})
+        };
     });
 }
 

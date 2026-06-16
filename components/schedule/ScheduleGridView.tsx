@@ -580,11 +580,16 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                             </button>
                                         </td>
                                         <td className="px-1 py-3 text-center text-[12px] text-gray-400">—</td>
-                                        <td className="px-1 py-2 text-center">
-                                            <div className="text-[12px] font-medium text-gray-500">{formatDateDisplay(node.earlyStart)}</div>
+                                        <td className="px-1 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                            <ModernDateInput
+                                                value={nodeSchedule?.startDate ? nodeSchedule.startDate.split('T')[0] : (node.earlyStart || '')}
+                                                onChange={(val) => handleUpdateItemSchedule(node.id, 'startDate', val)}
+                                                compact
+                                                className="w-32 mx-auto"
+                                            />
                                         </td>
                                         <td className="px-1 py-2 text-center">
-                                            <div className="text-[12px] font-medium text-gray-500">{formatDateDisplay(node.earlyFinish)}</div>
+                                            <div className="text-[12px] font-medium text-gray-500">{formatDateDisplay(nodeSchedule?.endDate || node.earlyFinish)}</div>
                                         </td>
                                         <td className="px-1 py-3"></td>
                                         <td className="px-1 py-3"></td>

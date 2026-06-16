@@ -3142,9 +3142,15 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                         <div>
                             <h1 className="text-lg md:text-3xl font-black text-gray-900 tracking-tight leading-tight">
-                                {clientProfile?.name ? `Olá, ${clientProfile.name.split(' ')[0]}` : 'Área do Cliente'}
+                                {clientProfile?.name
+                                    ? (clientCategory === 'Locação' || clientCategory === 'Serviços')
+                                        ? clientProfile.name.split(' ')[0]
+                                        : `Olá, ${clientProfile.name.split(' ')[0]}`
+                                    : 'Área do Cliente'}
                             </h1>
-                            <p className="text-xs md:text-sm font-medium text-gray-400">Bem-vindo à sua área exclusiva</p>
+                            <p className="text-xs md:text-sm font-medium text-gray-400">
+                                {clientCategory === 'Locação' ? 'Locação' : clientCategory === 'Serviços' ? 'Serviços' : 'Bem-vindo à sua área exclusiva'}
+                            </p>
                         </div>
                     </div>
 

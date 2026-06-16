@@ -1,4 +1,4 @@
-// Módulo Almoxarifado (ÒPURA Inventory) — Fase 1
+// Módulo Almoxarifado (ÒPURA Inventory) — Fases 1 e 2
 
 export type WarehouseType = 'site' | 'central' | 'virtual';
 
@@ -91,6 +91,83 @@ export interface CreateSupplierLeadTimeInput {
     categoryId?: string;
     leadTimeDays: number;
     notes?: string;
+}
+
+// ── Fase 2 ────────────────────────────────────────────────────────────────────
+
+export type ReservationStatus = 'active' | 'consumed' | 'cancelled';
+
+export interface StockReservation {
+    id: string;
+    organizationId: string;
+    warehouseId: string;
+    warehouseName?: string;
+    inputCode: string;
+    inputDescription: string;
+    inputUnit: string;
+    quantity: number;
+    workOrderId?: string;
+    status: ReservationStatus;
+    notes?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface CreateReservationInput {
+    warehouseId: string;
+    inputCode: string;
+    inputDescription: string;
+    inputUnit: string;
+    quantity: number;
+    workOrderId?: string;
+    notes?: string;
+}
+
+export type TransferStatus = 'in_transit' | 'received' | 'cancelled';
+
+export interface StockTransferItem {
+    id: string;
+    transferId: string;
+    inputCode?: string;
+    inputDescription: string;
+    inputUnit: string;
+    quantity: number;
+}
+
+export interface StockTransfer {
+    id: string;
+    organizationId: string;
+    fromWarehouseId: string;
+    fromWarehouseName?: string;
+    toWarehouseId: string;
+    toWarehouseName?: string;
+    status: TransferStatus;
+    shippedAt?: string;
+    receivedAt?: string;
+    notes?: string;
+    items: StockTransferItem[];
+    created_at: string;
+    updated_at: string;
+}
+
+export interface CreateTransferInput {
+    fromWarehouseId: string;
+    toWarehouseId: string;
+    notes?: string;
+    items: Array<{
+        inputCode?: string;
+        inputDescription: string;
+        inputUnit: string;
+        quantity: number;
+    }>;
+}
+
+// Item de consumo da OE
+export interface StockConsumptionItem {
+    inputCode?: string;
+    inputDescription: string;
+    inputUnit: string;
+    quantity: number;
 }
 
 // Posição líquida (Fase 3 — exposta ao Plano de Aquisições)

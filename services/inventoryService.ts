@@ -4,9 +4,15 @@ import {
     StockMovement,
     StockBalance,
     SupplierLeadTime,
+    StockReservation,
+    StockTransfer,
+    StockTransferItem,
     CreateStockMovementInput,
     CreateWarehouseInput,
     CreateSupplierLeadTimeInput,
+    CreateReservationInput,
+    CreateTransferInput,
+    StockConsumptionItem,
 } from '../types/inventory';
 
 const WAREHOUSE_COLS =
@@ -280,5 +286,194 @@ export const inventoryService = {
         }
         const generic = items.find(lt => !lt.inputCode);
         return generic?.leadTimeDays ?? null;
+    },
+
+    // ─── RESERVAS (Fase 2) ─────────────────────────────────────────────────────
+
+    async listReservations(
+        organizationId: string,
+        opts?: { warehouseId?: string; workOrderId?: string; activeOnly?: boolean }
+    ): Promise<StockReservation[]> {
+        let query = supabase
+            .from('stock_reservations')
+            .select('id, organization_id, warehouse_id, input_code, input_description, input_unit, quantity, work_order_id, status, notes, created_at, updated_at, warehouse:warehouses(name)')
+            .eq('organization_id', organizationId)
+            .order('created_at', { ascending: false });
+        if (opts?.warehouseId) query = query.eq('warehouse_id', opts.warehouseId);
+        if (opts?.workOrderId) query = query.eq('work_order_id', opts.workOrderId);
+        if (opts?.activeOnly) query = query.eq('status', 'active');
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data ?? []).map(r => {
+            const row = r as Record<string, unknown>;
+            return {
+                id: row.id as string,
+                organizationId: row.organization_id as string,
+                warehouseId: row.warehouse_id as string,
+                warehouseName: (row.warehouse as Record<string, unknown> | null)?.name as string | undefined,
+                inputCode: row.input_code as string,
+                inputDescription: row.input_description as string,
+                inputUnit: row.input_unit as string,
+                quantity: row.quantity as number,
+                workOrderId: row.work_order_id as string | undefined,
+                status: row.status as StockReservation['status'],
+                notes: row.notes as string | undefined,
+                created_at: row.created_at as string,
+                updated_at: row.updated_at as string,
+            };
+        });
+    },
+
+    async createReservation(organizationId: string, input: CreateReservationInput): Promise<StockReservation> {
+        const { data, error } = await supabase
+            .from('stock_reservations')
+            .insert({
+                organization_id: organizationId,
+                warehouse_id: input.warehouseId,
+                input_code: input.inputCode,
+                input_description: input.inputDescription,
+                input_unit: input.inputUnit,
+                quantity: input.quantity,
+                work_order_id: input.workOrderId ?? null,
+                notes: input.notes ?? null,
+            })
+            .select('id, organization_id, warehouse_id, input_code, input_description, input_unit, quantity, work_order_id, status, notes, created_at, updated_at')
+            .single();
+        if (error) throw error;
+        const row = data as Record<string, unknown>;
+        return {
+            id: row.id as string,
+            organizationId: row.organization_id as string,
+            warehouseId: row.warehouse_id as string,
+            inputCode: row.input_code as string,
+            inputDescription: row.input_description as string,
+            inputUnit: row.input_unit as string,
+            quantity: row.quantity as number,
+            workOrderId: row.work_order_id as string | undefined,
+            status: row.status as StockReservation['status'],
+            notes: row.notes as string | undefined,
+            created_at: row.created_at as string,
+            updated_at: row.updated_at as string,
+        };
+    },
+
+    async cancelReservation(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('stock_reservations')
+            .update({ status: 'cancelled' })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    // ─── CONSUMO DE ESTOQUE PELA OE (Fase 2) ───────────────────────────────────
+
+    async consumeStockForWorkOrder(
+        workOrderId: string,
+        warehouseId: string,
+        items: StockConsumptionItem[]
+    ): Promise<number> {
+        const { data, error } = await supabase.rpc('fn_consume_stock_for_work_order', {
+            p_work_order_id: workOrderId,
+            p_warehouse_id: warehouseId,
+            p_items: items,
+        });
+        if (error) throw error;
+        return (data as number) ?? 0;
+    },
+
+    // ─── TRANSFERÊNCIAS (Fase 2) ───────────────────────────────────────────────
+
+    async listTransfers(
+        organizationId: string,
+        opts?: { status?: StockTransfer['status'] }
+    ): Promise<StockTransfer[]> {
+        let query = supabase
+            .from('stock_transfers')
+            .select(`
+                id, organization_id, from_warehouse_id, to_warehouse_id,
+                status, shipped_at, received_at, notes, created_at, updated_at,
+                from_warehouse:warehouses!from_warehouse_id(name),
+                to_warehouse:warehouses!to_warehouse_id(name),
+                stock_transfer_items(id, transfer_id, input_code, input_description, input_unit, quantity)
+            `)
+            .eq('organization_id', organizationId)
+            .order('created_at', { ascending: false });
+        if (opts?.status) query = query.eq('status', opts.status);
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data ?? []).map(r => {
+            const row = r as Record<string, unknown>;
+            const items = (row.stock_transfer_items as Record<string, unknown>[] ?? []).map(i => ({
+                id: i.id as string,
+                transferId: i.transfer_id as string,
+                inputCode: i.input_code as string | undefined,
+                inputDescription: i.input_description as string,
+                inputUnit: i.input_unit as string,
+                quantity: i.quantity as number,
+            } as StockTransferItem));
+            return {
+                id: row.id as string,
+                organizationId: row.organization_id as string,
+                fromWarehouseId: row.from_warehouse_id as string,
+                fromWarehouseName: (row.from_warehouse as Record<string, unknown> | null)?.name as string | undefined,
+                toWarehouseId: row.to_warehouse_id as string,
+                toWarehouseName: (row.to_warehouse as Record<string, unknown> | null)?.name as string | undefined,
+                status: row.status as StockTransfer['status'],
+                shippedAt: row.shipped_at as string | undefined,
+                receivedAt: row.received_at as string | undefined,
+                notes: row.notes as string | undefined,
+                items,
+                created_at: row.created_at as string,
+                updated_at: row.updated_at as string,
+            };
+        });
+    },
+
+    async createTransfer(organizationId: string, input: CreateTransferInput): Promise<StockTransfer> {
+        if (input.fromWarehouseId === input.toWarehouseId) throw new Error('Origem e destino não podem ser o mesmo almoxarifado.');
+        if (input.items.length === 0) throw new Error('Informe ao menos um item.');
+
+        const { data: transfer, error } = await supabase
+            .from('stock_transfers')
+            .insert({
+                organization_id: organizationId,
+                from_warehouse_id: input.fromWarehouseId,
+                to_warehouse_id: input.toWarehouseId,
+                notes: input.notes ?? null,
+                shipped_at: new Date().toISOString().slice(0, 10),
+            })
+            .select('id')
+            .single();
+        if (error) throw error;
+
+        const { error: itemsError } = await supabase
+            .from('stock_transfer_items')
+            .insert(input.items.map(i => ({
+                transfer_id: transfer.id,
+                input_code: i.inputCode ?? null,
+                input_description: i.inputDescription,
+                input_unit: i.inputUnit,
+                quantity: i.quantity,
+            })));
+        if (itemsError) throw itemsError;
+
+        const transfers = await this.listTransfers(organizationId);
+        return transfers.find(t => t.id === transfer.id)!;
+    },
+
+    async receiveTransfer(transferId: string): Promise<void> {
+        const { error } = await supabase.rpc('fn_receive_stock_transfer', {
+            p_transfer_id: transferId,
+        });
+        if (error) throw error;
+    },
+
+    async cancelTransfer(transferId: string): Promise<void> {
+        const { error } = await supabase
+            .from('stock_transfers')
+            .update({ status: 'cancelled' })
+            .eq('id', transferId)
+            .eq('status', 'in_transit');
+        if (error) throw error;
     },
 };

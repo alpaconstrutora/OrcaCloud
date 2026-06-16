@@ -1,4 +1,4 @@
-// components/InventoryModule.tsx — Módulo Almoxarifado Fase 1
+// components/InventoryModule.tsx — Módulo Almoxarifado Fases 1 e 2
 
 import React from 'react';
 import {
@@ -18,6 +18,9 @@ import {
     Edit,
     Trash2,
     Check,
+    ArrowLeftRight,
+    Send,
+    CheckCircle2,
 } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import { useStore } from '../store/useStore';
@@ -26,9 +29,11 @@ import type {
     StockBalance,
     StockMovement,
     SupplierLeadTime,
+    StockTransfer,
     CreateWarehouseInput,
     CreateStockMovementInput,
     CreateSupplierLeadTimeInput,
+    CreateTransferInput,
 } from '../types/inventory';
 
 interface Props {
@@ -36,7 +41,7 @@ interface Props {
     onChangeView: (view: string) => void;
 }
 
-type Tab = 'saldos' | 'movimentos' | 'almoxarifados' | 'lead_times';
+type Tab = 'saldos' | 'movimentos' | 'almoxarifados' | 'lead_times' | 'transferencias';
 
 // ─── Modal de movimento manual ────────────────────────────────────────────────
 interface MovementModalProps {
@@ -303,12 +308,14 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const [balances, setBalances] = React.useState<StockBalance[]>([]);
     const [movements, setMovements] = React.useState<StockMovement[]>([]);
     const [leadTimes, setLeadTimes] = React.useState<SupplierLeadTime[]>([]);
+    const [transfers, setTransfers] = React.useState<StockTransfer[]>([]);
 
     const [selectedWarehouseId, setSelectedWarehouseId] = React.useState<string>('');
     const [searchTerm, setSearchTerm] = React.useState('');
 
     const [movementModal, setMovementModal] = React.useState<'in' | 'out' | 'adjust' | null>(null);
     const [warehouseModal, setWarehouseModal] = React.useState<WarehouseType | true | null>(null);
+    const [transferModal, setTransferModal] = React.useState(false);
 
     const load = React.useCallback(async () => {
         if (!activeOrganizationId) return;
@@ -318,14 +325,16 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
             setWarehouses(whs);
             if (!selectedWarehouseId && whs.length > 0) setSelectedWarehouseId(whs[0].id);
 
-            const [bal, mov, lts] = await Promise.all([
+            const [bal, mov, lts, trfs] = await Promise.all([
                 inventoryService.listBalances(activeOrganizationId, { warehouseId: selectedWarehouseId || undefined }),
                 inventoryService.listMovements(activeOrganizationId, { warehouseId: selectedWarehouseId || undefined }),
                 inventoryService.listLeadTimes(activeOrganizationId),
+                inventoryService.listTransfers(activeOrganizationId),
             ]);
             setBalances(bal);
             setMovements(mov);
             setLeadTimes(lts);
+            setTransfers(trfs);
         } catch (e) {
             console.error(e);
         } finally {
@@ -430,10 +439,11 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 bg-gray-800/50 rounded-xl p-1 w-fit">
+            <div className="flex flex-wrap gap-1 bg-gray-800/50 rounded-xl p-1 w-fit">
                 {([
                     { key: 'saldos', label: 'Saldos', icon: Package },
                     { key: 'movimentos', label: 'Movimentos', icon: History },
+                    { key: 'transferencias', label: 'Transferências', icon: ArrowLeftRight },
                     { key: 'almoxarifados', label: 'Almoxarifados', icon: Warehouse },
                     { key: 'lead_times', label: 'Lead Time', icon: Clock },
                 ] as const).map(t => (
@@ -580,6 +590,93 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                         </div>
                     )}
 
+                    {/* ── TAB: TRANSFERÊNCIAS ── */}
+                    {tab === 'transferencias' && (
+                        <div className="space-y-3">
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={() => setTransferModal(true)}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium"
+                                >
+                                    <Plus className="w-4 h-4" /> Nova Transferência
+                                </button>
+                            </div>
+                            <div className="bg-gray-800/30 border border-gray-700 rounded-xl overflow-hidden">
+                                {transfers.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                                        <ArrowLeftRight className="w-10 h-10 mb-3 opacity-40" />
+                                        <p>Nenhuma transferência registrada.</p>
+                                    </div>
+                                ) : (
+                                    <div className="divide-y divide-gray-700">
+                                        {transfers.map(t => {
+                                            const statusColor: Record<string, string> = {
+                                                in_transit: 'bg-yellow-900/40 text-yellow-400',
+                                                received: 'bg-green-900/40 text-green-400',
+                                                cancelled: 'bg-gray-700 text-gray-500',
+                                            };
+                                            const statusLabel: Record<string, string> = {
+                                                in_transit: 'Em trânsito',
+                                                received: 'Recebida',
+                                                cancelled: 'Cancelada',
+                                            };
+                                            return (
+                                                <div key={t.id} className="p-4 hover:bg-gray-700/20">
+                                                    <div className="flex items-start justify-between gap-4">
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="text-white font-medium">{t.fromWarehouseName ?? '—'}</span>
+                                                                <ArrowLeftRight className="w-4 h-4 text-gray-500 shrink-0" />
+                                                                <span className="text-white font-medium">{t.toWarehouseName ?? '—'}</span>
+                                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[t.status]}`}>
+                                                                    {statusLabel[t.status]}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-gray-400 mt-1">
+                                                                {new Date(t.created_at).toLocaleDateString('pt-BR')}
+                                                                {t.notes && ` — ${t.notes}`}
+                                                            </p>
+                                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                                {t.items.map((item, idx) => (
+                                                                    <span key={idx} className="px-2 py-0.5 bg-gray-800 rounded text-xs text-gray-300">
+                                                                        {item.inputDescription}: {fmt(item.quantity)} {item.inputUnit}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                        {t.status === 'in_transit' && (
+                                                            <div className="flex gap-2 shrink-0">
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        await inventoryService.receiveTransfer(t.id);
+                                                                        load();
+                                                                    }}
+                                                                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium"
+                                                                >
+                                                                    <CheckCircle2 className="w-3 h-3" /> Receber
+                                                                </button>
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        if (!confirm('Cancelar transferência?')) return;
+                                                                        await inventoryService.cancelTransfer(t.id);
+                                                                        load();
+                                                                    }}
+                                                                    className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-400 hover:text-red-400 text-xs"
+                                                                >
+                                                                    Cancelar
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* ── TAB: ALMOXARIFADOS ── */}
                     {tab === 'almoxarifados' && (
                         <div className="space-y-3">
@@ -710,6 +807,154 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     onSaved={() => { setWarehouseModal(null); load(); }}
                 />
             )}
+            {transferModal && (
+                <TransferModal
+                    orgId={activeOrganizationId}
+                    warehouses={warehouses.filter(w => w.isActive)}
+                    onClose={() => setTransferModal(false)}
+                    onCreated={() => { setTransferModal(false); load(); }}
+                />
+            )}
+        </div>
+    );
+};
+
+// ─── Modal de transferência ────────────────────────────────────────────────────
+interface TransferModalProps {
+    orgId: string;
+    warehouses: WarehouseType[];
+    onClose: () => void;
+    onCreated: () => void;
+}
+
+const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClose, onCreated }) => {
+    const keyRef = React.useRef(0);
+    const [form, setForm] = React.useState<CreateTransferInput>({
+        fromWarehouseId: warehouses[0]?.id ?? '',
+        toWarehouseId: warehouses[1]?.id ?? '',
+        notes: '',
+        items: [],
+    });
+    const [saving, setSaving] = React.useState(false);
+    const [err, setErr] = React.useState('');
+
+    const addItem = () => {
+        keyRef.current += 1;
+        setForm(f => ({
+            ...f,
+            items: [...f.items, { inputCode: '', inputDescription: '', inputUnit: 'un', quantity: 0, _key: keyRef.current } as CreateTransferInput['items'][0] & { _key: number }],
+        }));
+    };
+
+    const updateItem = (idx: number, patch: Partial<CreateTransferInput['items'][0]>) => {
+        setForm(f => ({ ...f, items: f.items.map((it, i) => i === idx ? { ...it, ...patch } : it) }));
+    };
+
+    const removeItem = (idx: number) => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
+
+    const save = async () => {
+        if (form.fromWarehouseId === form.toWarehouseId) { setErr('Origem e destino não podem ser iguais.'); return; }
+        const validItems = form.items.filter(i => i.inputDescription && i.quantity > 0);
+        if (validItems.length === 0) { setErr('Adicione ao menos um item com quantidade.'); return; }
+        setSaving(true);
+        try {
+            await inventoryService.createTransfer(orgId, { ...form, items: validItems });
+            onCreated();
+        } catch (e: unknown) {
+            setErr((e as Error).message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+                    <div className="flex items-center gap-2">
+                        <Send className="w-5 h-5 text-blue-400" />
+                        <h3 className="font-semibold text-white">Nova Transferência</h3>
+                    </div>
+                    <button onClick={onClose}><X className="w-5 h-5 text-gray-400 hover:text-white" /></button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1">Origem *</label>
+                            <select
+                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                value={form.fromWarehouseId}
+                                onChange={e => setForm(f => ({ ...f, fromWarehouseId: e.target.value }))}
+                            >
+                                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1">Destino *</label>
+                            <select
+                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                value={form.toWarehouseId}
+                                onChange={e => setForm(f => ({ ...f, toWarehouseId: e.target.value }))}
+                            >
+                                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs text-gray-400 mb-1">Observações</label>
+                        <input className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white" value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+                    </div>
+
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs text-gray-400 uppercase font-medium">Itens</label>
+                            <button onClick={addItem} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
+                                <Plus className="w-3 h-3" /> Adicionar
+                            </button>
+                        </div>
+                        {form.items.length === 0 && (
+                            <div className="text-center py-6 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg">Adicione os materiais a transferir.</div>
+                        )}
+                        <div className="space-y-2">
+                            {form.items.map((item, idx) => (
+                                <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                                    <div className="col-span-5">
+                                        <label className="block text-xs text-gray-500 mb-1">Descrição</label>
+                                        <input className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.inputDescription} onChange={e => updateItem(idx, { inputDescription: e.target.value })} placeholder="Insumo" />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs text-gray-500 mb-1">Cód.</label>
+                                        <input className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.inputCode ?? ''} onChange={e => updateItem(idx, { inputCode: e.target.value || undefined })} />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs text-gray-500 mb-1">Un</label>
+                                        <input className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.inputUnit} onChange={e => updateItem(idx, { inputUnit: e.target.value })} />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs text-gray-500 mb-1">Qtd</label>
+                                        <input type="number" min="0.001" step="0.01" className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.quantity || ''} onChange={e => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })} />
+                                    </div>
+                                    <div className="col-span-1 flex justify-center">
+                                        <button onClick={() => removeItem(idx)} className="text-gray-600 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="px-6 py-4 border-t border-gray-700 shrink-0">
+                    {err && <p className="text-red-400 text-xs mb-3">{err}</p>}
+                    <div className="flex gap-3">
+                        <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">Cancelar</button>
+                        <button onClick={save} disabled={saving} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            Enviar Transferência
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

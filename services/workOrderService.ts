@@ -704,13 +704,22 @@ export const workOrderService = {
       ? Math.min(100, (totalQty / plannedQty) * 100)
       : 0
 
+    // busca o custo de material já registrado (via consumo de estoque ou lançamento manual)
+    const { data: woCosts } = await supabase
+      .from('work_orders')
+      .select('actual_material_cost')
+      .eq('id', workOrderId)
+      .single()
+
+    const materialCost = woCosts?.actual_material_cost ?? 0
+
     await supabase
       .from('work_orders')
       .update({
         executed_quantity: totalQty,
         completion_pct: Number(completionPct.toFixed(2)),
         actual_labor_cost: totalLaborCost,
-        actual_total_cost: totalLaborCost, // material adicionado manualmente na Sprint 8
+        actual_total_cost: totalLaborCost + materialCost,
       })
       .eq('id', workOrderId)
   },

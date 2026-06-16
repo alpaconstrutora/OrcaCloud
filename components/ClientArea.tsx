@@ -299,142 +299,112 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         const quickTabs = tabs.filter(t => t.id !== 'dashboard').slice(0, 4);
 
         return (
-            <div className="space-y-0 md:space-y-6 animate-in fade-in duration-500">
-                {/* ── Hero mobile / banner desktop ── */}
-                <div className="-mx-4 md:mx-0 bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-400 md:rounded-[2rem] px-5 pt-4 pb-10 md:pb-6">
-                    <div className="flex items-center justify-between mb-4 md:mb-3">
-                        <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5">
-                            <span className="text-[10px] font-black text-white uppercase tracking-widest truncate max-w-[160px]">Locação</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => setActiveTab('manutencao')} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white" title="Manutenção">
-                                <Wrench className="w-3.5 h-3.5" />
-                            </button>
-                            {portalToken && (
-                                <button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white" title="Notificações">
-                                    <Bell className="w-3.5 h-3.5" />
-                                    {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[7px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}
-                                </button>
-                            )}
-                            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-600 font-black text-sm shadow">
-                                {(clientProfile?.name || '?').charAt(0)}
+            <div className="animate-in fade-in duration-500">
+                {/* ══ MOBILE ══ */}
+                <div className="md:hidden space-y-0">
+                    {/* Hero */}
+                    <div className="-mx-4 bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-400 px-5 pt-4 pb-10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5">
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Locação</span>
                             </div>
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setActiveTab('manutencao')} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"><Wrench className="w-3.5 h-3.5" /></button>
+                                {portalToken && (
+                                    <button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white">
+                                        <Bell className="w-3.5 h-3.5" />
+                                        {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[7px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+                                    </button>
+                                )}
+                                <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-600 font-black text-sm shadow">{(clientProfile?.name || '?').charAt(0)}</div>
+                            </div>
+                        </div>
+                        <h2 className="text-2xl font-black text-white leading-tight">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
+                        <p className="text-blue-200 text-sm font-medium mt-1">Acompanhe seu imóvel e pagamentos</p>
+                        <div className="mt-4 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
+                            <div className="grid grid-cols-2 gap-3 mb-3">
+                                <div>
+                                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Próximo Vencimento</p>
+                                    {nextDue ? (<><p className="text-lg font-black text-white">R$ {nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p><p className="text-[9px] text-blue-200 font-bold mt-0.5">{new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p></>) : <p className="text-sm font-black text-white">Em dia</p>}
+                                </div>
+                                <div className="border-l border-white/20 pl-3">
+                                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Total Pago</p>
+                                    <p className="text-lg font-black text-white">{paidPct}%</p>
+                                    <p className="text-[9px] text-blue-200 font-bold mt-0.5">R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                                </div>
+                            </div>
+                            {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="w-full py-2.5 bg-white text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"><Wallet className="w-3.5 h-3.5" /> Ver Financeiro <ArrowRight className="w-3 h-3" /></button>}
                         </div>
                     </div>
-                    <h2 className="text-2xl font-black text-white leading-tight">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
-                    <p className="text-blue-200 text-sm font-medium mt-1">Acompanhe seu imóvel e pagamentos</p>
-
-                    {/* Card flutuante: próximo vencimento */}
-                    <div className="mt-4 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                            <div>
-                                <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Próximo Vencimento</p>
-                                {nextDue ? (
-                                    <>
-                                        <p className="text-lg font-black text-white">R$ {nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
-                                        <p className="text-[9px] text-blue-200 font-bold mt-0.5">{new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
-                                    </>
-                                ) : <p className="text-sm font-black text-white">Em dia</p>}
-                            </div>
-                            <div className="border-l border-white/20 pl-3">
-                                <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Total Pago</p>
-                                <p className="text-lg font-black text-white">{paidPct}%</p>
-                                <p className="text-[9px] text-blue-200 font-bold mt-0.5">R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
-                            </div>
-                        </div>
-                        {enabledTabIds.includes('financeiro') && (
-                            <button onClick={() => setActiveTab('financeiro')} className="w-full py-2.5 bg-white text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all">
-                                <Wallet className="w-3.5 h-3.5" /> Ver Financeiro <ArrowRight className="w-3 h-3" />
+                    {/* KPIs flutuantes */}
+                    <div className="px-4 -mt-4 grid grid-cols-3 gap-3">
+                        {[
+                            { label: 'Contratos', value: activeContracts.length, icon: <FileText className="w-4 h-4" />, color: 'indigo', tab: 'contratos' as const },
+                            { label: 'Chamados', value: openRequests.length, icon: <Wrench className="w-4 h-4" />, color: openRequests.length > 0 ? 'amber' : 'emerald', tab: 'manutencao' as const },
+                            { label: 'Pago', value: `${paidPct}%`, icon: <CheckCircle2 className="w-4 h-4" />, color: 'emerald', tab: 'financeiro' as const },
+                        ].map(card => (
+                            <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col items-center text-center gap-1.5">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500`}>{card.icon}</div>
+                                <p className="text-xl font-black text-gray-900">{card.value}</p>
+                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-wide leading-tight">{card.label}</p>
                             </button>
-                        )}
+                        ))}
                     </div>
+                    {/* Alerta reajuste */}
+                    {reajusteAlert && <div className="mx-4 mt-3 flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl"><AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" /><div><p className="text-sm font-black text-amber-800">Reajuste em {new Date(reajusteAlert.reajuste_proximo! + 'T12:00:00').toLocaleDateString('pt-BR')}</p><p className="text-xs text-amber-600 mt-0.5">{reajusteAlert.title}</p></div></div>}
+                    {/* Chamados recentes */}
+                    {recentRequests.length > 0 && <div className="px-4 mt-4 pb-6 space-y-2">
+                        <div className="flex items-center justify-between mb-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Últimos Chamados</p>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Ver todos</button>}</div>
+                        {recentRequests.map(req => (<div key={req.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-black text-gray-900 truncate">{req.title}</p><p className="text-[10px] font-bold text-gray-400 mt-0.5">{req.category}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span></div>))}
+                    </div>}
                 </div>
 
-                {/* ── KPIs ── */}
-                <div className="px-4 md:px-0 -mt-4 md:mt-0 grid grid-cols-3 gap-3">
-                    {[
-                        { label: 'Contratos Ativos', value: activeContracts.length, icon: <FileText className="w-4 h-4" />, color: 'indigo', tab: 'contratos' as const },
-                        { label: 'Chamados Abertos', value: openRequests.length, icon: <Wrench className="w-4 h-4" />, color: openRequests.length > 0 ? 'amber' : 'emerald', tab: 'manutencao' as const },
-                        { label: 'Cobranças Pagas', value: `${paidPct}%`, icon: <CheckCircle2 className="w-4 h-4" />, color: 'emerald', tab: 'financeiro' as const },
-                    ].map(card => (
-                        <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col items-center text-center gap-1.5 hover:border-blue-200 transition-all active:scale-95">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500`}>{card.icon}</div>
-                            <p className="text-xl font-black text-gray-900">{card.value}</p>
-                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-wide leading-tight">{card.label}</p>
-                        </button>
-                    ))}
-                </div>
-
-                {/* ── Alerta de reajuste ── */}
-                {reajusteAlert && (
-                    <div className="mx-4 md:mx-0 flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
-                        <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                {/* ══ DESKTOP ══ */}
+                <div className="hidden md:block space-y-6">
+                    {/* Faixa de boas-vindas compacta */}
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-500 rounded-3xl px-8 py-6 flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-black text-amber-800 uppercase tracking-tight">Reajuste contratual próximo</p>
-                            <p className="text-xs text-amber-600 mt-0.5">{reajusteAlert.title} — índice {reajusteAlert.reajuste_index || '—'} em {new Date(reajusteAlert.reajuste_proximo! + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                            <p className="text-blue-200 text-xs font-black uppercase tracking-widest mb-1">Locação</p>
+                            <h2 className="text-2xl font-black text-white">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
+                            <p className="text-blue-200 text-sm mt-1">Acompanhe seu imóvel e pagamentos</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="text-right">
+                                <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Próximo Vencimento</p>
+                                <p className="text-xl font-black text-white mt-0.5">{nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : 'Em dia'}</p>
+                                {nextDue && <p className="text-[10px] text-blue-200 font-bold">{new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
+                            </div>
+                            {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="flex items-center gap-2 px-5 py-3 bg-white text-blue-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-50 transition-all shadow"><Wallet className="w-4 h-4" /> Financeiro</button>}
                         </div>
                     </div>
-                )}
-
-                {/* ── Acesso rápido — desktop only (mobile já tem bottom nav) ── */}
-                {quickTabs.length > 0 && (
-                    <div className="hidden md:block px-4 md:px-0">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Acesso Rápido</p>
-                        <div className="grid grid-cols-4 gap-2">
-                            {quickTabs.map(tab => (
-                                <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex flex-col items-center gap-1.5 hover:border-blue-200 hover:bg-blue-50/30 transition-all active:scale-95">
-                                    <span className="text-blue-500">{tab.icon}</span>
-                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-wide text-center leading-tight">{tab.label.split(' ')[0]}</span>
-                                </button>
-                            ))}
+                    {/* Grid principal */}
+                    <div className="grid grid-cols-3 gap-6">
+                        {/* KPIs */}
+                        {[
+                            { label: 'Contratos Ativos', value: activeContracts.length, icon: <FileText className="w-5 h-5" />, color: 'indigo', tab: 'contratos' as const },
+                            { label: 'Chamados Abertos', value: openRequests.length, icon: <Wrench className="w-5 h-5" />, color: openRequests.length > 0 ? 'amber' : 'emerald', tab: 'manutencao' as const },
+                            { label: 'Cobranças Pagas', value: `${paidPct}%`, icon: <CheckCircle2 className="w-5 h-5" />, color: 'emerald', tab: 'financeiro' as const },
+                        ].map(card => (
+                            <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center gap-4 hover:border-blue-200 hover:shadow-md transition-all text-left">
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500 shrink-0`}>{card.icon}</div>
+                                <div><p className="text-2xl font-black text-gray-900">{card.value}</p><p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-0.5">{card.label}</p></div>
+                            </button>
+                        ))}
+                    </div>
+                    {/* Alerta reajuste */}
+                    {reajusteAlert && <div className="flex items-start gap-3 p-5 bg-amber-50 border border-amber-200 rounded-2xl"><AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" /><div><p className="text-sm font-black text-amber-800 uppercase tracking-tight">Reajuste contratual próximo</p><p className="text-xs text-amber-600 mt-0.5">{reajusteAlert.title} — índice {reajusteAlert.reajuste_index || '—'} em {new Date(reajusteAlert.reajuste_proximo! + 'T12:00:00').toLocaleDateString('pt-BR')}</p></div></div>}
+                    {/* Duas colunas: chamados + contratos */}
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Últimos Chamados</h3>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
+                            {recentRequests.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum chamado</p> : <div className="space-y-3">{recentRequests.map(req => (<div key={req.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{req.title}</p><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{req.category}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span></div>))}</div>}
+                        </div>
+                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos Ativos</h3>{enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
+                            {activeContracts.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p> : <div className="space-y-3">{activeContracts.slice(0, 3).map(c => (<div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{c.title}</p><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{c.billing_cycle ?? c.contract_type}{c.end_date ? ` · até ${new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}</p></div><span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span></div>))}</div>}
                         </div>
                     </div>
-                )}
-
-                {/* ── Chamados recentes ── */}
-                {recentRequests.length > 0 && (
-                    <div className="px-4 md:px-0">
-                        <div className="flex items-center justify-between mb-3">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Últimos Chamados</p>
-                            {enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}
-                        </div>
-                        <div className="space-y-2">
-                            {recentRequests.map(req => (
-                                <div key={req.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-black text-gray-900 uppercase tracking-tight truncate">{req.title}</p>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{req.category} · {new Date(req.opened_at + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
-                                    </div>
-                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shrink-0 ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* ── Contratos ativos ── */}
-                {activeContracts.length > 0 && (
-                    <div className="px-4 md:px-0 pb-6 md:pb-0">
-                        <div className="flex items-center justify-between mb-3">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contratos Ativos</p>
-                            {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}
-                        </div>
-                        <div className="space-y-2">
-                            {activeContracts.slice(0, 2).map(c => (
-                                <div key={c.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-black text-gray-900 uppercase tracking-tight truncate">{c.title}</p>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                            {c.billing_cycle ?? c.contract_type}
-                                            {c.end_date ? ` · até ${new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}
-                                        </p>
-                                    </div>
-                                    <span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
+                </div>
             </div>
         );
     };
@@ -454,132 +424,100 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             .sort((a, b) => a.scheduled_date!.localeCompare(b.scheduled_date!))[0];
 
         const STATUS_COLOR: Record<string, string> = { Aberta: 'bg-blue-100 text-blue-700', 'Em Execução': 'bg-amber-100 text-amber-700', Concluída: 'bg-emerald-100 text-emerald-700', Cancelada: 'bg-gray-100 text-gray-400' };
-        const quickTabs = tabs.filter(t => t.id !== 'dashboard').slice(0, 4);
 
         return (
-            <div className="space-y-0 md:space-y-6 animate-in fade-in duration-500">
-                {/* ── Hero ── */}
-                <div className="-mx-4 md:mx-0 bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-400 md:rounded-[2rem] px-5 pt-4 pb-10 md:pb-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5">
-                            <span className="text-[10px] font-black text-white uppercase tracking-widest">Serviços</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {portalToken && (
-                                <button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white" title="Notificações">
-                                    <Bell className="w-3.5 h-3.5" />
-                                    {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[7px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}
-                                </button>
-                            )}
-                            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-indigo-600 font-black text-sm shadow">
-                                {(clientProfile?.name || '?').charAt(0)}
+            <div className="animate-in fade-in duration-500">
+                {/* ══ MOBILE ══ */}
+                <div className="md:hidden space-y-0">
+                    {/* Hero */}
+                    <div className="-mx-4 bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-400 px-5 pt-4 pb-10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5"><span className="text-[10px] font-black text-white uppercase tracking-widest">Serviços</span></div>
+                            <div className="flex items-center gap-2">
+                                {portalToken && (<button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"><Bell className="w-3.5 h-3.5" />{unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[7px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}</button>)}
+                                <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-indigo-600 font-black text-sm shadow">{(clientProfile?.name || '?').charAt(0)}</div>
                             </div>
+                        </div>
+                        <h2 className="text-2xl font-black text-white leading-tight">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
+                        <p className="text-indigo-200 text-sm font-medium mt-1">Acompanhe suas ordens de serviço</p>
+                        <div className="mt-4 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
+                            <div className="grid grid-cols-2 gap-3 mb-3">
+                                <div>
+                                    <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mb-1">Próximo Agendamento</p>
+                                    {nextScheduled ? (<><p className="text-base font-black text-white leading-tight truncate max-w-[130px]">{nextScheduled.title}</p><p className="text-[9px] text-indigo-200 font-bold mt-0.5">{new Date(nextScheduled.scheduled_date! + 'T12:00:00').toLocaleDateString('pt-BR')}</p></>) : <p className="text-sm font-black text-white">Sem agendamento</p>}
+                                </div>
+                                <div className="border-l border-white/20 pl-3">
+                                    <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mb-1">Total Contratado</p>
+                                    <p className="text-lg font-black text-white">R$ {totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                                </div>
+                            </div>
+                            {enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="w-full py-2.5 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"><ClipboardList className="w-3.5 h-3.5" /> Ver Ordens de Serviço <ArrowRight className="w-3 h-3" /></button>}
                         </div>
                     </div>
-                    <h2 className="text-2xl font-black text-white leading-tight">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
-                    <p className="text-indigo-200 text-sm font-medium mt-1">Acompanhe suas ordens de serviço</p>
-
-                    <div className="mt-4 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                            <div>
-                                <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mb-1">Próximo Agendamento</p>
-                                {nextScheduled ? (
-                                    <>
-                                        <p className="text-base font-black text-white leading-tight truncate max-w-[130px]">{nextScheduled.title}</p>
-                                        <p className="text-[9px] text-indigo-200 font-bold mt-0.5">{new Date(nextScheduled.scheduled_date! + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
-                                    </>
-                                ) : <p className="text-sm font-black text-white">Sem agendamento</p>}
-                            </div>
-                            <div className="border-l border-white/20 pl-3">
-                                <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mb-1">Total Contratado</p>
-                                <p className="text-lg font-black text-white">R$ {totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
-                            </div>
-                        </div>
-                        {enabledTabIds.includes('os') && (
-                            <button onClick={() => setActiveTab('os')} className="w-full py-2.5 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all">
-                                <ClipboardList className="w-3.5 h-3.5" /> Ver Ordens de Serviço <ArrowRight className="w-3 h-3" />
+                    {/* KPIs flutuantes */}
+                    <div className="px-4 -mt-4 grid grid-cols-3 gap-3">
+                        {[
+                            { label: 'Abertas', value: openOS.length, icon: <ClipboardList className="w-4 h-4" />, color: openOS.length > 0 ? 'blue' : 'gray', tab: 'os' as const },
+                            { label: 'Execução', value: execOS.length, icon: <Clock className="w-4 h-4" />, color: execOS.length > 0 ? 'amber' : 'gray', tab: 'os' as const },
+                            { label: 'Concluídas', value: doneOS.length, icon: <CheckCircle2 className="w-4 h-4" />, color: 'emerald', tab: 'os' as const },
+                        ].map(card => (
+                            <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col items-center text-center gap-1.5">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500`}>{card.icon}</div>
+                                <p className="text-xl font-black text-gray-900">{card.value}</p>
+                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-wide leading-tight">{card.label}</p>
                             </button>
-                        )}
+                        ))}
                     </div>
+                    {/* OS recentes */}
+                    {recentOS.length > 0 && <div className="px-4 mt-4 pb-6 space-y-2">
+                        <div className="flex items-center justify-between mb-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">OS Recentes</p>{enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Ver todas</button>}</div>
+                        {recentOS.map(os => (<div key={os.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0 flex items-center gap-2"><span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-lg shrink-0">{os.number}</span><p className="text-sm font-black text-gray-900 truncate">{os.title}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span></div>))}
+                    </div>}
                 </div>
 
-                {/* ── KPIs ── */}
-                <div className="px-4 md:px-0 -mt-4 md:mt-0 grid grid-cols-3 gap-3">
-                    {[
-                        { label: 'OS Abertas', value: openOS.length, icon: <ClipboardList className="w-4 h-4" />, color: openOS.length > 0 ? 'blue' : 'gray', tab: 'os' as const },
-                        { label: 'Em Execução', value: execOS.length, icon: <Clock className="w-4 h-4" />, color: execOS.length > 0 ? 'amber' : 'gray', tab: 'os' as const },
-                        { label: 'Concluídas', value: doneOS.length, icon: <CheckCircle2 className="w-4 h-4" />, color: 'emerald', tab: 'os' as const },
-                    ].map(card => (
-                        <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col items-center text-center gap-1.5 hover:border-indigo-200 transition-all active:scale-95">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500`}>{card.icon}</div>
-                            <p className="text-xl font-black text-gray-900">{card.value}</p>
-                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-wide leading-tight">{card.label}</p>
-                        </button>
-                    ))}
+                {/* ══ DESKTOP ══ */}
+                <div className="hidden md:block space-y-6">
+                    {/* Faixa de boas-vindas */}
+                    <div className="bg-gradient-to-r from-indigo-600 to-violet-500 rounded-3xl px-8 py-6 flex items-center justify-between">
+                        <div>
+                            <p className="text-indigo-200 text-xs font-black uppercase tracking-widest mb-1">Serviços</p>
+                            <h2 className="text-2xl font-black text-white">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
+                            <p className="text-indigo-200 text-sm mt-1">Acompanhe suas ordens de serviço</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="text-right">
+                                <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Próximo Agendamento</p>
+                                <p className="text-lg font-black text-white mt-0.5">{nextScheduled ? nextScheduled.title : 'Sem agendamento'}</p>
+                                {nextScheduled && <p className="text-[10px] text-indigo-200 font-bold">{new Date(nextScheduled.scheduled_date! + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
+                            </div>
+                            {enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="flex items-center gap-2 px-5 py-3 bg-white text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-50 transition-all shadow"><ClipboardList className="w-4 h-4" /> Ver OS</button>}
+                        </div>
+                    </div>
+                    {/* KPIs */}
+                    <div className="grid grid-cols-3 gap-6">
+                        {[
+                            { label: 'OS Abertas', value: openOS.length, icon: <ClipboardList className="w-5 h-5" />, color: openOS.length > 0 ? 'blue' : 'gray', tab: 'os' as const },
+                            { label: 'Em Execução', value: execOS.length, icon: <Clock className="w-5 h-5" />, color: execOS.length > 0 ? 'amber' : 'gray', tab: 'os' as const },
+                            { label: 'Concluídas', value: doneOS.length, icon: <CheckCircle2 className="w-5 h-5" />, color: 'emerald', tab: 'os' as const },
+                        ].map(card => (
+                            <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center gap-4 hover:border-indigo-200 hover:shadow-md transition-all text-left">
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500 shrink-0`}>{card.icon}</div>
+                                <div><p className="text-2xl font-black text-gray-900">{card.value}</p><p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-0.5">{card.label}</p></div>
+                            </button>
+                        ))}
+                    </div>
+                    {/* Duas colunas: OS + contratos */}
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Ordens de Serviço Recentes</h3>{enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Ver todas</button>}</div>
+                            {recentOS.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhuma OS</p> : <div className="space-y-3">{recentOS.map(os => (<div key={os.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0 flex items-center gap-2"><span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-lg shrink-0">{os.number}</span><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{os.title}</p>{os.scheduled_date && <p className="text-[10px] font-bold text-gray-400 uppercase">{new Date(os.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}</div></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span></div>))}</div>}
+                        </div>
+                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos Ativos</h3>{enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
+                            {activeContracts.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p> : <div className="space-y-3">{activeContracts.slice(0, 3).map(c => (<div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{c.title}</p><p className="text-[10px] font-bold text-gray-400 uppercase">{c.contract_type}{c.sla_days != null ? ` · SLA ${c.sla_days}d` : ''}</p></div><span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span></div>))}</div>}
+                        </div>
+                    </div>
                 </div>
-
-                {/* ── Acesso rápido — desktop only (mobile já tem bottom nav) ── */}
-                {quickTabs.length > 0 && (
-                    <div className="hidden md:block px-4 md:px-0">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Acesso Rápido</p>
-                        <div className="grid grid-cols-4 gap-2">
-                            {quickTabs.map(tab => (
-                                <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex flex-col items-center gap-1.5 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all active:scale-95">
-                                    <span className="text-indigo-500">{tab.icon}</span>
-                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-wide text-center leading-tight">{tab.label.split(' ')[0]}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* ── OS recentes ── */}
-                {recentOS.length > 0 && (
-                    <div className="px-4 md:px-0">
-                        <div className="flex items-center justify-between mb-3">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ordens de Serviço Recentes</p>
-                            {enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Ver todas</button>}
-                        </div>
-                        <div className="space-y-2">
-                            {recentOS.map(os => (
-                                <div key={os.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3">
-                                    <div className="min-w-0 flex items-center gap-3">
-                                        <span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-lg shrink-0">{os.number}</span>
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-black text-gray-900 uppercase tracking-tight truncate">{os.title}</p>
-                                            {os.scheduled_date && <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Agendada: {new Date(os.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
-                                        </div>
-                                    </div>
-                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shrink-0 ${STATUS_COLOR[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* ── Contratos ── */}
-                {activeContracts.length > 0 && (
-                    <div className="px-4 md:px-0 pb-6 md:pb-0">
-                        <div className="flex items-center justify-between mb-3">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contratos Ativos</p>
-                            {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Ver todos</button>}
-                        </div>
-                        <div className="space-y-2">
-                            {activeContracts.slice(0, 2).map(c => (
-                                <div key={c.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-black text-gray-900 uppercase tracking-tight truncate">{c.title}</p>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                            {c.contract_type}
-                                            {c.sla_days != null ? ` · SLA ${c.sla_days}d` : ''}
-                                        </p>
-                                    </div>
-                                    <span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
             </div>
         );
     };

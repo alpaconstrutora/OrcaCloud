@@ -1198,16 +1198,19 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
     // Wrapper that expands group/phase predecessors before calling the engine and
     // then restores original predecessor lists so the expanded form is never persisted.
+    const hierarchyRef = React.useRef(hierarchy);
+    React.useEffect(() => { hierarchyRef.current = hierarchy; }, [hierarchy]);
+
     const calcWithGroups = React.useCallback((
         items: ItemScheduleDetails[],
         ...args: Parameters<typeof SchedulingEngine.calculate> extends [ItemScheduleDetails[], ...infer R] ? R : never
     ): ItemScheduleDetails[] => {
-        const expanded = expandGroupPredecessors(items, hierarchy);
-        const calculated = calcWithGroups(expanded, ...args);
+        const expanded = expandGroupPredecessors(items, hierarchyRef.current);
+        const calculated = SchedulingEngine.calculate(expanded, ...args);
         // Restore original predecessor lists (expanded ones must not be saved)
         const origPreds = new Map(items.map(s => [s.id, s.predecessors]));
         return calculated.map(s => ({ ...s, predecessors: origPreds.has(s.id) ? origPreds.get(s.id) : s.predecessors }));
-    }, [hierarchy]);
+    }, []);
 
     const taskInsights = React.useMemo(() => {
         const insights: Record<string, { missingItems: number; missingCost: number; hasAlert: boolean; message: string }> = {};

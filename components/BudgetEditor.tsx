@@ -1,6 +1,6 @@
 import React from 'react';
 import { BudgetEntry, ProjectSettings, SinapiItem, WBSPhase, SinapiType, BudgetVersion, WBSGroup, CustomDatabase, CompositionComponent } from '../types';
-import { sinapiService } from '../services/sinapiService'; // Importação do Serviço
+import { sinapiService, SinapiReference, resolveReferenceDate } from '../services/sinapiService'; // Importação do Serviço
 import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText } from 'lucide-react';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
@@ -95,6 +95,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [searchLocation, setSearchLocation] = React.useState(settings.location || 'MG');
   const [searchCharges, setSearchCharges] = React.useState(settings.socialChargesMode || 'SEM_DESONERACAO');
   const [searchReference, setSearchReference] = React.useState(settings.referenceMonth || '12/2025');
+  const [references, setReferences] = React.useState<SinapiReference[]>([]);
   const [searchDatabase, setSearchDatabase] = React.useState(settings.database || 'SINAPI');
   const [searchScope, setSearchScope] = React.useState<'description' | 'category' | 'both'>('description');
   const [searchMode, setSearchMode] = React.useState<'exact' | 'all-words'>('all-words');
@@ -331,6 +332,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       if (!cancelled) setCategories(cats);
     });
 
+    // Competências SINAPI; normaliza a referência salva (label legado → reference_date).
+    sinapiService.getReferences().then(refs => {
+      if (cancelled) return;
+      setReferences(refs);
+      setSearchReference(prev => resolveReferenceDate(prev, refs) || refs[0]?.referenceDate || '');
+    });
+
     customDatabaseService.listDatabases().then(dbs => {
       if (!cancelled) setCustomDatabases(dbs);
     });
@@ -391,7 +399,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           const fetched = await sinapiService.getItemsByCodes(
             batch,
             settings.location,
-            settings.socialChargesMode
+            settings.socialChargesMode,
+            searchReference
           );
 
           if (cancelled) break;
@@ -428,7 +437,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
     loadAuxiliaryItems();
     return () => { cancelled = true; };
-  }, [showNatureBreakdown, selectedCPUItem, settings.location, settings.socialChargesMode]);
+  }, [showNatureBreakdown, selectedCPUItem, settings.location, settings.socialChargesMode, searchReference]);
 
   // --- Search Effect (Debounce) ---
   React.useEffect(() => {
@@ -448,6 +457,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               chargeType: searchCharges,
               searchScope: searchScope,
               searchMode: searchMode,
+              referenceDate: searchReference,
               codes: showOnlyFavorites ? favorites : undefined
             });
           } else {
@@ -489,7 +499,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     }, 300); // Aguarda 300ms após o usuário parar de digitar
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, searchCode, searchGroupFilter, searchType, searchLocation, searchCharges, searchDatabase, searchScope, searchMode, favorites, showOnlyFavorites]);
+  }, [searchTerm, searchCode, searchGroupFilter, searchType, searchLocation, searchCharges, searchDatabase, searchScope, searchMode, searchReference, favorites, showOnlyFavorites]);
 
   const handleExpandAll = () => {
     const allGroupIds = settings.wbs.map(g => g.id);
@@ -2407,7 +2417,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         onUpdateSettings({ ...settings, referenceMonth: e.target.value });
                       }}
                     >
-                      <option value="12/2025">12/2025</option>
+                      {references.map(ref => (
+                        <option key={ref.referenceDate} value={ref.referenceDate}>{ref.label}</option>
+                      ))}
                     </select>
                   </div>
 

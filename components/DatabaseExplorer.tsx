@@ -30,7 +30,7 @@ import {
     FolderTree,
     FolderPlus
 } from 'lucide-react';
-import { sinapiService } from '../services/sinapiService';
+import { sinapiService, SinapiReference } from '../services/sinapiService';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { supabase } from '../lib/supabase';
 import { SinapiItem, SinapiType, BudgetEntry, CompositionComponent } from '../types';
@@ -57,7 +57,8 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
     const [searchDatabase, setSearchDatabase] = React.useState('SINAPI');
     const [searchLocation, setSearchLocation] = React.useState('MG');
     const [searchCharges, setSearchCharges] = React.useState('SEM_DESONERACAO');
-    const [searchReference, setSearchReference] = React.useState('12/2025');
+    const [searchReference, setSearchReference] = React.useState('');
+    const [references, setReferences] = React.useState<SinapiReference[]>([]);
     const [searchNature, setSearchNature] = React.useState('');
     const [searchScope, setSearchScope] = React.useState<'description' | 'category' | 'both'>('description');
     const [searchMode, setSearchMode] = React.useState<'exact' | 'all-words'>('all-words');
@@ -141,6 +142,12 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
     React.useEffect(() => {
         const init = async () => {
             setDbSize(sinapiService.databaseSize);
+
+            // Competências SINAPI disponíveis (mais recente como default).
+            const refs = await sinapiService.getReferences();
+            setReferences(refs);
+            setSearchReference(prev => prev || refs[0]?.referenceDate || '');
+
             const cats = await sinapiService.getCategories();
             setCategories(cats);
 
@@ -275,7 +282,8 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                     const fetched = await sinapiService.getItemsByCodes(
                         batch,
                         searchLocation,
-                        searchCharges
+                        searchCharges,
+                        searchReference
                     );
 
                     if (cancelled) break;
@@ -308,7 +316,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
 
         loadAuxiliaryItems();
         return () => { cancelled = true; };
-    }, [selectedItem?.code, searchLocation, searchCharges]);
+    }, [selectedItem?.code, searchLocation, searchCharges, searchReference]);
 
     // Lógica de Busca
     const handleSearch = React.useCallback(async () => {
@@ -329,6 +337,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                 searchScope: searchScope,
                 searchMode: searchMode,
                 nature: searchNature,
+                referenceDate: searchReference,
                 codes: showOnlyFavorites ? favorites : undefined
             };
 
@@ -356,7 +365,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
         } finally {
             setIsSearching(false);
         }
-    }, [searchTerm, searchCode, searchType, searchNature, searchGroup, searchDatabase, searchLocation, searchCharges, favorites, showOnlyFavorites, currentDatabase]);
+    }, [searchTerm, searchCode, searchType, searchNature, searchGroup, searchDatabase, searchLocation, searchCharges, searchReference, favorites, showOnlyFavorites, currentDatabase]);
 
     // Lógica para atualizar a composição (simulação no explorador)
     const handleUpdateComposition = (updates: Partial<CompositionComponent>, index: number) => {
@@ -896,7 +905,9 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                 value={searchReference}
                                 onChange={(e) => setSearchReference(e.target.value)}
                             >
-                                <option value="12/2025">12/2025</option>
+                                {references.map(ref => (
+                                    <option key={ref.referenceDate} value={ref.referenceDate}>{ref.label}</option>
+                                ))}
                             </select>
                         </div>
 
@@ -1430,7 +1441,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                             <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
                                 <div className="flex items-center gap-2 text-xs text-gray-400 bg-white px-3 py-1.5 rounded-full border border-gray-200 italic shadow-sm">
                                     <Info className="w-3.5 h-3.5" />
-                                    Valores baseados na referência {searchReference} para o estado de {searchLocation}.
+                                    Valores baseados na referência {references.find(r => r.referenceDate === searchReference)?.label || searchReference} para o estado de {searchLocation}.
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {(searchDatabase === 'GENERAL' || (selectedItem && selectedItem.isOverride)) && (

@@ -1,12 +1,63 @@
 import { SinapiItem } from '../types';
 import { supabase } from '../lib/supabase';
 
+export interface SinapiReference {
+  referenceDate: string; // 'YYYY-MM-DD' (1º dia da competência) — chave canônica
+  label: string;         // 'MM/AAAA' para exibição
+  status: string;
+}
+
+/**
+ * Resolve um valor de referência armazenado (reference_date 'YYYY-MM-DD' ou
+ * label legado 'MM/AAAA') para o reference_date canônico. Default = competência
+ * mais recente publicada (references[0]).
+ */
+export function resolveReferenceDate(
+  stored: string | undefined | null,
+  references: SinapiReference[]
+): string | undefined {
+  if (references.length === 0) return undefined;
+  if (stored) {
+    const match = references.find(r => r.referenceDate === stored || r.label === stored);
+    if (match) return match.referenceDate;
+  }
+  return references[0].referenceDate;
+}
+
 class SinapiDatabaseService {
   // Mantendo compatibilidade com a interface anterior, mas agora é assíncrono real
   private _databaseSize: number = 0;
+  // Só passa a true quando sinapi_references existe (migration de versionamento
+  // aplicada). Enquanto false, as buscas NÃO filtram por competência — assim o
+  // código é seguro mesmo se publicado antes da migration.
+  private _versioningEnabled = false;
 
   constructor() {
     this.refreshCount();
+  }
+
+  /**
+   * Lista as competências SINAPI publicadas (mais recente primeiro).
+   * Fallback para 12/2025 se a tabela de versões ainda não existir.
+   */
+  public async getReferences(): Promise<SinapiReference[]> {
+    try {
+      const { data, error } = await supabase
+        .from('sinapi_references')
+        .select('reference_date, label, status')
+        .eq('status', 'published')
+        .order('reference_date', { ascending: false });
+
+      if (error) throw error;
+      if (data && data.length > 0) {
+        this._versioningEnabled = true;
+        return data.map(r => ({ referenceDate: r.reference_date, label: r.label, status: r.status }));
+      }
+    } catch (e) {
+      this._versioningEnabled = false;
+      console.warn('sinapi_references indisponível (migration de versionamento não aplicada?). Usando fallback 12/2025.', e);
+    }
+    return [{ referenceDate: '2025-12-01', label: '12/2025', status: 'published' }];
   }
 
   /**
@@ -45,6 +96,7 @@ class SinapiDatabaseService {
       searchScope?: 'description' | 'category' | 'both';
       searchMode?: 'exact' | 'all-words';
       codes?: string[];
+      referenceDate?: string;
     }
   ): Promise<SinapiItem[]> {
     const cleanTerm = term.trim();
@@ -53,6 +105,11 @@ class SinapiDatabaseService {
 
     // composition (sub-itens JSON) omitido na listagem — carregado apenas no detalhe individual
     let query = supabase.from('sinapi_items').select('code, description, unit, price, prices, category, nature, type, origin');
+
+    // Filtra pela competência (só quando o versionamento está ativo).
+    if (this._versioningEnabled && filters?.referenceDate) {
+      query = query.eq('reference_date', filters.referenceDate);
+    }
 
     // 1. Filtrar por Código (Correspondência Exata ou Início)
     if (filters?.code) {
@@ -175,7 +232,7 @@ class SinapiDatabaseService {
   /**
    * Busca múltiplos itens por código (para resolver composições auxiliares)
    */
-  public async getItemsByCodes(codes: string[], state?: string, chargeType?: string): Promise<SinapiItem[]> {
+  public async getItemsByCodes(codes: string[], state?: string, chargeType?: string, referenceDate?: string): Promise<SinapiItem[]> {
     if (!codes || codes.length === 0) return [];
 
     // Unique codes only
@@ -183,12 +240,18 @@ class SinapiDatabaseService {
     // Colunas reais de sinapi_items (verificado via REST): id/database_id/created_at/updated_at
     // NÃO existem — pedi-las fazia o PostgREST abortar com 42703 e a query retornar [],
     // zerando auxiliaryItems (Natureza "—", drill-down e fallback de preço quebrados na CPU).
-    const { data, error } = await supabase
+    let query = supabase
       .from('sinapi_items')
       .select('code, description, unit, price, prices, category, nature, type, origin, source')
-      .in('code', uniqueCodes)
-      // Se houver múltiplas linhas para o mesmo código, prioriza preço não-zero.
-      .order('price', { ascending: false });
+      .in('code', uniqueCodes);
+
+    // Resolve as composições filhas DENTRO da mesma competência (evita misturar preços).
+    if (this._versioningEnabled && referenceDate) {
+      query = query.eq('reference_date', referenceDate);
+    }
+
+    // Se houver múltiplas linhas para o mesmo código, prioriza preço não-zero.
+    const { data, error } = await query.order('price', { ascending: false });
 
     if (error) {
       console.error("Error fetching items by codes:", error);
@@ -201,7 +264,7 @@ class SinapiDatabaseService {
   /**
    * Obtém lista de categorias/grupos disponíveis
    */
-  public async getCategories(): Promise<string[]> {
+  public async getCategories(referenceDate?: string): Promise<string[]> {
     const allCategories = new Set<string>();
 
     try {
@@ -215,8 +278,12 @@ class SinapiDatabaseService {
       } else {
         // Fallback para o método antigo caso a RPC não exista (ainda não foi executada a migration)
         console.warn("RPC get_distinct_categories falhou ou não existe, caindo para fallback via SELECT. Execute a migration SQL no Supabase para corrigir os grupos ausentes.");
+        let sinapiQuery = supabase.from('sinapi_items').select('category').not('category', 'is', null).neq('category', '').limit(100000);
+        if (this._versioningEnabled && referenceDate) {
+          sinapiQuery = sinapiQuery.eq('reference_date', referenceDate);
+        }
         const [{ data: sinapiData }, { data: customData }] = await Promise.all([
-          supabase.from('sinapi_items').select('category').not('category', 'is', null).neq('category', '').limit(100000),
+          sinapiQuery,
           supabase.from('custom_items').select('category').not('category', 'is', null).neq('category', '').limit(10000),
         ]);
 

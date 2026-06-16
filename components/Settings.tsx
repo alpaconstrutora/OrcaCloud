@@ -66,6 +66,8 @@ const Settings: React.FC = () => {
             // Transform data to match SQL schema
             const itemsToInsert = MOCK_SINAPI_DB.map(item => ({
                 code: item.code,
+                // Competência do mock = 12/2025 (PK composta code+reference_date).
+                reference_date: '2025-12-01',
                 description: item.description,
                 unit: item.unit,
                 price: item.price,
@@ -86,7 +88,7 @@ const Settings: React.FC = () => {
                 // Ignore other errors for now, might be empty table or permission
             }
 
-            const { error } = await supabase.from('sinapi_items').upsert(itemsToInsert, { onConflict: 'code' });
+            const { error } = await supabase.from('sinapi_items').upsert(itemsToInsert, { onConflict: 'code,reference_date' });
 
             if (error) throw error;
 

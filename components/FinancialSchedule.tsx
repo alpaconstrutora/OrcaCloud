@@ -72,6 +72,69 @@ const formatDateDisplay = (dateString?: string) => {
     return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year.toString().slice(-2)}`;
 };
 
+/**
+ * Expands group/phase/subphase predecessor entries to their leaf items before engine execution.
+ * When "Grupo B" has predecessor "Grupo A", all items in B get FS constraints from all items in A.
+ * Run transiently — do NOT save the expanded form back to itemSchedules.
+ */
+function expandGroupPredecessors(
+    items: ItemScheduleDetails[],
+    hierarchy: HierarchyNode[]
+): ItemScheduleDetails[] {
+    // Build map: non-item node ID → flat list of descendant item IDs
+    const nodeToLeaves = new Map<string, string[]>();
+    const collectLeaves = (node: HierarchyNode): string[] => {
+        if (node.type === 'item') return [node.id];
+        const leaves: string[] = [];
+        (node.children || []).forEach(c => leaves.push(...collectLeaves(c)));
+        if (leaves.length > 0) nodeToLeaves.set(node.id, leaves);
+        return leaves;
+    };
+    hierarchy.forEach(collectLeaves);
+
+    // Group/phase/subphase entries that carry predecessor definitions
+    const groupPredMap = new Map<string, Predecessor[]>();
+    items.forEach(s => {
+        if (nodeToLeaves.has(s.id) && (s.predecessors?.length ?? 0) > 0) {
+            groupPredMap.set(s.id, s.predecessors!);
+        }
+    });
+    if (groupPredMap.size === 0) return items;
+
+    return items.map(item => {
+        // Non-item nodes (groups/phases): keep as-is (they act as relay nodes in the graph)
+        if (nodeToLeaves.has(item.id)) return item;
+
+        // For each leaf item, find ancestor groups that have predecessors and inherit them
+        const inherited: Predecessor[] = [];
+        groupPredMap.forEach((preds, groupId) => {
+            const leaves = nodeToLeaves.get(groupId) || [];
+            if (!leaves.includes(item.id)) return;
+            preds.forEach(pred => {
+                // If the predecessor is itself a group, expand to its leaf items
+                const predLeaves = nodeToLeaves.get(pred.id);
+                if (predLeaves) {
+                    predLeaves.forEach(leafId => {
+                        if (leafId !== item.id &&
+                            !inherited.some(p => p.id === leafId) &&
+                            !(item.predecessors || []).some(p => p.id === leafId)) {
+                            inherited.push({ id: leafId, type: pred.type, lag: pred.lag });
+                        }
+                    });
+                } else {
+                    if (!inherited.some(p => p.id === pred.id) &&
+                        !(item.predecessors || []).some(p => p.id === pred.id)) {
+                        inherited.push(pred);
+                    }
+                }
+            });
+        });
+
+        if (inherited.length === 0) return item;
+        return { ...item, predecessors: [...(item.predecessors || []), ...inherited] };
+    });
+}
+
 function ensureFullScheduleList(currentItems: ItemScheduleDetails[], budgetItems: BudgetEntry[]): ItemScheduleDetails[] {
     const list = [...currentItems];
     budgetItems.forEach(item => {
@@ -1133,6 +1196,19 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     // Calculate Hierarchy
     const hierarchy = React.useMemo(() => buildHierarchy(budget, schedule.itemSchedules || [], realizedState.realizedValues, settings.bdi), [budget, schedule.itemSchedules, realizedState.realizedValues, settings.bdi]);
 
+    // Wrapper that expands group/phase predecessors before calling the engine and
+    // then restores original predecessor lists so the expanded form is never persisted.
+    const calcWithGroups = React.useCallback((
+        items: ItemScheduleDetails[],
+        ...args: Parameters<typeof SchedulingEngine.calculate> extends [ItemScheduleDetails[], ...infer R] ? R : never
+    ): ItemScheduleDetails[] => {
+        const expanded = expandGroupPredecessors(items, hierarchy);
+        const calculated = calcWithGroups(expanded, ...args);
+        // Restore original predecessor lists (expanded ones must not be saved)
+        const origPreds = new Map(items.map(s => [s.id, s.predecessors]));
+        return calculated.map(s => ({ ...s, predecessors: origPreds.has(s.id) ? origPreds.get(s.id) : s.predecessors }));
+    }, [hierarchy]);
+
     const taskInsights = React.useMemo(() => {
         const insights: Record<string, { missingItems: number; missingCost: number; hasAlert: boolean; message: string }> = {};
         const today = new Date();
@@ -1519,7 +1595,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
                 const itemsToUse = ensureFullScheduleList(currentSchedules || prev.itemSchedules || [], budget);
 
-                const calculated = SchedulingEngine.calculate(
+                const calculated = calcWithGroups(
                     itemsToUse,
                     projectStart,
                     activeBaseline,
@@ -1683,7 +1759,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             const itemQuantities = new Map<string, number>();
             budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
-            const finalSchedules = SchedulingEngine.calculate(
+            const finalSchedules = calcWithGroups(
                 ensureFullScheduleList(updatedSchedules, budget),
                 prev.startDate,
                 undefined,
@@ -1792,7 +1868,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const itemQuantities = new Map<string, number>();
                 budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
-                const calculated = SchedulingEngine.calculate(
+                const calculated = calcWithGroups(
                     ensureFullScheduleList(updatedSchedules, budget),
                     prev.startDate,
                     activeBaseline,
@@ -1945,7 +2021,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const itemQuantities = new Map<string, number>();
                 budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
-                const calculated = SchedulingEngine.calculate(
+                const calculated = calcWithGroups(
                     ensureFullScheduleList(updatedSchedules, budget),
                     prev.startDate,
                     activeBaseline,
@@ -2085,7 +2161,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const itemQuantities = new Map<string, number>();
                 budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
-                const calculated = SchedulingEngine.calculate(
+                const calculated = calcWithGroups(
                     fullList,
                     prev.startDate,
                     activeBaseline,
@@ -2121,7 +2197,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const itemQuantities = new Map<string, number>();
                 budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
-                const calculated = SchedulingEngine.calculate(
+                const calculated = calcWithGroups(
                     updatedSchedules,
                     prev.startDate,
                     activeBaseline,
@@ -2179,7 +2255,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         const itemQuantities = new Map<string, number>();
         budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
-        const calculated = SchedulingEngine.calculate(
+        const calculated = calcWithGroups(
             ensureFullScheduleList(newSchedule.itemSchedules || [], budget),
             newSchedule.startDate,
             activeBaseline,
@@ -2346,7 +2422,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
                     try {
-                        const calculated = SchedulingEngine.calculate(
+                        const calculated = calcWithGroups(
                             ensureFullScheduleList(updatedSchedules, budget),
                             prev.startDate,
                             activeBaseline,
@@ -2442,7 +2518,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const itemQuantities = new Map<string, number>();
                 budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
-                const calculated = SchedulingEngine.calculate(
+                const calculated = calcWithGroups(
                     itemsToUse,
                     prev.startDate,
                     activeBaseline,
@@ -2489,7 +2565,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const itemQuantities = new Map<string, number>();
                 budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
-                const calculated = SchedulingEngine.calculate(
+                const calculated = calcWithGroups(
                     itemsToUse,
                     prev.startDate,
                     activeBaseline,
@@ -2530,7 +2606,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const itemQuantities = new Map<string, number>();
                 budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
-                const calculated = SchedulingEngine.calculate(
+                const calculated = calcWithGroups(
                     itemsToUse,
                     prev.startDate,
                     activeBaseline,
@@ -2598,7 +2674,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const itemQuantities = new Map<string, number>();
                 budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
 
-                const calculated = SchedulingEngine.calculate(
+                const calculated = calcWithGroups(
                     itemsToUse,
                     prev.startDate,
                     activeBaseline,

@@ -19,20 +19,33 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
     onClose,
     onUpdate
 }) => {
-    // Flatten hierarchy to get all tasks for selection
+    // Flatten hierarchy to get all tasks for selection (items + group/phase/subphase nodes)
     const allTasks = React.useMemo(() => {
-        const tasks: { id: string, name: string, group: string, phase: string }[] = [];
-        const walk = (nodes: HierarchyNode[]) => {
+        const tasks: { id: string, name: string, group: string, phase: string, nodeType: string }[] = [];
+        const walk = (nodes: HierarchyNode[], parentGroup = '', parentPhase = '') => {
             nodes.forEach(n => {
-                if (n.type === 'item' && n.data && n.id !== taskId) {
+                if (n.id === taskId) {
+                    if (n.children) walk(n.children, parentGroup, parentPhase);
+                    return;
+                }
+                if (n.type === 'group') {
+                    tasks.push({ id: n.id, name: n.name, group: '', phase: '', nodeType: 'group' });
+                    if (n.children) walk(n.children, n.name, parentPhase);
+                } else if (n.type === 'phase') {
+                    tasks.push({ id: n.id, name: n.name, group: parentGroup, phase: '', nodeType: 'phase' });
+                    if (n.children) walk(n.children, parentGroup, n.name);
+                } else if (n.type === 'subphase') {
+                    tasks.push({ id: n.id, name: n.name, group: parentGroup, phase: parentPhase, nodeType: 'subphase' });
+                    if (n.children) walk(n.children, parentGroup, parentPhase);
+                } else if (n.type === 'item' && n.data) {
                     tasks.push({
                         id: n.id,
                         name: n.data.sinapiItem.description,
-                        group: n.data.group,
-                        phase: n.data.phase
+                        group: parentGroup,
+                        phase: parentPhase,
+                        nodeType: 'item'
                     });
                 }
-                if (n.children) walk(n.children);
             });
         };
         walk(hierarchy);
@@ -68,11 +81,12 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                             <div className="space-y-2">
                                 {predecessors.map(p => {
                                     const task = allTasks.find(t => t.id === p.id);
+                                    const typeLabel: Record<string, string> = { group: 'Grupo', phase: 'Etapa', subphase: 'Subetapa', item: 'Item' };
                                     return (
                                         <div key={p.id} className="flex items-center justify-between p-3 bg-blue-50 border border-blue-100 rounded-xl">
                                             <div className="flex-1">
                                                 <div className="text-xs font-bold text-gray-800 flex items-center gap-2">
-                                                    <span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-[10px]">{idToUid[p.id]}</span>
+                                                    <span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-[10px]">{idToUid[p.id] || (task?.nodeType ? typeLabel[task.nodeType] : '—')}</span>
                                                     {task?.name || 'Item não encontrado'}
                                                 </div>
                                                 <div className="text-[10px] text-gray-500 mt-0.5">Tipo: {p.type} • Lag: {p.lag} dias</div>
@@ -92,17 +106,27 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                         <div className="pt-6 border-t border-gray-100">
                             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Adicionar Novo Predecessor</h4>
                             <div className="space-y-2">
-                                {allTasks.filter(t => !predecessors.some(p => p.id === t.id)).map(task => (
+                                {allTasks.filter(t => !predecessors.some(p => p.id === t.id)).map(task => {
+                                    const nodeColors: Record<string, string> = {
+                                        group: 'bg-violet-100 text-violet-600',
+                                        phase: 'bg-sky-100 text-sky-600',
+                                        subphase: 'bg-teal-100 text-teal-600',
+                                        item: 'bg-gray-100 text-gray-400',
+                                    };
+                                    const nodeLabels: Record<string, string> = { group: 'Grupo', phase: 'Etapa', subphase: 'Subetapa', item: '' };
+                                    return (
                                     <div key={task.id} className="p-3 border border-gray-100 rounded-xl hover:border-blue-200 hover:bg-blue-50/30 transition-all flex items-center justify-between group">
                                         <div className="flex-1">
                                             <div className="text-xs font-bold text-gray-800 line-clamp-1 flex items-center gap-2">
-                                                <span className="text-[9px] bg-gray-100 px-1 rounded text-gray-400">{idToUid[task.id]}</span>
+                                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${nodeColors[task.nodeType] || 'bg-gray-100 text-gray-400'}`}>
+                                                    {nodeLabels[task.nodeType] || idToUid[task.id]}
+                                                </span>
                                                 {task.name}
                                             </div>
                                             <div className="text-[10px] text-gray-500 flex items-center gap-2 mt-0.5">
-                                                <span>{task.group}</span>
-                                                <span>•</span>
-                                                <span>{task.phase}</span>
+                                                {task.group && <span>{task.group}</span>}
+                                                {task.group && task.phase && <span>•</span>}
+                                                {task.phase && <span>{task.phase}</span>}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -125,7 +149,8 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                                             </button>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>

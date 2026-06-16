@@ -1185,10 +1185,37 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const insightSummary = React.useMemo(() => {
         const entries = Object.values(taskInsights);
         const totalAlerts = entries.length;
-        const totalMissingItems = entries.reduce((sum, e) => sum + e.missingItems, 0);
-        const totalMissingCost = entries.reduce((sum, e) => sum + e.missingCost, 0);
+
+        // Visit only leaf item nodes to avoid counting the same item multiple times
+        // (evaluateNode is recursive, so groups/phases/items all get entries in taskInsights)
+        const uniqueMissing = new Map<string, number>();
+        const today = new Date();
+        const approvedStatuses = ['Confirmado', 'Separação', 'Em Trânsito', 'Entregue', 'Recebido'];
+        const orderedCodes = new Set(
+            orders.filter(o => approvedStatuses.includes(o.status))
+                  .flatMap(o => o.items.map(i => i.code))
+        );
+        const visitLeaves = (node: HierarchyNode) => {
+            if (node.type === 'item' && node.data) {
+                const startDate = node.schedule?.startDate;
+                if (startDate) {
+                    const days = (new Date(startDate).getTime() - today.getTime()) / (1000 * 3600 * 24);
+                    if (days >= -30 && days <= 30) {
+                        const item = node.data;
+                        if (item.sinapiItem?.code && !orderedCodes.has(item.sinapiItem.code)) {
+                            uniqueMissing.set(item.id, item.quantity * item.sinapiItem.price);
+                        }
+                    }
+                }
+            }
+            node.children?.forEach(visitLeaves);
+        };
+        hierarchy.forEach(visitLeaves);
+
+        const totalMissingItems = uniqueMissing.size;
+        const totalMissingCost = [...uniqueMissing.values()].reduce((s, v) => s + v, 0);
         return { totalAlerts, totalMissingItems, totalMissingCost };
-    }, [taskInsights]);
+    }, [taskInsights, hierarchy, orders]);
 
     const [isRiskPanelExpanded, setIsRiskPanelExpanded] = React.useState(false);
 

@@ -72,6 +72,27 @@ const formatDateDisplay = (dateString?: string) => {
     return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year.toString().slice(-2)}`;
 };
 
+/** Returns all leaf item IDs (type==='item') under a given node ID in the hierarchy. */
+function collectNodeLeaves(hierarchy: HierarchyNode[], nodeId: string): string[] {
+    const walkLeaves = (node: HierarchyNode, acc: string[]) => {
+        if (node.type === 'item') acc.push(node.id);
+        else (node.children || []).forEach(c => walkLeaves(c, acc));
+    };
+    const findNode = (nodes: HierarchyNode[]): HierarchyNode | undefined => {
+        for (const n of nodes) {
+            if (n.id === nodeId) return n;
+            const found = findNode(n.children || []);
+            if (found) return found;
+        }
+        return undefined;
+    };
+    const target = findNode(hierarchy);
+    if (!target || target.type === 'item') return [];
+    const leaves: string[] = [];
+    (target.children || []).forEach(c => walkLeaves(c, leaves));
+    return leaves;
+}
+
 /**
  * Expands group/phase/subphase predecessor entries to their leaf items before engine execution.
  * When "Grupo B" has predecessor "Grupo A", all items in B get FS constraints from all items in A.
@@ -153,12 +174,6 @@ function expandGroupPredecessors(
         return {
             ...item,
             predecessors: inherited.length > 0 ? [...(item.predecessors || []), ...inherited] : item.predecessors,
-            // Clear MSO when inheriting group predecessors so the predecessor drives the date
-            // (mirrors the behavior of setting an item-level predecessor in handleUpdatePredecessorField)
-            ...(inherited.length > 0 && item.constraintType === ConstraintType.MSO ? {
-                constraintType: undefined,
-                constraintDate: undefined,
-            } : {}),
             ...(hasGroupConstraint ? {
                 constraintType: ConstraintType.SNET,
                 constraintDate: inheritedConstraintDate
@@ -1267,9 +1282,18 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     ): ItemScheduleDetails[] => {
         const expanded = expandGroupPredecessors(items, hierarchyRef.current);
         const calculated = SchedulingEngine.calculate(expanded, ...args);
-        // Restore original predecessor lists (expanded ones must not be saved)
-        const origPreds = new Map(items.map(s => [s.id, s.predecessors]));
-        return calculated.map(s => ({ ...s, predecessors: origPreds.has(s.id) ? origPreds.get(s.id) : s.predecessors }));
+        // Restore original predecessors AND constraint types: group-derived constraints (SNET/FNLT)
+        // are transient helpers for the CPM calculation only and must never be persisted.
+        const origMap = new Map(items.map(s => [s.id, {
+            predecessors: s.predecessors,
+            constraintType: s.constraintType,
+            constraintDate: s.constraintDate,
+        }]));
+        return calculated.map(s => {
+            const orig = origMap.get(s.id);
+            if (!orig) return s;
+            return { ...s, predecessors: orig.predecessors, constraintType: orig.constraintType, constraintDate: orig.constraintDate };
+        });
     }, []);
 
     const taskInsights = React.useMemo(() => {
@@ -2585,9 +2609,76 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 newDetails.duration = Math.max(0, diffDays);
             }
 
-            const updatedSchedules = [...currentItems];
+            let updatedSchedules = [...currentItems];
             if (taskIdx >= 0) updatedSchedules[taskIdx] = newDetails;
             else updatedSchedules.push(newDetails);
+
+            // Hierarchy cascade: when a GROUP/PHASE/SUBPHASE date changes, shift all leaf descendants.
+            // For start: leaf items with manual dates shift by the same delta as the parent.
+            // For end:   leaf items with manual end dates shift by the same delta as the parent.
+            // Leaves without manual dates are handled by the SNET propagation in expandGroupPredecessors.
+            const targetNode = hierarchyRef.current && (() => {
+                const find = (nodes: HierarchyNode[]): HierarchyNode | undefined => {
+                    for (const n of nodes) {
+                        if (n.id === itemId) return n;
+                        const f = find(n.children || []);
+                        if (f) return f;
+                    }
+                };
+                return find(hierarchyRef.current);
+            })();
+
+            if (targetNode && targetNode.type !== 'item' && value) {
+                const shiftDate = (dateStr: string, deltaDays: number): string => {
+                    const d = new Date(dateStr);
+                    d.setDate(d.getDate() + deltaDays);
+                    return d.toISOString().split('T')[0];
+                };
+
+                if (field === 'startDate') {
+                    const oldStart = targetNode.earlyStart;
+                    if (oldStart && oldStart !== value) {
+                        const delta = Math.round(
+                            (new Date(value as string).getTime() - new Date(oldStart).getTime()) / 86400000
+                        );
+                        if (delta !== 0) {
+                            const leafIds = collectNodeLeaves(hierarchyRef.current, itemId);
+                            updatedSchedules = updatedSchedules.map(s => {
+                                if (!leafIds.includes(s.id) || !s.startDate) return s;
+                                const newStart = shiftDate(s.startDate, delta);
+                                const updated: ItemScheduleDetails = {
+                                    ...s,
+                                    startDate: newStart,
+                                    constraintType: ConstraintType.MSO,
+                                    constraintDate: newStart,
+                                    ...(s.endDate ? { endDate: shiftDate(s.endDate, delta) } : {}),
+                                };
+                                return updated;
+                            });
+                        }
+                    }
+                } else if (field === 'endDate') {
+                    const oldEnd = targetNode.earlyFinish;
+                    if (oldEnd && oldEnd !== value) {
+                        const delta = Math.round(
+                            (new Date(value as string).getTime() - new Date(oldEnd).getTime()) / 86400000
+                        );
+                        if (delta !== 0) {
+                            const leafIds = collectNodeLeaves(hierarchyRef.current, itemId);
+                            updatedSchedules = updatedSchedules.map(s => {
+                                if (!leafIds.includes(s.id) || !s.endDate) return s;
+                                const newEnd = shiftDate(s.endDate, delta);
+                                const newDuration = s.startDate
+                                    ? Math.max(0, Math.ceil(
+                                        (new Date(newEnd).getTime() - new Date(s.startDate).getTime()) / 86400000
+                                    ))
+                                    : s.duration;
+                                return { ...s, endDate: newEnd, duration: newDuration };
+                            });
+                        }
+                    }
+                }
+            }
 
             const itemsToUse = ensureFullScheduleList(updatedSchedules, budget);
 
@@ -2741,9 +2832,22 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 }
             }
 
-            const updatedSchedules = [...currentItems];
+            let updatedSchedules = [...currentItems];
             if (taskIdx >= 0) updatedSchedules[taskIdx] = newTask;
             else updatedSchedules.push(newTask);
+
+            // If setting predecessors on a GROUP/PHASE/SUBPHASE node, clear MSO on all leaf
+            // descendants so the inherited predecessor can drive their scheduling dates.
+            if (field === 'uid' && newTask.predecessors && newTask.predecessors.length > 0) {
+                const leafIds = collectNodeLeaves(hierarchyRef.current, itemId);
+                if (leafIds.length > 0) {
+                    updatedSchedules = updatedSchedules.map(s =>
+                        leafIds.includes(s.id) && s.constraintType === ConstraintType.MSO
+                            ? { ...s, constraintType: undefined, constraintDate: undefined }
+                            : s
+                    );
+                }
+            }
 
             const itemsToUse = ensureFullScheduleList(updatedSchedules, budget);
 

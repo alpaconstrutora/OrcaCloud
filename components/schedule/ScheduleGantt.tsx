@@ -594,15 +594,21 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                             </div>
                                         )}
 
+                                        {/* Task name label — inside bar, clipped */}
+                                        {width > 30 && (
+                                            <div
+                                                className="absolute inset-y-0 left-0 right-0 flex items-center px-2 pointer-events-none z-[5] overflow-hidden"
+                                            >
+                                                <span className="text-[11px] font-semibold text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.4)] truncate">
+                                                    {node.name}
+                                                </span>
+                                            </div>
+                                        )}
+
                                         <div className="opacity-0 group-hover/bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[12px] px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none">
                                             {new Date(itemSchedule.startDate).toLocaleDateString()} - {itemSchedule.endDate ? new Date(itemSchedule.endDate).toLocaleDateString() : ''} ({itemSchedule.duration}d)
                                             {itemSchedule.totalFloat ? ` | Folga: ${itemSchedule.totalFloat}d` : ''}
                                         </div>
-                                    </div>
-
-                                    {/* Right side label (Name + Duration) */}
-                                    <div className="ml-2 whitespace-nowrap text-[12px] font-medium text-gray-500 pointer-events-none truncate max-w-[200px]" title={`${node.name} (${itemSchedule.duration}d)`}>
-                                        {node.name} <span className="font-medium text-gray-400">({itemSchedule.duration}d)</span>
                                     </div>
 
                                     {/* Extend to project end button */}

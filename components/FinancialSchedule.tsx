@@ -549,6 +549,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const [originalScheduleBackup, setOriginalScheduleBackup] = useState<ProjectSchedule | null>(null);
     const [isDraggingTask, setIsDraggingTask] = useState<string | null>(null);
     const [dragTaskStartOffset, setDragTaskStartOffset] = useState<number>(0);
+    const [dragGhostOffset, setDragGhostOffset] = useState<number>(0);
+    const dragGhostOffsetRef = useRef(0);
 
     // Refs to avoid stale closures in drag useEffect
     const isSimulationModeRef = useRef(isSimulationMode);
@@ -2441,62 +2443,67 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
         const pxPerDayByScale: Record<string, number> = { day: 40, week: 10, month: 3, year: 0.5 };
 
-        // Snapshot the backup at drag-start so mousemove can reference original positions
+        // Snapshot at drag-start so mouseup can reference original positions
         const dragBackup = originalScheduleBackup ?? scheduleRef.current;
 
         const handleMouseMove = (e: MouseEvent) => {
-            const pxPerDay = pxPerDayByScale[timeScaleRef.current] ?? 10;
+            // Ghost-only: move the bar visually, no schedule recalculation during drag
             const deltaX = e.clientX - dragTaskStartOffset;
-            const daysShift = Math.round(deltaX / pxPerDay);
-
-            if (daysShift !== 0) {
-                setSchedule(prev => {
-                    const currentItems = prev.itemSchedules || [];
-                    const taskIdx = currentItems.findIndex(s => s.id === isDraggingTask);
-                    if (taskIdx === -1) return prev;
-
-                    const activeBaseline = prev.baselines?.find(b => b.id === prev.activeBaselineId);
-                    const backupTask = dragBackup?.itemSchedules?.find(s => s.id === isDraggingTask);
-                    if (!backupTask || !backupTask.startDate) return prev;
-
-                    const originalDate = new Date(backupTask.startDate);
-                    const newDate = SchedulingEngine.addDays(originalDate, daysShift, prev.useWorkingDays ?? true);
-                    const newDateStr = newDate.toISOString().split('T')[0];
-
-                    const newTask = { ...currentItems[taskIdx], startDate: newDateStr, constraintType: ConstraintType.MSO as ConstraintType, constraintDate: newDateStr };
-
-                    const updatedSchedules = [...currentItems];
-                    updatedSchedules[taskIdx] = newTask;
-
-                    const itemQuantities = new Map<string, number>();
-                    budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
-
-                    try {
-                        const calculated = calcWithGroups(
-                            ensureFullScheduleList(updatedSchedules, budget),
-                            prev.startDate,
-                            activeBaseline,
-                            prev.useWorkingDays ?? true,
-                            prev.replanMode ?? ReplanMode.AFFECTED_TASK,
-                            prev.resources?.roles || [],
-                            itemQuantities,
-                            prev.resources?.workers || [],
-                            prev.resources?.teams || []
-                        );
-                        return { ...prev, itemSchedules: calculated };
-                    } catch (err) {
-                        return prev;
-                    }
-                });
-            }
+            dragGhostOffsetRef.current = deltaX;
+            setDragGhostOffset(deltaX);
         };
 
         const handleMouseUp = () => {
+            // Commit: apply the actual date shift and recalculate only once
+            const pxPerDay = pxPerDayByScale[timeScaleRef.current] ?? 10;
+            const daysShift = Math.round(dragGhostOffsetRef.current / pxPerDay);
+
+            if (daysShift !== 0) {
+                const backupTask = dragBackup?.itemSchedules?.find(s => s.id === isDraggingTask);
+                if (backupTask?.startDate) {
+                    setSchedule(prev => {
+                        const currentItems = prev.itemSchedules || [];
+                        const taskIdx = currentItems.findIndex(s => s.id === isDraggingTask);
+                        if (taskIdx === -1) return prev;
+
+                        const activeBaseline = prev.baselines?.find(b => b.id === prev.activeBaselineId);
+                        const originalDate = new Date(backupTask.startDate!);
+                        const newDate = SchedulingEngine.addDays(originalDate, daysShift, prev.useWorkingDays ?? true);
+                        const newDateStr = newDate.toISOString().split('T')[0];
+
+                        const newTask = { ...currentItems[taskIdx], startDate: newDateStr, constraintType: ConstraintType.MSO as ConstraintType, constraintDate: newDateStr };
+                        const updatedSchedules = [...currentItems];
+                        updatedSchedules[taskIdx] = newTask;
+
+                        const itemQuantities = new Map<string, number>();
+                        budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
+
+                        try {
+                            const calculated = calcWithGroups(
+                                ensureFullScheduleList(updatedSchedules, budget),
+                                prev.startDate,
+                                activeBaseline,
+                                prev.useWorkingDays ?? true,
+                                prev.replanMode ?? ReplanMode.AFFECTED_TASK,
+                                prev.resources?.roles || [],
+                                itemQuantities,
+                                prev.resources?.workers || [],
+                                prev.resources?.teams || []
+                            );
+                            return { ...prev, itemSchedules: calculated };
+                        } catch (err) {
+                            return prev;
+                        }
+                    });
+                }
+            }
+
             setIsDraggingTask(null);
+            setDragGhostOffset(0);
+            dragGhostOffsetRef.current = 0;
             document.body.style.cursor = '';
-            // Outside simulation mode: persist the repositioned schedule immediately
             if (!isSimulationModeRef.current) {
-                onUpdateSettings({ ...settings, schedule: scheduleRef.current });
+                setTimeout(() => onUpdateSettings({ ...settings, schedule: scheduleRef.current }), 50);
             }
         };
 
@@ -3644,6 +3651,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 setViewingTaskPhotos={setViewingTaskPhotos}
                                                 isSimulationMode={isSimulationMode}
                                                 isDraggingTask={isDraggingTask}
+                                                dragGhostOffset={dragGhostOffset}
                                                 budget={budget}
                                                 SchedulingEngine={SchedulingEngine}
                                                 taskInsights={taskInsights}

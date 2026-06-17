@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff } from 'lucide-react';
+import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff, ArrowRightToLine } from 'lucide-react';
 
 import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation } from '../../types';
 
@@ -21,6 +21,7 @@ interface ScheduleGanttProps {
     handleUpdateCrewField: (id: string, field: string, value: any) => void;
     handleUpdateItemSchedule: (itemId: string, field: 'duration' | 'startDate' | 'endDate', value: string | number) => void;
     handleGanttBarMouseDown: (e: React.MouseEvent, id: string, date: string) => void;
+    dragGhostOffset: number;
     crewPopoverItem: string | null;
     crewPopoverPos: { top: number; left: number } | null;
     setCrewPopoverItem: (id: string | null) => void;
@@ -60,6 +61,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     handleUpdateCrewField,
     handleUpdateItemSchedule,
     handleGanttBarMouseDown,
+    dragGhostOffset,
     crewPopoverItem,
     crewPopoverPos,
     setCrewPopoverItem,
@@ -510,8 +512,19 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 );
                             }
 
+                            const projectEndDate = schedule.endDate || '';
                             return (
-                                <div className="group/task-container absolute top-1.5 flex items-center overflow-visible" style={{ left: `${left}px`, width: `${width}px` }}>
+                                <div
+                                    className="group/task-container absolute top-1.5 flex items-center overflow-visible"
+                                    style={{
+                                        left: `${left}px`,
+                                        width: `${width}px`,
+                                        transform: isDraggingTask === item.id ? `translateX(${dragGhostOffset}px)` : undefined,
+                                        transition: isDraggingTask === item.id ? 'none' : undefined,
+                                        pointerEvents: isDraggingTask && isDraggingTask !== item.id ? 'none' : undefined,
+                                        zIndex: isDraggingTask === item.id ? 30 : undefined,
+                                    }}
+                                >
                                     {itemSchedule.totalFloat && itemSchedule.totalFloat > 0 && (
                                         <div
                                             className="absolute top-0 h-6 bg-indigo-500/10 border border-dashed border-indigo-300 rounded-r z-[1]"
@@ -566,6 +579,20 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     <div className="ml-2 whitespace-nowrap text-[12px] font-medium text-gray-500 pointer-events-none truncate max-w-[200px]" title={`${node.name} (${itemSchedule.duration}d)`}>
                                         {node.name} <span className="font-medium text-gray-400">({itemSchedule.duration}d)</span>
                                     </div>
+
+                                    {/* Extend to project end button */}
+                                    {projectEndDate && itemSchedule.endDate && itemSchedule.endDate < projectEndDate && (
+                                        <button
+                                            title={`Estender até o fim do planejamento (${new Date(projectEndDate).toLocaleDateString('pt-BR')})`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleUpdateItemSchedule(item.id, 'endDate', projectEndDate);
+                                            }}
+                                            className="opacity-0 group-hover/task-container:opacity-100 transition-opacity ml-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold text-blue-400 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 shrink-0"
+                                        >
+                                            <ArrowRightToLine className="w-3 h-3" />
+                                        </button>
+                                    )}
                                 </div>
                             );
                         })() : null}

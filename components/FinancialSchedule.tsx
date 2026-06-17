@@ -1429,6 +1429,19 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         }
     }, [budget, schedule.itemSchedules]);
 
+    // On first load with existing data: run CPM once to apply parent SNET constraints and correct
+    // any stored dates that violate the parent hierarchy (e.g. task starting before its group).
+    const initialRecalcDone = React.useRef(false);
+    React.useEffect(() => {
+        if (initialRecalcDone.current) return;
+        const scheduleIds = new Set((schedule.itemSchedules || []).map(s => s.id));
+        const hasExistingItems = budget.filter(b => scheduleIds.has(b.id)).length > 0;
+        if (hasExistingItems) {
+            initialRecalcDone.current = true;
+            handleRecalculate();
+        }
+    }, [budget, schedule.itemSchedules]);
+
     // Diff between current budget and schedule — drives the Sincronizar button and modal
     const [syncModalOpen, setSyncModalOpen] = React.useState(false);
 

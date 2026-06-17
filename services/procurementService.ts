@@ -340,12 +340,38 @@ export const procurementService = {
             .single();
         if (pErr || !project) throw new Error('Projeto não encontrado');
 
-        const budget: BudgetEntry[] = project.budget ?? [];
         const settings = (project.settings ?? {}) as Record<string, unknown>;
-        const schedule = settings.schedule as ProjectSchedule | undefined;
-        if (!schedule) throw new Error('Projeto não possui cronograma físico-financeiro.');
+        let schedule = settings.schedule as ProjectSchedule | undefined;
+        let budgetVersionId = settings.activeVersionId as string | undefined;
 
-        const budgetVersionId = settings.activeVersionId as string | undefined;
+        // Budget: prefere project.budget; se vazio, usa basedOnBudgetSnapshot (caso PLANEJAMENTO)
+        let budget: BudgetEntry[] =
+            ((project.budget ?? []) as BudgetEntry[]).length > 0
+                ? (project.budget as BudgetEntry[])
+                : ((settings.basedOnBudgetSnapshot as BudgetEntry[]) ?? []);
+
+        // Se o projeto não tiver cronograma, busca no projeto PLANEJAMENTO vinculado
+        if (!schedule) {
+            const { data: planProj } = await supabase
+                .from('projects')
+                .select('id, budget, settings')
+                .filter('settings->>linkedProjectId', 'eq', projectId)
+                .filter('settings->>classification', 'eq', 'PLANEJAMENTO')
+                .order('updated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            if (planProj) {
+                const planSettings = (planProj.settings ?? {}) as Record<string, unknown>;
+                schedule = planSettings.schedule as ProjectSchedule | undefined;
+                if (!budgetVersionId) budgetVersionId = planSettings.activeVersionId as string | undefined;
+                // As distribuições do cronograma referenciam os IDs do basedOnBudgetSnapshot,
+                // então SEMPRE usamos o snapshot quando há PLANEJAMENTO vinculado.
+                const snap = (planSettings.basedOnBudgetSnapshot as BudgetEntry[] | undefined) ?? [];
+                budget = snap.length > 0 ? snap : ((planProj.budget ?? []) as BudgetEntry[]);
+            }
+        }
+
+        if (!schedule) throw new Error('Projeto não possui cronograma físico-financeiro. Verifique se há um Planejamento vinculado com cronograma definido.');
 
         // 2. Apaga somente os 'pending' (os demais permanecem para rastreabilidade)
         await supabase

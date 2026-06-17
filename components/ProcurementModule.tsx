@@ -220,7 +220,7 @@ function OrderModal({
 // ── Módulo principal ───────────────────────────────────────────────────────────
 export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const [tab, setTab] = useState<Tab>('plano');
-    const [projects, setProjects] = useState<Pick<ProjectData, 'id' | 'name'>[]>([]);
+    const [projects, setProjects] = useState<{ id: string; name: string; classification: 'OBRA' | 'PLANEJAMENTO' }[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
     const [items, setItems] = useState<ProcurementPlanItem[]>([]);
     const [monthly, setMonthly] = useState<ProcurementMonthlySpend[]>([]);
@@ -247,10 +247,16 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
         if (!activeOrganizationId) return;
         projectService.listProjects(undefined, activeOrganizationId).then(list => {
             const filtered = (list ?? []).filter(p =>
-                (p.settings as any)?.classification === 'PLANEJAMENTO' ||
-                (p.settings as any)?.classification === 'OBRA'
+                ((p.settings as any)?.classification === 'PLANEJAMENTO' ||
+                (p.settings as any)?.classification === 'OBRA') &&
+                !(p.settings as any)?.isSystemProject &&
+                p.name !== 'Gestão Comercial'
             );
-            setProjects(filtered.map(p => ({ id: p.id!, name: p.name })));
+            setProjects(filtered.map(p => ({
+                id: p.id!,
+                name: p.name,
+                classification: (p.settings as any)?.classification as 'OBRA' | 'PLANEJAMENTO',
+            })));
             if (filtered.length > 0 && !selectedProjectId) setSelectedProjectId(filtered[0].id!);
         });
     }, [activeOrganizationId]);
@@ -467,7 +473,15 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                         onChange={e => { setSelectedProjectId(e.target.value); setSelected(new Set()); }}
                     >
                         <option value="">Selecione o projeto…</option>
-                        {projects.map(p => <option key={p.id} value={p.id!}>{p.name}</option>)}
+                        {(['OBRA', 'PLANEJAMENTO'] as const).map(cls => {
+                            const group = projects.filter(p => p.classification === cls);
+                            if (group.length === 0) return null;
+                            return (
+                                <optgroup key={cls} label={cls === 'OBRA' ? '🏗 Obra' : '📅 Planejamento'}>
+                                    {group.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </optgroup>
+                            );
+                        })}
                     </select>
                     <button
                         onClick={handleGenerate}

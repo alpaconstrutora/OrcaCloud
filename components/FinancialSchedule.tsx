@@ -1438,7 +1438,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         const hasExistingItems = budget.filter(b => scheduleIds.has(b.id)).length > 0;
         if (hasExistingItems) {
             initialRecalcDone.current = true;
-            handleRecalculate();
+            handleRecalculate(undefined, settings.startDate || undefined);
         }
     }, [budget, schedule.itemSchedules]);
 
@@ -1688,7 +1688,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const handleRecalculate = (currentSchedules?: ItemScheduleDetails[], newStartDate?: string) => {
         setSchedule(prev => {
             try {
-                const projectStart = newStartDate || prev.startDate;
+                const projectStart = (newStartDate || prev.startDate || settings.startDate) as string;
                 const activeBaseline = prev.baselines?.find(b => b.id === prev.activeBaselineId);
                 const itemQuantities = new Map<string, number>();
                 budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
@@ -1731,7 +1731,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     totalFloat, isCritical, constraintType, constraintDate, slippage, spi, ...rest } = s;
             return rest;
         });
-        handleRecalculate(cleaned);
+        // Use settings.startDate (project-level start) so stale schedule.startDate doesn't anchor tasks to a wrong date.
+        handleRecalculate(cleaned, settings.startDate || schedule.startDate);
     };
 
     const handleLevelResources = () => {

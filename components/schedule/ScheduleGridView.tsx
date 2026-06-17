@@ -110,8 +110,18 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                 setShowLevelsDropdown(false);
             }
         };
-        if (isColMenuOpen || showLevelsDropdown) document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setIsColMenuOpen(false);
+                setShowLevelsDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
     }, [isColMenuOpen, showLevelsDropdown]);
 
     const COL_LABELS: Record<string, string> = {

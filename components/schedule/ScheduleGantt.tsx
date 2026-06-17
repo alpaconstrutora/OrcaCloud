@@ -90,19 +90,33 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     const headerRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const colMenuRef = useRef<HTMLDivElement>(null);
+    const levelsMenuRef = useRef<HTMLDivElement>(null);
     const [showLevelsDropdown, setShowLevelsDropdown] = useState(false);
     const [showColsDropdown, setShowColsDropdown] = useState(false);
 
-    // Close menu on click outside
+    // Close dropdowns on click-outside or ESC
     React.useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
                 setShowColsDropdown(false);
             }
+            if (levelsMenuRef.current && !levelsMenuRef.current.contains(e.target as Node)) {
+                setShowLevelsDropdown(false);
+            }
         };
-        if (showColsDropdown) document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [showColsDropdown]);
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setShowColsDropdown(false);
+                setShowLevelsDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, []);
 
     const COL_LABELS: Record<string, string> = {
         gWbs: 'ITEM',
@@ -836,7 +850,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         )}
                                     </div>
                                 </div>
-                                <div className="relative">
+                                <div className="relative" ref={levelsMenuRef}>
                                     <button
                                         onClick={() => setShowLevelsDropdown(!showLevelsDropdown)}
                                         className={`px-2 py-1 flex items-center gap-1.5 rounded-lg border transition-all text-[12px] font-medium ${showLevelsDropdown ? 'bg-indigo-600 border-indigo-700 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'}`}

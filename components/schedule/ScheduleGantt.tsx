@@ -674,6 +674,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         <div data-gantt-col="gDur" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gDur')}></div>
                         <div data-gantt-col="gStart" className="shrink-0 border-r border-gray-200 flex items-center justify-center" style={getGanttColStyle('gStart')} onClick={(e) => e.stopPropagation()}>
                             {(() => {
+                                if (schedule.autoRollupParentDates) {
+                                    return node.earlyStart
+                                        ? <span className="text-[12px] font-medium text-gray-600">{new Date(node.earlyStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+                                        : null;
+                                }
                                 const ns = schedule.itemSchedules?.find(s => s.id === node.id);
                                 const effectiveDate = ns?.startDate ? ns.startDate.split('T')[0] : (node.earlyStart || '');
                                 return (
@@ -688,8 +693,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         </div>
                         <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-500" style={getGanttColStyle('gEnd')}>
                             {(() => {
-                                const ns = schedule.itemSchedules?.find(s => s.id === node.id);
-                                const effectiveDate = ns?.endDate || node.earlyFinish;
+                                const effectiveDate = schedule.autoRollupParentDates
+                                    ? node.earlyFinish
+                                    : (schedule.itemSchedules?.find(s => s.id === node.id)?.endDate || node.earlyFinish);
                                 return effectiveDate ? new Date(effectiveDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
                             })()}
                         </div>

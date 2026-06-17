@@ -212,6 +212,7 @@ export interface ProjectSchedule {
     history?: ScheduleHistoryEntry[];
     replanMode?: ReplanMode;
     useWorkingDays?: boolean;
+    autoRollupParentDates?: boolean; // datas de grupo/etapa/subetapa seguem mín/máx das tarefas
     resources?: {
         roles: ResourceRole[];
         workers: ResourceWorker[];

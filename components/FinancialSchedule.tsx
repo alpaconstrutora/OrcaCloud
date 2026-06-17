@@ -375,23 +375,28 @@ function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetail
                 aggregateDates(node.children);
 
                 const childDates = node.children.map(c => {
-                    let start = c.earlyStart ? new Date(c.earlyStart).getTime() : Infinity;
-                    let finish = c.earlyFinish ? new Date(c.earlyFinish).getTime() : -Infinity;
+                    let start = Infinity;
+                    let finish = -Infinity;
 
                     if (c.type === 'item' && c.schedule) {
-                        if (start === Infinity && c.schedule.startDate) {
-                            start = new Date(c.schedule.startDate).getTime();
-                        }
-                        if (finish === -Infinity) {
-                            if (c.schedule.endDate) {
-                                finish = new Date(c.schedule.endDate).getTime();
-                            } else if (c.schedule.startDate && c.schedule.duration !== undefined) {
-                                const d = new Date(c.schedule.startDate);
-                                d.setDate(d.getDate() + Math.max(0, c.schedule.duration - 1));
-                                finish = d.getTime();
-                            }
+                        // Itens-folha: priorizar as datas reais planejadas (refletem edição/arraste),
+                        // com fallback para as datas calculadas pelo CPM.
+                        if (c.schedule.startDate) start = new Date(c.schedule.startDate).getTime();
+                        else if (c.earlyStart) start = new Date(c.earlyStart).getTime();
 
+                        if (c.schedule.endDate) {
+                            finish = new Date(c.schedule.endDate).getTime();
+                        } else if (c.schedule.startDate && c.schedule.duration !== undefined) {
+                            const d = new Date(c.schedule.startDate);
+                            d.setDate(d.getDate() + Math.max(0, c.schedule.duration - 1));
+                            finish = d.getTime();
+                        } else if (c.earlyFinish) {
+                            finish = new Date(c.earlyFinish).getTime();
                         }
+                    } else {
+                        // Grupo/etapa/subetapa filho: usar suas datas já agregadas (recursão acima).
+                        if (c.earlyStart) start = new Date(c.earlyStart).getTime();
+                        if (c.earlyFinish) finish = new Date(c.earlyFinish).getTime();
                     }
                     return { start, finish };
                 });

@@ -31,6 +31,9 @@ class SinapiDatabaseService {
   // aplicada). Enquanto false, as buscas NÃO filtram por competência — assim o
   // código é seguro mesmo se publicado antes da migration.
   private _versioningEnabled = false;
+  // Cache da competência mais recente publicada (undefined = ainda não resolvido,
+  // null = versionamento inativo). Default das buscas que não informam referência.
+  private _latestReference: string | null | undefined = undefined;
 
   constructor() {
     this.refreshCount();
@@ -51,6 +54,7 @@ class SinapiDatabaseService {
       if (error) throw error;
       if (data && data.length > 0) {
         this._versioningEnabled = true;
+        this._latestReference = data[0].reference_date as string; // ordenado desc → 1ª é a mais recente
         return data.map(r => ({ referenceDate: r.reference_date, label: r.label, status: r.status }));
       }
     } catch (e) {
@@ -58,6 +62,33 @@ class SinapiDatabaseService {
       console.warn('sinapi_references indisponível (migration de versionamento não aplicada?). Usando fallback 12/2025.', e);
     }
     return [{ referenceDate: '2025-12-01', label: '12/2025', status: 'published' }];
+  }
+
+  /**
+   * reference_date da competência mais recente publicada (cacheado por sessão).
+   * null = versionamento inativo (tabela ausente). Usado como default de escopo
+   * em todas as consultas por código, evitando misturar competências.
+   */
+  public async getLatestReferenceDate(): Promise<string | null> {
+    if (this._latestReference !== undefined) return this._latestReference;
+    try {
+      const { data, error } = await supabase
+        .from('sinapi_references')
+        .select('reference_date')
+        .eq('status', 'published')
+        .order('reference_date', { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      if (data && data.length > 0) {
+        this._versioningEnabled = true;
+        this._latestReference = data[0].reference_date as string;
+        return this._latestReference;
+      }
+    } catch {
+      // tabela ausente — versionamento inativo
+    }
+    this._latestReference = null;
+    return this._latestReference;
   }
 
   /**
@@ -103,12 +134,16 @@ class SinapiDatabaseService {
     // Allow empty term if code, group, or a list of codes is specified
     if (cleanTerm.length < 2 && !filters?.code && !filters?.group && !filters?.nature && !filters?.type && (!filters?.codes || filters.codes.length === 0)) return [];
 
-    // composition (sub-itens JSON) omitido na listagem — carregado apenas no detalhe individual
-    let query = supabase.from('sinapi_items').select('code, description, unit, price, prices, category, nature, type, origin');
+    // composition (sub-itens JSON) é necessária para a CPU do item selecionado;
+    // omiti-la antes deixava as composições "com 0 componentes" (regressão e237386).
+    let query = supabase.from('sinapi_items').select('code, description, unit, price, prices, category, nature, type, origin, composition');
 
-    // Filtra pela competência (só quando o versionamento está ativo).
-    if (this._versioningEnabled && filters?.referenceDate) {
-      query = query.eq('reference_date', filters.referenceDate);
+    // Escopo de competência: usa a informada ou, na ausência, a mais recente
+    // publicada (evita misturar versões quando houver mais de uma competência).
+    await this.getLatestReferenceDate();
+    const refSearch = filters?.referenceDate ?? this._latestReference ?? undefined;
+    if (this._versioningEnabled && refSearch) {
+      query = query.eq('reference_date', refSearch);
     }
 
     // 1. Filtrar por Código (Correspondência Exata ou Início)
@@ -242,12 +277,15 @@ class SinapiDatabaseService {
     // zerando auxiliaryItems (Natureza "—", drill-down e fallback de preço quebrados na CPU).
     let query = supabase
       .from('sinapi_items')
-      .select('code, description, unit, price, prices, category, nature, type, origin, source')
+      .select('code, description, unit, price, prices, category, nature, type, origin, source, composition')
       .in('code', uniqueCodes);
 
-    // Resolve as composições filhas DENTRO da mesma competência (evita misturar preços).
-    if (this._versioningEnabled && referenceDate) {
-      query = query.eq('reference_date', referenceDate);
+    // Resolve as composições filhas DENTRO de uma única competência (a informada
+    // ou a mais recente publicada) — evita misturar preços de versões diferentes.
+    await this.getLatestReferenceDate();
+    const refByCodes = referenceDate ?? this._latestReference ?? undefined;
+    if (this._versioningEnabled && refByCodes) {
+      query = query.eq('reference_date', refByCodes);
     }
 
     // Se houver múltiplas linhas para o mesmo código, prioriza preço não-zero.

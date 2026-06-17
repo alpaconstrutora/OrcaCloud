@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { sinapiService } from './sinapiService';
 
 // Mapeamento NBR 12721 (padrão R8N, Tabela 5) → códigos SINAPI
 // Atualizar conforme novas versões da tabela NBR ou revisões SINAPI.
@@ -141,10 +142,12 @@ export const investorService = {
 
     async getSINAPIPrices(codes: string[]) {
         if (!codes.length) return {};
-        const { data, error } = await supabase
-            .from('sinapi_items')
-            .select('code, price')
-            .in('code', codes);
+        // Escopa à competência mais recente — sem isso, .in('code') retornaria
+        // múltiplas linhas por código quando houver mais de uma competência.
+        const ref = await sinapiService.getLatestReferenceDate();
+        let q = supabase.from('sinapi_items').select('code, price').in('code', codes);
+        if (ref) q = q.eq('reference_date', ref);
+        const { data, error } = await q;
 
         if (error) {
             console.error('Error fetching SINAPI prices:', error);
@@ -193,11 +196,16 @@ export const investorService = {
 
     async searchSINAPI(query: string) {
         try {
-            const { data, error } = await supabase
+            // `id` NÃO existe em sinapi_items (causava 42703 → busca sempre vazia).
+            // Escopa à competência mais recente para não duplicar entre versões.
+            const ref = await sinapiService.getLatestReferenceDate();
+            let q = supabase
                 .from('sinapi_items')
-                .select('id, code, description, price, unit')
+                .select('code, description, price, unit')
                 .ilike('description', `%${query}%`)
                 .limit(20);
+            if (ref) q = q.eq('reference_date', ref);
+            const { data, error } = await q;
 
             if (error) throw error;
             return data || [];

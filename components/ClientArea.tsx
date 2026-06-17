@@ -42,7 +42,8 @@ import {
     ArrowRight,
     Wallet,
     Wrench,
-    ClipboardList
+    ClipboardList,
+    MoreHorizontal
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
@@ -121,6 +122,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [portalMessages, setPortalMessages] = React.useState<ClientPortalMessage[]>([]);
     const [unreadCount, setUnreadCount] = React.useState(0);
     const [showNotifications, setShowNotifications] = React.useState(false);
+    const [showMoreSheet, setShowMoreSheet] = React.useState(false);
     React.useEffect(() => {
         if (!showNotifications) return;
         const close = () => setShowNotifications(false);
@@ -345,7 +347,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             { label: 'Chamados', value: openRequests.length, icon: <Wrench className="w-4 h-4" />, color: openRequests.length > 0 ? 'amber' : 'emerald', tab: 'manutencao' as const },
                             { label: 'Pago', value: `${paidPct}%`, icon: <CheckCircle2 className="w-4 h-4" />, color: 'emerald', tab: 'financeiro' as const },
                         ].map(card => (
-                            <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col items-center text-center gap-1.5">
+                            <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-4 shadow-lg shadow-gray-900/5 border border-gray-100 flex flex-col items-center text-center gap-1.5 active:scale-95 transition-transform">
                                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500`}>{card.icon}</div>
                                 <p className="text-xl font-black text-gray-900">{card.value}</p>
                                 <p className="text-[8px] font-black text-gray-400 uppercase tracking-wide leading-tight">{card.label}</p>
@@ -463,7 +465,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             { label: 'Execução', value: execOS.length, icon: <Clock className="w-4 h-4" />, color: execOS.length > 0 ? 'amber' : 'gray', tab: 'os' as const },
                             { label: 'Concluídas', value: doneOS.length, icon: <CheckCircle2 className="w-4 h-4" />, color: 'emerald', tab: 'os' as const },
                         ].map(card => (
-                            <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col items-center text-center gap-1.5">
+                            <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-4 shadow-lg shadow-gray-900/5 border border-gray-100 flex flex-col items-center text-center gap-1.5 active:scale-95 transition-transform">
                                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500`}>{card.icon}</div>
                                 <p className="text-xl font-black text-gray-900">{card.value}</p>
                                 <p className="text-[8px] font-black text-gray-400 uppercase tracking-wide leading-tight">{card.label}</p>
@@ -3426,37 +3428,103 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 </div>
             </div>
 
-            {/* Mobile Bottom Navigation */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
-                <div className="flex overflow-x-auto scrollbar-hide">
-                    {tabs.map(tab => {
-                        const isActive = activeTab === tab.id;
-                        const isVisible = enabledTabIds.includes(tab.id);
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                                className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-[64px] py-3 px-2 transition-all duration-200 relative
-                                    ${isActive ? 'text-indigo-600' : isAdmin && !isVisible ? 'text-gray-200' : 'text-gray-400'}
-                                `}
-                            >
-                                {isActive && (
-                                    <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-600 rounded-full" />
-                                )}
-                                <span className={`transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}>
-                                    {tab.icon}
-                                </span>
-                                <span className="text-[9px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
-                                    {tab.label.split(' ')[0]}
-                                </span>
-                                {isAdmin && !isVisible && <EyeOff className="w-2 h-2 absolute top-2 right-2 text-gray-200" />}
-                            </button>
-                        );
-                    })}
-                </div>
-                {/* Safe area for iOS home indicator */}
-                <div className="h-safe-area-inset-bottom bg-white" style={{ height: 'env(safe-area-inset-bottom)' }} />
-            </div>
+            {/* Mobile Bottom Navigation — máx. 5 slots; excedente vai pro sheet "Mais" */}
+            {(() => {
+                const MAX_BAR = 5;
+                const hasMore = tabs.length > MAX_BAR;
+                const barTabs = hasMore ? tabs.slice(0, MAX_BAR - 1) : tabs;
+                const moreTabs = hasMore ? tabs.slice(MAX_BAR - 1) : [];
+                const moreActive = moreTabs.some(t => t.id === activeTab);
+                return (
+                    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
+                        <div className="flex">
+                            {barTabs.map(tab => {
+                                const isActive = activeTab === tab.id;
+                                const isVisible = enabledTabIds.includes(tab.id);
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                                        className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
+                                            ${isActive ? 'text-indigo-600' : isAdmin && !isVisible ? 'text-gray-200' : 'text-gray-400'}
+                                        `}
+                                    >
+                                        {isActive && (
+                                            <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-600 rounded-full" />
+                                        )}
+                                        <span className={`transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}>
+                                            {tab.icon}
+                                        </span>
+                                        <span className="text-[9px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
+                                            {tab.label.split(' ')[0]}
+                                        </span>
+                                        {isAdmin && !isVisible && <EyeOff className="w-2 h-2 absolute top-2 right-2 text-gray-200" />}
+                                    </button>
+                                );
+                            })}
+                            {hasMore && (
+                                <button
+                                    onClick={() => setShowMoreSheet(true)}
+                                    className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
+                                        ${moreActive ? 'text-indigo-600' : 'text-gray-400'}
+                                    `}
+                                >
+                                    {moreActive && (
+                                        <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-600 rounded-full" />
+                                    )}
+                                    <span className={`transition-transform duration-200 ${moreActive ? 'scale-110' : ''}`}>
+                                        <MoreHorizontal className="w-4 h-4" />
+                                    </span>
+                                    <span className="text-[9px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
+                                        Mais
+                                    </span>
+                                </button>
+                            )}
+                        </div>
+                        {/* Safe area for iOS home indicator */}
+                        <div className="h-safe-area-inset-bottom bg-white" style={{ height: 'env(safe-area-inset-bottom)' }} />
+                    </div>
+                );
+            })()}
+
+            {/* Bottom-sheet "Mais" — abas excedentes (somente mobile) */}
+            {showMoreSheet && (() => {
+                const MAX_BAR = 5;
+                const moreTabs = tabs.length > MAX_BAR ? tabs.slice(MAX_BAR - 1) : [];
+                return (
+                    <div className="md:hidden fixed inset-0 z-[200]" onClick={() => setShowMoreSheet(false)}>
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" />
+                        <div
+                            className="absolute bottom-0 inset-x-0 bg-white rounded-t-[2rem] shadow-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-in slide-in-from-bottom duration-200"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-4" />
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center mb-4">Mais opções</p>
+                            <div className="space-y-2">
+                                {moreTabs.map(tab => {
+                                    const isActive = activeTab === tab.id;
+                                    const isVisible = enabledTabIds.includes(tab.id);
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => { setActiveTab(tab.id as typeof activeTab); setShowMoreSheet(false); }}
+                                            className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition-all ${
+                                                isActive
+                                                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                    : 'bg-gray-50 border-gray-100 text-gray-600'
+                                            }`}
+                                        >
+                                            <span className={isActive ? 'text-indigo-500' : 'text-gray-400'}>{tab.icon}</span>
+                                            <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
+                                            {isAdmin && !isVisible && <EyeOff className="w-3.5 h-3.5 ml-auto text-gray-300" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Tab Visibility Config Modal */}
             {showTabConfig && (

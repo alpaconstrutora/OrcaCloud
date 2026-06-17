@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { BudgetEntry, SinapiCategory } from '../types/budget';
+import { BudgetEntry, SinapiCategory, SinapiType } from '../types/budget';
 import { SchedulePeriod, ItemDistribution } from '../types/schedule';
 import { ProjectSchedule } from '../types/project';
 import { inventoryService } from './inventoryService';
@@ -126,10 +126,27 @@ async function explodeNeeds(
         distribsByItemId[d.itemId].push(d);
     }
 
+    // Suporte a itemSchedules (formato mais novo do planejamento)
+    // Converte itemSchedule {id, startDate, endDate} → distribuição sintética de 100% no mês de início
+    const itemScheduleById: Record<string, { startDate: string; endDate: string }> = {};
+    for (const is of (schedule as any).itemSchedules ?? []) {
+        if (is.id && is.startDate) itemScheduleById[is.id] = { startDate: is.startDate, endDate: is.endDate ?? is.startDate };
+    }
+
+    // Garante que periodsById também inclui períodos sintéticos a partir de itemSchedules
+    for (const is of Object.values(itemScheduleById)) {
+        const monthKey = is.startDate.slice(0, 7); // YYYY-MM
+        const syntheticId = `synthetic-${monthKey}`;
+        if (!periodsById[syntheticId]) {
+            periodsById[syntheticId] = { id: syntheticId, name: monthKey, date: is.startDate.slice(0, 10) };
+        }
+    }
+
     console.log('[procurement] explodeNeeds', {
         budgetEntries: budget.length,
-        periods: Object.keys(periodsById).length,
+        periodsCount: Object.keys(periodsById).length,
         distributionItemIds: Object.keys(distribsByItemId).length,
+        itemScheduleIds: Object.keys(itemScheduleById).length,
         sampleBudgetIds: budget.slice(0, 3).map(e => e.id),
         sampleDistribItemIds: Object.keys(distribsByItemId).slice(0, 3),
     });
@@ -143,12 +160,23 @@ async function explodeNeeds(
         const comp = entry.sinapiItem?.composition;
         if (!comp || comp.length === 0) { skippedNoComposition++; continue; }
 
-        const itemDistribs = distribsByItemId[entry.id] ?? [];
-        if (itemDistribs.length === 0) { skippedNoDistrib++; continue; } // sem distribuição → vai para backlog
+        // Tenta distribuições explícitas; se vazio, tenta itemSchedule sintético
+        let itemDistribs: ItemDistribution[] = distribsByItemId[entry.id] ?? [];
+        if (itemDistribs.length === 0 && itemScheduleById[entry.id]) {
+            const { startDate } = itemScheduleById[entry.id];
+            const monthKey = startDate.slice(0, 7);
+            const syntheticPeriodId = `synthetic-${monthKey}`;
+            itemDistribs = [{ itemId: entry.id, periodId: syntheticPeriodId, percentage: 100, value: 0 }];
+        }
+        if (itemDistribs.length === 0) { skippedNoDistrib++; continue; }
 
         for (const component of comp) {
-            // Só materiais (category = 'Material' / SinapiCategory.MATERIAL)
-            if (component.category !== SinapiCategory.MATERIAL && component.category !== 'Material') { skippedNoMaterial++; continue; }
+            // Inclui INPUTs (materiais/equipamentos diretos); exclui sub-COMPOSITIONs e Mão de Obra
+            const cat = component.category;
+            const typ = component.type;
+            const isSubComposition = typ === SinapiType.COMPOSITION || (typ as string) === 'COMPOSITION';
+            const isLabor = cat === SinapiCategory.MAO_DE_OBRA || cat === 'Mão de Obra';
+            if (isSubComposition || isLabor) { skippedNoMaterial++; continue; }
 
             const componentQtyPerUnit = Number(component.quantity ?? 0);
             if (componentQtyPerUnit <= 0) continue;

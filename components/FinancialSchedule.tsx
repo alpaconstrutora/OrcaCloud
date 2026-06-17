@@ -1731,8 +1731,10 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     totalFloat, isCritical, constraintType, constraintDate, slippage, spi, ...rest } = s;
             return rest;
         });
-        // Use settings.startDate (project-level start) so stale schedule.startDate doesn't anchor tasks to a wrong date.
-        handleRecalculate(cleaned, settings.startDate || schedule.startDate);
+        // Use schedule.startDate (shown in the header) as the CPM anchor.
+        // This also calls onUpdateSettings({ startDate }) inside handleRecalculate, which syncs
+        // settings.startDate to match — preventing the needsStartSync loop from reverting the result.
+        handleRecalculate(cleaned, schedule.startDate);
     };
 
     const handleLevelResources = () => {

@@ -599,7 +599,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                             <div
                                                 className="absolute inset-y-0 left-0 right-0 flex items-center px-2 pointer-events-none z-[5] overflow-hidden"
                                             >
-                                                <span className="text-[11px] font-semibold text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.4)] truncate">
+                                                <span className="text-[11px] font-semibold text-gray-700 truncate">
                                                     {node.name}
                                                 </span>
                                             </div>

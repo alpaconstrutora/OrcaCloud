@@ -3794,7 +3794,19 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 onClose={() => setIsConfigModalOpen(false)}
                 schedule={schedule}
                 onUpdate={(updates) => {
-                    const newSchedule = { ...schedule, ...updates };
+                    let newSchedule = { ...schedule, ...updates };
+                    // Ao LIGAR a agregação automática: limpar overrides de data antigos nas entradas
+                    // de grupo/etapa/subetapa (ids fora do budget) para que nada fique "preso".
+                    if (updates.autoRollupParentDates === true) {
+                        const itemIds = new Set(budget.map(b => b.id));
+                        const cleaned = (newSchedule.itemSchedules || []).map(s => {
+                            if (itemIds.has(s.id)) return s;
+                            // Entrada de nó-pai: preservar predecessores, descartar datas/restrições manuais
+                            const { startDate, endDate, constraintType, constraintDate, earlyStart, earlyFinish, lateStart, lateFinish, duration, ...rest } = s;
+                            return rest;
+                        });
+                        newSchedule = { ...newSchedule, itemSchedules: cleaned };
+                    }
                     setSchedule(newSchedule);
                     onUpdateSettings({ ...settings, schedule: newSchedule });
                     // Trigger recalculation if replan mode or working days changed

@@ -210,8 +210,16 @@ interface FinancialScheduleProps {
 }
 
 
+/** Extrai o prefixo numérico WBS de um nome como "01.02. Etapa X" → "01.02" */
+function extractWbsPrefix(name: string): string {
+    const match = name?.match(/^([\d.]+)/);
+    return match ? match[1].replace(/\.$/, '') : name || '';
+}
+
 function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetails[] = [], realizedValues: Record<string, number>, globalBdi: number = 0): HierarchyNode[] {
     const groups: Record<string, HierarchyNode> = {};
+    // Track item index per subphase for WBS code generation
+    const subphaseItemCounters = new Map<string, number>();
 
     budget.forEach(item => {
         const itemBdi = item.bdi !== undefined ? item.bdi : globalBdi;
@@ -232,7 +240,6 @@ function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetail
                 id: groupId,
                 uid: '',
                 type: 'group',
-
                 name: groupName,
                 children: [],
                 total: 0,
@@ -240,7 +247,8 @@ function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetail
                 budgetedTotal: 0,
                 plannedTotal: 0,
                 variation: 0,
-                level: 0
+                level: 0,
+                wbsCode: extractWbsPrefix(groupName)
             };
         }
         groups[groupId].total += itemTotal;
@@ -259,7 +267,6 @@ function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetail
                 id: phaseId,
                 uid: '',
                 type: 'phase',
-
                 name: phaseName,
                 children: [],
                 total: 0,
@@ -267,7 +274,8 @@ function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetail
                 budgetedTotal: 0,
                 plannedTotal: 0,
                 variation: 0,
-                level: 1
+                level: 1,
+                wbsCode: extractWbsPrefix(phaseName)
             };
             groups[groupId].children.push(phaseNode);
         }
@@ -289,7 +297,6 @@ function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetail
                     id: subPhaseId,
                     uid: '',
                     type: 'subphase',
-
                     name: subPhaseName,
                     children: [],
                     total: 0,
@@ -297,7 +304,8 @@ function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetail
                     budgetedTotal: 0,
                     plannedTotal: 0,
                     variation: 0,
-                    level: 2
+                    level: 2,
+                    wbsCode: extractWbsPrefix(subPhaseName)
                 };
                 phaseNode.children.push(subPhaseNode);
             }
@@ -309,7 +317,12 @@ function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetail
             parentForItems = subPhaseNode;
         }
 
-        // 4. Item Level
+        // 4. Item Level — compute WBS code using parent wbsCode + sequential index within subphase
+        const parentWbs = parentForItems.wbsCode || '';
+        const itemCounter = (subphaseItemCounters.get(parentForItems.id) || 0) + 1;
+        subphaseItemCounters.set(parentForItems.id, itemCounter);
+        const itemWbsCode = parentWbs ? `${parentWbs}.${itemCounter.toString().padStart(2, '0')}` : itemCounter.toString().padStart(2, '0');
+
         parentForItems.children.push({
             id: item.id,
             uid: '',
@@ -330,11 +343,19 @@ function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetail
             lateStart: itemSchedule?.lateStart,
             lateFinish: itemSchedule?.lateFinish,
             totalFloat: itemSchedule?.totalFloat,
-            level: parentForItems.level + 1
+            level: parentForItems.level + 1,
+            wbsCode: itemWbsCode
         });
     });
 
     const result = Object.values(groups);
+
+    // Sort groups, phases, subphases by their WBS numeric prefix for consistent ordering
+    const sortByWbs = (nodes: HierarchyNode[]) => {
+        nodes.sort((a, b) => (a.wbsCode || '').localeCompare(b.wbsCode || '', undefined, { numeric: true }));
+        nodes.forEach(n => { if (n.children?.length) sortByWbs(n.children); });
+    };
+    sortByWbs(result);
 
     // ── Group Color Themes ──
     const GANTT_PALETTE = ['#3b82f6', '#22c55e', '#a855f7', '#f97316', '#6366f1', '#14b8a6', '#ec4899'];
@@ -552,7 +573,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
     // ── Column Resize State ──
     const DEFAULT_COL_WIDTHS: Record<string, number> = {
-        item: 250, uid: 40, pred: 50, duration: 60,
+        item: 250, wbs: 80, uid: 40, pred: 50, duration: 60,
         start: 100, end: 100, esef: 80, lslf: 80, float: 50,
         budgeted: 100, planned: 100, realized: 100, variation: 100, realPct: 100, totalPct: 80
     };
@@ -636,7 +657,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
     // ── Gantt Column Resize ──
     const GANTT_DEFAULT_COL_WIDTHS: Record<string, number> = {
-        gId: 44, gPred: 56, gDur: 64, gStart: 86, gEnd: 86,
+        gWbs: 100, gId: 44, gPred: 56, gDur: 64, gStart: 86, gEnd: 86,
         gEsEf: 86, gLsLf: 86, gFloat: 56, gBudgeted: 110, gPlanned: 110, gRealized: 110, gVariation: 110, gResources: 120, gRealPct: 100
     };
     const [ganttColWidths, setGanttColWidths] = useState<Record<string, number>>(() => {

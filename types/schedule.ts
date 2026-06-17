@@ -47,6 +47,7 @@ export interface HierarchyNode {
     totalFloat?: number;
     level: number;
     color?: string;
+    wbsCode?: string;
 }
 
 export interface Baseline {

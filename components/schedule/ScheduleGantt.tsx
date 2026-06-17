@@ -105,6 +105,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     }, [showColsDropdown]);
 
     const COL_LABELS: Record<string, string> = {
+        gWbs: 'ITEM',
         gId: 'ID',
         gPred: 'Predecessora',
         gDur: 'Duração',
@@ -180,6 +181,10 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     </div>
                                 </div>
                             )}
+                        </div>
+
+                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-[11px] font-medium text-gray-500" style={getGanttColStyle('gWbs')}>
+                            {node.wbsCode || ''}
                         </div>
 
                         <div data-gantt-col="gId" className={`shrink-0 border-r border-gray-100 flex items-center justify-center text-[12px] font-medium ${itemSchedule?.isCritical ? 'text-red-500 bg-red-50' : 'text-gray-400 bg-gray-50/50'}`} style={getGanttColStyle('gId')}>
@@ -583,6 +588,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 </div>
                             )}
                         </div>
+                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-medium text-gray-500" style={getGanttColStyle('gWbs')}>{node.wbsCode || ''}</div>
                         <div data-gantt-col="gId" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gId')}>{node.uid}</div>
                         <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-200 flex items-center px-0.5" style={getGanttColStyle('gPred')}>
                             {(() => {
@@ -866,6 +872,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 </div>
                             </div>
 
+                            <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gWbs')}>ITEM</div>
                             <div data-gantt-col="gId" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gId')}>ID</div>
                             <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gPred')}>PRÉD.</div>
                             <div data-gantt-col="gDur" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gDur')}>DUR.</div>

@@ -138,6 +138,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
             <table ref={tableRef} className="sched-tbl w-full text-[12px]" style={{ tableLayout: 'fixed' }}>
                 <colgroup>
                     <col data-col="item" style={{ width: getColWidth('item') }} />
+                    <col data-col="wbs" style={{ width: getColWidth('wbs') }} />
                     <col data-col="uid" style={{ width: getColWidth('uid') }} />
                     <col data-col="pred" style={{ width: getColWidth('pred') }} />
                     <col data-col="duration" style={{ width: getColWidth('duration') }} />
@@ -251,6 +252,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                             </div>
                             <ResizeHandle colKey="item" />
                         </th>
+                        <th className="px-1 py-3 text-center relative">ITEM<ResizeHandle colKey="wbs" /></th>
                         <th className="px-1 py-3 text-center relative">ID<ResizeHandle colKey="uid" /></th>
                         <th className="px-1 py-3 text-center relative">Pred<ResizeHandle colKey="pred" /></th>
                         <th className="px-4 py-3 text-center relative">Duração<ResizeHandle colKey="duration" /></th>
@@ -352,6 +354,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 <button onClick={() => handleClearItem(item.id)} className="text-[12px] text-red-400 hover:text-red-500 hover:underline cursor-pointer">Limpar</button>
                                             </div>
                                         </td>
+                                        <td className="px-1 py-2 text-center text-[11px] font-medium text-gray-500">{node.wbsCode || ''}</td>
                                         <td className={`px-1 py-2 text-center font-medium transition-all ${itemSchedule.isCritical ? 'text-red-600 bg-red-50' : 'text-gray-400 bg-gray-50/50'}`}>
                                             <div className="flex items-center justify-center gap-1">
                                                 {node.uid}
@@ -561,6 +564,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 </div>
                                             )}
                                         </td>
+                                        <td className="px-1 py-3 text-center text-[11px] font-medium text-gray-500">{node.wbsCode || ''}</td>
                                         <td className={`px-1 py-3 text-center font-medium ${node.isCritical ? 'text-red-500 bg-red-50' : 'text-gray-400'}`}>{node.uid}</td>
                                         <td className="px-1 py-1 text-center group/pred relative" onClick={(e) => e.stopPropagation()}>
                                             <input
@@ -637,6 +641,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                 <tfoot className="bg-gray-50 font-medium text-gray-900 border-t-2 border-gray-200">
                     <tr>
                         <td className="px-4 py-3">TOTAL GERAL</td>
+                        <td className="px-1 py-3"></td>
                         <td className="px-1 py-3"></td>
                         <td className="px-1 py-3"></td>
                         <td className="px-1 py-3"></td>

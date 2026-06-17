@@ -3656,6 +3656,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 SchedulingEngine={SchedulingEngine}
                                                 taskInsights={taskInsights}
                                                 handleUpdateRealPct={handleUpdateRealPct}
+                                                setPredecessorModalTask={setPredecessorModalTask}
                                             />
                                         );
                                     } catch (err) {

@@ -41,6 +41,7 @@ interface ScheduleGanttProps {
     handleSplitterDblClick: () => void;
     onSidebarResizeStart: (e: React.MouseEvent) => void;
     handleUpdateRealPct: (itemId: string, value: string) => void;
+    setPredecessorModalTask: (id: string | null) => void;
 }
 
 
@@ -80,7 +81,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     onToggleColumn,
     handleSplitterDblClick,
     onSidebarResizeStart,
-    handleUpdateRealPct
+    handleUpdateRealPct,
+    setPredecessorModalTask
 }) => {
 
     const formatDateDisplay = (dateString?: string) => {
@@ -852,6 +854,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         handleUpdateItemSchedule={handleUpdateItemSchedule}
                         handleUpdateRealPct={handleUpdateRealPct}
                         handleUpdateCrewField={handleUpdateCrewField}
+                        onEditPredecessors={() => { setSelectedTaskId(null); setPredecessorModalTask(sn.item.id); }}
                     />
                 );
             })()}

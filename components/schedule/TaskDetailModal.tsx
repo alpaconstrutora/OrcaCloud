@@ -13,6 +13,7 @@ interface TaskDetailModalProps {
     handleUpdateItemSchedule: (itemId: string, field: 'duration' | 'startDate' | 'endDate', value: string | number) => void;
     handleUpdateRealPct: (itemId: string, value: string) => void;
     handleUpdateCrewField: (id: string, field: string, value: string | number | boolean) => void;
+    onEditPredecessors: () => void;
 }
 
 const fmt = (date?: string) =>
@@ -95,6 +96,7 @@ const EditField: React.FC<EditFieldProps> = ({ label, type = 'number', value, su
 export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     node, item, itemSchedule, idToUid, allItems, onClose,
     handleUpdateItemSchedule, handleUpdateRealPct, handleUpdateCrewField,
+    onEditPredecessors,
 }) => {
     const isCritical = itemSchedule?.isCritical ?? node.isCritical;
     const totalFloat = itemSchedule?.totalFloat ?? node.totalFloat ?? 0;
@@ -299,12 +301,20 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         </section>
                     )}
 
-                    {/* Predecessores */}
-                    {itemSchedule?.predecessors && itemSchedule.predecessors.length > 0 && (
-                        <section>
-                            <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
-                                <Link2 className="w-3.5 h-3.5" /> Predecessores ({itemSchedule.predecessors.length})
+                    {/* Predecessores — editável via PredecessorModal */}
+                    <section>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                <Link2 className="w-3.5 h-3.5" /> Predecessores ({itemSchedule?.predecessors?.length || 0})
                             </h3>
+                            <button
+                                onClick={onEditPredecessors}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-blue-600 hover:bg-blue-50 border border-blue-200 transition-colors"
+                            >
+                                <Link2 className="w-3 h-3" /> Editar
+                            </button>
+                        </div>
+                        {itemSchedule?.predecessors && itemSchedule.predecessors.length > 0 ? (
                             <div className="space-y-2">
                                 {itemSchedule.predecessors.map((pred) => {
                                     const predItem = allItems.find(t => t.id === pred.id);
@@ -327,8 +337,15 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                     );
                                 })}
                             </div>
-                        </section>
-                    )}
+                        ) : (
+                            <button
+                                onClick={onEditPredecessors}
+                                className="w-full text-center py-4 border-2 border-dashed border-gray-100 rounded-xl text-gray-400 text-[11px] hover:border-blue-200 hover:text-blue-500 transition-colors"
+                            >
+                                Nenhum predecessor — clique para adicionar
+                            </button>
+                        )}
+                    </section>
 
                     {/* Equipe — editável */}
                     <section>

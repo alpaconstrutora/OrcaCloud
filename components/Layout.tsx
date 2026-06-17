@@ -307,9 +307,12 @@ const Layout: React.FC<LayoutProps> = ({
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','operacional','estrutural','quality','pos-obra','explorer','eng-planejamento','project-diary','reports','project-settings','eng-obra-types','org-type-templates'];
+  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
+  const operacionalViews = ['operacional','quality','pos-obra','project-diary'];
+  const [isOperacionalOpen, setIsOperacionalOpen] = React.useState(() => operacionalViews.includes(activeView));
+  React.useEffect(() => { if (operacionalViews.includes(activeView)) setIsOperacionalOpen(true); }, [activeView]);
   const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
@@ -593,16 +596,28 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="org-type-templates" label="Templates de Obra" icon={Layers} />
                     <DropdownItem id="eng-orcamentos" label="Orçamentos" icon={FolderOpen} />
                     <DropdownItem id="explorer" label="Composições" icon={BookOpen} />
-                    <DropdownItem id="measure-ai" label="Medição Inteligente" icon={Calculator} />
-                    <DropdownItem id="operacional" label="Controle Operacional" icon={ClipboardList} />
-                    <DropdownItem id="estrutural" label="Ferragem & Aço" icon={Layers} />
-                    <DropdownItem id="quality" label="Qualidade & Entrega" icon={Activity} />
-                    <DropdownItem id="pos-obra" label="Pós-Obra & Garantia" icon={Shield} />
                     <DropdownItem id="eng-planejamento" label="Planejamento" icon={Calendar} />
-                    <DropdownItem id="project-diary" label="Diário de Obra" icon={BookOpen} />
                     <DropdownItem id="reports" label="Relatórios" icon={FileText} />
+                    <DropdownItem id="measure-ai" label="Medição Inteligente" icon={Calculator} />
+                    <DropdownItem id="estrutural" label="Ferragem & Aço" icon={Layers} />
                     <DropdownItem id="project-settings" label="Dados Técnicos" icon={Calculator} />
                     <DropdownItem id="eng-obra-types" label="Tipos de Obra" icon={Layers} />
+                  </NavDropdown>
+
+                  <NavDropdown
+                    label="Operacional"
+                    icon={ClipboardList}
+                    isOpen={isOperacionalOpen}
+                    onToggle={() => {
+                      if (isCollapsed) { onChangeView('operacional'); }
+                      else { setIsOperacionalOpen(o => !o); }
+                    }}
+                    hasActiveChild={operacionalViews.includes(activeView)}
+                  >
+                    <DropdownItem id="operacional" label="Controle Operacional" icon={ClipboardList} />
+                    <DropdownItem id="quality" label="Qualidade e Entrega" icon={Activity} />
+                    <DropdownItem id="pos-obra" label="Pós obra e garantia" icon={Shield} />
+                    <DropdownItem id="project-diary" label="Diário de Obra" icon={BookOpen} />
                   </NavDropdown>
                 </>
               )}

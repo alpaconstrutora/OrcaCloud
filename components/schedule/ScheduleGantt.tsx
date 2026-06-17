@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff, ArrowRightToLine } from 'lucide-react';
 
 import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation } from '../../types';
+import { TaskDetailModal } from './TaskDetailModal';
 
 interface ScheduleGanttProps {
     hierarchy: HierarchyNode[];
@@ -95,6 +96,22 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     const levelsMenuRef = useRef<HTMLDivElement>(null);
     const [showLevelsDropdown, setShowLevelsDropdown] = useState(false);
     const [showColsDropdown, setShowColsDropdown] = useState(false);
+    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+    // Flat list of all items for predecessor name lookup
+    const allItems = React.useMemo(() => {
+        const result: { id: string; name: string }[] = [];
+        const walk = (nodes: HierarchyNode[]) => {
+            nodes.forEach(n => {
+                if (n.type === 'item' && n.data) {
+                    result.push({ id: n.data.id, name: n.data.sinapiItem.description });
+                }
+                if (n.children) walk(n.children);
+            });
+        };
+        walk(hierarchy);
+        return result;
+    }, [hierarchy]);
 
     // Close dropdowns on click-outside or ESC
     React.useEffect(() => {
@@ -110,6 +127,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             if (e.key === 'Escape') {
                 setShowColsDropdown(false);
                 setShowLevelsDropdown(false);
+                setSelectedTaskId(null);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -177,7 +195,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             const itemSchedule = schedule.itemSchedules?.find(s => s.id === item.id);
 
             return (
-                <div key={item.id} className="flex border-b border-gray-50 hover:bg-blue-50/20 transition-colors h-9 relative">
+                <div
+                    key={item.id}
+                    className="flex border-b border-gray-50 hover:bg-blue-50/30 transition-colors h-9 relative cursor-pointer"
+                    onClick={() => setSelectedTaskId(item.id)}
+                >
                     <div
                         className="shrink-0 flex bg-white sticky left-0 z-[35] shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)] border-r border-gray-100"
                         style={{ width: `${getGanttSidebarTotal()}px` }}
@@ -552,6 +574,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         className={`relative h-6 rounded shadow-sm border group/bar transition-all z-[2] flex overflow-hidden ${itemSchedule?.isCritical ? 'border-red-600' : 'border-black/10'} cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-400 hover:z-[10] ${isSimulationMode ? 'hover:ring-purple-400' : ''} ${isDraggingTask === item.id ? 'opacity-80 scale-105 z-[20] shadow-xl ring-2 ring-blue-600 ring-offset-1' : ''}`}
                                         style={{ width: `${width}px`, backgroundColor: `${baseColor}55` }} // translucent base
                                         onMouseDown={(e) => handleGanttBarMouseDown(e, item.id, itemSchedule.startDate as string)}
+                                        onClick={(e) => e.stopPropagation()}
                                     >
                                         {/* Progress Bar (darker portion) */}
                                         <div
@@ -802,7 +825,33 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
         flatten(hierarchy);
 
 
+        // Resolve selected task for detail modal
+        let selectedNode: { node: HierarchyNode; item: BudgetEntry } | null = null;
+        if (selectedTaskId) {
+            const walkForModal = (nodes: HierarchyNode[]) => {
+                nodes.forEach(n => {
+                    if (n.type === 'item' && n.data && n.data.id === selectedTaskId) selectedNode = { node: n, item: n.data };
+                    if (n.children) walkForModal(n.children);
+                });
+            };
+            walkForModal(hierarchy);
+        }
+
         return (
+            <>
+            {selectedNode && (() => {
+                const sn = selectedNode as { node: HierarchyNode; item: BudgetEntry };
+                return (
+                    <TaskDetailModal
+                        node={sn.node}
+                        item={sn.item}
+                        itemSchedule={schedule.itemSchedules?.find(s => s.id === selectedTaskId) ?? undefined}
+                        idToUid={idToUid}
+                        allItems={allItems}
+                        onClose={() => setSelectedTaskId(null)}
+                    />
+                );
+            })()}
             <div
                 ref={containerRef}
                 onScroll={handleScroll}
@@ -1034,6 +1083,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                     </div>
                 </div>
             </div>
+            </>
         );
     } catch (err) {
         console.error('Error rendering Gantt:', err);

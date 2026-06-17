@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { X, Loader2, Save, Trash2, Bell } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { X, Loader2, Save, Trash2, Bell, ChevronDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { TaskStatus } from '../services/taskService'
 
@@ -99,6 +99,9 @@ const TaskForm: React.FC<Props> = ({
     task?.folder_id ?? initialDefaults.folder_id ?? ''
   )
   const [alertAt, setAlertAt]         = useState(toLocalInput(task?.alert_at ?? null))
+  const [collaboratorIds, setCollaboratorIds] = useState<string[]>([])
+  const [showCollabDropdown, setShowCollabDropdown] = useState(false)
+  const collabRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
 
@@ -121,6 +124,29 @@ const TaskForm: React.FC<Props> = ({
       if (def) setStatusId(def.id)
     }
   }, [orgStatuses])
+
+  // Carrega colaboradores ao editar tarefa existente
+  useEffect(() => {
+    if (!task?.id) return
+    supabase
+      .from('task_collaborators')
+      .select('employee_id')
+      .eq('task_id', task.id)
+      .then(({ data }) => {
+        if (data) setCollaboratorIds(data.map(r => r.employee_id))
+      })
+  }, [task?.id])
+
+  // Fecha dropdown de envolvidos ao clicar fora
+  useEffect(() => {
+    if (!showCollabDropdown) return
+    const handler = (e: MouseEvent) => {
+      if (collabRef.current && !collabRef.current.contains(e.target as Node))
+        setShowCollabDropdown(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showCollabDropdown])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -150,9 +176,11 @@ const TaskForm: React.FC<Props> = ({
       alert_at:             alertAt    ? new Date(alertAt).toISOString() : null,
     }
     try {
+      let taskId: string
       if (task?.id) {
         const { error: e } = await supabase.from('tasks').update(payload).eq('id', task.id)
         if (e) throw e
+        taskId = task.id
       } else {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error('Usuário não autenticado')
@@ -168,6 +196,14 @@ const TaskForm: React.FC<Props> = ({
           .select().single()
         if (e) throw e
         if (!inserted) throw new Error('Tarefa não foi salva — tente novamente')
+        taskId = (inserted as { id: string }).id
+      }
+      // Sincroniza colaboradores: remove todos e reinsere os selecionados
+      await supabase.from('task_collaborators').delete().eq('task_id', taskId)
+      if (collaboratorIds.length > 0) {
+        await supabase.from('task_collaborators').insert(
+          collaboratorIds.map(eid => ({ task_id: taskId, employee_id: eid }))
+        )
       }
       onSaved()
     } catch (e) {
@@ -187,6 +223,11 @@ const TaskForm: React.FC<Props> = ({
     if (e) { setError(e.message); return }
     onSaved()
   }
+
+  const toggleCollaborator = (empId: string) =>
+    setCollaboratorIds(prev =>
+      prev.includes(empId) ? prev.filter(id => id !== empId) : [...prev, empId]
+    )
 
   const sel = 'w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none bg-white'
   const inp = 'mt-1 ' + sel
@@ -248,6 +289,71 @@ const TaskForm: React.FC<Props> = ({
               </select>
             </div>
           </div>
+
+          {/* Envolvidos — multi-select */}
+          {employees.length > 0 && (
+            <div ref={collabRef}>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Envolvidos</label>
+              <div className="mt-1 relative">
+                {collaboratorIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {collaboratorIds.map(id => {
+                      const emp = employees.find(e => e.id === id)
+                      if (!emp) return null
+                      return (
+                        <span key={id} className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold border border-blue-200">
+                          {emp.name}
+                          <button
+                            type="button"
+                            onClick={() => toggleCollaborator(id)}
+                            className="hover:text-red-500 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowCollabDropdown(v => !v)}
+                  className={`${sel} flex items-center justify-between text-left ${collaboratorIds.length === 0 ? 'text-slate-400' : 'text-slate-700'}`}
+                >
+                  <span className="text-sm">
+                    {collaboratorIds.length === 0
+                      ? 'Selecionar envolvidos...'
+                      : `${collaboratorIds.length} envolvido${collaboratorIds.length > 1 ? 's' : ''} selecionado${collaboratorIds.length > 1 ? 's' : ''}`}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showCollabDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showCollabDropdown && (
+                  <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-44 overflow-y-auto">
+                    {employees
+                      .filter(emp => emp.id !== assigneeId)
+                      .map(emp => (
+                        <label
+                          key={emp.id}
+                          className="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={collaboratorIds.includes(emp.id)}
+                            onChange={() => toggleCollaborator(emp.id)}
+                            className="w-3.5 h-3.5 rounded text-blue-600 border-slate-300"
+                          />
+                          <span className="text-sm font-medium text-slate-700">{emp.name}</span>
+                          {emp.role && <span className="text-xs text-slate-400">{emp.role}</span>}
+                        </label>
+                      ))}
+                    {employees.filter(emp => emp.id !== assigneeId).length === 0 && (
+                      <p className="px-3 py-2 text-xs text-slate-400">Nenhum colaborador disponível</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Espaço → Pasta (encadeados) — oculto em subtarefas */}
           {!parentTaskId && spaces.length > 0 && (

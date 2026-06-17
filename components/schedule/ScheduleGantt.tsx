@@ -5,6 +5,22 @@ import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff, Arr
 import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation } from '../../types';
 import { TaskDetailModal } from './TaskDetailModal';
 
+/**
+ * Formata uma data 'YYYY-MM-DD' (ou ISO) para pt-BR SEM deslocamento de fuso.
+ * `new Date('2026-08-01')` é interpretado como UTC meia-noite → no Brasil (UTC-3)
+ * vira 31/07 21h e toLocaleDateString exibe o dia errado. Aqui construímos a data
+ * com componentes locais explícitos, evitando o shift.
+ */
+const fmtLocalDate = (
+    s?: string,
+    opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: '2-digit' }
+): string => {
+    if (!s) return '-';
+    const [y, m, d] = s.split('T')[0].split('-').map(Number);
+    if (!y || !m || !d) return '-';
+    return new Date(y, m - 1, d).toLocaleDateString('pt-BR', opts);
+};
+
 interface ScheduleGanttProps {
     hierarchy: HierarchyNode[];
     schedule: ProjectSchedule;
@@ -430,16 +446,16 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         </div>
 
                         <div data-gantt-col="gStart" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-[12px] font-medium text-gray-500" style={getGanttColStyle('gStart')}>
-                            {itemSchedule?.startDate ? new Date(itemSchedule.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '-'}
+                            {itemSchedule?.startDate ? fmtLocalDate(itemSchedule.startDate) : '-'}
                         </div>
 
                         <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-[12px] font-medium text-gray-500" style={getGanttColStyle('gEnd')}>
-                            {itemSchedule?.endDate ? new Date(itemSchedule.endDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '-'}
+                            {itemSchedule?.endDate ? fmtLocalDate(itemSchedule.endDate) : '-'}
                         </div>
 
                         <div data-gantt-col="gEsEf" className="shrink-0 border-r border-gray-100 flex flex-col items-center justify-center bg-blue-50/20 text-[12px] font-medium text-blue-600 leading-tight" style={getGanttColStyle('gEsEf')}>
-                            <span>{itemSchedule?.earlyStart ? new Date(itemSchedule.earlyStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '-'}</span>
-                            <span>{itemSchedule?.earlyFinish ? new Date(itemSchedule.earlyFinish).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '-'}</span>
+                            <span>{itemSchedule?.earlyStart ? fmtLocalDate(itemSchedule.earlyStart, { day: '2-digit', month: '2-digit' }) : '-'}</span>
+                            <span>{itemSchedule?.earlyFinish ? fmtLocalDate(itemSchedule.earlyFinish, { day: '2-digit', month: '2-digit' }) : '-'}</span>
                         </div>
 
                         <div data-gantt-col="gLsLf" className="shrink-0 border-r border-gray-100 flex flex-col items-center justify-center bg-orange-50/20 text-[12px] font-medium text-orange-600 leading-tight" style={getGanttColStyle('gLsLf')}>
@@ -528,7 +544,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                             style={!itemSchedule.isCritical ? { backgroundColor: baseColor } : {}}
                                         />
                                         <div className="opacity-0 hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[12px] px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none">
-                                            Marco: {new Date(itemSchedule.startDate).toLocaleDateString()} {itemSchedule.isCritical ? '(CRÍTICO)' : ''}
+                                            Marco: {fmtLocalDate(itemSchedule.startDate)} {itemSchedule.isCritical ? '(CRÍTICO)' : ''}
                                         </div>
                                         {/* External Label for Milestones */}
                                         <div className="absolute left-[calc(100%+8px)] whitespace-nowrap text-[12px] font-medium text-gray-500 pointer-events-none">
@@ -608,7 +624,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         )}
 
                                         <div className="opacity-0 group-hover/bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[12px] px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none">
-                                            {new Date(itemSchedule.startDate).toLocaleDateString()} - {itemSchedule.endDate ? new Date(itemSchedule.endDate).toLocaleDateString() : ''} ({itemSchedule.duration}d)
+                                            {fmtLocalDate(itemSchedule.startDate)} - {itemSchedule.endDate ? fmtLocalDate(itemSchedule.endDate) : ''} ({itemSchedule.duration}d)
                                             {itemSchedule.totalFloat ? ` | Folga: ${itemSchedule.totalFloat}d` : ''}
                                         </div>
                                     </div>
@@ -684,7 +700,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             {(() => {
                                 if (schedule.autoRollupParentDates) {
                                     return node.earlyStart
-                                        ? <span className="text-[12px] font-medium text-gray-600">{new Date(node.earlyStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+                                        ? <span className="text-[12px] font-medium text-gray-600">{fmtLocalDate(node.earlyStart)}</span>
                                         : null;
                                 }
                                 const ns = schedule.itemSchedules?.find(s => s.id === node.id);
@@ -704,12 +720,12 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 // FIM do nó-pai é sempre derivado (read-only): mostra o rollup (máx dos filhos),
                                 // nunca um endDate antigo armazenado que poderia ficar "preso".
                                 const effectiveDate = node.earlyFinish;
-                                return effectiveDate ? new Date(effectiveDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
+                                return effectiveDate ? fmtLocalDate(effectiveDate) : '';
                             })()}
                         </div>
                         <div data-gantt-col="gEsEf" className="shrink-0 border-r border-gray-200 flex flex-col items-center justify-center text-[12px] font-medium text-blue-600 leading-tight" style={getGanttColStyle('gEsEf')}>
-                            {node.earlyStart ? <span>{new Date(node.earlyStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span> : null}
-                            {node.earlyFinish ? <span>{new Date(node.earlyFinish).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span> : null}
+                            {node.earlyStart ? <span>{fmtLocalDate(node.earlyStart, { day: '2-digit', month: '2-digit' })}</span> : null}
+                            {node.earlyFinish ? <span>{fmtLocalDate(node.earlyFinish, { day: '2-digit', month: '2-digit' })}</span> : null}
                         </div>
                         <div data-gantt-col="gLsLf" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gLsLf')}></div>
                         <div data-gantt-col="gFloat" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gFloat')}></div>
@@ -806,7 +822,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     </div>
 
                                     <div className="opacity-0 group-hover/summary-bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[12px] px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none font-medium">
-                                        {node.name}: {new Date(node.earlyStart).toLocaleDateString()} - {new Date(node.earlyFinish).toLocaleDateString()} ({durationDays.toFixed(0)}d)
+                                        {node.name}: {fmtLocalDate(node.earlyStart)} - {fmtLocalDate(node.earlyFinish)} ({durationDays.toFixed(0)}d)
                                     </div>
                                 </div>
                             );

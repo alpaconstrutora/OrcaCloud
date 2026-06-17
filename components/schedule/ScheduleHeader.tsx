@@ -13,7 +13,8 @@ import {
     Loader2,
     ShieldAlert,
     RefreshCw,
-    History
+    History,
+    Wand2
 } from 'lucide-react';
 import { ProjectSchedule, ProjectSettings, ItemScheduleDetails } from '../../types';
 import ModernDateInput from '../ModernDateInput';
@@ -53,6 +54,7 @@ interface ScheduleHeaderProps {
     onOpenVersions: () => void;
     planningVersionsCount: number;
     hasNewerBudgetVersion: boolean;
+    onAutoSchedule: () => void;
 }
 
 const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
@@ -89,7 +91,8 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     onSyncBudget,
     onOpenVersions,
     planningVersionsCount,
-    hasNewerBudgetVersion
+    hasNewerBudgetVersion,
+    onAutoSchedule
 }) => {
     return (
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
@@ -263,6 +266,16 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     >
                         <Users className="w-3.5 h-3.5" />
                         Nivelar
+                    </button>
+
+                    <div className="h-4 w-px bg-gray-300 mx-1"></div>
+                    <button
+                        onClick={onAutoSchedule}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-emerald-700 hover:bg-emerald-50 hover:shadow-sm rounded-md text-[11px] font-semibold transition-all"
+                        title="Recalcula todas as datas com base em predecessores e duração"
+                    >
+                        <Wand2 className="w-3.5 h-3.5" />
+                        Auto Programar
                     </button>
 
                     {/* Auto Equipe (bulk toggle) */}

@@ -1681,6 +1681,16 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         });
     };
 
+    const handleAutoSchedule = () => {
+        if (!window.confirm('Isso recalcula todas as datas com base em predecessores e duração, removendo ajustes manuais de data. Continuar?')) return;
+        const cleaned = (schedule.itemSchedules || []).map(s => {
+            const { startDate, endDate, earlyStart, earlyFinish, lateStart, lateFinish,
+                    totalFloat, isCritical, constraintType, constraintDate, slippage, spi, ...rest } = s;
+            return rest;
+        });
+        handleRecalculate(cleaned);
+    };
+
     const handleLevelResources = () => {
         try {
             const currentItemSchedules = schedule.itemSchedules || [];
@@ -3136,6 +3146,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 onOpenVersions={() => setVersionPanelOpen(true)}
                 planningVersionsCount={(settings.planningVersions || []).length}
                 hasNewerBudgetVersion={budgetVersionStatus.hasNewerVersion}
+                onAutoSchedule={handleAutoSchedule}
             />
 
             {/* ── Sync Budget Modal ── */}

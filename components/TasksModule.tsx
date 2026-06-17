@@ -109,13 +109,24 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     setLoading(false)
   }, [])
 
-  // Carrega colaboradores da org selecionada para o form
+  // Carrega colaboradores da org selecionada + os compartilhados com ela
   const loadEmployees = useCallback(async (orgId: string) => {
     if (!orgId) { setEmployees([]); return }
+
+    const { data: shared } = await supabase
+      .from('employee_org_shares')
+      .select('employee_id')
+      .eq('target_org_id', orgId)
+    const sharedIds = (shared ?? []).map((s: any) => s.employee_id)
+
+    const orFilter = sharedIds.length > 0
+      ? `org_id.eq.${orgId},id.in.(${sharedIds.join(',')})`
+      : `org_id.eq.${orgId}`
+
     const { data } = await supabase
       .from('employees')
       .select('id, name, role')
-      .eq('org_id', orgId)
+      .or(orFilter)
       .eq('status', 'ATIVO')
       .order('name')
     setEmployees((data ?? []) as EmployeeOption[])

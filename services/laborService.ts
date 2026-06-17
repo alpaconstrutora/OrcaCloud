@@ -491,6 +491,16 @@ export interface Employee {
 
     // joins
     allocations?: EmployeeAllocation[];
+    shared_orgs?: { target_org_id: string; org_name?: string }[];
+}
+
+export interface EmployeeOrgShare {
+    id: string;
+    employee_id: string;
+    target_org_id: string;
+    target_org_name?: string;
+    granted_by?: string;
+    created_at?: string;
 }
 
 // ── EPI TYPES ──────────────────────────────────────────────
@@ -657,20 +667,42 @@ export const laborService = {
     // ── EMPLOYEES ──────────────────────────────────────────
 
     async listEmployees(orgId?: string, empresaId?: string): Promise<Employee[]> {
-        let query = supabase
-            .from('employees')
-            .select(`
-                *,
-                allocations:employee_allocations(*)
-            `);
-
         if (empresaId) {
-            query = query.eq('empresa_id', empresaId);
-        } else if (orgId && orgId !== 'all') {
-            query = query.eq('org_id', orgId);
+            const { data, error } = await supabase
+                .from('employees')
+                .select('*, allocations:employee_allocations(*)')
+                .eq('empresa_id', empresaId)
+                .order('name');
+            if (error) throw error;
+            return data || [];
         }
 
-        const { data, error } = await query.order('name');
+        if (orgId && orgId !== 'all') {
+            // Retorna os colaboradores próprios da org + os compartilhados com ela
+            const { data: shared, error: sharedErr } = await supabase
+                .from('employee_org_shares')
+                .select('employee_id')
+                .eq('target_org_id', orgId);
+            if (sharedErr) throw sharedErr;
+
+            const sharedIds = (shared || []).map(s => s.employee_id);
+
+            const { data, error } = await supabase
+                .from('employees')
+                .select('*, allocations:employee_allocations(*), shared_orgs:employee_org_shares(target_org_id)')
+                .or(sharedIds.length > 0
+                    ? `org_id.eq.${orgId},id.in.(${sharedIds.join(',')})`
+                    : `org_id.eq.${orgId}`)
+                .order('name');
+            if (error) throw error;
+            return data || [];
+        }
+
+        // Modo consolidado — todas as orgs acessíveis via RLS
+        const { data, error } = await supabase
+            .from('employees')
+            .select('*, allocations:employee_allocations(*), shared_orgs:employee_org_shares(target_org_id)')
+            .order('name');
         if (error) throw error;
         return data || [];
     },
@@ -2145,5 +2177,45 @@ export const laborService = {
         }
 
         return { imported: totalImported, skipped: totalSkipped };
-    }
+    },
+
+    // ── EMPLOYEE ORG SHARING ───────────────────────────────
+
+    async getEmployeeShares(employeeId: string): Promise<EmployeeOrgShare[]> {
+        const { data, error } = await supabase
+            .from('employee_org_shares')
+            .select('*, organizations:target_org_id(name)')
+            .eq('employee_id', employeeId)
+            .order('created_at');
+        if (error) throw error;
+        return (data || []).map((row: any) => ({
+            id: row.id,
+            employee_id: row.employee_id,
+            target_org_id: row.target_org_id,
+            target_org_name: row.organizations?.name,
+            granted_by: row.granted_by,
+            created_at: row.created_at,
+        }));
+    },
+
+    async setEmployeeShares(employeeId: string, targetOrgIds: string[], grantedBy?: string): Promise<void> {
+        // Remove todos os shares existentes e recria
+        const { error: delErr } = await supabase
+            .from('employee_org_shares')
+            .delete()
+            .eq('employee_id', employeeId);
+        if (delErr) throw delErr;
+
+        if (targetOrgIds.length === 0) return;
+
+        const rows = targetOrgIds.map(orgId => ({
+            employee_id: employeeId,
+            target_org_id: orgId,
+            granted_by: grantedBy || null,
+        }));
+        const { error: insErr } = await supabase
+            .from('employee_org_shares')
+            .insert(rows);
+        if (insErr) throw insErr;
+    },
 };

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Search, Filter, Edit3, UserMinus, UserCheck, Building2, Briefcase, DollarSign, Clock, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { Search, Filter, Edit3, UserMinus, UserCheck, Building2, Briefcase, DollarSign, Clock, ChevronDown, ChevronUp, Trash2, Share2 } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
+import LaborEmployeeSharing from './LaborEmployeeSharing';
 
 interface LaborEmployeeListProps {
     employees: Employee[];
     projects: any[];
     organizations?: any[];
+    currentUserEmail?: string;
     onEdit: (emp: Employee) => void;
     onRefresh: () => void;
 }
@@ -27,12 +29,13 @@ const STATUS_COLORS: Record<EmployeeStatus, string> = {
     DESLIGADO: 'bg-red-100 text-red-700',
 };
 
-const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organizations = [], onEdit, onRefresh }) => {
+const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organizations = [], currentUserEmail, onEdit, onRefresh }) => {
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState<EmployeeStatus | 'ALL'>('ATIVO');
     const [filterContract, setFilterContract] = useState<ContractType | 'ALL'>('ALL');
     const [sortBy, setSortBy] = useState<'name' | 'cost'>('name');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+    const [sharingEmployee, setSharingEmployee] = useState<Employee | null>(null);
 
     const filtered = employees
         .filter(e => filterStatus === 'ALL' || e.status === filterStatus)
@@ -80,6 +83,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
         : <ChevronDown className="w-3 h-3 opacity-30" />;
 
     return (
+        <>
         <div className="space-y-4">
             {/* Filters */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-3">
@@ -157,7 +161,18 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                             {emp.name.charAt(0).toUpperCase()}
                                         </div>
                                         <div>
-                                            <p className="text-sm font-bold text-slate-900">{emp.name}</p>
+                                            <div className="flex items-center gap-1.5">
+                                                <p className="text-sm font-bold text-slate-900">{emp.name}</p>
+                                                {(emp.shared_orgs?.length ?? 0) > 0 && (
+                                                    <span
+                                                        title={`Disponível em ${emp.shared_orgs!.length} organização${emp.shared_orgs!.length > 1 ? 'ões' : ''} adicional${emp.shared_orgs!.length > 1 ? 'is' : ''}`}
+                                                        className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded-full text-[9px] font-black"
+                                                    >
+                                                        <Share2 className="w-2.5 h-2.5" />
+                                                        {emp.shared_orgs!.length}
+                                                    </span>
+                                                )}
+                                            </div>
                                             {emp.cpf && <p className="text-[10px] text-slate-400">{emp.cpf}</p>}
                                         </div>
                                     </div>
@@ -219,6 +234,15 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                         >
                                             <Edit3 className="w-3.5 h-3.5" />
                                         </button>
+                                        {organizations.length > 1 && (
+                                            <button
+                                                onClick={() => setSharingEmployee(emp)}
+                                                className={`p-1.5 rounded-lg transition-colors ${(emp.shared_orgs?.length ?? 0) > 0 ? 'bg-violet-100 text-violet-600 hover:bg-violet-200' : 'bg-slate-50 text-slate-400 hover:bg-violet-50 hover:text-violet-600'}`}
+                                                title="Disponibilizar para outras organizações"
+                                            >
+                                                <Share2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => handleToggleStatus(emp)}
                                             className={`p-1.5 rounded-lg transition-colors ${emp.status === 'ATIVO' ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
@@ -250,6 +274,17 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                 )}
             </div>
         </div>
+
+        {sharingEmployee && (
+            <LaborEmployeeSharing
+                employee={sharingEmployee}
+                organizations={organizations}
+                currentUserEmail={currentUserEmail}
+                onClose={() => setSharingEmployee(null)}
+                onSaved={() => { setSharingEmployee(null); onRefresh(); }}
+            />
+        )}
+        </>
     );
 };
 

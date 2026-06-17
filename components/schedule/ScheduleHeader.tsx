@@ -41,6 +41,7 @@ interface ScheduleHeaderProps {
     onUpdateSettings: (settings: ProjectSettings) => void;
     handleExpandAll: () => void;
     handleCollapseAll: () => void;
+    allExpanded: boolean;
     handleApplyAutoAllItems: () => void;
     handleDisableAutoAllItems: () => void;
     budgetLength: number;
@@ -77,6 +78,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     onUpdateSettings,
     handleExpandAll,
     handleCollapseAll,
+    allExpanded,
     handleApplyAutoAllItems,
     handleDisableAutoAllItems,
     budgetLength,
@@ -342,22 +344,15 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
 
                 {/* ── Group 5: Utility (Expand/Collapse, Clear) ── */}
                 <div className="h-5 w-px bg-gray-200"></div>
-                <div className="flex items-center gap-0.5 bg-gray-50/80 p-0.5 rounded-lg border border-gray-200/40">
+                <div className="flex items-center gap-0.5">
                     <button
-                        onClick={handleExpandAll}
-                        className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-gray-400 hover:text-blue-600"
-                        title="Expandir Tudo"
+                        onClick={allExpanded ? handleCollapseAll : handleExpandAll}
+                        title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:border-slate-300 bg-white transition-all"
                     >
-                        <ChevronsUpDown className="w-3.5 h-3.5" />
+                        {allExpanded ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
+                        {allExpanded ? 'Recolher' : 'Expandir'}
                     </button>
-                    <button
-                        onClick={handleCollapseAll}
-                        className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-gray-400 hover:text-gray-600"
-                        title="Recolher Tudo"
-                    >
-                        <ChevronsDownUp className="w-3.5 h-3.5" />
-                    </button>
-                    <div className="h-4 w-px bg-gray-200 mx-0.5"></div>
                     <button
                         onClick={onClearAll}
                         className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"

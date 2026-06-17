@@ -3100,6 +3100,13 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 onUpdateSettings={onUpdateSettings}
                 handleExpandAll={handleExpandAll}
                 handleCollapseAll={handleCollapseAll}
+                allExpanded={(() => {
+                    const expandedNodes = viewMode === 'gantt' ? ganttExpandedNodes : tableExpandedNodes;
+                    const nonItemIds: string[] = [];
+                    const collect = (nodes: HierarchyNode[]) => nodes.forEach(n => { if (n.type !== 'item') { nonItemIds.push(n.id); if (n.children) collect(n.children); } });
+                    collect(hierarchy);
+                    return nonItemIds.length > 0 && nonItemIds.every(id => !!expandedNodes[id]);
+                })()}
                 handleApplyAutoAllItems={handleApplyAutoAllItems}
                 handleDisableAutoAllItems={handleDisableAutoAllItems}
                 budgetLength={budget.length}

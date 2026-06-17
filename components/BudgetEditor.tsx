@@ -1637,22 +1637,14 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
             <div className="h-6 w-px bg-gray-200 mx-1" />
 
-            <div className="flex gap-1">
-              <button
-                onClick={handleExpandAll}
-                className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-blue-600 group"
-                title="Expandir Tudo"
-              >
-                <ChevronsUpDown className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleCollapseAll}
-                className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-gray-400 group"
-                title="Recolher Tudo"
-              >
-                <ChevronsDownUp className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              onClick={expandedGroups.length > 0 ? handleCollapseAll : handleExpandAll}
+              title={expandedGroups.length > 0 ? 'Recolher tudo' : 'Expandir tudo'}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:border-slate-300 bg-white transition-all"
+            >
+              {expandedGroups.length > 0 ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
+              {expandedGroups.length > 0 ? 'Recolher' : 'Expandir'}
+            </button>
 
             <div className="h-6 w-px bg-gray-200 mx-1" />
 

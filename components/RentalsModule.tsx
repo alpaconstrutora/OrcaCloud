@@ -1052,6 +1052,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 onSubmit={handleSaveProperty}
                 initialData={editingProperty}
                 defaultPurpose="RENTAL"
+                organizationId={organizationId}
             />
 
             <DealModal

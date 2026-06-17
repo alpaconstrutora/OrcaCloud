@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Trash2, Settings2 } from 'lucide-react';
+import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Trash2, Settings2, Settings } from 'lucide-react';
 import { Property, PropertyStatus, Client, TowerMatrixConfig, GridCellConfig } from '../types';
 import { clientService } from '../services/clientService';
+import { propertyTypesService, PropertyType } from '../services/propertyTypesService';
+import PropertyTypesManager from './PropertyTypesManager';
 
 interface PropertyModalProps {
     isOpen: boolean;
@@ -10,9 +12,10 @@ interface PropertyModalProps {
     initialData?: Property;
     defaultPurpose?: 'SALE' | 'RENTAL' | 'BOTH';
     buildings?: Property[];
+    organizationId?: string;
 }
 
-const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit, initialData, defaultPurpose, buildings = [] }) => {
+const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit, initialData, defaultPurpose, buildings = [], organizationId }) => {
     const [formData, setFormData] = useState<Partial<Property>>({
         name: '',
         type: 'APARTMENT',
@@ -141,6 +144,8 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
     const [sheetOpen, setSheetOpen] = useState(false);
     const [clients, setClients] = useState<Client[]>([]);
     const [enableMatrix, setEnableMatrix] = useState(!initialData);
+    const [propertyTypes, setPropertyTypes] = useState<PropertyType[]>([]);
+    const [isTypesManagerOpen, setIsTypesManagerOpen] = useState(false);
 
     const [towerMatrix, setTowerMatrix] = useState<TowerMatrixConfig[]>([
         {
@@ -161,6 +166,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
     useEffect(() => {
         if (isOpen) {
             clientService.listClients().then(setClients).catch(console.error);
+            propertyTypesService.listTypes().then(setPropertyTypes).catch(console.error);
             setActiveTab('dados');
         }
 
@@ -223,6 +229,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
     };
 
     return (
+        <>
         <div className="fixed inset-0 z-[100]">
             {/* Backdrop */}
             <div
@@ -380,17 +387,36 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5 col-span-2">
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Tipo</label>
+                                    <div className="flex items-center justify-between px-1">
+                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Tipo</label>
+                                        {organizationId && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsTypesManagerOpen(true)}
+                                                className="flex items-center gap-1 text-[9px] font-black text-blue-400 hover:text-blue-600 uppercase tracking-widest transition-colors"
+                                            >
+                                                <Settings className="w-3 h-3" />
+                                                Gerenciar
+                                            </button>
+                                        )}
+                                    </div>
                                     <select
                                         value={formData.type}
                                         onChange={(e) => setFormData({ ...formData, type: e.target.value as Property['type'] })}
                                         className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
                                     >
-                                        <option value="APARTMENT">Apartamento</option>
-                                        <option value="HOUSE">Casa</option>
-                                        <option value="LAND">Terreno / Lote</option>
-                                        <option value="COMMERCIAL">Comercial</option>
-                                        <option value="BUILDING">Edifício (Master)</option>
+                                        {propertyTypes.length > 0
+                                            ? propertyTypes.map(t => (
+                                                <option key={t.code} value={t.code}>{t.label}</option>
+                                            ))
+                                            : <>
+                                                <option value="APARTMENT">Apartamento</option>
+                                                <option value="HOUSE">Casa</option>
+                                                <option value="LAND">Terreno / Lote</option>
+                                                <option value="COMMERCIAL">Comercial</option>
+                                                <option value="BUILDING">Edifício (Master)</option>
+                                            </>
+                                        }
                                     </select>
                                 </div>
                                 <div className="space-y-1.5 col-span-2">
@@ -1235,6 +1261,16 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                 </div>
             </div>
         </div>
+
+        {organizationId && (
+            <PropertyTypesManager
+                isOpen={isTypesManagerOpen}
+                onClose={() => setIsTypesManagerOpen(false)}
+                organizationId={organizationId}
+                onTypesChanged={() => propertyTypesService.listTypes().then(setPropertyTypes).catch(console.error)}
+            />
+        )}
+        </>
     );
 };
 

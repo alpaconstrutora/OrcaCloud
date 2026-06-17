@@ -491,7 +491,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                             {dealTypeFilter === 'RENTAL' ? <Key className="w-6 h-6 text-white" /> : <Building2 className="w-6 h-6 text-white" />}
                         </div>
                         <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">
-                            {dealTypeFilter === 'SALE' ? 'Comercial & Vendas' : dealTypeFilter === 'RENTAL' ? 'Gestão de Aluguéis' : 'Comercial & Ativos'}
+                            {dealTypeFilter === 'SALE' ? 'Comercial & Vendas' : dealTypeFilter === 'RENTAL' ? 'Gestão de Locações' : 'Comercial & Ativos'}
                         </span>
                     </div>
                     <h1 className="text-4xl font-black text-white tracking-tight">
@@ -1010,7 +1010,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                             {[
                                 ...(dealTypeFilter !== 'RENTAL' ? [{ label: 'Volume em Vendas', value: stats.soldValue, icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' }] : []),
-                                ...(dealTypeFilter !== 'SALE' ? [{ label: 'Receita em Aluguéis', value: stats.rentValue, icon: Key, color: 'text-purple-600', bg: 'bg-purple-50' }] : []),
+                                ...(dealTypeFilter !== 'SALE' ? [{ label: 'Receita em Locações', value: stats.rentValue, icon: Key, color: 'text-purple-600', bg: 'bg-purple-50' }] : []),
                                 { label: 'Unidades no Radar', value: filteredProperties.length, icon: Home, color: 'text-emerald-600', bg: 'bg-emerald-50' },
                                 { label: 'Negociações Ativas', value: stats.activeDeals, icon: DollarSign, color: 'text-amber-600', bg: 'bg-amber-50' }
                             ].map((stat, i) => (
@@ -1079,6 +1079,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                 initialData={editingProperty || undefined}
                 buildings={properties.filter(p => p.type === 'BUILDING')}
                 defaultPurpose={dealTypeFilter}
+                organizationId={organizationId}
             />
 
             <DealModal

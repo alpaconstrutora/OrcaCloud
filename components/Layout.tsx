@@ -592,12 +592,12 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="eng-obras" label="Obras" icon={Building2} />
                     <DropdownItem id="org-type-templates" label="Templates de Obra" icon={Layers} />
                     <DropdownItem id="eng-orcamentos" label="Orçamentos" icon={FolderOpen} />
+                    <DropdownItem id="explorer" label="Composições" icon={BookOpen} />
                     <DropdownItem id="measure-ai" label="Medição Inteligente" icon={Calculator} />
                     <DropdownItem id="operacional" label="Controle Operacional" icon={ClipboardList} />
                     <DropdownItem id="estrutural" label="Ferragem & Aço" icon={Layers} />
                     <DropdownItem id="quality" label="Qualidade & Entrega" icon={Activity} />
                     <DropdownItem id="pos-obra" label="Pós-Obra & Garantia" icon={Shield} />
-                    <DropdownItem id="explorer" label="Composições" icon={BookOpen} />
                     <DropdownItem id="eng-planejamento" label="Planejamento" icon={Calendar} />
                     <DropdownItem id="project-diary" label="Diário de Obra" icon={BookOpen} />
                     <DropdownItem id="reports" label="Relatórios" icon={FileText} />
@@ -730,7 +730,7 @@ const Layout: React.FC<LayoutProps> = ({
                     {(mod.crm || isDev) && (
                       <>
                         <DropdownItem id="sales" label="Espelho de Vendas" icon={Building2} />
-                        <DropdownItem id="rentals" label="Aluguéis" icon={Building2} />
+                        <DropdownItem id="rentals" label="Locações" icon={Building2} />
                         <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />
                         <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />
                       </>
@@ -767,7 +767,7 @@ const Layout: React.FC<LayoutProps> = ({
           {profile.group === 'CLIENTE' && (
             <>
               <NavGroup label="Minha Área" />
-              <NavItem id="dashboard" icon={Building2} label={profile.role === 'ALUGUEL' ? 'Meus Aluguéis' : 'Meus Imóveis'} />
+              <NavItem id="dashboard" icon={Building2} label={profile.role === 'ALUGUEL' ? 'Minhas Locações' : 'Meus Imóveis'} />
               <NavItem id="documentos" icon={FileText} label="Documentos" />
             </>
           )}

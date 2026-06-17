@@ -1493,6 +1493,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 onSubmit={handleSaveProperty}
                 initialData={editingProperty || (selectedBuildingId ? { parent_id: selectedBuildingId, type: 'APARTMENT' } as Property : undefined)}
                 defaultPurpose="SALE"
+                organizationId={organizationId}
             />
 
             <DealModal

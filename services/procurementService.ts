@@ -126,19 +126,29 @@ async function explodeNeeds(
         distribsByItemId[d.itemId].push(d);
     }
 
+    console.log('[procurement] explodeNeeds', {
+        budgetEntries: budget.length,
+        periods: Object.keys(periodsById).length,
+        distributionItemIds: Object.keys(distribsByItemId).length,
+        sampleBudgetIds: budget.slice(0, 3).map(e => e.id),
+        sampleDistribItemIds: Object.keys(distribsByItemId).slice(0, 3),
+    });
+
+    let skippedNoComposition = 0, skippedNoDistrib = 0, skippedNoMaterial = 0;
+
     const needs: ExplodedNeed[] = [];
     const consolGroupIds: Record<string, string> = {}; // groupKey → UUID
 
     for (const entry of budget) {
         const comp = entry.sinapiItem?.composition;
-        if (!comp || comp.length === 0) continue;
+        if (!comp || comp.length === 0) { skippedNoComposition++; continue; }
 
         const itemDistribs = distribsByItemId[entry.id] ?? [];
-        if (itemDistribs.length === 0) continue; // sem distribuição → vai para backlog
+        if (itemDistribs.length === 0) { skippedNoDistrib++; continue; } // sem distribuição → vai para backlog
 
         for (const component of comp) {
             // Só materiais (category = 'Material' / SinapiCategory.MATERIAL)
-            if (component.category !== SinapiCategory.MATERIAL && component.category !== 'Material') continue;
+            if (component.category !== SinapiCategory.MATERIAL && component.category !== 'Material') { skippedNoMaterial++; continue; }
 
             const componentQtyPerUnit = Number(component.quantity ?? 0);
             if (componentQtyPerUnit <= 0) continue;
@@ -191,6 +201,13 @@ async function explodeNeeds(
             }
         }
     }
+
+    console.log('[procurement] explodeNeeds resultado', {
+        needs: needs.length,
+        skippedNoComposition,
+        skippedNoDistrib,
+        skippedNoMaterial,
+    });
 
     return needs;
 }
@@ -350,6 +367,17 @@ export const procurementService = {
                 ? (project.budget as BudgetEntry[])
                 : ((settings.basedOnBudgetSnapshot as BudgetEntry[]) ?? []);
 
+        console.log('[procurement] projeto carregado', {
+            projectId,
+            classification: settings.classification,
+            linkedProjectId: settings.linkedProjectId,
+            budgetRows: budget.length,
+            hasSchedule: !!schedule,
+            schedulePeriodsCount: (schedule as any)?.periods?.length ?? 0,
+            scheduleDistributionsCount: (schedule as any)?.distributions?.length ?? 0,
+            snapshotRows: ((settings.basedOnBudgetSnapshot as any[]) ?? []).length,
+        });
+
         // Se o projeto não tiver cronograma, busca no projeto PLANEJAMENTO vinculado
         if (!schedule) {
             const { data: planProj } = await supabase
@@ -368,6 +396,17 @@ export const procurementService = {
                 // então SEMPRE usamos o snapshot quando há PLANEJAMENTO vinculado.
                 const snap = (planSettings.basedOnBudgetSnapshot as BudgetEntry[] | undefined) ?? [];
                 budget = snap.length > 0 ? snap : ((planProj.budget ?? []) as BudgetEntry[]);
+                console.log('[procurement] PLANEJAMENTO vinculado encontrado', {
+                    planProjectId: planProj.id,
+                    planLinkedProjectId: planSettings.linkedProjectId,
+                    snapshotRows: snap.length,
+                    planBudgetRows: ((planProj.budget ?? []) as any[]).length,
+                    scheduleFound: !!schedule,
+                    schedulePeriodsCount: (schedule as any)?.periods?.length ?? 0,
+                    scheduleDistributionsCount: (schedule as any)?.distributions?.length ?? 0,
+                });
+            } else {
+                console.warn('[procurement] Nenhum PLANEJAMENTO vinculado encontrado para projectId:', projectId);
             }
         }
 

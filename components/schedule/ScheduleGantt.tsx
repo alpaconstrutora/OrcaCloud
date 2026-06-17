@@ -600,9 +600,31 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             })()}
                         </div>
                         <div data-gantt-col="gDur" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gDur')}></div>
-                        <div data-gantt-col="gStart" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gStart')}></div>
-                        <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gEnd')}></div>
-                        <div data-gantt-col="gEsEf" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gEsEf')}></div>
+                        <div data-gantt-col="gStart" className="shrink-0 border-r border-gray-200 flex items-center justify-center" style={getGanttColStyle('gStart')} onClick={(e) => e.stopPropagation()}>
+                            {(() => {
+                                const ns = schedule.itemSchedules?.find(s => s.id === node.id);
+                                const effectiveDate = ns?.startDate ? ns.startDate.split('T')[0] : (node.earlyStart || '');
+                                return (
+                                    <input
+                                        type="date"
+                                        value={effectiveDate}
+                                        onChange={(e) => handleUpdateItemSchedule(node.id, 'startDate', e.target.value)}
+                                        className="w-full bg-transparent border-none text-center text-[12px] font-medium text-gray-600 outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 rounded px-1"
+                                    />
+                                );
+                            })()}
+                        </div>
+                        <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-500" style={getGanttColStyle('gEnd')}>
+                            {(() => {
+                                const ns = schedule.itemSchedules?.find(s => s.id === node.id);
+                                const effectiveDate = ns?.endDate || node.earlyFinish;
+                                return effectiveDate ? new Date(effectiveDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
+                            })()}
+                        </div>
+                        <div data-gantt-col="gEsEf" className="shrink-0 border-r border-gray-200 flex flex-col items-center justify-center text-[12px] font-medium text-blue-600 leading-tight" style={getGanttColStyle('gEsEf')}>
+                            {node.earlyStart ? <span>{new Date(node.earlyStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span> : null}
+                            {node.earlyFinish ? <span>{new Date(node.earlyFinish).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span> : null}
+                        </div>
                         <div data-gantt-col="gLsLf" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gLsLf')}></div>
                         <div data-gantt-col="gFloat" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gFloat')}></div>
                         <div data-gantt-col="gBudgeted" className="shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-gray-500" style={getGanttColStyle('gBudgeted')}>

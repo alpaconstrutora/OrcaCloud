@@ -1100,10 +1100,13 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             const needsEndSync = settings.endDate && settings.schedule.endDate !== settings.endDate;
 
             if (incomingJson !== lastSyncedScheduleJson || needsStartSync || needsEndSync) {
-                if (needsStartSync) {
+                // Skip needsStartSync on initial load (lastSyncedScheduleJson === '') to avoid
+                // recalculating with a stale settings.startDate that differs from the schedule's own
+                // startDate — this would anchor all tasks to the wrong project start date on every load.
+                if (needsStartSync && lastSyncedScheduleJson !== '') {
                     // We call handleRecalculate with the new start date to shift all tasks correctly
                     handleRecalculate(settings.schedule.itemSchedules || [], settings.startDate);
-                } else if (needsEndSync) {
+                } else if (needsEndSync && lastSyncedScheduleJson !== '') {
                     const start = new Date(settings.schedule.startDate);
                     const end = settings.endDate ? new Date(settings.endDate) : null;
                     let newDuration = settings.schedule.duration;

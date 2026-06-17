@@ -238,6 +238,8 @@ class CPMEngine {
 
                 if (candidates.length > 0) {
                     earlyStart = new Date(Math.max(...candidates));
+                    // Enforce project start as minimum — predecessor chains cannot push a task before day 1
+                    if (earlyStart < projectStart) earlyStart = new Date(projectStart);
                 }
             }
 

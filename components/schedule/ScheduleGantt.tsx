@@ -42,6 +42,7 @@ interface ScheduleGanttProps {
     onSidebarResizeStart: (e: React.MouseEvent) => void;
     handleUpdateRealPct: (itemId: string, value: string) => void;
     setPredecessorModalTask: (id: string | null) => void;
+    GanttResizeHandle?: React.ComponentType<{ colKey: string }>;
 }
 
 
@@ -82,7 +83,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     handleSplitterDblClick,
     onSidebarResizeStart,
     handleUpdateRealPct,
-    setPredecessorModalTask
+    setPredecessorModalTask,
+    GanttResizeHandle
 }) => {
 
     const formatDateDisplay = (dateString?: string) => {
@@ -980,21 +982,21 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 </div>
                             </div>
 
-                            <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gWbs')}>ITEM</div>
-                            <div data-gantt-col="gId" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gId')}>ID</div>
-                            <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gPred')}>PRÉD.</div>
-                            <div data-gantt-col="gDur" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gDur')}>DUR.</div>
-                            <div data-gantt-col="gStart" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gStart')}>INÍCIO</div>
-                            <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gEnd')}>FIM</div>
-                            <div data-gantt-col="gEsEf" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-blue-400 bg-blue-50/30" style={getGanttColStyle('gEsEf')}>P.I/P.T</div>
-                            <div data-gantt-col="gLsLf" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-orange-400 bg-orange-50/30" style={getGanttColStyle('gLsLf')}>M.I/M.T</div>
-                            <div data-gantt-col="gFloat" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-indigo-400" style={getGanttColStyle('gFloat')}>F.L</div>
-                            <div data-gantt-col="gBudgeted" className="shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-gray-400" style={getGanttColStyle('gBudgeted')}>ORÇADO</div>
-                            <div data-gantt-col="gPlanned" className="shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-blue-500" style={getGanttColStyle('gPlanned')}>PLANEJ.</div>
-                            <div data-gantt-col="gRealized" className="shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-emerald-500" style={getGanttColStyle('gRealized')}>REALIZADO</div>
-                            <div data-gantt-col="gVariation" className="shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-gray-400" style={getGanttColStyle('gVariation')}>VARIAÇÃO</div>
-                            <div data-gantt-col="gResources" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gResources')}>RECURSOS</div>
-                            <div data-gantt-col="gRealPct" className="shrink-0 flex items-center justify-center text-[12px] font-medium text-blue-600" style={getGanttColStyle('gRealPct')}>REAL %</div>
+                            <div data-gantt-col="gWbs" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gWbs')}>ITEM{GanttResizeHandle && <GanttResizeHandle colKey="gWbs" />}</div>
+                            <div data-gantt-col="gId" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gId')}>ID{GanttResizeHandle && <GanttResizeHandle colKey="gId" />}</div>
+                            <div data-gantt-col="gPred" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gPred')}>PRÉD.{GanttResizeHandle && <GanttResizeHandle colKey="gPred" />}</div>
+                            <div data-gantt-col="gDur" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gDur')}>DUR.{GanttResizeHandle && <GanttResizeHandle colKey="gDur" />}</div>
+                            <div data-gantt-col="gStart" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gStart')}>INÍCIO{GanttResizeHandle && <GanttResizeHandle colKey="gStart" />}</div>
+                            <div data-gantt-col="gEnd" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gEnd')}>FIM{GanttResizeHandle && <GanttResizeHandle colKey="gEnd" />}</div>
+                            <div data-gantt-col="gEsEf" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-blue-400 bg-blue-50/30" style={getGanttColStyle('gEsEf')}>P.I/P.T{GanttResizeHandle && <GanttResizeHandle colKey="gEsEf" />}</div>
+                            <div data-gantt-col="gLsLf" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-orange-400 bg-orange-50/30" style={getGanttColStyle('gLsLf')}>M.I/M.T{GanttResizeHandle && <GanttResizeHandle colKey="gLsLf" />}</div>
+                            <div data-gantt-col="gFloat" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-indigo-400" style={getGanttColStyle('gFloat')}>F.L{GanttResizeHandle && <GanttResizeHandle colKey="gFloat" />}</div>
+                            <div data-gantt-col="gBudgeted" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-gray-400" style={getGanttColStyle('gBudgeted')}>ORÇADO{GanttResizeHandle && <GanttResizeHandle colKey="gBudgeted" />}</div>
+                            <div data-gantt-col="gPlanned" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-blue-500" style={getGanttColStyle('gPlanned')}>PLANEJ.{GanttResizeHandle && <GanttResizeHandle colKey="gPlanned" />}</div>
+                            <div data-gantt-col="gRealized" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-emerald-500" style={getGanttColStyle('gRealized')}>REALIZADO{GanttResizeHandle && <GanttResizeHandle colKey="gRealized" />}</div>
+                            <div data-gantt-col="gVariation" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-gray-400" style={getGanttColStyle('gVariation')}>VARIAÇÃO{GanttResizeHandle && <GanttResizeHandle colKey="gVariation" />}</div>
+                            <div data-gantt-col="gResources" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gResources')}>RECURSOS{GanttResizeHandle && <GanttResizeHandle colKey="gResources" />}</div>
+                            <div data-gantt-col="gRealPct" className="relative shrink-0 flex items-center justify-center text-[12px] font-medium text-blue-600" style={getGanttColStyle('gRealPct')}>REAL %{GanttResizeHandle && <GanttResizeHandle colKey="gRealPct" />}</div>
                         </div>
                         <div
                             ref={headerRef}

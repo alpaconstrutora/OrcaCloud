@@ -28,7 +28,8 @@ import {
     Edit,
     Copy,
     FolderTree,
-    FolderPlus
+    FolderPlus,
+    Calendar
 } from 'lucide-react';
 import { sinapiService, SinapiReference } from '../services/sinapiService';
 import { customDatabaseService } from '../services/customDatabaseService';
@@ -38,6 +39,7 @@ import SaveConfirmationModal from './SaveConfirmationModal';
 import DatabasePickerModal from './DatabasePickerModal';
 import DatabaseManagerModal from './DatabaseManagerModal';
 import DatabaseExcelImportModal from './DatabaseExcelImportModal';
+import SinapiImportModal from './SinapiImportModal';
 import { CustomDatabase } from '../types';
 import ExcelJS from 'exceljs';
 
@@ -122,6 +124,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
     const [currentDatabase, setCurrentDatabase] = React.useState<CustomDatabase | null>(null);
     const [isDbManagerOpen, setIsDbManagerOpen] = React.useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
+    const [isSinapiImportOpen, setIsSinapiImportOpen] = React.useState(false);
     const [databases, setDatabases] = React.useState<CustomDatabase[]>([]);
 
 
@@ -909,6 +912,16 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                     <option key={ref.referenceDate} value={ref.referenceDate}>{ref.label}</option>
                                 ))}
                             </select>
+                            {searchDatabase === 'SINAPI' && (
+                                <button
+                                    onClick={() => setIsSinapiImportOpen(true)}
+                                    className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"
+                                    title="Importar nova competência SINAPI via planilha"
+                                >
+                                    <Upload className="w-3 h-3" />
+                                    Nova
+                                </button>
+                            )}
                         </div>
 
                         <div className="h-4 w-[1px] bg-gray-200" />
@@ -1022,9 +1035,17 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                 <span className="text-emerald-600 font-bold text-lg">R$ {result.price.toFixed(2)}</span>
                                             </div>
                                             <p className="text-sm text-gray-700 font-medium leading-tight group-hover:text-blue-700 transition-colors uppercase">{result.description}</p>
-                                            <div className="mt-2 flex items-center gap-3">
-                                                <span className="text-[10px] bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-500 font-bold uppercase tracking-wider">{result.unit}</span>
-                                                <span className="text-[10px] text-gray-400 uppercase font-medium">{result.category}</span>
+                                            <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                                <span className="text-[10px] bg-gray-100 border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-bold uppercase tracking-wider">{result.unit}</span>
+                                                {result.nature && (
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border ${
+                                                        result.nature === 'Mão de Obra' ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                                                        result.nature === 'Material'    ? 'bg-sky-50 text-sky-600 border-sky-100' :
+                                                        result.nature === 'Equipamento' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                                                          'bg-purple-50 text-purple-600 border-purple-100'
+                                                    }`}>{result.nature}</span>
+                                                )}
+                                                <span className="text-[10px] text-gray-400 uppercase font-medium truncate">{result.category}</span>
                                             </div>
 
                                             <div className="mt-3 flex items-center justify-between">
@@ -1204,6 +1225,17 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                     <span className="text-[10px] font-bold text-gray-600 uppercase truncate max-w-[200px]">{selectedItem.category || 'Geral'}</span>
                                                 )}
                                             </div>
+
+                                            {/* Competência Badge — só para itens SINAPI com versionamento ativo */}
+                                            {selectedItem.source !== 'Própria' && searchReference && (
+                                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 rounded-md border border-blue-100 shadow-sm">
+                                                    <Calendar className="w-3 h-3 text-blue-400" />
+                                                    <span className="text-[9px] font-black text-blue-400 uppercase tracking-tighter">Ref:</span>
+                                                    <span className="text-[10px] font-bold text-blue-600">
+                                                        {references.find(r => r.referenceDate === searchReference)?.label || searchReference}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {selectedItem.source === 'Própria' ? (
@@ -1509,6 +1541,20 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 onImport={handleImportItems}
+            />
+
+            <SinapiImportModal
+                isOpen={isSinapiImportOpen}
+                onClose={() => setIsSinapiImportOpen(false)}
+                onSuccess={async () => {
+                    // Recarrega competências e invalida cache do service
+                    (sinapiService as any)._latestReference = undefined;
+                    (sinapiService as any)._versioningEnabled = false;
+                    const refs = await sinapiService.getReferences();
+                    setReferences(refs);
+                    setSearchReference(refs[0]?.referenceDate || '');
+                    setIsSinapiImportOpen(false);
+                }}
             />
 
             {/* Gerenciar Grupos Modal */}

@@ -607,7 +607,8 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                             )}
                                         </td>
                                         <td className="px-1 py-2 text-center">
-                                            <div className="text-[12px] font-medium text-gray-500">{formatDateDisplay(schedule.autoRollupParentDates ? node.earlyFinish : (nodeSchedule?.endDate || node.earlyFinish))}</div>
+                                            {/* FIM do nó-pai é sempre derivado (read-only): mostra o rollup (máx dos filhos) */}
+                                            <div className="text-[12px] font-medium text-gray-500">{formatDateDisplay(node.earlyFinish)}</div>
                                         </td>
                                         <td className="px-1 py-3"></td>
                                         <td className="px-1 py-3"></td>

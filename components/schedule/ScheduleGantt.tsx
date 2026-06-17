@@ -693,9 +693,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         </div>
                         <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-500" style={getGanttColStyle('gEnd')}>
                             {(() => {
-                                const effectiveDate = schedule.autoRollupParentDates
-                                    ? node.earlyFinish
-                                    : (schedule.itemSchedules?.find(s => s.id === node.id)?.endDate || node.earlyFinish);
+                                // FIM do nó-pai é sempre derivado (read-only): mostra o rollup (máx dos filhos),
+                                // nunca um endDate antigo armazenado que poderia ficar "preso".
+                                const effectiveDate = node.earlyFinish;
                                 return effectiveDate ? new Date(effectiveDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
                             })()}
                         </div>

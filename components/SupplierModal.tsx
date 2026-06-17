@@ -1,11 +1,12 @@
 import React from 'react';
-import { X, Truck, Mail, Phone, FileText, MapPin, Tag, Building2, User } from 'lucide-react';
+import { Truck, Mail, Phone, FileText, MapPin, Tag, Building2, User } from 'lucide-react';
 import { Supplier, Organization } from '../types';
 import { supplierCategoryService } from '../services/supplierCategoryService';
 import { organizationService } from '../services/organizationService';
 import { useStore } from '../store/useStore';
 import SupplierBankAccountsTab from './SupplierBankAccountsTab';
 import CityStateSelect from './CityStateSelect';
+import { Sheet, SheetHeader } from './ui/sheet';
 
 interface SupplierModalProps {
     isOpen: boolean;
@@ -57,7 +58,11 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     });
 
     const [formData, setFormData] = React.useState(emptyForm());
-    const set = (patch: Partial<typeof formData>) => setFormData(f => ({ ...f, ...patch }));
+    const [dirty, setDirty] = React.useState(false);
+    const set = (patch: Partial<typeof formData>) => {
+        setFormData(f => ({ ...f, ...patch }));
+        setDirty(true);
+    };
 
     const handleDocumentChange = (value: string) => {
         set({ document: formData.type === 'PJ' ? maskCNPJ(value) : maskCPF(value) });
@@ -76,6 +81,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     React.useEffect(() => {
         // Sempre volta para a aba de cadastro ao abrir/fechar
         setModalTab('cadastro');
+        setDirty(false);
         if (initialData) {
             setFormData({
                 name: initialData.name,
@@ -98,8 +104,6 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         }
     }, [initialData, isOpen, activeOrganizationId]);
 
-    if (!isOpen) return null;
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isSubmitting) return;
@@ -109,6 +113,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 ...formData,
                 address: [formData.street, formData.number, formData.neighborhood].filter(Boolean).join(', ')
             });
+            setDirty(false);
         } finally {
             setIsSubmitting(false);
         }
@@ -118,18 +123,9 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     const docPlaceholder = formData.type === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-end p-4">
-            {/* Overlay */}
-            <div
-                className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-                onClick={onClose}
-            />
-
-            {/* Painel lateral direito com afastamento e bordas arredondas */}
-            <div className="relative w-[480px] h-full bg-white rounded-[1.75rem] shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in slide-in-from-right duration-300">
-
+        <Sheet open={isOpen} onClose={onClose} size="lg" dirty={dirty}>
                 {/* Header */}
-                <div className="flex items-center justify-between px-7 py-5 border-b border-gray-100 bg-gray-50/60 shrink-0">
+                <SheetHeader onClose={onClose}>
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
                             <Truck className="w-5 h-5" />
@@ -141,10 +137,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Gestão de Parceiros</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-all">
-                        <X className="w-4 h-4 text-gray-400" />
-                    </button>
-                </div>
+                </SheetHeader>
 
                 {/* Tabs de navegação — apenas ao editar fornecedor existente */}
                 {initialData && (
@@ -380,7 +373,6 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                     </button>
                 </div>
                 )}
-            </div>
-        </div>
+        </Sheet>
     );
 };

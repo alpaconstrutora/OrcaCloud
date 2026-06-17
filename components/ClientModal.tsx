@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, User, Mail, Phone, FileText, MapPin } from 'lucide-react';
+import { User, Mail, Phone, FileText, MapPin } from 'lucide-react';
 import { Client } from '../types';
 import CityStateSelect from './CityStateSelect';
+import { Sheet, SheetHeader, SheetTitle, SheetPanel, SheetFooter } from './ui/sheet';
 
 interface ClientModalProps {
     isOpen: boolean;
@@ -12,6 +13,7 @@ interface ClientModalProps {
 
 const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
     const [isSubmitting, setIsSubmitting] = React.useState(false);
+    const [dirty, setDirty] = React.useState(false);
     const [formData, setFormData] = React.useState<Partial<Client>>({
         name: '',
         email: '',
@@ -26,10 +28,17 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
         category: 'Vendas'
     });
 
+    const update = (patch: Partial<Client>) => {
+        setFormData(prev => ({ ...prev, ...patch }));
+        setDirty(true);
+    };
+
     React.useEffect(() => {
-        if (initialData && isOpen) {
+        if (!isOpen) return;
+        setDirty(false);
+        if (initialData) {
             setFormData(initialData);
-        } else if (isOpen) {
+        } else {
             setFormData({
                 name: '',
                 email: '',
@@ -46,8 +55,6 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
         }
     }, [initialData, isOpen]);
 
-    if (!isOpen) return null;
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name?.trim()) return;
@@ -55,28 +62,23 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
         setIsSubmitting(true);
         try {
             await onSubmit(formData);
+            setDirty(false);
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-12">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose} />
-            <div className="relative bg-white rounded-[2.5rem] shadow-2xl w-full h-full flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
-                <div className="bg-gray-50 px-12 py-8 border-b border-gray-100 flex justify-between items-center shrink-0">
-                    <div>
-                        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                            <User className="w-5 h-5 text-blue-600" />
-                            {initialData ? 'Editar Cliente' : 'Novo Cliente'}
-                        </h2>
-                    </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full transition-colors">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+        <Sheet open={isOpen} onClose={onClose} size="xl" dirty={dirty}>
+            <SheetHeader onClose={onClose}>
+                <SheetTitle className="flex items-center gap-2">
+                    <User className="w-5 h-5 text-blue-600" />
+                    {initialData ? 'Editar Cliente' : 'Novo Cliente'}
+                </SheetTitle>
+            </SheetHeader>
 
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-12 space-y-6">
+            <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+                <SheetPanel className="p-6 space-y-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo / Razão Social</label>
                         <div className="relative">
@@ -85,7 +87,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                 type="text"
                                 className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                                 value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                onChange={(e) => update({ name: e.target.value })}
                                 autoFocus
                             />
                         </div>
@@ -97,7 +99,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                             <select
                                 className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                                 value={formData.type}
-                                onChange={(e) => setFormData({ ...formData, type: e.target.value as 'PF' | 'PJ' })}
+                                onChange={(e) => update({ type: e.target.value as 'PF' | 'PJ' })}
                             >
                                 <option value="PF">Pessoa Física</option>
                                 <option value="PJ">Pessoa Jurídica</option>
@@ -108,7 +110,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                             <select
                                 className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-bold text-blue-600"
                                 value={formData.category}
-                                onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
+                                onChange={(e) => update({ category: e.target.value as any })}
                             >
                                 <option value="Vendas">Vendas</option>
                                 <option value="Locação">Locação</option>
@@ -124,7 +126,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                     placeholder="000.000.000-00"
                                     className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                                     value={formData.document}
-                                    onChange={(e) => setFormData({ ...formData, document: e.target.value })}
+                                    onChange={(e) => update({ document: e.target.value })}
                                 />
                             </div>
                         </div>
@@ -140,7 +142,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                     placeholder="exemplo@email.com"
                                     className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                                     value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                    onChange={(e) => update({ email: e.target.value })}
                                 />
                             </div>
                         </div>
@@ -153,7 +155,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                     placeholder="(00) 00000-0000"
                                     className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                                     value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                    onChange={(e) => update({ phone: e.target.value })}
                                 />
                             </div>
                         </div>
@@ -168,7 +170,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                 placeholder="Rua, Avenida, etc"
                                 className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                                 value={formData.address}
-                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                onChange={(e) => update({ address: e.target.value })}
                             />
                         </div>
                     </div>
@@ -181,7 +183,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                 placeholder="Nome do bairro"
                                 className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                                 value={formData.neighborhood}
-                                onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
+                                onChange={(e) => update({ neighborhood: e.target.value })}
                             />
                         </div>
                         <div>
@@ -191,7 +193,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                 placeholder="Nº"
                                 className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                                 value={formData.address_number ?? ''}
-                                onChange={(e) => setFormData({ ...formData, address_number: e.target.value })}
+                                onChange={(e) => update({ address_number: e.target.value })}
                             />
                         </div>
                     </div>
@@ -200,8 +202,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                         cep={formData.zip_code}
                         stateCode={formData.state}
                         cityName={formData.city}
-                        onChange={({ cep, stateCode, cityName }) => setFormData({
-                            ...formData,
+                        onChange={({ cep, stateCode, cityName }) => update({
                             zip_code: cep,
                             state: stateCode || '',
                             city: cityName || '',
@@ -210,25 +211,26 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                         inputCls="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                     />
 
-                    <div className="pt-4 flex gap-3 border-t border-gray-100">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                            {isSubmitting ? 'Salvando...' : 'Salvar Cliente'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                </SheetPanel>
+
+                <SheetFooter>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                        {isSubmitting ? 'Salvando...' : 'Salvar Cliente'}
+                    </button>
+                </SheetFooter>
+            </form>
+        </Sheet>
     );
 };
 

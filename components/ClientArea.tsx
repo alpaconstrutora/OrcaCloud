@@ -63,6 +63,7 @@ import { orderService } from '../services/orderService';
 import { storageService } from '../services/storageService';
 import { PurchaseOrder } from '../types';
 import MobilePreviewFrame from './MobilePreviewFrame';
+import { useConfirm } from './ui/confirm';
 
 interface ClientAreaProps {
     settings: ProjectSettings;
@@ -82,6 +83,7 @@ interface ClientAreaProps {
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'];
 
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false }) => {
+    const confirm = useConfirm();
     const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao' | 'os'>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
@@ -1495,8 +1497,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     <Pencil className="w-4 h-4" />
                                                 </button>
                                                 <button
-                                                    onClick={() => {
-                                                        if (confirm('Remover esta parcela?')) {
+                                                    onClick={async () => {
+                                                        if (await confirm({ title: 'Remover esta parcela?', variant: 'danger', confirmLabel: 'Remover' })) {
                                                             const newInsts = financialInfo.installments.filter(i => i.id !== inst.id);
                                                             handleUpdateFinancial(newInsts);
                                                         }
@@ -1596,8 +1598,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                                         <Pencil className="w-4 h-4" />
                                                                     </button>
                                                                     <button
-                                                                        onClick={() => {
-                                                                            if (confirm('Remover esta parcela?')) {
+                                                                        onClick={async () => {
+                                                                            if (await confirm({ title: 'Remover esta parcela?', variant: 'danger', confirmLabel: 'Remover' })) {
                                                                                 const newInsts = financialInfo.installments.filter(i => i.id !== inst.id);
                                                                                 handleUpdateFinancial(newInsts);
                                                                             }
@@ -1739,7 +1741,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                             </button>
                                                         )}
                                                         <button onClick={() => { const d = prompt('Descrição:', charge.description); const v = prompt('Valor:', charge.value.toString()); if (d !== null || v !== null) handleUpdateCharges(charges.map(c => c.id === charge.id ? { ...c, description: d ?? c.description, value: v ? parseFloat(v) : c.value } : c)); }} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Pencil className="w-4 h-4" /></button>
-                                                        <button onClick={() => { if (confirm('Remover cobrança?')) handleUpdateCharges(charges.filter(c => c.id !== charge.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><X className="w-4 h-4" /></button>
+                                                        <button onClick={async () => { if (await confirm({ title: 'Remover cobrança?', variant: 'danger', confirmLabel: 'Remover' })) handleUpdateCharges(charges.filter(c => c.id !== charge.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><X className="w-4 h-4" /></button>
                                                     </div>
                                                 </td>
                                             )}
@@ -1874,7 +1876,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         <button onClick={() => exportService.generateReceiptPDF(med, settings, { name: clientProfile?.name || 'OPURA' })} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-all" title="Recibo PDF"><FileDown className="w-4 h-4" /></button>
                                                     )}
                                                     <button onClick={() => { const d = prompt('Descrição:', med.description); const v = prompt('Valor:', med.value.toString()); if (d !== null || v !== null) handleUpdateMedicoes(medicoes.map(m => m.id === med.id ? { ...m, description: d ?? m.description, value: v ? parseFloat(v) : m.value } : m)); }} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"><Pencil className="w-4 h-4" /></button>
-                                                    <button onClick={() => { if (confirm('Remover medição?')) handleUpdateMedicoes(medicoes.filter(m => m.id !== med.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><X className="w-4 h-4" /></button>
+                                                    <button onClick={async () => { if (await confirm({ title: 'Remover medição?', variant: 'danger', confirmLabel: 'Remover' })) handleUpdateMedicoes(medicoes.filter(m => m.id !== med.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><X className="w-4 h-4" /></button>
                                                 </div>
                                             </td>
                                         )}
@@ -2421,9 +2423,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     <Pencil className="w-3.5 h-3.5" />
                                                 </button>
                                                 <button
-                                                    onClick={(e) => {
+                                                    onClick={async (e) => {
                                                         e.stopPropagation();
-                                                        if (confirm('Remover este documento?')) {
+                                                        if (await confirm({ title: 'Remover este documento?', variant: 'danger', confirmLabel: 'Remover' })) {
                                                             const newDocs = currentClientDocs.filter((d) => d !== doc);
                                                             if (clientProfile) {
                                                                 updateClientData({ clientDocuments: newDocs });
@@ -2536,8 +2538,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                                     <Pencil className="w-4 h-4" />
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => {
-                                                                        if (confirm('Remover este documento?')) {
+                                                                    onClick={async () => {
+                                                                        if (await confirm({ title: 'Remover este documento?', variant: 'danger', confirmLabel: 'Remover' })) {
                                                                             const newDocs = currentClientDocs.filter((d) => d !== doc);
                                                                             if (clientProfile) {
                                                                                 updateClientData({ clientDocuments: newDocs });

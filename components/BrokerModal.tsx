@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Mail, Phone, FileText, Briefcase, Percent, Save } from 'lucide-react';
+import { User, Mail, Phone, FileText, Briefcase, Percent, Save } from 'lucide-react';
 import { BrokerProfile } from '../types';
+import { Sheet, SheetHeader, SheetPanel, SheetFooter } from './ui/sheet';
 
 interface BrokerModalProps {
     isOpen: boolean;
@@ -21,8 +22,14 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
         is_active: true
     });
     const [loading, setLoading] = useState(false);
+    const [dirty, setDirty] = useState(false);
+    const update = (patch: Partial<BrokerProfile>) => {
+        setFormData(prev => ({ ...prev, ...patch }));
+        setDirty(true);
+    };
 
     useEffect(() => {
+        setDirty(false);
         if (initialData) {
             setFormData(initialData);
         } else {
@@ -39,13 +46,12 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
         }
     }, [initialData, isOpen]);
 
-    if (!isOpen) return null;
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         try {
             await onSave(formData);
+            setDirty(false);
             onClose();
         } catch (err) {
             console.error('Error saving broker:', err);
@@ -55,10 +61,9 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-            <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-300">
+        <Sheet open={isOpen} onClose={onClose} size="2xl" dirty={dirty}>
                 {/* Header */}
-                <div className="px-8 py-6 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                <SheetHeader onClose={onClose}>
                     <div className="flex items-center gap-3">
                         <div className="p-2.5 bg-blue-600 rounded-xl shadow-lg shadow-blue-600/20">
                             <User className="w-5 h-5 text-white" />
@@ -70,12 +75,10 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Gestão Comercial</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-xl transition-colors">
-                        <X className="w-5 h-5 text-gray-400" />
-                    </button>
-                </div>
+                </SheetHeader>
 
-                <form onSubmit={handleSubmit} className="p-8">
+                <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+                    <SheetPanel className="p-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Nome Completo */}
                         <div className="md:col-span-2 space-y-2">
@@ -86,7 +89,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                     required
                                     type="text"
                                     value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                    onChange={e => update({ name: e.target.value })}
                                     placeholder="Ex: João Silva"
                                     className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
@@ -102,7 +105,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                     required
                                     type="email"
                                     value={formData.email}
-                                    onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                    onChange={e => update({ email: e.target.value })}
                                     placeholder="joao@exemplo.com"
                                     className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
@@ -117,7 +120,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                 <input
                                     type="text"
                                     value={formData.phone}
-                                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                    onChange={e => update({ phone: e.target.value })}
                                     placeholder="(00) 00000-0000"
                                     className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
@@ -132,7 +135,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                 <input
                                     type="text"
                                     value={formData.cpf}
-                                    onChange={e => setFormData({ ...formData, cpf: e.target.value })}
+                                    onChange={e => update({ cpf: e.target.value })}
                                     placeholder="000.000.000-00"
                                     className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
@@ -147,7 +150,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                 <input
                                     type="text"
                                     value={formData.creci}
-                                    onChange={e => setFormData({ ...formData, creci: e.target.value })}
+                                    onChange={e => update({ creci: e.target.value })}
                                     placeholder="Ex: 12345-F"
                                     className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
@@ -162,7 +165,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                 <input
                                     type="text"
                                     value={formData.agency_name}
-                                    onChange={e => setFormData({ ...formData, agency_name: e.target.value })}
+                                    onChange={e => update({ agency_name: e.target.value })}
                                     placeholder="Nome da Imobiliária"
                                     className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
@@ -178,7 +181,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                     type="number"
                                     step="0.01"
                                     value={formData.commission_rate}
-                                    onChange={e => setFormData({ ...formData, commission_rate: parseFloat(e.target.value) })}
+                                    onChange={e => update({ commission_rate: parseFloat(e.target.value) })}
                                     className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700"
                                 />
                             </div>
@@ -190,7 +193,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                 type="checkbox"
                                 id="is_active"
                                 checked={formData.is_active}
-                                onChange={e => setFormData({ ...formData, is_active: e.target.checked })}
+                                onChange={e => update({ is_active: e.target.checked })}
                                 className="w-5 h-5 rounded border-blue-200 text-blue-600 focus:ring-blue-500 cursor-pointer"
                             />
                             <label htmlFor="is_active" className="text-sm font-black text-blue-900 cursor-pointer">
@@ -198,19 +201,20 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                             </label>
                         </div>
                     </div>
+                    </SheetPanel>
 
-                    <div className="mt-10 flex gap-4">
+                    <SheetFooter>
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all"
+                            className="px-6 py-3 bg-gray-100 text-gray-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all"
                         >
                             Cancelar
                         </button>
                         <button
                             type="submit"
                             disabled={loading}
-                            className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2 group disabled:opacity-50"
+                            className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2 group disabled:opacity-50"
                         >
                             {loading ? (
                                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -221,10 +225,9 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                 </>
                             )}
                         </button>
-                    </div>
+                    </SheetFooter>
                 </form>
-            </div>
-        </div>
+        </Sheet>
     );
 };
 

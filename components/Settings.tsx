@@ -4,8 +4,10 @@ import { MOCK_SINAPI_DB } from '../constants';
 import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw } from 'lucide-react';
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
+import { useConfirm } from './ui/confirm';
 
 const Settings: React.FC = () => {
+    const confirm = useConfirm();
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [message, setMessage] = React.useState('');
 
@@ -21,8 +23,8 @@ const Settings: React.FC = () => {
         setTimeout(() => setWaSaved(false), 3000);
     };
 
-    const handleWaClear = () => {
-        if (!confirm('Remover as credenciais WhatsApp salvas?')) return;
+    const handleWaClear = async () => {
+        if (!await confirm({ title: 'Remover credenciais WhatsApp?', message: 'As credenciais salvas serão apagadas.', variant: 'danger', confirmLabel: 'Remover' })) return;
         whatsappService.clearConfig();
         setWaForm({ phoneNumberId: '', accessToken: '' });
     };
@@ -37,8 +39,8 @@ const Settings: React.FC = () => {
         setTimeout(() => setAppSettingsSaved(false), 3000);
     };
 
-    const handleAppSettingsReset = (section: 'numbering' | 'whatsapp' | 'email') => {
-        if (!confirm('Restaurar padrões desta seção?')) return;
+    const handleAppSettingsReset = async (section: 'numbering' | 'whatsapp' | 'email') => {
+        if (!await confirm({ title: 'Restaurar padrões desta seção?', variant: 'warning', confirmLabel: 'Restaurar' })) return;
         const patch: Partial<AppSettings> =
             section === 'numbering' ? {
                 orderPrefix: APP_SETTINGS_DEFAULTS.orderPrefix,
@@ -55,7 +57,12 @@ const Settings: React.FC = () => {
     };
 
     const runMigration = async () => {
-        if (!confirm('Isso irá migrar os itens do MOCK_SINAPI_DB para a tabela sinapi_items no Supabase. Certifique-se que a tabela foi criada. Deseja continuar?')) {
+        if (!await confirm({
+            title: 'Migrar itens SINAPI?',
+            message: 'Isso irá migrar os itens do MOCK_SINAPI_DB para a tabela sinapi_items no Supabase. Certifique-se que a tabela foi criada.',
+            variant: 'warning',
+            confirmLabel: 'Continuar',
+        })) {
             return;
         }
 

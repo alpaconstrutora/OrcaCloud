@@ -1,9 +1,10 @@
 import React from 'react';
-import { X, User, Mail, Phone, FileText, Building2 } from 'lucide-react';
+import { User, Mail, Phone, FileText, Building2 } from 'lucide-react';
 import { Investor } from '../services/investorService';
 import { projectService } from '../services/projectService';
 import { investorContributionsService } from '../services/investorContributionsService';
 import ContributionsManager from './investor/ContributionsManager';
+import { Sheet, SheetHeader, SheetTitle, SheetPanel, SheetFooter } from './ui/sheet';
 
 interface InvestorModalProps {
     isOpen: boolean;
@@ -15,12 +16,18 @@ interface InvestorModalProps {
 
 const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit, initialData, organizationId }) => {
     const [isSubmitting, setIsSubmitting] = React.useState(false);
+    const [dirty, setDirty] = React.useState(false);
     const [formData, setFormData] = React.useState<Partial<Investor>>({
         name: '',
         email: '',
         phone: '',
         document: ''
     });
+
+    const update = (patch: Partial<Investor>) => {
+        setFormData(prev => ({ ...prev, ...patch }));
+        setDirty(true);
+    };
 
     // State for projects linkage
     const [projects, setProjects] = React.useState<any[]>([]);
@@ -72,10 +79,12 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
     };
 
     React.useEffect(() => {
-        if (initialData && isOpen) {
+        if (!isOpen) return;
+        setDirty(false);
+        if (initialData) {
             // Ensure organization_id is always set (fixes legacy investors with null org_id)
             setFormData({ ...initialData, organization_id: initialData.organization_id ?? organizationId });
-        } else if (isOpen) {
+        } else {
             setFormData({
                 name: '',
                 email: '',
@@ -86,8 +95,6 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
             setSelectedProjectIds(new Set());
         }
     }, [initialData, isOpen, organizationId]);
-
-    if (!isOpen) return null;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -118,6 +125,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
             if (investorId) {
                 await updateProjectLinks(investorId);
             }
+            setDirty(false);
         } catch (error) {
             console.error("Error in modal submit:", error);
         } finally {
@@ -164,6 +172,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
             ...prev,
             [projectId]: { ...{ ownership_pct: 0, committed_amount: 0 }, ...prev[projectId], [field]: value },
         }));
+        setDirty(true);
     };
 
     const toggleProject = (id: string) => {
@@ -174,25 +183,20 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
             newSet.add(id);
         }
         setSelectedProjectIds(newSet);
+        setDirty(true);
     };
 
     return (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-12">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose} />
-            <div className="relative bg-white rounded-[2.5rem] shadow-2xl w-full h-full flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
-                <div className="bg-gray-50 px-12 py-8 border-b border-gray-100 flex justify-between items-center shrink-0">
-                    <div>
-                        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                            <User className="w-5 h-5 text-purple-600" />
-                            {initialData ? 'Editar Investidor' : 'Novo Investidor'}
-                        </h2>
-                    </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full transition-colors">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+        <>
+        <Sheet open={isOpen} onClose={onClose} size="xl" dirty={dirty}>
+                <SheetHeader onClose={onClose}>
+                    <SheetTitle className="flex items-center gap-2">
+                        <User className="w-5 h-5 text-purple-600" />
+                        {initialData ? 'Editar Investidor' : 'Novo Investidor'}
+                    </SheetTitle>
+                </SheetHeader>
 
-                <div className="overflow-y-auto p-12 space-y-6">
+                <SheetPanel className="p-6 space-y-6">
                     <form id="investor-form" onSubmit={handleSubmit} className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
@@ -202,7 +206,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                     type="text"
                                     className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-purple-500 outline-none"
                                     value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    onChange={(e) => update({ name: e.target.value })}
                                     placeholder="Ex: João da Silva"
                                     autoFocus
                                 />
@@ -217,7 +221,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                     type="email"
                                     className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-purple-500 outline-none"
                                     value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                    onChange={(e) => update({ email: e.target.value })}
                                     placeholder="investidor@exemplo.com"
                                 />
                             </div>
@@ -233,7 +237,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                         type="text"
                                         className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-purple-500 outline-none"
                                         value={formData.document}
-                                        onChange={(e) => setFormData({ ...formData, document: e.target.value })}
+                                        onChange={(e) => update({ document: e.target.value })}
                                         placeholder="000.000.000-00"
                                     />
                                 </div>
@@ -246,7 +250,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                         type="text"
                                         className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-purple-500 outline-none"
                                         value={formData.phone}
-                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                        onChange={(e) => update({ phone: e.target.value })}
                                         placeholder="(00) 00000-0000"
                                     />
                                 </div>
@@ -326,13 +330,13 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                             )}
                         </div>
                     </form>
-                </div>
+                </SheetPanel>
 
-                <div className="pt-6 px-12 pb-8 flex gap-3 border-t border-gray-100 bg-gray-50 shrink-0">
+                <SheetFooter>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                        className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
                     >
                         Cancelar
                     </button>
@@ -340,23 +344,23 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                         type="submit"
                         form="investor-form"
                         disabled={isSubmitting}
-                        className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? 'Salvando...' : 'Salvar Investidor'}
                     </button>
-                </div>
-            </div>
+                </SheetFooter>
+        </Sheet>
 
-            {managingProject && initialData?.id && (
-                <ContributionsManager
-                    organizationId={managingProject.orgId}
-                    projectId={managingProject.id}
-                    projectName={managingProject.name}
-                    investorId={initialData.id}
-                    onClose={() => setManagingProject(null)}
-                />
-            )}
-        </div>
+        {managingProject && initialData?.id && (
+            <ContributionsManager
+                organizationId={managingProject.orgId}
+                projectId={managingProject.id}
+                projectName={managingProject.name}
+                investorId={initialData.id}
+                onClose={() => setManagingProject(null)}
+            />
+        )}
+        </>
     );
 };
 

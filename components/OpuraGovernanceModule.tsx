@@ -23,6 +23,7 @@ import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import { orgGovernanceService } from '../services/orgGovernanceService';
 import { laborService, Employee } from '../services/laborService';
+import { useConfirm } from './ui/confirm';
 import {
   OrgRole,
   OrgRelationship,
@@ -57,6 +58,7 @@ export default function OpuraGovernanceModule({
   activeOrganizationId,
   onChangeView
 }: OpuraGovernanceModuleProps) {
+  const confirm = useConfirm();
   const { organizations, setActiveOrganizationId } = useStore();
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
@@ -282,7 +284,7 @@ export default function OpuraGovernanceModule({
   };
 
   const handleRevokeDelegation = async (id: string) => {
-    if (!confirm('Deseja realmente revogar esta delegação de autoridade?')) return;
+    if (!await confirm({ title: 'Revogar esta delegação?', message: 'A delegação de autoridade será revogada.', variant: 'danger', confirmLabel: 'Revogar' })) return;
     try {
       await orgGovernanceService.revokeDelegation(id);
       const data = await orgGovernanceService.listDelegations(selectedCompanyId);
@@ -583,7 +585,7 @@ export default function OpuraGovernanceModule({
                                 </div>
                                 <button
                                   onClick={async () => {
-                                    if(confirm(`Excluir cargo ${role.nome}? Isso desassociará funcionários associados.`)) {
+                                    if(await confirm({ title: `Excluir cargo ${role.nome}?`, message: 'Isso desassociará funcionários associados.', variant: 'danger', confirmLabel: 'Excluir' })) {
                                       await orgGovernanceService.deleteRole(role.id);
                                       setRoles(roles.filter(r => r.id !== role.id));
                                     }
@@ -659,7 +661,7 @@ export default function OpuraGovernanceModule({
                             <td className="py-4 pr-4 text-right">
                               <button
                                 onClick={async () => {
-                                  if(confirm('Excluir este limite?')) {
+                                  if(await confirm({ title: 'Excluir este limite?', variant: 'danger', confirmLabel: 'Excluir' })) {
                                     await orgGovernanceService.deleteAuthorityLimit(lim.id);
                                     setAuthorityLimits(authorityLimits.filter(l => l.id !== lim.id));
                                   }
@@ -747,7 +749,7 @@ export default function OpuraGovernanceModule({
                               )}
                               <button
                                 onClick={async () => {
-                                  if(confirm('Excluir delegação?')) {
+                                  if(await confirm({ title: 'Excluir delegação?', variant: 'danger', confirmLabel: 'Excluir' })) {
                                     await orgGovernanceService.deleteDelegation(del.id);
                                     setDelegations(delegations.filter(d => d.id !== del.id));
                                   }
@@ -833,7 +835,7 @@ export default function OpuraGovernanceModule({
                         </div>
                         <button
                           onClick={async () => {
-                            if(confirm('Excluir este comitê?')) {
+                            if(await confirm({ title: 'Excluir este comitê?', variant: 'danger', confirmLabel: 'Excluir' })) {
                               await orgGovernanceService.deleteCommittee(com.id);
                               setCommittees(committees.filter(c => c.id !== com.id));
                             }
@@ -947,7 +949,7 @@ export default function OpuraGovernanceModule({
                       </div>
                       <button
                         onClick={async () => {
-                          if (confirm('Aprovar este cenário e aplicar as mudanças no organograma principal?')) {
+                          if (await confirm({ title: 'Aprovar este cenário?', message: 'As mudanças serão aplicadas no organograma principal.', variant: 'default', confirmLabel: 'Aprovar' })) {
                             await orgGovernanceService.approveSandboxScenario(sc.id, 'altair.rosa@alpaconstrutora.com.br');
                             const data = await orgGovernanceService.listSandboxScenarios(selectedCompanyId);
                             setSandboxScenarios(data);

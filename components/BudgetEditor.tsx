@@ -8,6 +8,7 @@ import { BudgetRow } from './BudgetRow';
 import SinapiRebaseModal from './SinapiRebaseModal';
 import { WBSImportModal } from './WBSImportModal';
 import { WBSTemplateModal } from './WBSTemplateModal';
+import { useConfirm } from './ui/confirm';
 import * as XLSX from 'xlsx';
 
 interface BudgetEditorProps {
@@ -70,6 +71,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   projectId,
   organizationId,
 }) => {
+  const confirm = useConfirm();
   const [generatingContract, setGeneratingContract] = React.useState(false);
   const [wbsModal, setWbsModal] = React.useState<{
     isOpen: boolean;
@@ -218,8 +220,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     setTimeout(() => setNotification(null), 4000);
   };
 
-  const handleLoadVersion = (version: BudgetVersion) => {
-    if (window.confirm(`Deseja carregar a versão ${version.item}? O orçamento atual será substituído.`)) {
+  const handleLoadVersion = async (version: BudgetVersion) => {
+    if (await confirm({ title: `Carregar a versão ${version.item}?`, message: 'O orçamento atual será substituído.', variant: 'warning', confirmLabel: 'Carregar' })) {
       // Congela o budget atual no snapshot da versão ativa antes de trocar
       const currentActiveId = settings.activeVersionId;
       let newVersions = settings.versions || [];
@@ -640,8 +642,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     alert('Modelo de EAP carregado com sucesso!');
   };
 
-  const handleClearWBS = () => {
-    if (confirm('Tem certeza que deseja limpar toda a estrutura da EAP? Isso não pode ser desfeito.')) {
+  const handleClearWBS = async () => {
+    if (await confirm({ title: 'Limpar toda a estrutura da EAP?', message: 'Isso não pode ser desfeito.', variant: 'danger', confirmLabel: 'Limpar' })) {
       onUpdateSettings({ ...settings, wbs: [] });
       setExpandedGroups([]);
       setExpandedPhases([]);
@@ -811,9 +813,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     renumberWBSAndSync(newWBS);
   };
 
-  const handleDeleteGroup = (e: React.MouseEvent, groupIndex: number) => {
+  const handleDeleteGroup = async (e: React.MouseEvent, groupIndex: number) => {
     e.stopPropagation();
-    if (window.confirm("Deseja excluir este Grupo e TODAS as suas etapas e itens?")) {
+    if (await confirm({ title: 'Excluir este Grupo?', message: 'Todas as suas etapas e itens serão excluídos.', variant: 'danger', confirmLabel: 'Excluir' })) {
       const groupName = settings.wbs[groupIndex].name;
       const newWBS = [...settings.wbs];
       newWBS.splice(groupIndex, 1);
@@ -825,9 +827,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     }
   };
 
-  const handleDeletePhase = (e: React.MouseEvent, groupIndex: number, phaseIndex: number) => {
+  const handleDeletePhase = async (e: React.MouseEvent, groupIndex: number, phaseIndex: number) => {
     e.stopPropagation();
-    if (window.confirm("Deseja excluir esta etapa e todos os seus itens?")) {
+    if (await confirm({ title: 'Excluir esta etapa?', message: 'Todos os seus itens serão excluídos.', variant: 'danger', confirmLabel: 'Excluir' })) {
       const phaseName = settings.wbs[groupIndex].phases[phaseIndex].name;
       const newWBS = [...settings.wbs];
       newWBS[groupIndex].phases.splice(phaseIndex, 1);
@@ -842,9 +844,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     }
   };
 
-  const handleDeleteSubPhase = (e: React.MouseEvent, groupIndex: number, phaseIndex: number, subPhaseName: string) => {
+  const handleDeleteSubPhase = async (e: React.MouseEvent, groupIndex: number, phaseIndex: number, subPhaseName: string) => {
     e.stopPropagation();
-    if (window.confirm("Deseja excluir esta subetapa e seus itens?")) {
+    if (await confirm({ title: 'Excluir esta subetapa?', message: 'Os seus itens serão excluídos.', variant: 'danger', confirmLabel: 'Excluir' })) {
       const newWBS = [...settings.wbs];
       const phase = newWBS[groupIndex].phases[phaseIndex];
 
@@ -1338,7 +1340,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
   const handleDeleteCustomItem = async (e: React.MouseEvent, code: string) => {
     e.stopPropagation();
-    if (window.confirm('Deseja excluir este item da sua Base Própria?')) {
+    if (await confirm({ title: 'Excluir este item da sua Base Própria?', variant: 'danger', confirmLabel: 'Excluir' })) {
       try {
         await customDatabaseService.deleteItem(code);
         setSearchResults(prev => prev.filter(item => item.code !== code));
@@ -1497,8 +1499,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     });
   }, [budget, settings?.wbs]);
 
-  const handleClearOrphanedItems = () => {
-    if (confirm(`Deseja remover ${orphanedItems.length} itens que não pertencem a nenhuma etapa válida?`)) {
+  const handleClearOrphanedItems = async () => {
+    if (await confirm({ title: `Remover ${orphanedItems.length} itens órfãos?`, message: 'Itens que não pertencem a nenhuma etapa válida serão removidos.', variant: 'warning', confirmLabel: 'Remover' })) {
       const validItems = budget.filter(item => {
         const path = `${(item.group || '').trim().toLowerCase()}|${(item.phase || '').trim().toLowerCase()}|${(item.subPhase || '').trim().toLowerCase()}`;
         const isValid = settings.wbs?.some(g =>

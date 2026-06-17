@@ -16,12 +16,14 @@ import { bankReconciliationService } from '../services/bankReconciliationService
 import { supabase } from '../lib/supabase';
 import { financialSyncService } from '../services/financialSyncService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
+import { useConfirm } from './ui/confirm';
 
 interface BankReconciliationProps {
     organizationId: string;
 }
 
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId }) => {
+    const confirm = useConfirm();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const categoriesLoadedForOrg = useRef<string | null>(null);
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
@@ -819,7 +821,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     };
 
     const handleDeleteRule = async (ruleId: string) => {
-        if (!confirm('Tem certeza que deseja excluir esta regra?')) return;
+        if (!await confirm({ title: 'Excluir esta regra?', variant: 'danger', confirmLabel: 'Excluir' })) return;
         try {
             const { error } = await supabase
                 .from('reconciliation_rules')
@@ -986,7 +988,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     };
 
     const handleUndoMatch = async (matchId: string, bankTxId: string, internalTxId: string) => {
-        if (!confirm('Tem certeza que deseja desfazer este vínculo? Ambas as transações voltarão para a lista de Pendentes.')) return;
+        if (!await confirm({ title: 'Desfazer este vínculo?', message: 'Ambas as transações voltarão para a lista de Pendentes.', variant: 'warning', confirmLabel: 'Desfazer' })) return;
         
         setIsLoading(true);
         try {
@@ -1079,7 +1081,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 .single();
 
             if (match) {
-                if (!confirm('Este lançamento está conciliado. Excluí-lo também desfará o vínculo bancário na aba Conciliados. Deseja continuar?')) {
+                if (!await confirm({ title: 'Excluir lançamento conciliado?', message: 'Excluí-lo também desfará o vínculo bancário na aba Conciliados.', variant: 'warning', confirmLabel: 'Continuar' })) {
                     setIsLoading(false);
                     return;
                 }
@@ -1100,7 +1102,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                     .update({ status: restoredStatus })
                     .eq('id', match.bank_transaction_id);
             } else {
-                if (!confirm('Tem certeza que deseja excluir este lançamento manual?')) {
+                if (!await confirm({ title: 'Excluir este lançamento manual?', variant: 'danger', confirmLabel: 'Excluir' })) {
                     setIsLoading(false);
                     return;
                 }
@@ -1379,7 +1381,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         const msg = ids.length === 1
             ? 'Deseja realmente excluir este extrato bancário? Esta ação não pode ser desfeita.'
             : `Deseja realmente excluir ${ids.length} extratos bancários? Esta ação não pode ser desfeita.`;
-        if (!confirm(msg)) return;
+        if (!await confirm({ title: 'Excluir extrato bancário?', message: msg, variant: 'danger', confirmLabel: 'Excluir' })) return;
 
         setIsLoading(true);
         try {
@@ -1567,7 +1569,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     };
 
     const handleDeleteCategory = async (catName: string) => {
-        if (!confirm(`Deseja realmente excluir "${catName}" da lista de categorias? As transações que usam essa categoria não serão alteradas.`)) return;
+        if (!await confirm({ title: `Excluir "${catName}"?`, message: 'As transações que usam essa categoria não serão alteradas.', variant: 'danger', confirmLabel: 'Excluir' })) return;
         const orgId = organizationId || effectiveOrgId;
         setIsLoading(true);
         try {

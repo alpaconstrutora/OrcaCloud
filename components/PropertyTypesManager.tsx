@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Edit, Check, Shield } from 'lucide-react';
+import { Plus, Trash2, Edit, Check, Shield } from 'lucide-react';
 import { propertyTypesService, PropertyType } from '../services/propertyTypesService';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
+import { useConfirm } from './ui/confirm';
 
 interface PropertyTypesManagerProps {
     isOpen: boolean;
@@ -20,6 +22,7 @@ const PropertyTypesManager: React.FC<PropertyTypesManagerProps> = ({
     const [newLabel, setNewLabel] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const confirm = useConfirm();
 
     const load = async () => {
         setLoading(true);
@@ -61,7 +64,13 @@ const PropertyTypesManager: React.FC<PropertyTypesManagerProps> = ({
     };
 
     const handleDelete = async (id: string, label: string) => {
-        if (!confirm(`Excluir tipo "${label}"?\nImóveis existentes com este tipo não serão afetados.`)) return;
+        const ok = await confirm({
+            title: `Excluir tipo "${label}"?`,
+            message: 'Imóveis existentes com este tipo não serão afetados.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
         try {
             await propertyTypesService.deleteType(id);
             await load();
@@ -71,25 +80,16 @@ const PropertyTypesManager: React.FC<PropertyTypesManagerProps> = ({
         }
     };
 
-    if (!isOpen) return null;
-
     return (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-                    <div>
-                        <h2 className="text-lg font-black text-gray-900">Tipos de Imóvel</h2>
-                        <p className="text-xs text-gray-400 mt-0.5">Gerencie os tipos disponíveis para cadastro</p>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition-all">
-                        <X className="w-5 h-5 text-gray-500" />
-                    </button>
-                </div>
+        <Sheet open={isOpen} onClose={onClose} size="md">
+            {/* Header */}
+            <SheetHeader onClose={onClose}>
+                <SheetTitle>Tipos de Imóvel</SheetTitle>
+                <SheetDescription>Gerencie os tipos disponíveis para cadastro</SheetDescription>
+            </SheetHeader>
 
-                {/* Body */}
-                <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+            {/* Body */}
+            <SheetPanel className="p-6 space-y-4">
                     {error && (
                         <div className="px-4 py-2 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600 font-bold">
                             {error}
@@ -191,9 +191,8 @@ const PropertyTypesManager: React.FC<PropertyTypesManagerProps> = ({
                             O código é imutável após criação (ex: STUDIO, PENTHOUSE, GALPAO)
                         </p>
                     </div>
-                </div>
-            </div>
-        </div>
+            </SheetPanel>
+        </Sheet>
     );
 };
 

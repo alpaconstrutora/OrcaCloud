@@ -16,6 +16,9 @@ CREATE INDEX IF NOT EXISTS idx_task_collaborators_employee ON public.task_collab
 
 ALTER TABLE public.task_collaborators ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "task_collaborators_select" ON public.task_collaborators;
+DROP POLICY IF EXISTS "task_collaborators_all"    ON public.task_collaborators;
+
 -- Quem pode ver a tarefa pode ver seus colaboradores
 CREATE POLICY "task_collaborators_select" ON public.task_collaborators
     FOR SELECT USING (

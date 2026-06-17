@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { X, Loader2, Save, Trash2, Bell, ChevronDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { TaskStatus } from '../services/taskService'
+import { notificationService } from '../services/notificationService'
 
 export type TaskRecord = {
   id: string
@@ -26,7 +27,7 @@ export type TaskRecord = {
   alert_at: string | null
 }
 
-export type EmployeeOption = { id: string; name: string; role: string }
+export type EmployeeOption = { id: string; name: string; role: string; email?: string }
 export type ProjectOption  = { id: string; name: string }
 export type OrgOption      = { id: string; name: string }
 export type FolderOption   = { id: string; space_id: string; name: string }
@@ -198,6 +199,14 @@ const TaskForm: React.FC<Props> = ({
         if (!inserted) throw new Error('Tarefa não foi salva — tente novamente')
         taskId = (inserted as { id: string }).id
       }
+      // Colaboradores anteriores (para detectar novos)
+      const { data: prevCollabs } = await supabase
+        .from('task_collaborators')
+        .select('employee_id')
+        .eq('task_id', taskId)
+      const prevIds = new Set((prevCollabs ?? []).map((r: { employee_id: string }) => r.employee_id))
+      const newlyAdded = collaboratorIds.filter(id => !prevIds.has(id))
+
       // Sincroniza colaboradores: remove todos e reinsere os selecionados
       await supabase.from('task_collaborators').delete().eq('task_id', taskId)
       if (collaboratorIds.length > 0) {
@@ -205,6 +214,23 @@ const TaskForm: React.FC<Props> = ({
           collaboratorIds.map(eid => ({ task_id: taskId, employee_id: eid }))
         )
       }
+
+      // Notifica colaboradores recém-adicionados
+      if (newlyAdded.length > 0) {
+        const notifPromises = newlyAdded
+          .map(eid => employees.find(e => e.id === eid))
+          .filter((emp): emp is EmployeeOption & { email: string } => !!emp?.email)
+          .map(emp =>
+            notificationService.sendNotification({
+              recipientEmail: emp.email,
+              title: 'Você foi adicionado como envolvido em uma tarefa',
+              message: `A tarefa "${title.trim()}" foi compartilhada com você.`,
+              type: 'operacional',
+            }).catch(() => null)
+          )
+        await Promise.all(notifPromises)
+      }
+
       onSaved()
     } catch (e) {
       const err = e as { message?: string; details?: string }

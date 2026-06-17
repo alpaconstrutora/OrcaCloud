@@ -125,7 +125,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
 
     const { data } = await supabase
       .from('employees')
-      .select('id, name, role')
+      .select('id, name, role, email')
       .or(orFilter)
       .eq('status', 'ATIVO')
       .order('name')

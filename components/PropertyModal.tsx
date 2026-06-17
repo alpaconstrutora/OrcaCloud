@@ -4,6 +4,7 @@ import { Property, PropertyStatus, Client, TowerMatrixConfig, GridCellConfig } f
 import { clientService } from '../services/clientService';
 import { propertyTypesService, PropertyType } from '../services/propertyTypesService';
 import PropertyTypesManager from './PropertyTypesManager';
+import { Sheet, SheetPanel, SheetFooter } from './ui/sheet';
 
 interface PropertyModalProps {
     isOpen: boolean;
@@ -46,6 +47,14 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         images: [],
         parent_id: undefined
     });
+
+    const [dirty, setDirty] = useState(false);
+    const update = (patch: Partial<Property>) => { setFormData(prev => ({ ...prev, ...patch })); setDirty(true); };
+    const handleRequestClose = React.useCallback(() => {
+        if (dirty && !window.confirm('Há alterações não salvas. Deseja sair mesmo assim?')) return;
+        setDirty(false);
+        onClose();
+    }, [dirty, onClose]);
 
     const [connectedTowers, setConnectedTowers] = useState(false);
     const [connectionDirection, setConnectionDirection] = useState<'HORIZONTAL' | 'VERTICAL'>('HORIZONTAL');
@@ -141,7 +150,6 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
     };
 
     const [activeTab, setActiveTab] = useState<'dados' | 'gestao'>('dados');
-    const [sheetOpen, setSheetOpen] = useState(false);
     const [clients, setClients] = useState<Client[]>([]);
     const [enableMatrix, setEnableMatrix] = useState(!initialData);
     const [propertyTypes, setPropertyTypes] = useState<PropertyType[]>([]);
@@ -164,11 +172,11 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
     ]);
 
     useEffect(() => {
-        if (isOpen) {
-            clientService.listClients().then(setClients).catch(console.error);
-            propertyTypesService.listTypes().then(setPropertyTypes).catch(console.error);
-            setActiveTab('dados');
-        }
+        if (!isOpen) return;
+        setDirty(false);
+        clientService.listClients().then(setClients).catch(console.error);
+        propertyTypesService.listTypes().then(setPropertyTypes).catch(console.error);
+        setActiveTab('dados');
 
         if (initialData) {
             setFormData(initialData);
@@ -207,17 +215,6 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         }
     }, [initialData, isOpen, defaultPurpose]);
 
-    // Animação do drawer — efeito separado para não interferir no setFormData
-    useEffect(() => {
-        if (isOpen) {
-            const id = requestAnimationFrame(() => setSheetOpen(true));
-            return () => { cancelAnimationFrame(id); setSheetOpen(false); };
-        }
-        setSheetOpen(false);
-    }, [isOpen]);
-
-    if (!isOpen) return null;
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (formData.type === 'BUILDING' && enableMatrix) {
@@ -230,15 +227,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
 
     return (
         <>
-        <div className="fixed inset-0 z-[100]">
-            {/* Backdrop */}
-            <div
-                className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-200 ${sheetOpen ? 'opacity-100' : 'opacity-0'}`}
-                onClick={onClose}
-            />
-
-            {/* Drawer panel */}
-            <div className={`absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-2xl overflow-hidden border-l border-gray-200 transition-transform duration-300 ease-in-out ${sheetOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <Sheet open={isOpen} onClose={handleRequestClose} size="2xl">
                 {/* Header */}
                 <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0">
                     <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -268,7 +257,8 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                         </div>
                     </div>
                     <button
-                        onClick={onClose}
+                        type="button"
+                        onClick={handleRequestClose}
                         className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors shrink-0"
                     >
                         <X className="w-5 h-5" />
@@ -305,7 +295,8 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+                <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+                <SheetPanel className="p-6 space-y-6">
                     {/* ── ABA: DADOS DO IMÓVEL ─────────────────────────────── */}
                     {/* Section: Identificação, Localização e Tipo */}
                     <div className={`grid grid-cols-1 md:grid-cols-12 gap-6 ${activeTab !== 'dados' ? 'hidden' : ''}`}>
@@ -321,7 +312,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                         required
                                         type="text"
                                         value={formData.name}
-                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        onChange={(e) => update({ name: e.target.value })}
                                         className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-sm shadow-inner"
                                         placeholder="Ex: Edifício Ocean View - Apto 501"
                                     />
@@ -334,7 +325,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                             required
                                             type="text"
                                             value={formData.street || ''}
-                                            onChange={(e) => setFormData({ ...formData, street: e.target.value, address: `${e.target.value}, ${formData.number || ''}` })}
+                                            onChange={(e) => update({ street: e.target.value, address: `${e.target.value}, ${formData.number || ''}` })}
                                             className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
                                             placeholder="Rua, Avenida, etc."
                                         />
@@ -345,7 +336,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <input
                                         type="text"
                                         value={formData.number || ''}
-                                        onChange={(e) => setFormData({ ...formData, number: e.target.value, address: `${formData.street || ''}, ${e.target.value}` })}
+                                        onChange={(e) => update({ number: e.target.value, address: `${formData.street || ''}, ${e.target.value}` })}
                                         className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm text-center"
                                     />
                                 </div>
@@ -354,7 +345,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <input
                                         type="text"
                                         value={formData.neighborhood || ''}
-                                        onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
+                                        onChange={(e) => update({ neighborhood: e.target.value })}
                                         className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
                                     />
                                 </div>
@@ -363,7 +354,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <input
                                         type="text"
                                         value={formData.city || ''}
-                                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                                        onChange={(e) => update({ city: e.target.value })}
                                         className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
                                     />
                                 </div>
@@ -373,7 +364,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                         type="text"
                                         maxLength={2}
                                         value={formData.state || ''}
-                                        onChange={(e) => setFormData({ ...formData, state: e.target.value.toUpperCase() })}
+                                        onChange={(e) => update({ state: e.target.value.toUpperCase() })}
                                         className="w-full px-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm text-center uppercase"
                                     />
                                 </div>
@@ -402,7 +393,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     </div>
                                     <select
                                         value={formData.type}
-                                        onChange={(e) => setFormData({ ...formData, type: e.target.value as Property['type'] })}
+                                        onChange={(e) => update({ type: e.target.value as Property['type'] })}
                                         className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
                                     >
                                         {propertyTypes.length > 0
@@ -423,7 +414,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Finalidade</label>
                                     <select
                                         value={formData.purpose || 'BOTH'}
-                                        onChange={(e) => setFormData({ ...formData, purpose: e.target.value as Property['purpose'] })}
+                                        onChange={(e) => update({ purpose: e.target.value as Property['purpose'] })}
                                         className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
                                     >
                                         <option value="SALE">Apenas Venda</option>
@@ -436,7 +427,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <input
                                         type="text"
                                         value={formData.block || ''}
-                                        onChange={(e) => setFormData({ ...formData, block: e.target.value })}
+                                        onChange={(e) => update({ block: e.target.value })}
                                         className="w-full px-3 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-center uppercase text-sm"
                                     />
                                 </div>
@@ -445,7 +436,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <input
                                         type="number"
                                         value={formData.floor || 0}
-                                        onChange={(e) => setFormData({ ...formData, floor: parseInt(e.target.value) })}
+                                        onChange={(e) => update({ floor: parseInt(e.target.value) })}
                                         className="w-full px-3 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-center text-sm"
                                     />
                                 </div>
@@ -454,7 +445,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Vincular a Empreendimento (Opcional)</label>
                                         <select
                                             value={formData.parent_id || ''}
-                                            onChange={(e) => setFormData({ ...formData, parent_id: e.target.value || undefined })}
+                                            onChange={(e) => update({ parent_id: e.target.value || undefined })}
                                             className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
                                         >
                                             <option value="">Nenhum (Unidade Independente)</option>
@@ -1004,7 +995,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                             value={formData.private_area || 0}
                                             onChange={(e) => {
                                                 const val = parseFloat(e.target.value);
-                                                setFormData({ ...formData, private_area: val, total_area: val + (formData.common_area || 0) });
+                                                update({ private_area: val, total_area: val + (formData.common_area || 0) });
                                             }}
                                             className="bg-transparent text-lg font-black text-gray-700 outline-none w-full font-mono"
                                         />
@@ -1019,7 +1010,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                             value={formData.common_area || 0}
                                             onChange={(e) => {
                                                 const val = parseFloat(e.target.value);
-                                                setFormData({ ...formData, common_area: val, total_area: (formData.private_area || 0) + val });
+                                                update({ common_area: val, total_area: (formData.private_area || 0) + val });
                                             }}
                                             className="bg-transparent text-lg font-black text-gray-700 outline-none w-full font-mono"
                                         />
@@ -1052,7 +1043,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <input
                                         type="number"
                                         value={formData.specs?.bedrooms}
-                                        onChange={(e) => setFormData({ ...formData, specs: { ...formData.specs, bedrooms: parseInt(e.target.value) } })}
+                                        onChange={(e) => update({ specs: { ...formData.specs, bedrooms: parseInt(e.target.value) } })}
                                         className="bg-transparent text-base font-black text-gray-700 text-center outline-none w-full"
                                     />
                                 </div>
@@ -1061,7 +1052,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <input
                                         type="number"
                                         value={formData.specs?.bathrooms}
-                                        onChange={(e) => setFormData({ ...formData, specs: { ...formData.specs, bathrooms: parseInt(e.target.value) } })}
+                                        onChange={(e) => update({ specs: { ...formData.specs, bathrooms: parseInt(e.target.value) } })}
                                         className="bg-transparent text-base font-black text-gray-700 text-center outline-none w-full"
                                     />
                                 </div>
@@ -1070,7 +1061,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <input
                                         type="number"
                                         value={formData.specs?.parkingSpaces}
-                                        onChange={(e) => setFormData({ ...formData, specs: { ...formData.specs, parkingSpaces: parseInt(e.target.value) } })}
+                                        onChange={(e) => update({ specs: { ...formData.specs, parkingSpaces: parseInt(e.target.value) } })}
                                         className="bg-transparent text-base font-black text-gray-700 text-center outline-none w-full"
                                     />
                                 </div>
@@ -1095,7 +1086,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     value={formData.initial_price || formData.price || 0}
                                     onChange={(e) => {
                                         const val = parseFloat(e.target.value) || 0;
-                                        setFormData({ ...formData, initial_price: val, price: val });
+                                        update({ initial_price: val, price: val });
                                     }}
                                     className="w-full px-4 py-2 bg-blue-50/50 border border-blue-100 focus:bg-white focus:border-blue-500 rounded-xl outline-none font-black text-gray-900 transition-all shadow-inner text-base"
                                     placeholder="0,00"
@@ -1105,7 +1096,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Mudar Status</label>
                                 <select
                                     value={formData.status}
-                                    onChange={(e) => setFormData({ ...formData, status: e.target.value as PropertyStatus })}
+                                    onChange={(e) => update({ status: e.target.value as PropertyStatus })}
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
                                 >
                                     <option value={PropertyStatus.AVAILABLE}>Disponível 🟢</option>
@@ -1120,7 +1111,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Cliente / Proprietário</label>
                                 <select
                                     value={formData.client_id || ''}
-                                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value || undefined })}
+                                    onChange={(e) => update({ client_id: e.target.value || undefined })}
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
                                 >
                                     <option value="">Sem vínculo (Inventário)</option>
@@ -1138,7 +1129,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Posição no Pavimento</label>
                                     <select
                                         value={formData.position_type}
-                                        onChange={(e) => setFormData({ ...formData, position_type: e.target.value as Property['position_type'] })}
+                                        onChange={(e) => update({ position_type: e.target.value as Property['position_type'] })}
                                         className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-xs"
                                     >
                                         <option value="LATERAL">Lateral</option>
@@ -1150,7 +1141,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Qualidade da Vista</label>
                                     <select
                                         value={formData.view_type}
-                                        onChange={(e) => setFormData({ ...formData, view_type: e.target.value as Property['view_type'] })}
+                                        onChange={(e) => update({ view_type: e.target.value as Property['view_type'] })}
                                         className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-xs"
                                     >
                                         <option value="NONE">Sem Vista (Base)</option>
@@ -1162,7 +1153,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Orientação Solar</label>
                                     <select
                                         value={formData.sun_orientation}
-                                        onChange={(e) => setFormData({ ...formData, sun_orientation: e.target.value as Property['sun_orientation'] })}
+                                        onChange={(e) => update({ sun_orientation: e.target.value as Property['sun_orientation'] })}
                                         className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-xs"
                                     >
                                         <option value="NORTH">Norte (Melhor)</option>
@@ -1190,7 +1181,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                         <img src={url} className="w-full h-full object-cover" alt={`Propriedade ${idx + 1}`} />
                                         <button
                                             type="button"
-                                            onClick={() => setFormData({ ...formData, images: formData.images?.filter((_, i) => i !== idx) })}
+                                            onClick={() => update({ images: formData.images?.filter((_, i) => i !== idx) })}
                                             className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                                         >
                                             <X className="w-4 h-4" />
@@ -1228,7 +1219,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                         // TIP: In a real scenario, we'd upload here if (initialData?.id)
                                         // and update the array.
                                     }
-                                    setFormData({ ...formData, images: newImages });
+                                    update({ images: newImages });
                                 }}
                             />
                             <div className="p-6 border-4 border-dashed border-gray-100 rounded-[2.5rem] flex flex-col items-center justify-center bg-gray-50/50 group hover:border-blue-200 hover:bg-white transition-all">
@@ -1240,27 +1231,25 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                             </div>
                         </div>
                     </div>
-                </form>
-
-                {/* Footer */}
-                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-3 shrink-0">
+                </SheetPanel>
+                <SheetFooter>
                     <button
                         type="button"
-                        onClick={onClose}
+                        onClick={handleRequestClose}
                         className="px-6 py-2.5 bg-white text-gray-500 rounded-xl font-bold hover:text-gray-900 transition-all border border-gray-200 shadow-sm active:scale-95 text-sm"
                     >
                         Cancelar
                     </button>
                     <button
-                        onClick={handleSubmit}
+                        type="submit"
                         className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center gap-2 active:scale-95 text-sm"
                     >
                         <Check className="w-4 h-4" />
                         Salvar Alterações
                     </button>
-                </div>
-            </div>
-        </div>
+                </SheetFooter>
+                </form>
+            </Sheet>
 
         {organizationId && (
             <PropertyTypesManager

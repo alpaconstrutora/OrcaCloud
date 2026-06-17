@@ -153,6 +153,12 @@ function expandGroupPredecessors(
         return {
             ...item,
             predecessors: inherited.length > 0 ? [...(item.predecessors || []), ...inherited] : item.predecessors,
+            // Clear MSO when inheriting group predecessors so the predecessor drives the date
+            // (mirrors the behavior of setting an item-level predecessor in handleUpdatePredecessorField)
+            ...(inherited.length > 0 && item.constraintType === ConstraintType.MSO ? {
+                constraintType: undefined,
+                constraintDate: undefined,
+            } : {}),
             ...(hasGroupConstraint ? {
                 constraintType: ConstraintType.SNET,
                 constraintDate: inheritedConstraintDate

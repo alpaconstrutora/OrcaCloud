@@ -325,6 +325,17 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                         <h2 className="text-2xl font-black text-white leading-tight">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
                         <p className="text-blue-200 text-sm font-medium mt-1">Acompanhe seu imóvel e pagamentos</p>
+                        {/* Ações rápidas (topo) */}
+                        {quickTabs.length > 0 && (
+                            <div className="mt-5 grid grid-cols-4 gap-2">
+                                {quickTabs.map(tab => (
+                                    <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)} className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
+                                        <span className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-white">{tab.icon}</span>
+                                        <span className="text-[9px] font-bold text-white/90 uppercase tracking-wide text-center leading-tight">{tab.label.split(' ')[0]}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                         <div className="mt-4 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
                             <div className="grid grid-cols-2 gap-3 mb-3">
                                 <div>
@@ -369,19 +380,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Tudo em dia por aqui</p>
                                 <p className="text-xs text-gray-400 font-medium mt-1 max-w-[240px]">Seus chamados e atualizações do imóvel aparecerão aqui.</p>
                             </div>
-                            {quickTabs.length > 0 && (
-                                <>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center mt-4 mb-3">Acesso Rápido</p>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {quickTabs.map(tab => (
-                                            <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
-                                                <span className="text-blue-500">{tab.icon}</span>
-                                                <span className="text-[8px] font-black text-gray-500 uppercase tracking-wide text-center leading-tight">{tab.label.split(' ')[0]}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
                         </div>
                     )}
                 </div>
@@ -468,6 +466,17 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                         <h2 className="text-2xl font-black text-white leading-tight">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
                         <p className="text-indigo-200 text-sm font-medium mt-1">Acompanhe suas ordens de serviço</p>
+                        {/* Ações rápidas (topo) */}
+                        {quickTabs.length > 0 && (
+                            <div className="mt-5 grid grid-cols-4 gap-2">
+                                {quickTabs.map(tab => (
+                                    <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)} className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
+                                        <span className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-white">{tab.icon}</span>
+                                        <span className="text-[9px] font-bold text-white/90 uppercase tracking-wide text-center leading-tight">{tab.label.split(' ')[0]}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                         <div className="mt-4 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
                             <div className="grid grid-cols-2 gap-3 mb-3">
                                 <div>
@@ -509,19 +518,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhuma ordem de serviço ainda</p>
                                 <p className="text-xs text-gray-400 font-medium mt-1 max-w-[240px]">Suas ordens de serviço e agendamentos aparecerão aqui.</p>
                             </div>
-                            {quickTabs.length > 0 && (
-                                <>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center mt-4 mb-3">Acesso Rápido</p>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {quickTabs.map(tab => (
-                                            <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
-                                                <span className="text-indigo-500">{tab.icon}</span>
-                                                <span className="text-[8px] font-black text-gray-500 uppercase tracking-wide text-center leading-tight">{tab.label.split(' ')[0]}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
                         </div>
                     )}
                 </div>

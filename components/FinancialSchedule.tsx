@@ -1441,7 +1441,10 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         const hasExistingItems = budget.filter(b => scheduleIds.has(b.id)).length > 0;
         if (hasExistingItems) {
             initialRecalcDone.current = true;
-            handleRecalculate(undefined, settings.startDate || undefined);
+            // Use schedule.startDate (the CPM's own stored start) so a stale settings.startDate
+            // (e.g. project creation date 01/07) doesn't anchor all tasks to the wrong month.
+            // Passing it as newStartDate also syncs settings.startDate → stops the needsStartSync loop.
+            handleRecalculate(undefined, schedule.startDate);
         }
     }, [budget, schedule.itemSchedules]);
 

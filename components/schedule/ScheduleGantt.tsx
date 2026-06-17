@@ -849,6 +849,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         idToUid={idToUid}
                         allItems={allItems}
                         onClose={() => setSelectedTaskId(null)}
+                        handleUpdateItemSchedule={handleUpdateItemSchedule}
+                        handleUpdateRealPct={handleUpdateRealPct}
+                        handleUpdateCrewField={handleUpdateCrewField}
                     />
                 );
             })()}

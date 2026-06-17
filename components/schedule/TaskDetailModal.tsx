@@ -10,10 +10,15 @@ interface TaskDetailModalProps {
     idToUid: Record<string, string>;
     allItems: { id: string; name: string }[];
     onClose: () => void;
+    handleUpdateItemSchedule: (itemId: string, field: 'duration' | 'startDate' | 'endDate', value: string | number) => void;
+    handleUpdateRealPct: (itemId: string, value: string) => void;
+    handleUpdateCrewField: (id: string, field: string, value: string | number | boolean) => void;
 }
 
 const fmt = (date?: string) =>
     date ? new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
+
+const toInputDate = (date?: string) => (date ? date.split('T')[0] : '');
 
 const fmtCurrency = (v?: number) =>
     v != null ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }) : '—';
@@ -44,8 +49,52 @@ const Field: React.FC<FieldProps> = ({ label, value, className }) => (
     </div>
 );
 
+interface EditFieldProps {
+    label: string;
+    type?: 'date' | 'number';
+    value: string | number;
+    suffix?: string;
+    step?: string;
+    min?: number;
+    max?: number;
+    onCommit: (value: string) => void;
+    className?: string;
+}
+const EditField: React.FC<EditFieldProps> = ({ label, type = 'number', value, suffix, step, min, max, onCommit, className }) => {
+    const [draft, setDraft] = React.useState(String(value ?? ''));
+    React.useEffect(() => { setDraft(String(value ?? '')); }, [value]);
+
+    const commit = () => {
+        if (draft !== String(value ?? '')) onCommit(draft);
+    };
+
+    return (
+        <div className={`flex flex-col gap-0.5 ${className || ''}`}>
+            {label && <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</span>}
+            <div className="flex items-center gap-1">
+                <input
+                    type={type}
+                    value={draft}
+                    step={step}
+                    min={min}
+                    max={max}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onBlur={commit}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') { commit(); (e.target as HTMLInputElement).blur(); }
+                        if (e.key === 'Escape') { setDraft(String(value ?? '')); (e.target as HTMLInputElement).blur(); }
+                    }}
+                    className="w-full text-sm font-semibold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                />
+                {suffix && <span className="text-xs font-medium text-gray-400 shrink-0">{suffix}</span>}
+            </div>
+        </div>
+    );
+};
+
 export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     node, item, itemSchedule, idToUid, allItems, onClose,
+    handleUpdateItemSchedule, handleUpdateRealPct, handleUpdateCrewField,
 }) => {
     const isCritical = itemSchedule?.isCritical ?? node.isCritical;
     const totalFloat = itemSchedule?.totalFloat ?? node.totalFloat ?? 0;
@@ -105,12 +154,38 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         </div>
                     </section>
 
-                    {/* Cronograma */}
+                    {/* Cronograma — editável */}
                     <section>
                         <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
                             <Calendar className="w-3.5 h-3.5" /> Cronograma
                         </h3>
                         <div className="grid grid-cols-2 gap-3">
+                            <EditField
+                                label="Início"
+                                type="date"
+                                value={toInputDate(itemSchedule?.startDate || node.earlyStart)}
+                                onCommit={(v) => handleUpdateItemSchedule(item.id, 'startDate', v)}
+                            />
+                            <EditField
+                                label="Fim"
+                                type="date"
+                                value={toInputDate(itemSchedule?.endDate || node.earlyFinish)}
+                                onCommit={(v) => handleUpdateItemSchedule(item.id, 'endDate', v)}
+                            />
+                            <EditField
+                                label="Duração"
+                                type="number"
+                                min={0}
+                                suffix="dias"
+                                value={itemSchedule?.duration ?? 0}
+                                onCommit={(v) => handleUpdateItemSchedule(item.id, 'duration', parseInt(v, 10) || 0)}
+                            />
+                            <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Folga Total</span>
+                                <span className={`text-sm font-semibold py-1.5 ${totalFloat === 0 ? 'text-red-600' : totalFloat <= 3 ? 'text-orange-500' : 'text-green-600'}`}>
+                                    {totalFloat} {totalFloat === 1 ? 'dia' : 'dias'}
+                                </span>
+                            </div>
                             <div className="col-span-2 grid grid-cols-2 gap-1 bg-green-50 border border-green-100 rounded-xl p-3">
                                 <Field label="Início Cedo" value={fmt(itemSchedule?.earlyStart || node.earlyStart)} />
                                 <Field label="Fim Cedo" value={fmt(itemSchedule?.earlyFinish || node.earlyFinish)} />
@@ -118,13 +193,6 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                             <div className="col-span-2 grid grid-cols-2 gap-1 bg-orange-50 border border-orange-100 rounded-xl p-3">
                                 <Field label="Início Tarde" value={fmt(itemSchedule?.lateStart || node.lateStart)} />
                                 <Field label="Fim Tarde" value={fmt(itemSchedule?.lateFinish || node.lateFinish)} />
-                            </div>
-                            <Field label="Duração" value={itemSchedule?.duration != null ? `${itemSchedule.duration} dias` : '—'} />
-                            <div className="flex flex-col gap-0.5">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Folga Total</span>
-                                <span className={`text-sm font-semibold ${totalFloat === 0 ? 'text-red-600' : totalFloat <= 3 ? 'text-orange-500' : 'text-green-600'}`}>
-                                    {totalFloat} {totalFloat === 1 ? 'dia' : 'dias'}
-                                </span>
                             </div>
                             {itemSchedule?.isMilestone && (
                                 <div className="col-span-2">
@@ -136,15 +204,27 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         </div>
                     </section>
 
-                    {/* Progresso */}
+                    {/* Progresso — editável */}
                     <section>
                         <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
                             <TrendingUp className="w-3.5 h-3.5" /> Progresso
                         </h3>
                         <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 space-y-2">
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-gray-600">Realizado</span>
-                                <span className="text-sm font-black text-blue-600">{progress.toFixed(1)}%</span>
+                            <div className="flex items-center justify-between gap-3">
+                                <span className="text-xs font-bold text-gray-600 shrink-0">Realizado (%)</span>
+                                <div className="flex items-center gap-1 w-28">
+                                    <EditField
+                                        label=""
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        step="0.1"
+                                        value={progress}
+                                        onCommit={(v) => handleUpdateRealPct(item.id, v)}
+                                        className="flex-1"
+                                    />
+                                    <span className="text-sm font-black text-blue-600 shrink-0">%</span>
+                                </div>
                             </div>
                             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                                 <div
@@ -250,34 +330,53 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         </section>
                     )}
 
-                    {/* Equipe */}
-                    {(itemSchedule?.crewMainWorkers || itemSchedule?.crewHelpers || itemSchedule?.hoursPerDay) && (
-                        <section>
-                            <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
-                                <Users className="w-3.5 h-3.5" /> Equipe
-                            </h3>
-                            <div className="grid grid-cols-3 gap-3">
-                                {itemSchedule.crewMainWorkers != null && (
-                                    <Field label="Principais" value={itemSchedule.crewMainWorkers} />
-                                )}
-                                {itemSchedule.crewHelpers != null && (
-                                    <Field label="Ajudantes" value={itemSchedule.crewHelpers} />
-                                )}
-                                {itemSchedule.hoursPerDay != null && (
-                                    <Field label="Horas/dia" value={itemSchedule.hoursPerDay} />
-                                )}
-                                {itemSchedule.efficiencyFactor != null && (
-                                    <Field label="Eficiência" value={`${(itemSchedule.efficiencyFactor * 100).toFixed(0)}%`} />
-                                )}
-                                {itemSchedule.totalLaborCost != null && (
-                                    <Field label="Custo M.O." value={fmtCurrency(itemSchedule.totalLaborCost)} />
-                                )}
-                                {itemSchedule.totalManHours != null && (
-                                    <Field label="H·H Total" value={`${itemSchedule.totalManHours.toFixed(1)} h`} />
-                                )}
-                            </div>
-                        </section>
-                    )}
+                    {/* Equipe — editável */}
+                    <section>
+                        <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                            <Users className="w-3.5 h-3.5" /> Equipe
+                        </h3>
+                        <div className="grid grid-cols-3 gap-3">
+                            <EditField
+                                label="Principais"
+                                type="number"
+                                min={0}
+                                value={itemSchedule?.crewMainWorkers ?? 0}
+                                onCommit={(v) => handleUpdateCrewField(item.id, 'crewMainWorkers', parseInt(v, 10) || 0)}
+                            />
+                            <EditField
+                                label="Ajudantes"
+                                type="number"
+                                min={0}
+                                value={itemSchedule?.crewHelpers ?? 0}
+                                onCommit={(v) => handleUpdateCrewField(item.id, 'crewHelpers', parseInt(v, 10) || 0)}
+                            />
+                            <EditField
+                                label="Horas/dia"
+                                type="number"
+                                min={0}
+                                step="0.5"
+                                value={itemSchedule?.hoursPerDay ?? 8}
+                                onCommit={(v) => handleUpdateCrewField(item.id, 'hoursPerDay', parseFloat(v) || 0)}
+                            />
+                            <EditField
+                                label="Eficiência"
+                                type="number"
+                                min={0}
+                                suffix="%"
+                                value={itemSchedule?.efficiencyFactor != null ? Math.round(itemSchedule.efficiencyFactor * 100) : 100}
+                                onCommit={(v) => handleUpdateCrewField(item.id, 'efficiencyFactor', (parseFloat(v) || 100) / 100)}
+                            />
+                            {itemSchedule?.totalLaborCost != null && (
+                                <Field label="Custo M.O." value={fmtCurrency(itemSchedule.totalLaborCost)} />
+                            )}
+                            {itemSchedule?.totalManHours != null && (
+                                <Field label="H·H Total" value={`${itemSchedule.totalManHours.toFixed(1)} h`} />
+                            )}
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-2 leading-tight">
+                            Alterar a equipe ativa o cálculo automático de duração com base na produtividade.
+                        </p>
+                    </section>
 
                     {/* IDs internos */}
                     <section>

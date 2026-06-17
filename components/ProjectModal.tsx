@@ -301,22 +301,38 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     }
   }, [isOpen]);
 
-  // Fetch suggested code for new OBRA creation
+  // Fetch suggested code for new OBRA / PLANEJAMENTO creation
   React.useEffect(() => {
-    if (isOpen && mode === 'create' && initialClassification === 'OBRA' && organizationId) {
-      setIsFetchingCode(true);
-      const fetchCode = async () => {
-        try {
-          const { data, error } = await supabase.rpc('get_next_project_code', { p_org_id: organizationId });
-          if (error) throw error;
-          if (data) setProjectCode(data as string);
-        } catch (err) {
-          console.error(err);
-        } finally {
-          setIsFetchingCode(false);
-        }
-      };
-      fetchCode();
+    if (isOpen && mode === 'create' && organizationId) {
+      if (initialClassification === 'OBRA') {
+        setIsFetchingCode(true);
+        const fetchCode = async () => {
+          try {
+            const { data, error } = await supabase.rpc('get_next_project_code', { p_org_id: organizationId });
+            if (error) throw error;
+            if (data) setProjectCode(data as string);
+          } catch (err) {
+            console.error(err);
+          } finally {
+            setIsFetchingCode(false);
+          }
+        };
+        fetchCode();
+      } else if (initialClassification === 'PLANEJAMENTO') {
+        setIsFetchingCode(true);
+        const fetchCode = async () => {
+          try {
+            const { data, error } = await supabase.rpc('get_next_planejamento_code', { p_org_id: organizationId });
+            if (error) throw error;
+            if (data) setProjectCode(data as string);
+          } catch (err) {
+            console.error(err);
+          } finally {
+            setIsFetchingCode(false);
+          }
+        };
+        fetchCode();
+      }
     } else if (isOpen && mode === 'edit' && initialData?.code) {
       setProjectCode(initialData.code);
     } else if (!isOpen) {
@@ -467,7 +483,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
         ...formData,
         linkedProjectId: linkedProjectId || undefined,
         linkedProjectName: linkedProjectId ? projects.find(p => p.id === linkedProjectId)?.name : undefined,
-        code: (formData.classification === 'OBRA' && projectCode.trim()) ? projectCode.trim() : undefined,
+        code: ((formData.classification === 'OBRA' || formData.classification === 'PLANEJAMENTO') && projectCode.trim()) ? projectCode.trim() : undefined,
         organizationId: selectedOrgId,
         empresaId: selectedEmpresaId,
       });
@@ -1639,6 +1655,27 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           </div>
                         )}
                       </div>
+
+                      {/* Código sequencial — visível apenas para PLANEJAMENTO */}
+                      {formData.classification === 'PLANEJAMENTO' && (
+                        <div className="col-span-2 md:col-span-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                            <Hash className="w-3.5 h-3.5 text-blue-500" />
+                            Código do Planejamento
+                          </label>
+                          <input
+                            type="text"
+                            placeholder={isFetchingCode ? 'Carregando...' : '001'}
+                            className="w-full rounded-lg border border-blue-200 bg-blue-50 p-2.5 font-mono font-bold text-blue-700 outline-none transition-all focus:ring-2 focus:ring-blue-500"
+                            value={projectCode}
+                            onChange={(e) => setProjectCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            maxLength={6}
+                          />
+                          <p className="text-[10px] text-gray-400 mt-1">
+                            {mode === 'create' ? 'Gerado automaticamente. Você pode alterar antes de salvar.' : 'Você pode corrigir o código deste planejamento.'}
+                          </p>
+                        </div>
+                      )}
                       {/* Organization selector — full-width row when multiple orgs exist */}
                       {organizations.length > 1 && (
                         <div className="col-span-2">

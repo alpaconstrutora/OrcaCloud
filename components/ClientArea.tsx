@@ -361,6 +361,29 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="flex items-center justify-between mb-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Últimos Chamados</p>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Ver todos</button>}</div>
                         {recentRequests.map(req => (<div key={req.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-black text-gray-900 truncate">{req.title}</p><p className="text-[10px] font-bold text-gray-400 mt-0.5">{req.category}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span></div>))}
                     </div>}
+                    {/* Empty state + atalhos */}
+                    {recentRequests.length === 0 && (
+                        <div className="px-4 mt-6 pb-6">
+                            <div className="flex flex-col items-center text-center py-4">
+                                <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400 mb-3"><Wrench className="w-7 h-7" /></div>
+                                <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Tudo em dia por aqui</p>
+                                <p className="text-xs text-gray-400 font-medium mt-1 max-w-[240px]">Seus chamados e atualizações do imóvel aparecerão aqui.</p>
+                            </div>
+                            {quickTabs.length > 0 && (
+                                <>
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center mt-4 mb-3">Acesso Rápido</p>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {quickTabs.map(tab => (
+                                            <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
+                                                <span className="text-blue-500">{tab.icon}</span>
+                                                <span className="text-[8px] font-black text-gray-500 uppercase tracking-wide text-center leading-tight">{tab.label.split(' ')[0]}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* ══ DESKTOP ══ */}
@@ -428,6 +451,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             .sort((a, b) => a.scheduled_date!.localeCompare(b.scheduled_date!))[0];
 
         const STATUS_COLOR: Record<string, string> = { Aberta: 'bg-blue-100 text-blue-700', 'Em Execução': 'bg-amber-100 text-amber-700', Concluída: 'bg-emerald-100 text-emerald-700', Cancelada: 'bg-gray-100 text-gray-400' };
+        const quickTabs = tabs.filter(t => t.id !== 'dashboard').slice(0, 4);
 
         return (
             <div className="animate-in fade-in duration-500">
@@ -477,6 +501,29 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="flex items-center justify-between mb-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">OS Recentes</p>{enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Ver todas</button>}</div>
                         {recentOS.map(os => (<div key={os.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0 flex items-center gap-2"><span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-lg shrink-0">{os.number}</span><p className="text-sm font-black text-gray-900 truncate">{os.title}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span></div>))}
                     </div>}
+                    {/* Empty state + atalhos */}
+                    {recentOS.length === 0 && (
+                        <div className="px-4 mt-6 pb-6">
+                            <div className="flex flex-col items-center text-center py-4">
+                                <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-400 mb-3"><ClipboardList className="w-7 h-7" /></div>
+                                <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhuma ordem de serviço ainda</p>
+                                <p className="text-xs text-gray-400 font-medium mt-1 max-w-[240px]">Suas ordens de serviço e agendamentos aparecerão aqui.</p>
+                            </div>
+                            {quickTabs.length > 0 && (
+                                <>
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center mt-4 mb-3">Acesso Rápido</p>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {quickTabs.map(tab => (
+                                            <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
+                                                <span className="text-indigo-500">{tab.icon}</span>
+                                                <span className="text-[8px] font-black text-gray-500 uppercase tracking-wide text-center leading-tight">{tab.label.split(' ')[0]}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* ══ DESKTOP ══ */}

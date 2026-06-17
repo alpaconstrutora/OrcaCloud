@@ -553,7 +553,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 >
                                     {itemSchedule.totalFloat && itemSchedule.totalFloat > 0 && (
                                         <div
-                                            className="absolute top-0 h-6 bg-indigo-500/10 border border-dashed border-indigo-300 rounded-r z-[1]"
+                                            className="absolute top-0 h-6 bg-gray-200/40 border border-dashed border-gray-300 rounded-r z-[1]"
                                             style={{ left: `${width}px`, width: `${itemSchedule.totalFloat * pxPerDay}px` }}
                                         />
                                     )}

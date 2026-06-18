@@ -128,11 +128,33 @@ function expandGroupPredecessors(
         }
     });
 
-    if (groupPredMap.size === 0 && groupConstraintMap.size === 0) return items;
+    // Check if any leaf item has predecessors pointing directly to a group node
+    const anyItemHasGroupPred = items.some(item =>
+        !nodeToLeaves.has(item.id) &&
+        (item.predecessors || []).some(p => nodeToLeaves.has(p.id))
+    );
+
+    if (groupPredMap.size === 0 && groupConstraintMap.size === 0 && !anyItemHasGroupPred) return items;
 
     return items.map(item => {
         // Non-item nodes (groups/phases): keep as-is (they act as relay nodes in the graph)
         if (nodeToLeaves.has(item.id)) return item;
+
+        // Expand item's own predecessors that point to a group/subphase node
+        // e.g. item 46 → subphase 13 becomes item 46 → [item 14, item 15]
+        const ownExpanded: Predecessor[] = [];
+        (item.predecessors || []).forEach(pred => {
+            const predLeaves = nodeToLeaves.get(pred.id);
+            if (predLeaves && predLeaves.length > 0) {
+                predLeaves.forEach(leafId => {
+                    if (leafId !== item.id && !ownExpanded.some(p => p.id === leafId)) {
+                        ownExpanded.push({ id: leafId, type: pred.type, lag: pred.lag });
+                    }
+                });
+            } else {
+                ownExpanded.push(pred); // leaf-to-leaf, keep as-is
+            }
+        });
 
         // Inherit predecessors from ancestor groups
         const inherited: Predecessor[] = [];
@@ -144,14 +166,14 @@ function expandGroupPredecessors(
                 if (predLeaves) {
                     predLeaves.forEach(leafId => {
                         if (leafId !== item.id &&
-                            !inherited.some(p => p.id === leafId) &&
-                            !(item.predecessors || []).some(p => p.id === leafId)) {
+                            !ownExpanded.some(p => p.id === leafId) &&
+                            !inherited.some(p => p.id === leafId)) {
                             inherited.push({ id: leafId, type: pred.type, lag: pred.lag });
                         }
                     });
                 } else {
-                    if (!inherited.some(p => p.id === pred.id) &&
-                        !(item.predecessors || []).some(p => p.id === pred.id)) {
+                    if (!ownExpanded.some(p => p.id === pred.id) &&
+                        !inherited.some(p => p.id === pred.id)) {
                         inherited.push(pred);
                     }
                 }
@@ -170,10 +192,11 @@ function expandGroupPredecessors(
         const hasGroupConstraint = !!inheritedConstraintDate &&
             (!item.constraintDate || inheritedConstraintDate > item.constraintDate);
 
-        if (inherited.length === 0 && !hasGroupConstraint) return item;
+        const predsChanged = ownExpanded.length !== (item.predecessors || []).length || inherited.length > 0;
+        if (!predsChanged && !hasGroupConstraint) return item;
         return {
             ...item,
-            predecessors: inherited.length > 0 ? [...(item.predecessors || []), ...inherited] : item.predecessors,
+            predecessors: [...ownExpanded, ...inherited],
             ...(hasGroupConstraint ? {
                 constraintType: ConstraintType.SNET,
                 constraintDate: inheritedConstraintDate

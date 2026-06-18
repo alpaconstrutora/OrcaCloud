@@ -141,7 +141,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   // Filtrar projetos/obras (classification === 'OBRA')
   const obras = React.useMemo(() => {
-    return projects.filter(p => p.settings?.classification === 'OBRA' || !p.settings?.classification);
+    return projects.filter(p => 
+      (p.settings?.classification === 'OBRA' || !p.settings?.classification) &&
+      p.name?.toLowerCase() !== 'gestão comercial'
+    );
   }, [projects]);
 
   // Filtrar documentos localmente por busca simples

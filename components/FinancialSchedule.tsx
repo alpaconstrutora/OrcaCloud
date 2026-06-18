@@ -2595,40 +2595,41 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             newDetails = { ...newDetails, [field]: value };
 
             // Manual override logic if user changes dates directly
+            const useWD = prev.useWorkingDays ?? true;
             if (field === 'startDate') {
                 const dateVal = value as string;
                 if (dateVal) {
-                    if (newDetails.duration) {
-                        const start = new Date(dateVal);
-                        const end = new Date(start);
-                        end.setDate(start.getDate() + (newDetails.duration as number));
-                        newDetails.endDate = end.toISOString().split('T')[0];
+                    if (newDetails.duration !== undefined) {
+                        // Recalculate endDate using working-day arithmetic so it stays consistent with duration
+                        const [y, m, d] = dateVal.split('-').map(Number);
+                        const startLocal = new Date(y, m - 1, d);
+                        const endDate = SchedulingEngine.addDays(startLocal, newDetails.duration as number, useWD);
+                        newDetails.endDate = endDate.toISOString().split('T')[0];
                     }
                     // Use MSO (Must Start On) so it's not "blocked" by predecessors during manual override
                     newDetails.constraintType = ConstraintType.MSO;
                     newDetails.constraintDate = dateVal;
                 } else {
-                    console.log('[DEBUG] Clearing start date and constraints for item:', itemId);
                     // If date is cleared, remove constraint to allow predecessors to drive it
                     newDetails.constraintType = undefined;
                     newDetails.constraintDate = undefined;
                     newDetails.earlyStart = undefined;
                     newDetails.earlyFinish = undefined;
-                    // newDetails.startDate = undefined; // Do not clear startDate/endDate if we want to show something?
-                    // Actually, if we clear start date manually, we probably want to see what the scheduler calculates.
-                    // But the scheduler needs *some* date or needs to know it's unconstrained.
                 }
             } else if (field === 'duration' && value !== undefined && newDetails.startDate) {
-                const start = new Date(newDetails.startDate);
-                const end = new Date(start);
-                end.setDate(start.getDate() + (value as number));
-                newDetails.endDate = end.toISOString().split('T')[0];
-                newDetails.autoDuration = false; // Override auto if manually set
+                // Recalculate endDate from startDate + duration (working days)
+                const [y, m, d] = newDetails.startDate.split('T')[0].split('-').map(Number);
+                const startLocal = new Date(y, m - 1, d);
+                const endDate = SchedulingEngine.addDays(startLocal, value as number, useWD);
+                newDetails.endDate = endDate.toISOString().split('T')[0];
+                newDetails.autoDuration = false;
             } else if (field === 'endDate' && value !== undefined && newDetails.startDate) {
-                const start = new Date(newDetails.startDate);
-                const end = new Date(value as string);
-                const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-                newDetails.duration = Math.max(0, diffDays);
+                // Recalculate duration from working days between startDate and new endDate
+                const [sy, sm, sd] = newDetails.startDate.split('T')[0].split('-').map(Number);
+                const [ey, em, ed] = (value as string).split('-').map(Number);
+                const startLocal = new Date(sy, sm - 1, sd);
+                const endLocal   = new Date(ey, em - 1, ed);
+                newDetails.duration = Math.max(0, SchedulingEngine.diffDays(startLocal, endLocal, useWD));
             }
 
             let updatedSchedules = [...currentItems];

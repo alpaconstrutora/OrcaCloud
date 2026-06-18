@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Clock } from 'lucide-react';
 import { ProjectSchedule, ReplanMode } from '../../types';
+// ProjectSchedule is used for the workSchedule type helper below
 
 interface ConfigModalProps {
     isOpen: boolean;
@@ -22,26 +23,42 @@ const WEEK_DAYS = [
 const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5];
 const DEFAULT_HOURS_PER_DAY = 8;
 
+function totalWeekHours(workDays: number[], hoursPerDay: number, dayHours?: Record<number, number>): number {
+    return workDays.reduce((sum, d) => sum + (dayHours?.[d] ?? hoursPerDay), 0);
+}
+
 export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, schedule, onUpdate }) => {
     if (!isOpen) return null;
 
     const workDays = schedule.workSchedule?.workDays ?? DEFAULT_WORK_DAYS;
     const hoursPerDay = schedule.workSchedule?.hoursPerDay ?? DEFAULT_HOURS_PER_DAY;
+    const dayHours = schedule.workSchedule?.dayHours ?? {};
+
+    const getHoursForDay = (day: number) => dayHours[day] ?? hoursPerDay;
+
+    const update = (patch: Partial<NonNullable<ProjectSchedule['workSchedule']>>) =>
+        onUpdate({ workSchedule: { hoursPerDay, workDays, dayHours, ...patch } });
 
     const toggleDay = (day: number) => {
         const next = workDays.includes(day)
             ? workDays.filter(d => d !== day)
             : [...workDays, day].sort((a, b) => a - b);
-        if (next.length === 0) return; // pelo menos 1 dia
-        onUpdate({ workSchedule: { hoursPerDay, workDays: next } });
+        if (next.length === 0) return;
+        update({ workDays: next });
     };
 
-    const setHours = (val: number) => {
+    const setDefaultHours = (val: number) => {
         const clamped = Math.max(1, Math.min(24, val));
-        onUpdate({ workSchedule: { hoursPerDay: clamped, workDays } });
+        update({ hoursPerDay: clamped });
     };
 
-    const totalWeeklyHours = workDays.length * hoursPerDay;
+    const setDayHours = (day: number, val: number) => {
+        const clamped = Math.max(1, Math.min(24, val));
+        const next = { ...dayHours, [day]: clamped };
+        update({ dayHours: next });
+    };
+
+    const weeklyTotal = totalWeekHours(workDays, hoursPerDay, dayHours);
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -62,90 +79,100 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                             <span className="text-sm font-black text-gray-700 uppercase tracking-wide">Jornada de Trabalho</span>
                         </div>
 
-                        {/* Horas por dia */}
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <span className="text-sm font-bold text-gray-700">Horas por dia</span>
-                                <p className="text-[10px] text-gray-400">Duração da jornada diária</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setHours(hoursPerDay - 1)}
-                                    className="w-7 h-7 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 font-bold text-sm flex items-center justify-center transition-all"
-                                >−</button>
-                                <div className="flex items-center gap-1">
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={24}
-                                        value={hoursPerDay}
-                                        onChange={(e) => setHours(Number(e.target.value))}
-                                        className="w-12 text-center text-sm font-bold border border-gray-200 rounded-lg py-1 outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                    <span className="text-xs text-gray-400 font-medium">h</span>
-                                </div>
-                                <button
-                                    onClick={() => setHours(hoursPerDay + 1)}
-                                    className="w-7 h-7 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 font-bold text-sm flex items-center justify-center transition-all"
-                                >+</button>
-                            </div>
-                        </div>
-
-                        {/* Dias da semana */}
-                        <div className="space-y-2">
-                            <span className="text-sm font-bold text-gray-700">Dias trabalhados</span>
-                            <div className="flex gap-1.5">
-                                {WEEK_DAYS.map(({ value, short }) => {
-                                    const active = workDays.includes(value);
-                                    const isWeekend = value === 0 || value === 6;
+                        {/* Presets rápidos */}
+                        <div className="space-y-1.5">
+                            <span className="text-xs font-bold text-gray-500">Ajuste rápido</span>
+                            <div className="flex gap-2">
+                                {[
+                                    { label: '5×8h', days: [1,2,3,4,5], hours: 8 },
+                                    { label: '5×9h', days: [1,2,3,4,5], hours: 9 },
+                                    { label: '6×8h', days: [1,2,3,4,5,6], hours: 8 },
+                                    { label: '7×8h', days: [0,1,2,3,4,5,6], hours: 8 },
+                                ].map(preset => {
+                                    const active = JSON.stringify(workDays) === JSON.stringify(preset.days)
+                                        && hoursPerDay === preset.hours
+                                        && Object.keys(dayHours).length === 0;
                                     return (
                                         <button
-                                            key={value}
-                                            onClick={() => toggleDay(value)}
-                                            className={`flex-1 py-2 rounded-xl text-[11px] font-black transition-all border-2 ${
-                                                active
-                                                    ? isWeekend
-                                                        ? 'bg-amber-500 border-amber-500 text-white'
-                                                        : 'bg-blue-600 border-blue-600 text-white'
-                                                    : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'
+                                            key={preset.label}
+                                            onClick={() => onUpdate({ workSchedule: { hoursPerDay: preset.hours, workDays: preset.days, dayHours: {} } })}
+                                            className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                                                active ? 'bg-blue-50 border-blue-400 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
                                             }`}
                                         >
-                                            {short}
+                                            {preset.label}
                                         </button>
                                     );
                                 })}
                             </div>
-                            <div className="flex items-center justify-between pt-1">
+                        </div>
+
+                        {/* Dias + horas individuais */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-bold text-gray-700">Dias e horas por dia</span>
+                                <span className="text-[10px] font-bold text-blue-600">{weeklyTotal}h semanais</span>
+                            </div>
+
+                            <div className="grid grid-cols-7 gap-1.5">
+                                {WEEK_DAYS.map(({ value, short }) => {
+                                    const active = workDays.includes(value);
+                                    const isWeekend = value === 0 || value === 6;
+                                    const h = getHoursForDay(value);
+                                    const isCustom = dayHours[value] !== undefined;
+
+                                    return (
+                                        <div key={value} className="flex flex-col items-center gap-1">
+                                            {/* Toggle do dia */}
+                                            <button
+                                                onClick={() => toggleDay(value)}
+                                                className={`w-full py-1.5 rounded-lg text-[11px] font-black transition-all border-2 ${
+                                                    active
+                                                        ? isWeekend
+                                                            ? 'bg-amber-500 border-amber-500 text-white'
+                                                            : 'bg-blue-600 border-blue-600 text-white'
+                                                        : 'bg-white border-gray-200 text-gray-300 hover:border-gray-300 hover:text-gray-400'
+                                                }`}
+                                            >
+                                                {short}
+                                            </button>
+
+                                            {/* Input de horas — só aparece se o dia está ativo */}
+                                            {active && (
+                                                <div className="w-full flex items-center justify-center relative">
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        max={24}
+                                                        value={h}
+                                                        onChange={(e) => setDayHours(value, Number(e.target.value))}
+                                                        className={`w-full text-center text-[11px] font-bold border rounded-lg py-1 outline-none focus:ring-2 focus:ring-blue-400 transition-all ${
+                                                            isCustom
+                                                                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                                                : 'border-gray-200 text-gray-500'
+                                                        }`}
+                                                    />
+                                                    <span className="absolute right-1.5 text-[9px] text-gray-400 pointer-events-none">h</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="flex items-center justify-between pt-0.5">
                                 <span className="text-[10px] text-gray-400">
                                     {workDays.length} dia{workDays.length !== 1 ? 's' : ''}/semana
                                 </span>
-                                <span className="text-[10px] font-bold text-blue-600">
-                                    {totalWeeklyHours}h semanais
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Presets rápidos */}
-                        <div className="flex gap-2 pt-1">
-                            {[
-                                { label: '5×8h', days: [1,2,3,4,5], hours: 8 },
-                                { label: '5×9h', days: [1,2,3,4,5], hours: 9 },
-                                { label: '6×8h', days: [1,2,3,4,5,6], hours: 8 },
-                                { label: '7×8h', days: [0,1,2,3,4,5,6], hours: 8 },
-                            ].map(preset => {
-                                const active = JSON.stringify(workDays) === JSON.stringify(preset.days) && hoursPerDay === preset.hours;
-                                return (
+                                {Object.keys(dayHours).length > 0 && (
                                     <button
-                                        key={preset.label}
-                                        onClick={() => onUpdate({ workSchedule: { hoursPerDay: preset.hours, workDays: preset.days } })}
-                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
-                                            active ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                                        }`}
+                                        onClick={() => update({ dayHours: {} })}
+                                        className="text-[10px] text-gray-400 hover:text-red-500 underline transition-colors"
                                     >
-                                        {preset.label}
+                                        Uniformizar horas
                                     </button>
-                                );
-                            })}
+                                )}
+                            </div>
                         </div>
                     </div>
 

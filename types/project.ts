@@ -214,8 +214,9 @@ export interface ProjectSchedule {
     useWorkingDays?: boolean;
     autoRollupParentDates?: boolean; // datas de grupo/etapa/subetapa seguem mín/máx das tarefas
     workSchedule?: {
-        hoursPerDay: number;   // horas trabalhadas por dia (1–24)
-        workDays: number[];    // 0=Dom 1=Seg 2=Ter 3=Qua 4=Qui 5=Sex 6=Sáb
+        hoursPerDay: number;              // padrão de horas para todos os dias
+        workDays: number[];               // 0=Dom 1=Seg 2=Ter 3=Qua 4=Qui 5=Sex 6=Sáb
+        dayHours?: Record<number, number>; // override por dia (ex: {5: 7} = sexta com 7h)
     };
     resources?: {
         roles: ResourceRole[];

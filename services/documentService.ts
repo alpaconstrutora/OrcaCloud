@@ -51,6 +51,71 @@ export const documentService = {
 
     let result = (data || []) as OpuraDocument[];
 
+    // SE A CATEGORIA FOR CONTRATOS (juridico), INTEGRA OS CONTRATOS DA TABELA contracts
+    if (!filters?.categoria || filters.categoria === 'juridico') {
+      try {
+        let contractQuery = supabase
+          .from('contracts')
+          .select('id, title, number, contract_type, status, start_date, end_date, signed_contract_url, minuta_versions, responsible_email, created_at, project_id, organization_id');
+
+        if (organizationId) {
+          contractQuery = contractQuery.eq('organization_id', organizationId);
+        }
+        if (filters?.projectId) {
+          contractQuery = contractQuery.eq('project_id', filters.projectId);
+        }
+
+        const { data: contractsData, error: contractsError } = await contractQuery;
+
+        if (!contractsError && contractsData) {
+          const mappedContracts: OpuraDocument[] = contractsData
+            .filter((c) => c.signed_contract_url || (c.minuta_versions && Array.isArray(c.minuta_versions) && c.minuta_versions.length > 0))
+            .map((c) => {
+              const activeMinuta = c.minuta_versions && Array.isArray(c.minuta_versions) && c.minuta_versions.length > 0
+                ? c.minuta_versions[c.minuta_versions.length - 1]
+                : null;
+
+              const fileUrl = c.signed_contract_url || activeMinuta?.url || '';
+
+              return {
+                id: c.id,
+                organization_id: c.organization_id,
+                nome: c.title || `Contrato Nº ${c.number}`,
+                descricao: `Contrato de Serviço cadastrado via Suprimentos (Nº ${c.number})`,
+                categoria: 'juridico',
+                tipo_documento: c.contract_type || 'Contrato de Serviço',
+                status: c.status === 'Ativo' || c.status === 'Assinado' ? 'ativo' : 'arquivado',
+                data_emissao: c.start_date || undefined,
+                data_validade: c.end_date || undefined,
+                alerta_dias_antecedencia: 30,
+                tags: ['Suprimentos', c.number ? `Nº ${c.number}` : ''].filter(Boolean),
+                criado_por: c.responsible_email || 'sistema',
+                created_at: c.created_at || new Date().toISOString(),
+                updated_at: c.created_at || new Date().toISOString(),
+                project_id: c.project_id || undefined,
+                active_version: {
+                  id: `ver-${c.id}`,
+                  document_id: c.id,
+                  version_number: activeMinuta?.v || 1,
+                  storage_path: fileUrl,
+                  tamanho: 0,
+                  mime_type: 'application/pdf',
+                  criado_por: c.responsible_email || 'sistema',
+                  created_at: c.created_at || new Date().toISOString(),
+                },
+              };
+            });
+
+          result = [...result, ...mappedContracts];
+        }
+      } catch (err) {
+        console.error('[DocumentService] Erro ao integrar contratos no Docs:', err);
+      }
+    }
+
+    // Ordena por data de criação de forma descendente
+    result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
     // Busca de texto simples no frontend para compatibilidade inicial (Sem OCR)
     if (filters?.search) {
       const searchLower = filters.search.toLowerCase();
@@ -293,6 +358,12 @@ export const documentService = {
 
   // ─── GERAR LINK DE DOWNLOAD ASSINADO SEGURO ─────────────────
   async generateDownloadUrl(storagePath: string): Promise<string> {
+    if (!storagePath) {
+      throw new Error('Caminho de armazenamento do arquivo é nulo ou indefinido');
+    }
+    if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+      return storagePath;
+    }
     const { data, error } = await supabase.storage
       .from('opura-docs')
       .createSignedUrl(storagePath, 60 * 15); // Link válido por 15 minutos

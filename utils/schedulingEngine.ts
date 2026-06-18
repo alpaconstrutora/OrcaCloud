@@ -885,7 +885,7 @@ export class SchedulingEngine {
                         }
                     });
                 }
-                curr.setDate(curr.getDate() + 1);
+                curr.setUTCDate(curr.getUTCDate() + 1);
             }
         });
 

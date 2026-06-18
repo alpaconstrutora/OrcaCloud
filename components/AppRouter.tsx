@@ -67,6 +67,7 @@ const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
 const ControladoriaModule   = React.lazy(() => import('./ControladoriaModule'));
 const FinancialDashboard    = React.lazy(() => import('./FinancialDashboard'));
+const ContasReceberManager  = React.lazy(() => import('./ContasReceberManager'));
 const MasterDataBrowser     = React.lazy(() => import('./MasterDataBrowser'));
 const ProModule             = React.lazy(() => import('./ProModule'));
 const OfficesModule         = React.lazy(() => import('./OfficesModule'));
@@ -1054,6 +1055,18 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <FinancialDashboard
             organizationId={activeOrganizationId || organizations[0]?.id || ''}
             onNavigate={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    // ── Contas a Receber ───────────────────────────────────────────────────────
+    case 'contas-a-receber':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <ContasReceberManager
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizations={organizations}
+            onOrgChange={(id) => setActiveOrganizationId(id)}
           />
         </React.Suspense>
       );

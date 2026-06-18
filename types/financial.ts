@@ -389,6 +389,51 @@ export interface FinancialTopSupplier {
 }
 
 // ────────────────────────────────────────────────────────────
+// Contas a Receber
+// ────────────────────────────────────────────────────────────
+
+export type ReceivableBusinessStatus =
+    | 'PREVISTO'
+    | 'EMITIDO'
+    | 'ENVIADO'
+    | 'RECEBIDO'
+    | 'PARCIAL'
+    | 'RENEGOCIADO'
+    | 'CANCELADO';
+
+// effective_status inclui 'VENCIDO' (computado na view)
+export type ReceivableEffectiveStatus = ReceivableBusinessStatus | 'VENCIDO';
+
+export interface Receivable {
+    id: string;
+    organization_id: string;
+    source_system: string;
+    reference_id?: string;
+    transaction_date: string;
+    due_date?: string;
+    amount: number;
+    direction: 'CREDIT';
+    description?: string;
+    category?: string;
+    status: InternalTransactionStatus;
+    business_status: ReceivableBusinessStatus;
+    effective_status: ReceivableEffectiveStatus;
+    party_name?: string;
+    party_type?: string;
+    project_id?: string;
+    project_name?: string;
+    cost_center_id?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface InadimplenciaFaixa {
+    faixa: string;
+    count: number;
+    valor: number;
+}
+
+// ────────────────────────────────────────────────────────────
 // Fluxo de Caixa
 // ────────────────────────────────────────────────────────────
 

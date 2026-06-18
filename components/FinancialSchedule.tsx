@@ -3830,19 +3830,15 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     onClose={() => setPredecessorModalTask(null)}
                     onUpdate={(newPreds: Predecessor[]) => {
                         if (predecessorModalTask) {
-                            setSchedule(prev => {
-                                const currentItems = prev.itemSchedules || [];
-                                const taskIdx = currentItems.findIndex(s => s.id === predecessorModalTask);
-                                const updatedSchedules = [...currentItems];
-                                if (taskIdx >= 0) {
-                                    updatedSchedules[taskIdx] = { ...updatedSchedules[taskIdx], predecessors: newPreds };
-                                } else {
-                                    updatedSchedules.push({ id: predecessorModalTask, predecessors: newPreds });
-                                }
-                                const newSchedule = { ...prev, itemSchedules: updatedSchedules };
-                                persistSchedule(newSchedule);
-                                return newSchedule;
-                            });
+                            const currentItems = schedule.itemSchedules || [];
+                            const taskIdx = currentItems.findIndex(s => s.id === predecessorModalTask);
+                            const updatedSchedules = [...currentItems];
+                            if (taskIdx >= 0) {
+                                updatedSchedules[taskIdx] = { ...updatedSchedules[taskIdx], predecessors: newPreds };
+                            } else {
+                                updatedSchedules.push({ id: predecessorModalTask, predecessors: newPreds });
+                            }
+                            handleRecalculate(updatedSchedules, schedule.startDate);
                         }
                     }}
                 />

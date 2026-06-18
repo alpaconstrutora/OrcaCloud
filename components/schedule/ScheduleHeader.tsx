@@ -11,10 +11,12 @@ import {
     ChevronsDownUp,
     Trash2,
     Loader2,
-    ShieldAlert,
     RefreshCw,
     History,
-    Wand2
+    Wand2,
+    MoreHorizontal,
+    Settings,
+    FlaskConical,
 } from 'lucide-react';
 import { ProjectSchedule, ProjectSettings, ItemScheduleDetails } from '../../types';
 import ModernDateInput from '../ModernDateInput';
@@ -92,11 +94,28 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     onOpenVersions,
     planningVersionsCount,
     hasNewerBudgetVersion,
-    onAutoSchedule
+    onAutoSchedule,
 }) => {
+    const [overflowOpen, setOverflowOpen] = React.useState(false);
+    const overflowRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (!overflowOpen) return;
+        const handler = (e: MouseEvent) => {
+            if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+                setOverflowOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [overflowOpen]);
+
+    const closeOverflow = () => setOverflowOpen(false);
+
     return (
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex flex-col gap-1">
+        <div className="bg-white px-5 py-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-3">
+            {/* ── Left: Title + Project selector ── */}
+            <div className="flex flex-col gap-1 shrink-0">
                 <div className="flex items-center gap-3">
                     {onBack && (
                         <button
@@ -107,12 +126,12 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                             <ArrowLeft className="w-5 h-5 group-hover/back:-translate-x-1 transition-transform" />
                         </button>
                     )}
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-                        <Calendar className="w-6 h-6 text-blue-600" />
+                    <h1 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-blue-600" />
                         Planejamento Físico-Financeiro
                     </h1>
                 </div>
-                <div className="flex items-center gap-2 mt-1 relative">
+                <div className="flex items-center gap-2 mt-0.5 relative">
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Obra:</span>
                     <div className="relative">
                         <button
@@ -122,7 +141,6 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                             {settings.name || 'Selecionar Obra'}
                             <ChevronRight className={`w-3 h-3 transition-transform ${isProjectSelectorOpen ? 'rotate-90' : ''}`} />
                         </button>
-
                         {isProjectSelectorOpen && (
                             <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                                 <div className="px-3 py-2 border-b border-gray-50 mb-1">
@@ -132,10 +150,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                     {projects.filter(p => p.settings?.classification === 'ORCAMENTO' || p.settings?.classification === 'COST_ESTIMATION').map((p) => (
                                         <button
                                             key={p.id}
-                                            onClick={() => {
-                                                onLoadProject(p.id, 'schedule');
-                                                setIsProjectSelectorOpen(false);
-                                            }}
+                                            onClick={() => { onLoadProject(p.id, 'schedule'); setIsProjectSelectorOpen(false); }}
                                             className={`w-full text-left px-4 py-2 text-xs font-bold hover:bg-gray-50 flex items-center justify-between group ${p.id === settings.id ? 'text-blue-600 bg-blue-50/50' : 'text-gray-600'}`}
                                         >
                                             <span className="truncate">{p.name}</span>
@@ -154,8 +169,10 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                 </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-                {/* ── Group 1: View Mode ── */}
+            {/* ── Right: Controls ── */}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+
+                {/* Group 1: View Mode */}
                 <div className="flex bg-gray-100/80 p-0.5 rounded-lg border border-gray-200/60">
                     {([
                         { key: 'table', label: 'Tabela' },
@@ -167,29 +184,23 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                         <button
                             key={key}
                             onClick={() => setViewMode(key)}
-                            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === key
-                                ? 'bg-white text-gray-900 shadow-sm'
-                                : 'text-gray-500 hover:text-gray-700'
-                                }`}
+                            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             {label}
                         </button>
                     ))}
                 </div>
 
-                {/* ── Group 2: Time Scale (only table/gantt) ── */}
+                {/* Group 2: Time Scale */}
                 {(viewMode === 'table' || viewMode === 'gantt') && (
                     <>
-                        <div className="h-5 w-px bg-gray-200"></div>
+                        <div className="h-5 w-px bg-gray-200" />
                         <div className="flex bg-gray-100/80 p-0.5 rounded-lg border border-gray-200/60">
                             {(['day', 'week', 'month', 'year'] as const).map((scale) => (
                                 <button
                                     key={scale}
                                     onClick={() => setTimeScale(scale)}
-                                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all ${timeScale === scale
-                                        ? 'bg-white text-gray-900 shadow-sm'
-                                        : 'text-gray-500 hover:text-gray-700'
-                                        }`}
+                                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all ${timeScale === scale ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                 >
                                     {{ day: 'Dia', week: 'Sem', month: 'Mês', year: 'Ano' }[scale]}
                                 </button>
@@ -198,144 +209,70 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     </>
                 )}
 
-                {/* ── Group 3: Actions (Baseline, Config, Nivelar) ── */}
-                <div className="h-5 w-px bg-gray-200"></div>
-                <div className="flex items-center gap-1 bg-gray-50/80 p-1 rounded-lg border border-gray-200/40">
-                    <button
-                        onClick={() => setIsBaselineModalOpen(true)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-all ${schedule.activeBaselineId
-                            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                            : 'text-gray-500 hover:bg-white hover:text-gray-700 hover:shadow-sm'
-                            }`}
-                        title="Gerenciar Baselines"
-                    >
-                        <TrendingUp className="w-3.5 h-3.5" />
-                        {schedule.activeBaselineId
-                            ? schedule.baselines?.find(b => b.id === schedule.activeBaselineId)?.name || 'Baseline'
-                            : 'Baseline'}
-                    </button>
-
-                    {/* What-If Simulation Toggle */}
-                    <div className="h-4 w-px bg-gray-300 mx-1"></div>
-                    <button
-                        onClick={handleToggleSimulation}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-all ${isSimulationMode
-                            ? 'bg-purple-100 text-purple-700 border border-purple-300 hover:bg-purple-200 shadow-sm animate-pulse'
-                            : 'text-gray-500 hover:bg-white hover:text-gray-700 hover:shadow-sm'
-                            }`}
-                        title="Modo Simulação: Arraste as barras para ver o impacto no prazo final"
-                    >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                        </svg>
-                        {isSimulationMode ? 'Simulando...' : 'Modo What-If'}
-                    </button>
-                    <div className="h-4 w-px bg-gray-300 mx-1"></div>
-
-                    {/* Botão de Exportar PDF */}
-                    <button
-                        onClick={handleExportPDF}
-                        disabled={isExportingPDF}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-all shadow-sm border ${isExportingPDF
-                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:text-gray-900'
-                            }`}
-                        title="Exportar Relatório PDF"
-                    >
-                        {isExportingPDF ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                        ) : (
-                            <FileDown className="w-3.5 h-3.5 text-gray-500" />
-                        )}
-                        Exportar PDF
-                    </button>
-                    <div className="h-4 w-px bg-gray-300 mx-1"></div>
-
-                    <button
-                        onClick={() => setIsConfigModalOpen(true)}
-                        className="p-1.5 text-gray-400 hover:bg-white hover:text-gray-600 hover:shadow-sm rounded-md transition-all"
-                        title="Configurações"
-                    >
-                        <TrendingUp className="w-3.5 h-3.5 rotate-90" />
-                    </button>
-
-                    <button
-                        onClick={handleLevelResources}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-indigo-600 hover:bg-indigo-50 hover:shadow-sm rounded-md text-[11px] font-semibold transition-all"
-                        title="Nivelamento Automático de Recursos"
-                    >
-                        <Users className="w-3.5 h-3.5" />
-                        Nivelar
-                    </button>
-
-                    <div className="h-4 w-px bg-gray-300 mx-1"></div>
+                {/* Group 3: Primary Actions */}
+                <div className="h-5 w-px bg-gray-200" />
+                <div className="flex items-center gap-1">
                     <button
                         onClick={onAutoSchedule}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-emerald-700 hover:bg-emerald-50 hover:shadow-sm rounded-md text-[11px] font-semibold transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-sm"
                         title="Recalcula todas as datas com base em predecessores e duração"
                     >
                         <Wand2 className="w-3.5 h-3.5" />
                         Auto Programar
                     </button>
 
-                    {/* Auto Equipe (bulk toggle) */}
                     <button
-                        onClick={allAuto ? handleDisableAutoAllItems : handleApplyAutoAllItems}
-                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-all ${allAuto
-                            ? 'bg-green-100 text-green-700 hover:bg-green-200 border-2 border-green-200'
-                            : autoCount > 0
-                                ? 'bg-green-50 text-green-600 hover:bg-green-100 border border-green-100'
-                                : 'text-gray-500 hover:bg-white hover:text-gray-700 hover:shadow-sm'
-                            }`}
-                        title={allAuto ? 'Desativar cálculo automático em todos' : 'Ativar duração automática por equipe em todos os itens'}
+                        onClick={handleLevelResources}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-indigo-600 hover:bg-indigo-50 border border-indigo-100 rounded-lg text-[11px] font-bold transition-all"
+                        title="Nivelamento Automático de Recursos"
                     >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>
-                        Auto Equipe
-                        {budgetLength > 0 && <span className="text-[9px] bg-green-200 text-green-800 px-1 rounded-full">{autoCount}/{budgetLength}</span>}
+                        <Users className="w-3.5 h-3.5" />
+                        Nivelar
                     </button>
                 </div>
 
-                {/* ── Sync Button ── */}
-                <div className="h-5 w-px bg-gray-200"></div>
-                <button
-                    onClick={onSyncBudget}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border ${
-                        syncDiffCount > 0
-                            ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 shadow-sm'
-                            : 'bg-gray-50/80 text-gray-400 border-gray-200/40 hover:bg-white hover:text-gray-600 hover:shadow-sm'
-                    }`}
-                    title={syncDiffCount > 0 ? `${syncDiffCount} alteração(ões) no orçamento pendentes` : 'Planejamento sincronizado com o orçamento'}
-                >
-                    <RefreshCw className={`w-3.5 h-3.5 ${syncDiffCount > 0 ? 'text-amber-500' : ''}`} />
-                    Sincronizar
-                    {syncDiffCount > 0 && (
-                        <span className="bg-amber-200 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
-                            {syncDiffCount}
-                        </span>
-                    )}
-                </button>
+                {/* Group 4: Sync + Versions (with badges) */}
+                <div className="h-5 w-px bg-gray-200" />
+                <div className="flex items-center gap-1">
+                    <button
+                        onClick={onSyncBudget}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border ${
+                            syncDiffCount > 0
+                                ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 shadow-sm'
+                                : 'text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'
+                        }`}
+                        title={syncDiffCount > 0 ? `${syncDiffCount} alteração(ões) no orçamento pendentes` : 'Planejamento sincronizado com o orçamento'}
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${syncDiffCount > 0 ? 'text-amber-500' : ''}`} />
+                        Sincronizar
+                        {syncDiffCount > 0 && (
+                            <span className="bg-amber-200 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
+                                {syncDiffCount}
+                            </span>
+                        )}
+                    </button>
 
-                {/* ── Versions Button ── */}
-                <button
-                    onClick={onOpenVersions}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border ${
-                        hasNewerBudgetVersion
-                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 shadow-sm'
-                            : 'bg-gray-50/80 text-gray-400 border-gray-200/40 hover:bg-white hover:text-gray-600 hover:shadow-sm'
-                    }`}
-                    title="Versões do planejamento (orçamento × planejamento)"
-                >
-                    <History className={`w-3.5 h-3.5 ${hasNewerBudgetVersion ? 'text-indigo-500' : ''}`} />
-                    Versões
-                    {planningVersionsCount > 0 && (
-                        <span className="bg-indigo-200 text-indigo-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
-                            {planningVersionsCount}
-                        </span>
-                    )}
-                </button>
+                    <button
+                        onClick={onOpenVersions}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border ${
+                            hasNewerBudgetVersion
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 shadow-sm'
+                                : 'text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'
+                        }`}
+                        title="Versões do planejamento"
+                    >
+                        <History className={`w-3.5 h-3.5 ${hasNewerBudgetVersion ? 'text-indigo-500' : ''}`} />
+                        Versões
+                        {planningVersionsCount > 0 && (
+                            <span className="bg-indigo-200 text-indigo-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
+                                {planningVersionsCount}
+                            </span>
+                        )}
+                    </button>
+                </div>
 
-                {/* ── Group 4: Dates ── */}
-                <div className="h-5 w-px bg-gray-200"></div>
+                {/* Group 5: Dates */}
+                <div className="h-5 w-px bg-gray-200" />
                 <div className="flex items-center gap-2">
                     <ModernDateInput
                         label="Início"
@@ -348,31 +285,102 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                         value={schedule.endDate ? schedule.endDate.split('T')[0] : ''}
                         onChange={(val) => {
                             const next = { ...schedule, endDate: val };
-                            // Sync settings.endDate too so the sync effect doesn't revert the change.
                             onUpdateSettings({ ...settings, schedule: next, endDate: val });
                         }}
                         className="w-36"
                     />
                 </div>
 
-                {/* ── Group 5: Utility (Expand/Collapse, Clear) ── */}
-                <div className="h-5 w-px bg-gray-200"></div>
-                <div className="flex items-center gap-0.5">
+                {/* Group 6: Utility + Overflow */}
+                <div className="h-5 w-px bg-gray-200" />
+                <div className="flex items-center gap-1">
                     <button
                         onClick={allExpanded ? handleCollapseAll : handleExpandAll}
                         title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:border-slate-300 bg-white transition-all"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 bg-white transition-all"
                     >
                         {allExpanded ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
                         {allExpanded ? 'Recolher' : 'Expandir'}
                     </button>
-                    <button
-                        onClick={onClearAll}
-                        className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"
-                        title="Limpar Tudo"
-                    >
-                        <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+
+                    {/* Overflow menu ··· */}
+                    <div className="relative" ref={overflowRef}>
+                        <button
+                            onClick={() => setOverflowOpen(v => !v)}
+                            className={`p-1.5 rounded-lg border transition-all ${overflowOpen ? 'bg-gray-100 border-gray-300 text-gray-700' : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}
+                            title="Mais opções"
+                        >
+                            <MoreHorizontal className="w-4 h-4" />
+                        </button>
+
+                        {overflowOpen && (
+                            <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                                {/* Baseline */}
+                                <button
+                                    onClick={() => { setIsBaselineModalOpen(true); closeOverflow(); }}
+                                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold transition-colors ${schedule.activeBaselineId ? 'text-blue-700 bg-blue-50/60' : 'text-gray-600 hover:bg-gray-50'}`}
+                                >
+                                    <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                                    {schedule.activeBaselineId
+                                        ? schedule.baselines?.find(b => b.id === schedule.activeBaselineId)?.name || 'Baseline'
+                                        : 'Baseline'}
+                                    {schedule.activeBaselineId && <span className="ml-auto text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-bold">ativo</span>}
+                                </button>
+
+                                {/* What-If */}
+                                <button
+                                    onClick={() => { handleToggleSimulation(); closeOverflow(); }}
+                                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold transition-colors ${isSimulationMode ? 'text-purple-700 bg-purple-50/60' : 'text-gray-600 hover:bg-gray-50'}`}
+                                >
+                                    <FlaskConical className="w-3.5 h-3.5 shrink-0" />
+                                    Modo What-If
+                                    {isSimulationMode && <span className="ml-auto text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-bold">ativo</span>}
+                                </button>
+
+                                {/* Exportar PDF */}
+                                <button
+                                    onClick={() => { handleExportPDF(); closeOverflow(); }}
+                                    disabled={isExportingPDF}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isExportingPDF ? <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-blue-500" /> : <FileDown className="w-3.5 h-3.5 shrink-0" />}
+                                    Exportar PDF
+                                </button>
+
+                                <div className="h-px bg-gray-100 my-1 mx-3" />
+
+                                {/* Auto Equipe */}
+                                <button
+                                    onClick={() => { (allAuto ? handleDisableAutoAllItems : handleApplyAutoAllItems)(); closeOverflow(); }}
+                                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold transition-colors ${allAuto ? 'text-green-700 bg-green-50/60' : 'text-gray-600 hover:bg-gray-50'}`}
+                                >
+                                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>
+                                    Auto Equipe
+                                    {budgetLength > 0 && <span className="ml-auto text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">{autoCount}/{budgetLength}</span>}
+                                </button>
+
+                                {/* Configurações */}
+                                <button
+                                    onClick={() => { setIsConfigModalOpen(true); closeOverflow(); }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                                >
+                                    <Settings className="w-3.5 h-3.5 shrink-0" />
+                                    Configurações
+                                </button>
+
+                                <div className="h-px bg-gray-100 my-1 mx-3" />
+
+                                {/* Limpar tudo */}
+                                <button
+                                    onClick={() => { onClearAll(); closeOverflow(); }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                                    Limpar tudo
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

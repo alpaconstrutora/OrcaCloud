@@ -259,7 +259,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewLabor', 'rh');
     } else if (activeView === 'pro-dashboard') {
       allowed = isModuleAllowed('canViewPro', 'pro');
-    } else if (activeView === 'offices-dashboard') {
+    } else if (activeView === 'offices' || activeView === 'offices-dashboard' || activeView.startsWith('offices-')) {
       allowed = isModuleAllowed('canViewOffices', 'offices');
     } else if (['sales', 'rentals', 'gestao-vendas'].includes(activeView)) {
       allowed = isModuleAllowed('canViewSales', 'crm');
@@ -456,6 +456,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         />
       );
 
+    case 'offices':
     case 'offices-dashboard':
     case 'offices-crm':
     case 'offices-especificador':

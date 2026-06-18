@@ -36,7 +36,9 @@ class CalendarEngine {
     }
 
     isWorkingDay(date: Date): boolean {
-        const day = date.getDay();
+        // Use UTC methods — dates in the engine are always ISO strings parsed as UTC midnight.
+        // Local-time methods (getDay/getDate) shift by timezone offset and give wrong weekday.
+        const day = date.getUTCDay();
         if (!this.workDays.has(day)) return false;
         if (this.holidays.has(date.toISOString().split('T')[0])) return false;
         return true;
@@ -45,6 +47,7 @@ class CalendarEngine {
     /**
      * Add working days to a date. Handles positive and negative values.
      * Duration of 0 returns the same date.
+     * Uses UTC arithmetic to avoid timezone-shift bugs (e.g. UTC-3: getDate() lags 1 day).
      */
     addWorkingDays(date: Date, days: number, useWorkingDays: boolean): Date {
         const result = new Date(date);
@@ -54,7 +57,7 @@ class CalendarEngine {
         let remaining = Math.abs(days);
 
         while (remaining > 0) {
-            result.setDate(result.getDate() + direction);
+            result.setUTCDate(result.getUTCDate() + direction);
             if (!useWorkingDays || this.isWorkingDay(result)) {
                 remaining--;
             }
@@ -65,19 +68,21 @@ class CalendarEngine {
     /**
      * Calculate the number of working days between two dates.
      * Returns positive if d2 > d1, negative if d2 < d1, 0 if same.
+     * Uses UTC arithmetic to avoid timezone-shift bugs.
      */
     diffWorkingDays(d1: Date, d2: Date, useWorkingDays: boolean): number {
         const start = new Date(Math.min(d1.getTime(), d2.getTime()));
         const end = new Date(Math.max(d1.getTime(), d2.getTime()));
         const sign = d2.getTime() >= d1.getTime() ? 1 : -1;
 
-        start.setHours(0, 0, 0, 0);
-        end.setHours(0, 0, 0, 0);
+        // Normalise to UTC midnight to avoid partial-day counting
+        start.setUTCHours(0, 0, 0, 0);
+        end.setUTCHours(0, 0, 0, 0);
 
         let count = 0;
         const curr = new Date(start);
         while (curr < end) {
-            curr.setDate(curr.getDate() + 1);
+            curr.setUTCDate(curr.getUTCDate() + 1);
             if (!useWorkingDays || this.isWorkingDay(curr)) {
                 count++;
             }

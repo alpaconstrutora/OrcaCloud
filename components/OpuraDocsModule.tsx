@@ -55,7 +55,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   projects,
   currentProfile,
 }) => {
-  const { companies } = useStore();
+  const { companies = [] } = useStore();
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('all');
   const [activeTab, setActiveTab] = React.useState<OpuraDocumentCategoria>('engenharia');
   const [documents, setDocuments] = React.useState<OpuraDocument[]>([]);
@@ -141,21 +141,25 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   // Filtrar projetos/obras (classification === 'OBRA')
   const obras = React.useMemo(() => {
+    if (!projects || !Array.isArray(projects)) return [];
     return projects.filter(p => 
-      (p.settings?.classification === 'OBRA' || !p.settings?.classification) &&
+      p && (p.settings?.classification === 'OBRA' || !p.settings?.classification) &&
       p.name?.toLowerCase() !== 'gestão comercial'
     );
   }, [projects]);
 
   // Filtrar documentos localmente por busca simples
   const filteredDocuments = React.useMemo(() => {
+    if (!documents || !Array.isArray(documents)) return [];
     if (!searchQuery) return documents;
     const query = searchQuery.toLowerCase();
     return documents.filter(doc => 
-      doc.nome.toLowerCase().includes(query) ||
-      (doc.descricao && doc.descricao.toLowerCase().includes(query)) ||
-      doc.tipo_documento.toLowerCase().includes(query) ||
-      doc.tags.some(tag => tag.toLowerCase().includes(query))
+      doc && (
+        (doc.nome?.toLowerCase() || '').includes(query) ||
+        (doc.descricao?.toLowerCase() || '').includes(query) ||
+        (doc.tipo_documento?.toLowerCase() || '').includes(query) ||
+        (doc.tags && Array.isArray(doc.tags) && doc.tags.some(tag => tag?.toLowerCase().includes(query)))
+      )
     );
   }, [documents, searchQuery]);
 
@@ -308,7 +312,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   };
 
   // Renderizador de Ícone com base no MIME-type/Extensão
-  const renderFileIcon = (mime: string, name: string) => {
+  const renderFileIcon = (mime: string, name?: string) => {
+    if (!name) return <FileText className="w-8 h-8 text-gray-400" />;
     const ext = name.split('.').pop()?.toLowerCase();
     if (ext === 'pdf') return <FileText className="w-8 h-8 text-rose-500" />;
     if (ext === 'xlsx' || ext === 'xls') return <FileSpreadsheet className="w-8 h-8 text-emerald-600" />;
@@ -852,11 +857,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             V{ver.version_number} {isActive && '(Atual)'}
                           </span>
                           <div>
-                            <p className="text-sm font-bold text-slate-700 truncate max-w-xs md:max-w-md" title={ver.storage_path.split('/').pop()}>
-                              {ver.storage_path.split('/').pop()?.substring(37)} {/* Remove UUID do nome */}
+                            <p className="text-sm font-bold text-slate-700 truncate max-w-xs md:max-w-md" title={ver.storage_path ? ver.storage_path.split('/').pop() : ''}>
+                              {ver.storage_path ? (ver.storage_path.split('/').pop()?.substring(37) || '') : ''} {/* Remove UUID do nome */}
                             </p>
                             <p className="text-xs text-slate-400 font-semibold">
-                              Por {ver.criado_por} em {new Date(ver.created_at).toLocaleString()}
+                              Por {ver.criado_por || 'Sistema'} em {ver.created_at ? new Date(ver.created_at).toLocaleString() : ''}
                             </p>
                           </div>
                         </div>

@@ -316,7 +316,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['project-financial','controladoria','fiscal-nfe','automation','compliance-dashboard','opura-cno'];
+  const financeiroViews = ['financial-dashboard','project-financial','controladoria','fiscal-nfe','automation','compliance-dashboard','opura-cno'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
@@ -713,6 +713,7 @@ const Layout: React.FC<LayoutProps> = ({
                   >
                     {(mod.financeiro || isDev) && (
                       <>
+                        <DropdownItem id="financial-dashboard" label="Dashboard" icon={LayoutDashboard} />
                         <DropdownItem id="project-financial" label="Financeiro" icon={DollarSign} />
                         <DropdownItem id="controladoria" label="Controladoria" icon={BarChart3} />
                       </>

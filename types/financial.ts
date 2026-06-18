@@ -367,6 +367,28 @@ export interface WIPLine {
 }
 
 // ────────────────────────────────────────────────────────────
+// Dashboard Executivo Financeiro
+// ────────────────────────────────────────────────────────────
+
+export interface FinancialKPIs {
+    a_pagar: number;
+    pago: number;
+    a_receber: number;
+    recebido: number;
+    resultado_periodo: number;
+    boletos_vencidos_count: number;
+    boletos_vencidos_valor: number;
+}
+
+export interface FinancialTopSupplier {
+    supplier_id: string | null;
+    supplier_name: string;
+    total_valor: number;
+    count_boletos: number;
+    pct: number;
+}
+
+// ────────────────────────────────────────────────────────────
 // Fluxo de Caixa
 // ────────────────────────────────────────────────────────────
 

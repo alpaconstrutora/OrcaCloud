@@ -66,6 +66,7 @@ const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplate
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
 const ControladoriaModule   = React.lazy(() => import('./ControladoriaModule'));
+const FinancialDashboard    = React.lazy(() => import('./FinancialDashboard'));
 const MasterDataBrowser     = React.lazy(() => import('./MasterDataBrowser'));
 const ProModule             = React.lazy(() => import('./ProModule'));
 const OfficesModule         = React.lazy(() => import('./OfficesModule'));
@@ -1044,6 +1045,17 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           organizationId={activeOrganizationId || organizations[0]?.id || ''}
           onNavigate={setActiveView}
         />
+      );
+
+    // ── Dashboard Executivo Financeiro ─────────────────────────────────────────
+    case 'financial-dashboard':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <FinancialDashboard
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            onNavigate={setActiveView}
+          />
+        </React.Suspense>
       );
 
     // ── Financeiro — DRE & Fluxo de Caixa (redirecionam para Controladoria) ────

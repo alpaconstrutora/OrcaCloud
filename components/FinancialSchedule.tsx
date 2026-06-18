@@ -1308,8 +1308,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     ): ItemScheduleDetails[] => {
         const expanded = expandGroupPredecessors(items, hierarchyRef.current);
         // Always inject workDays from current schedule so every call site respects the work schedule
+        // args[8] = workDays (the 10th param of calculate, minus the leading 'tasks' which is not in args)
         const workDays = scheduleRef.current.workSchedule?.workDays ?? [1, 2, 3, 4, 5];
-        (args as unknown[])[9] = workDays;
+        (args as unknown[])[8] = workDays;
         const calculated = SchedulingEngine.calculate(expanded, ...args);
         // Restore original predecessors AND constraint types: group-derived constraints (SNET/FNLT)
         // are transient helpers for the CPM calculation only and must never be persisted.

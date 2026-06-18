@@ -62,6 +62,12 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
         onUpdate(predecessors.filter(p => p.id !== predId));
     };
 
+    const handleUpdatePred = (predId: string, field: 'type' | 'lag', value: string | number) => {
+        onUpdate(predecessors.map(p =>
+            p.id === predId ? { ...p, [field]: field === 'lag' ? Number(value) : value } : p
+        ));
+    };
+
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-200">
@@ -83,17 +89,37 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                                     const task = allTasks.find(t => t.id === p.id);
                                     const typeLabel: Record<string, string> = { group: 'Grupo', phase: 'Etapa', subphase: 'Subetapa', item: 'Item' };
                                     return (
-                                        <div key={p.id} className="flex items-center justify-between p-3 bg-blue-50 border border-blue-100 rounded-xl">
-                                            <div className="flex-1">
+                                        <div key={p.id} className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                                            <div className="flex-1 min-w-0">
                                                 <div className="text-xs font-bold text-gray-800 flex items-center gap-2">
-                                                    <span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-[10px]">{idToUid[p.id] || (task?.nodeType ? typeLabel[task.nodeType] : '—')}</span>
-                                                    {task?.name || 'Item não encontrado'}
+                                                    <span className="shrink-0 bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-[10px]">{idToUid[p.id] || (task?.nodeType ? typeLabel[task.nodeType] : '—')}</span>
+                                                    <span className="truncate">{task?.name || 'Item não encontrado'}</span>
                                                 </div>
-                                                <div className="text-[10px] text-gray-500 mt-0.5">Tipo: {p.type} • Lag: {p.lag} dias</div>
                                             </div>
-                                            <button onClick={() => handleRemove(p.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <select
+                                                    value={p.type}
+                                                    onChange={(e) => handleUpdatePred(p.id, 'type', e.target.value)}
+                                                    className="text-[10px] font-bold border border-blue-200 bg-white rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                                >
+                                                    <option value="FS">FS</option>
+                                                    <option value="SS">SS</option>
+                                                    <option value="FF">FF</option>
+                                                    <option value="SF">SF</option>
+                                                </select>
+                                                <div className="flex items-center gap-1">
+                                                    <input
+                                                        type="number"
+                                                        value={p.lag}
+                                                        onChange={(e) => handleUpdatePred(p.id, 'lag', e.target.value)}
+                                                        className="w-14 text-[10px] font-bold border border-blue-200 bg-white rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                                                    />
+                                                    <span className="text-[9px] text-gray-400 font-medium">lag</span>
+                                                </div>
+                                                <button onClick={() => handleRemove(p.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </div>
                                     );
                                 })}

@@ -102,10 +102,10 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                                                     onChange={(e) => handleUpdatePred(p.id, 'type', e.target.value)}
                                                     className="text-[10px] font-bold border border-blue-200 bg-white rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                                                 >
-                                                    <option value="FS">Final-Início (FI)</option>
+                                                    <option value="FS">Termina-Início (TI)</option>
                                                     <option value="SS">Início-Início (II)</option>
-                                                    <option value="FF">Final-Final (FF)</option>
-                                                    <option value="SF">Início-Final (IF)</option>
+                                                    <option value="FF">Termina-Termina (TT)</option>
+                                                    <option value="SF">Início-Termina (IT)</option>
                                                 </select>
                                                 <div className="flex items-center gap-1">
                                                     <input
@@ -157,10 +157,10 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                                         </div>
                                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <select id={`type-${task.id}`} className="text-[10px] font-bold border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500" defaultValue="FS">
-                                                <option value="FS">Final-Início (FI)</option>
+                                                <option value="FS">Termina-Início (TI)</option>
                                                 <option value="SS">Início-Início (II)</option>
-                                                <option value="FF">Final-Final (FF)</option>
-                                                <option value="SF">Início-Final (IF)</option>
+                                                <option value="FF">Termina-Termina (TT)</option>
+                                                <option value="SF">Início-Termina (IT)</option>
                                             </select>
                                             <input id={`lag-${task.id}`} type="number" className="w-12 text-[10px] font-bold border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500" defaultValue="0" />
                                             <button

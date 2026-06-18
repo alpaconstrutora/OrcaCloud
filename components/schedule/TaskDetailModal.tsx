@@ -36,10 +36,10 @@ const ConstraintLabels: Record<string, string> = {
 };
 
 const DependencyLabels: Record<string, string> = {
-    FS: 'Final-Início (FI)',
+    FS: 'Termina-Início (TI)',
     SS: 'Início-Início (II)',
-    FF: 'Final-Final (FF)',
-    SF: 'Início-Final (IF)',
+    FF: 'Termina-Termina (TT)',
+    SF: 'Início-Termina (IT)',
 };
 
 interface FieldProps { label: string; value: React.ReactNode; className?: string }

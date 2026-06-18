@@ -250,8 +250,8 @@ class CPMEngine {
                     case ConstraintType.SNET: // Start No Earlier Than
                         if (earlyStart < cDate) earlyStart = cDate;
                         break;
-                    case ConstraintType.MSO: // Must Start On
-                        earlyStart = cDate;
+                    case ConstraintType.MSO: // Must Start On — predecessors can still push later
+                        if (earlyStart < cDate) earlyStart = cDate;
                         break;
                     case ConstraintType.FNET: // Finish No Earlier Than
                         const minES = calendar.addWorkingDays(cDate, -(task.duration || 0), useWorkingDays);

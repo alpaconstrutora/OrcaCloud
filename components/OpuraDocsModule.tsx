@@ -115,7 +115,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   // Carregar lista de documentos
   const fetchDocs = async () => {
-    if (!activeOrganizationId) return;
+    if (!activeOrganizationId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const projFilter = selectedProjectId === 'all' ? undefined : selectedProjectId;
@@ -439,6 +442,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             <p className="text-xs font-black uppercase tracking-wider text-slate-400">Carregando Acervo...</p>
+          </div>
+        ) : !activeOrganizationId ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+            <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
+              <FolderOpen className="w-12 h-12" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-700">Nenhuma Organização Selecionada</h3>
+              <p className="text-slate-400 text-sm mt-1 max-w-sm">
+                Selecione uma organização no menu superior para visualizar os documentos.
+              </p>
+            </div>
           </div>
         ) : filteredDocuments.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">

@@ -28,14 +28,16 @@ import { DependencyType, ItemScheduleDetails, ConstraintType, Baseline, ReplanMo
 
 class CalendarEngine {
     private holidays: Set<string>;
+    private workDays: Set<number>; // 0=Dom...6=Sáb
 
-    constructor(holidays: string[] = []) {
+    constructor(holidays: string[] = [], workDays: number[] = [1, 2, 3, 4, 5]) {
         this.holidays = new Set(holidays);
+        this.workDays = new Set(workDays.length > 0 ? workDays : [1, 2, 3, 4, 5]);
     }
 
     isWorkingDay(date: Date): boolean {
         const day = date.getDay();
-        if (day === 0 || day === 6) return false;
+        if (!this.workDays.has(day)) return false;
         if (this.holidays.has(date.toISOString().split('T')[0])) return false;
         return true;
     }
@@ -679,11 +681,12 @@ export class SchedulingEngine {
         roles: ResourceRole[] = [],
         itemQuantities?: Map<string, number>,
         workers: ResourceWorker[] = [],
-        teams: ResourceTeam[] = []
+        teams: ResourceTeam[] = [],
+        workDays: number[] = [1, 2, 3, 4, 5]
     ): ItemScheduleDetails[] {
         if (!tasks.length) return [];
 
-        const calendar = new CalendarEngine();
+        const calendar = new CalendarEngine([], workDays);
 
         // 1. Initialize task map
         const taskMap = new Map<string, ItemScheduleDetails>(

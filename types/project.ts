@@ -213,6 +213,10 @@ export interface ProjectSchedule {
     replanMode?: ReplanMode;
     useWorkingDays?: boolean;
     autoRollupParentDates?: boolean; // datas de grupo/etapa/subetapa seguem mín/máx das tarefas
+    workSchedule?: {
+        hoursPerDay: number;   // horas trabalhadas por dia (1–24)
+        workDays: number[];    // 0=Dom 1=Seg 2=Ter 3=Qua 4=Qui 5=Sex 6=Sáb
+    };
     resources?: {
         roles: ResourceRole[];
         workers: ResourceWorker[];

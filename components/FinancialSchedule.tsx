@@ -1733,7 +1733,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     prev.resources?.roles || [],
                     itemQuantities,
                     prev.resources?.workers || [],
-                    prev.resources?.teams || []
+                    prev.resources?.teams || [],
+                    prev.workSchedule?.workDays ?? [1, 2, 3, 4, 5]
                 );
 
                 const newSchedule = { ...prev, startDate: projectStart, itemSchedules: calculated };

@@ -2,6 +2,7 @@ export interface MeasureProject {
   id: string;
   user_id: string;
   orcamento_id: string | null;
+  associated_project_id: string | null;
   nome: string;
   status: 'RASCUNHO' | 'CONCLUIDO' | 'ARQUIVADO';
   created_at: string;

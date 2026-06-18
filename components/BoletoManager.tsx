@@ -537,7 +537,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                     <div className="flex items-center gap-2 min-w-0">
                                         <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                         <span className="text-sm font-bold text-gray-900 truncate">
-                                            {b.banco_nome ?? 'Banco desconhecido'}
+                                            {b.supplier_id
+                                                ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
+                                                : (b.beneficiario_nome ?? b.documento_nome ?? 'Beneficiário desconhecido')}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -553,9 +555,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 </div>
 
                                 <p className="text-xs text-gray-500 mb-3 truncate">
-                                    {b.supplier_id
-                                        ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
-                                        : (b.beneficiario_nome ?? b.documento_nome)}
+                                    {b.banco_nome ?? 'Banco desconhecido'}
                                 </p>
 
                                 <div className="flex items-end justify-between">

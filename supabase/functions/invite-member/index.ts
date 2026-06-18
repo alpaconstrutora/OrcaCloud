@@ -100,10 +100,19 @@ serve(async (req: Request) => {
                             return json({ error: reinviteError.message }, 422);
                         }
 
+                        await adminClient.from('organization_members').upsert(
+                            { organization_id: organizationId, email: email.toLowerCase(), role },
+                            { onConflict: 'organization_id,email' }
+                        );
+
                         return json({ success: true });
                     }
 
-                    // User confirmed — active account
+                    // User confirmed — ensure membership exists (idempotent)
+                    await adminClient.from('organization_members').upsert(
+                        { organization_id: organizationId, email: email.toLowerCase(), role },
+                        { onConflict: 'organization_id,email' }
+                    );
                     return json({ success: true, alreadyConfirmed: true });
                 }
 
@@ -112,6 +121,12 @@ serve(async (req: Request) => {
 
             return json({ error: inviteError.message }, 422);
         }
+
+        // Pre-create the membership so the user can log in immediately after accepting the invite
+        await adminClient.from('organization_members').upsert(
+            { organization_id: organizationId, email: email.toLowerCase(), role },
+            { onConflict: 'organization_id,email' }
+        );
 
         return json({ success: true });
     } catch (err: unknown) {

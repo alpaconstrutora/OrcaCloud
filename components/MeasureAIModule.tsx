@@ -6,13 +6,15 @@ import {
 } from 'lucide-react';
 import { measureService } from '../services/measureService';
 import { proService } from '../services/proService';
+import { projectService } from '../services/projectService';
 import {
   MeasureProject,
   MeasureFile,
   MeasureLayer,
   MeasureLibraryItem,
   MeasureShape,
-  Point2D
+  Point2D,
+  BudgetEntry
 } from '../types';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -42,6 +44,10 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
   const [newProjectName, setNewProjectName] = useState('');
   const [orcamentos, setOrcamentos] = useState<any[]>([]);
   const [selectedOrcamentoId, setSelectedOrcamentoId] = useState<string>('');
+  const [engineeringProjects, setEngineeringProjects] = useState<any[]>([]);
+  const [selectedAssociatedProjectId, setSelectedAssociatedProjectId] = useState<string>('');
+  const [linkType, setLinkType] = useState<'PRO' | 'ENGENHARIA'>('ENGENHARIA');
+  const [linkedProject, setLinkedProject] = useState<any | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [pdfRendering, setPdfRendering] = useState(false);
   
@@ -66,6 +72,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
   const [newItemCategory, setNewItemCategory] = useState('Arquitetura');
   const [newItemUnit, setNewItemUnit] = useState<'M2' | 'M' | 'UN'>('M2');
   const [newItemValue, setNewItemValue] = useState('0.00');
+  const [newItemReferenciaId, setNewItemReferenciaId] = useState<string>('');
 
   const stageRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -74,7 +81,15 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
   useEffect(() => {
     loadProjects();
     loadProOrcamentos();
-  }, [userId]);
+    loadEngineeringProjects();
+  }, [userId, activeOrganizationId]);
+
+  // Resetar item_referencia_id ao abrir modal de biblioteca
+  useEffect(() => {
+    if (isLibraryModalOpen) {
+      setNewItemReferenciaId('');
+    }
+  }, [isLibraryModalOpen]);
 
   const loadProjects = async () => {
     try {
@@ -95,6 +110,20 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
       setOrcamentos(data);
     } catch (err: any) {
       console.error(err);
+    }
+  };
+
+  const loadEngineeringProjects = async () => {
+    try {
+      const data = await projectService.listProjects(undefined, activeOrganizationId || undefined);
+      // Filtra por projetos que são de orçamento (ORCAMENTO) ou obras (OBRA)
+      const filtered = data.filter(p => {
+        const c = (p.settings as any)?.classification;
+        return c === 'ORCAMENTO' || c === 'OBRA';
+      });
+      setEngineeringProjects(filtered);
+    } catch (err) {
+      console.error('Erro ao carregar projetos de engenharia:', err);
     }
   };
 
@@ -135,6 +164,19 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
         setActiveLibraryItem(libData[0]);
       } else {
         setActiveLibraryItem(null);
+      }
+
+      // Carregar obra associada se houver
+      if (project.associated_project_id) {
+        try {
+          const lProj = await projectService.loadProject(project.associated_project_id);
+          setLinkedProject(lProj);
+        } catch (projErr) {
+          console.error('Erro ao carregar projeto de engenharia associado:', projErr);
+          setLinkedProject(null);
+        }
+      } else {
+        setLinkedProject(null);
       }
 
       // Resetar arquivo ativo se mudar de projeto
@@ -242,10 +284,12 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
         user_id: userId,
         nome: newProjectName,
         status: 'RASCUNHO',
-        orcamento_id: selectedOrcamentoId || null
+        orcamento_id: linkType === 'PRO' ? (selectedOrcamentoId || null) : null,
+        associated_project_id: linkType === 'ENGENHARIA' ? (selectedAssociatedProjectId || null) : null
       });
       setNewProjectName('');
       setSelectedOrcamentoId('');
+      setSelectedAssociatedProjectId('');
       setIsCreatingProject(false);
       loadProjects();
       selectProject(proj);
@@ -328,7 +372,8 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
         nome: newItemName,
         categoria: newItemCategory,
         unidade: newItemUnit,
-        valor_unitario: parseFloat(newItemValue) || 0
+        valor_unitario: parseFloat(newItemValue) || 0,
+        item_referencia_id: newItemReferenciaId || null
       });
       
       const libData = await measureService.listLibraryItems(activeProject.id);
@@ -336,6 +381,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
       setActiveLibraryItem(item);
       setNewItemName('');
       setNewItemValue('0.00');
+      setNewItemReferenciaId('');
       setIsLibraryModalOpen(false);
     } catch (err) {
       console.error(err);
@@ -709,6 +755,87 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
     }
   };
 
+  // Exportar para Orçamento de Engenharia (projects.budget)
+  const handleExportToEngineeringProject = async () => {
+    if (!activeProject?.associated_project_id) return;
+
+    try {
+      const projectData = await projectService.loadProject(activeProject.associated_project_id);
+      if (!projectData) {
+        alert('Projeto de Engenharia associado não encontrado.');
+        return;
+      }
+
+      const currentBudget: BudgetEntry[] = Array.isArray(projectData.budget) ? [...projectData.budget] : [];
+      const itemsToExport = itemQuantitativos.filter(q => q.total > 0);
+
+      let updatedCount = 0;
+      let addedCount = 0;
+
+      itemsToExport.forEach(q => {
+        let budgetItemIndex = -1;
+        if (q.item.item_referencia_id) {
+          budgetItemIndex = currentBudget.findIndex(b => b.id === q.item.item_referencia_id);
+        }
+
+        if (budgetItemIndex === -1) {
+          budgetItemIndex = currentBudget.findIndex(b => b.sinapiItem?.description?.trim().toLowerCase() === q.item.nome.trim().toLowerCase());
+        }
+
+        if (budgetItemIndex !== -1) {
+          currentBudget[budgetItemIndex] = {
+            ...currentBudget[budgetItemIndex],
+            quantity: Math.round(q.total * 100) / 100
+          };
+          updatedCount++;
+        } else {
+          const newEntry: BudgetEntry = {
+            id: crypto.randomUUID(),
+            sinapiItem: {
+              code: `MED-${Math.floor(1000 + Math.random() * 9000)}`,
+              description: q.item.nome,
+              unit: q.item.unidade === 'M2' ? 'm²' : (q.item.unidade === 'M' ? 'm' : 'un'),
+              price: q.item.valor_unitario,
+              type: 'INPUT' as any,
+              category: q.item.categoria || 'Medições Inteligentes',
+              source: 'Própria'
+            },
+            quantity: Math.round(q.total * 100) / 100,
+            phase: q.item.categoria || 'Medições Inteligentes',
+            group: 'Medições Inteligentes'
+          };
+          currentBudget.push(newEntry);
+          addedCount++;
+        }
+      });
+
+      await projectService.saveProject({
+        ...projectData,
+        budget: currentBudget
+      });
+
+      setLinkedProject({
+        ...projectData,
+        budget: currentBudget
+      });
+
+      alert(`Exportação concluída com sucesso!\n- ${updatedCount} itens atualizados\n- ${addedCount} novos itens adicionados ao orçamento da obra.`);
+    } catch (err: any) {
+      console.error('Erro ao exportar para o orçamento de Engenharia:', err);
+      alert(`Erro ao exportar quantitativos: ${err.message || JSON.stringify(err)}`);
+    }
+  };
+
+  const handleExport = async () => {
+    if (activeProject?.orcamento_id) {
+      await handleExportToOrcamento();
+    } else if (activeProject?.associated_project_id) {
+      await handleExportToEngineeringProject();
+    } else {
+      alert('Este projeto de medição não possui um orçamento ou obra associada.');
+    }
+  };
+
   // --- Auxiliares de Visualização no Canvas ---
   const renderShapes = () => {
     return shapes.map((shape) => {
@@ -801,18 +928,55 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               />
             </div>
             <div>
-              <label className="text-[10px] uppercase font-bold text-slate-500">Vincular a Orçamento Pro</label>
-              <select
-                value={selectedOrcamentoId}
-                onChange={e => setSelectedOrcamentoId(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1"
-              >
-                <option value="">Nenhum</option>
-                {orcamentos.map(o => (
-                  <option key={o.id} value={o.id}>{o.descricao} ({o.pro_clientes?.nome})</option>
-                ))}
-              </select>
+              <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Tipo de Vínculo</label>
+              <div className="flex gap-2 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setLinkType('ENGENHARIA')}
+                  className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${linkType === 'ENGENHARIA' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  Engenharia
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLinkType('PRO')}
+                  className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${linkType === 'PRO' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  ÒPURA Pro
+                </button>
+              </div>
             </div>
+
+            {linkType === 'ENGENHARIA' ? (
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-500">Obra / Orçamento Principal</label>
+                <select
+                  value={selectedAssociatedProjectId}
+                  onChange={e => setSelectedAssociatedProjectId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1"
+                >
+                  <option value="">Nenhum</option>
+                  {engineeringProjects.map(ep => (
+                    <option key={ep.id} value={ep.id}>{ep.name} ({ep.code || 'Sem Código'})</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-500">Orçamento Standalone Pro</label>
+                <select
+                  value={selectedOrcamentoId}
+                  onChange={e => setSelectedOrcamentoId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1"
+                >
+                  <option value="">Nenhum</option>
+                  {orcamentos.map(o => (
+                    <option key={o.id} value={o.id}>{o.descricao} ({o.pro_clientes?.nome})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 text-xs">
               <button
                 type="button"
@@ -1228,6 +1392,37 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
         {/* Modal de Criação de Item da Biblioteca */}
         {isLibraryModalOpen && (
           <div className="p-4 bg-slate-900 border-b border-slate-800 space-y-3">
+            {linkedProject && linkedProject.budget && (
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Associar a Item do Orçamento</label>
+                <select
+                  value={newItemReferenciaId}
+                  onChange={e => {
+                    const refId = e.target.value;
+                    setNewItemReferenciaId(refId);
+                    
+                    if (refId) {
+                      const budgetItem = linkedProject.budget.find((b: any) => b.id === refId);
+                      if (budgetItem) {
+                        setNewItemName(budgetItem.sinapiItem?.description || '');
+                        const uni = budgetItem.sinapiItem?.unit?.toUpperCase() || 'UN';
+                        const mappedUnit = uni.includes('M²') || uni.includes('M2') ? 'M2' : (uni.includes('M') ? 'M' : 'UN');
+                        setNewItemUnit(mappedUnit);
+                        setNewItemValue(String(budgetItem.sinapiItem?.price || '0.00'));
+                      }
+                    }
+                  }}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1"
+                >
+                  <option value="">Novo Item (Criar no Orçamento)</option>
+                  {linkedProject.budget.map((b: any) => (
+                    <option key={b.id} value={b.id}>
+                      {b.sinapiItem?.description} ({b.sinapiItem?.unit} - R$ {b.sinapiItem?.price})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="text-[10px] uppercase font-bold text-slate-500">Nome do Item</label>
               <input
@@ -1335,8 +1530,8 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
             )}
           </div>
 
-          {/* Integração com ÒPURA Pro */}
-          {itemQuantitativos.some(q => q.total > 0) && activeProject?.orcamento_id && (
+          {/* Integração com Orçamentos (Pro ou Engenharia) */}
+          {itemQuantitativos.some(q => q.total > 0) && (activeProject?.orcamento_id || activeProject?.associated_project_id) && (
             <div className="mt-4 pt-4 border-t border-slate-800">
               <button
                 onClick={handleExportToOrcamento}

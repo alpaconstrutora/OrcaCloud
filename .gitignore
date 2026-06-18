@@ -34,3 +34,5 @@ _dev_scripts/
 .temp_ag_kit/
 .agents/
 .antigravity_rules
+
+.vercel

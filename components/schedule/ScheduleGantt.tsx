@@ -703,8 +703,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         ? <span className="text-[12px] font-medium text-gray-600">{fmtLocalDate(node.earlyStart)}</span>
                                         : null;
                                 }
-                                const ns = schedule.itemSchedules?.find(s => s.id === node.id);
-                                const effectiveDate = ns?.startDate ? ns.startDate.split('T')[0] : (node.earlyStart || '');
+                                // INÍCIO do pai = rollup (mín. dos filhos), igual ao FIM (máx. dos filhos).
+                                // Não usar a startDate armazenada do grupo, que pode ficar "presa" e
+                                // divergir dos filhos. A edição manual ainda funciona: o onChange cascateia
+                                // o deslocamento para os filhos e o novo rollup passa a ser o valor editado.
+                                const effectiveDate = node.earlyStart || '';
                                 return (
                                     <input
                                         type="date"

@@ -600,7 +600,10 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                             ) : (
                                                 <input
                                                     type="date"
-                                                    value={nodeSchedule?.startDate ? nodeSchedule.startDate.split('T')[0] : (node.earlyStart || '')}
+                                                    // INÍCIO do pai = rollup (mín. dos filhos), igual ao FIM (máx.).
+                                                    // Não usar a startDate armazenada do grupo, que pode ficar "presa".
+                                                    // A edição manual segue funcionando via cascata no onChange.
+                                                    value={node.earlyStart || ''}
                                                     onChange={(e) => handleUpdateItemSchedule(node.id, 'startDate', e.target.value)}
                                                     className="w-full bg-transparent border-none text-center text-[12px] font-medium text-gray-700 outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 rounded px-1"
                                                 />

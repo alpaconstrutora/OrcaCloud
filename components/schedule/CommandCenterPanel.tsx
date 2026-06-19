@@ -5,16 +5,25 @@ import {
     Clock,
     AlertTriangle,
     CheckCircle2,
-    Minus,
     Activity,
     Target,
     Zap,
     BarChart2,
     ChevronDown,
     ChevronUp,
-    Loader2,
 } from 'lucide-react';
-import { HierarchyNode, ProjectSchedule, BudgetEntry, Baseline, ItemScheduleDetails } from '../../types';
+import {
+    ComposedChart,
+    Bar,
+    Line,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    Legend,
+    ResponsiveContainer,
+} from 'recharts';
+import { HierarchyNode, ProjectSchedule, BudgetEntry } from '../../types';
 import { scheduleConstraintsService, weeklyCommitmentsService } from '../../services/scheduleConstraintsService';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -42,7 +51,6 @@ function elapsedFraction(start: string, end: string): number {
     return daysBetween(start, t) / Math.max(1, daysBetween(start, end));
 }
 
-/** Flatten leaf items from hierarchy (type==='item') */
 function flatLeaves(nodes: HierarchyNode[]): HierarchyNode[] {
     const acc: HierarchyNode[] = [];
     const walk = (n: HierarchyNode) => {
@@ -66,8 +74,8 @@ function computeKpis(
     budget.forEach(b => { budgetById[b.id] = b; });
 
     let totalBudget = 0;
-    let ev = 0;       // Earned Value = realPct × budgeted
-    let pv = 0;       // Planned Value = elapsed fraction × budgeted
+    let ev = 0;
+    let pv = 0;
     let physicalWeightedSum = 0;
     let physicalWeightTotal = 0;
     let atrasadas = 0;
@@ -78,26 +86,17 @@ function computeKpis(
         const budgeted = b ? b.quantity * b.sinapiItem.price : (leaf.budgetedTotal ?? 0);
         totalBudget += budgeted;
 
-        // Physical progress
-        const realPct = (sched?.manualRealPct ?? 0) / 100; // 0..1
+        const realPct = (sched?.manualRealPct ?? 0) / 100;
         if (budgeted > 0) {
             physicalWeightedSum += realPct * budgeted;
             physicalWeightTotal += budgeted;
         }
-
         ev += realPct * budgeted;
 
-        // Planned to date based on schedule dates
         const s = sched?.earlyStart ?? sched?.startDate;
         const e = sched?.earlyFinish ?? sched?.endDate;
-        if (s && e) {
-            pv += elapsedFraction(s, e) * budgeted;
-        }
-
-        // Atrasadas: earlyFinish < today AND not complete
-        if (e && e < todayStr && realPct < 1) {
-            atrasadas++;
-        }
+        if (s && e) pv += elapsedFraction(s, e) * budgeted;
+        if (e && e < todayStr && realPct < 1) atrasadas++;
     });
 
     const physicalPct = physicalWeightTotal > 0 ? (physicalWeightedSum / physicalWeightTotal) * 100 : 0;
@@ -110,16 +109,13 @@ function computeKpis(
         const sched = schedule.itemSchedules?.find(s => s.id === l.id);
         return sched?.isCritical;
     });
-    const criticalCount = criticalItems.length;
 
-    // Project end date from CPM
     const projectEnd = schedule.itemSchedules?.reduce((max, s) => {
         const e = s.earlyFinish ?? s.endDate;
         if (!e) return max;
         return !max || e > max ? e : max;
     }, '') ?? schedule.endDate ?? '';
 
-    // Baseline comparison
     let baselineEnd = '';
     let devioDias: number | null = null;
     if (schedule.activeBaselineId && schedule.baselines) {
@@ -128,92 +124,26 @@ function computeKpis(
             baselineEnd = Object.values(bl.itemDates).reduce((max, d) => {
                 return !max || d.endDate > max ? d.endDate : max;
             }, '');
-            if (baselineEnd && projectEnd) {
-                devioDias = daysBetween(baselineEnd, projectEnd);
-            }
+            if (baselineEnd && projectEnd) devioDias = daysBetween(baselineEnd, projectEnd);
         }
     }
 
     return {
-        physicalPct,
-        financialPct,
-        spi,
-        ev,
-        pv,
-        criticalCount,
-        criticalItems,
-        atrasadas,
-        projectEnd,
-        baselineEnd,
-        devioDias,
-        totalBudget,
+        physicalPct, financialPct, spi,
+        criticalItems, criticalCount: criticalItems.length,
+        atrasadas, projectEnd, baselineEnd, devioDias,
         totalLeaves: leaves.length,
     };
 }
 
-// ─── Monthly physical curve data ─────────────────────────────
+// ─── Chart data type (same shape as chartDataWithCumulative) ──
 
-function buildPhysicalCurve(schedule: ProjectSchedule, budget: BudgetEntry[]) {
-    const items = schedule.itemSchedules ?? [];
-    const budgetById: Record<string, BudgetEntry> = {};
-    budget.forEach(b => { budgetById[b.id] = b; });
-
-    // Gather all month buckets
-    const start = schedule.startDate;
-    const allEnds = items.map(s => s.earlyFinish ?? s.endDate).filter(Boolean) as string[];
-    const end = allEnds.reduce((max, e) => e > max ? e : max, start);
-    if (!start || !end) return [];
-
-    const months: string[] = [];
-    let cur = start.slice(0, 7); // YYYY-MM
-    const endYM = end.slice(0, 7);
-    while (cur <= endYM) {
-        months.push(cur);
-        const [y, m] = cur.split('-').map(Number);
-        const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
-        cur = next;
-    }
-
-    const todayStr = today();
-
-    return months.map(ym => {
-        const monthStart = ym + '-01';
-        const [y, m] = ym.split('-').map(Number);
-        const monthEnd = new Date(Date.UTC(y, m, 0)).toISOString().split('T')[0]; // last day of month
-
-        let plannedInMonth = 0;
-        let realizedInMonth = 0;
-        let totalBudget = 0;
-
-        items.forEach(sched => {
-            const b = budgetById[sched.id];
-            const budgeted = b ? b.quantity * b.sinapiItem.price : 0;
-            if (!budgeted) return;
-            totalBudget += budgeted;
-
-            const s = sched.earlyStart ?? sched.startDate;
-            const e = sched.earlyFinish ?? sched.endDate;
-            if (!s || !e) return;
-
-            const overlapStart = s > monthStart ? s : monthStart;
-            const overlapEnd = e < monthEnd ? e : monthEnd;
-            if (overlapStart > overlapEnd) return;
-
-            const itemDuration = Math.max(1, daysBetween(s, e));
-            const overlapDays = Math.max(0, daysBetween(overlapStart, overlapEnd) + 1);
-            const fraction = overlapDays / itemDuration;
-
-            plannedInMonth += fraction * budgeted;
-
-            // Realized: pro-rated by actual progress if month is past
-            if (monthEnd <= todayStr) {
-                const realPct = (sched.manualRealPct ?? 0) / 100;
-                realizedInMonth += fraction * budgeted * realPct;
-            }
-        });
-
-        return { month: ym, planned: plannedInMonth, realized: realizedInMonth };
-    }).filter(d => d.planned > 0 || d.realized > 0);
+export interface SCurveEntry {
+    name: string;
+    valor: number;
+    realizado: number;
+    acumulado: number;
+    acumuladoRealizado: number;
 }
 
 // ─── Props ────────────────────────────────────────────────────
@@ -223,6 +153,7 @@ interface Props {
     schedule: ProjectSchedule;
     budget: BudgetEntry[];
     realizedValues: Record<string, number>;
+    chartData: SCurveEntry[];
     organizationId?: string;
     projectId?: string;
 }
@@ -230,7 +161,8 @@ interface Props {
 // ─── Component ────────────────────────────────────────────────
 
 export const CommandCenterPanel: React.FC<Props> = ({
-    hierarchy, schedule, budget, realizedValues, organizationId, projectId,
+    hierarchy, schedule, budget, realizedValues, chartData,
+    organizationId, projectId,
 }) => {
     const [ppcLast, setPpcLast] = useState<number | null>(null);
     const [ppcAccum, setPpcAccum] = useState<number | null>(null);
@@ -241,11 +173,6 @@ export const CommandCenterPanel: React.FC<Props> = ({
     const kpis = React.useMemo(
         () => computeKpis(hierarchy, schedule, budget, realizedValues),
         [hierarchy, schedule, budget, realizedValues]
-    );
-
-    const curveData = React.useMemo(
-        () => buildPhysicalCurve(schedule, budget),
-        [schedule, budget]
     );
 
     const load = useCallback(async () => {
@@ -270,6 +197,9 @@ export const CommandCenterPanel: React.FC<Props> = ({
 
     useEffect(() => { load(); }, [load]);
 
+    // Use last 14 periods for chart legibility
+    const chartSlice = chartData.slice(-14);
+
     return (
         <div className="space-y-5">
             {/* Title */}
@@ -279,98 +209,88 @@ export const CommandCenterPanel: React.FC<Props> = ({
                 <span className="text-[10px] text-gray-400">{fmtDate(today())}</span>
             </div>
 
-            {/* ── KPI cards ── */}
+            {/* ── KPI cards row 1 ── */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <KpiCard
-                    label="Avanço Físico"
-                    value={fmtPct(kpis.physicalPct)}
-                    sub={`${kpis.totalLeaves} atividades`}
-                    color="blue"
-                    icon={<Target className="w-4 h-4" />}
-                />
-                <KpiCard
-                    label="Avanço Financeiro"
-                    value={fmtPct(kpis.financialPct)}
+                <KpiCard label="Avanço Físico" value={fmtPct(kpis.physicalPct)}
+                    sub={`${kpis.totalLeaves} atividades`} color="blue"
+                    icon={<Target className="w-4 h-4" />} />
+                <KpiCard label="Avanço Financeiro" value={fmtPct(kpis.financialPct)}
                     sub={kpis.physicalPct > kpis.financialPct ? '▲ físico à frente' : kpis.physicalPct < kpis.financialPct ? '▼ financeiro à frente' : 'empatados'}
-                    color="indigo"
-                    icon={<BarChart2 className="w-4 h-4" />}
-                />
-                <KpiCard
-                    label="SPI"
-                    value={kpis.spi !== null ? kpis.spi.toFixed(2) : '—'}
+                    color="indigo" icon={<BarChart2 className="w-4 h-4" />} />
+                <KpiCard label="SPI" value={kpis.spi !== null ? kpis.spi.toFixed(2) : '—'}
                     sub={kpis.spi === null ? 'sem datas' : kpis.spi >= 1 ? 'no prazo' : 'atrasado'}
                     color={kpis.spi === null ? 'gray' : kpis.spi >= 1 ? 'emerald' : 'red'}
                     icon={<Zap className="w-4 h-4" />}
-                    tooltip="Schedule Performance Index = Valor Agregado / Valor Planejado"
-                />
-                <KpiCard
-                    label="PPC acumulado"
+                    tooltip="Schedule Performance Index = Valor Agregado / Valor Planejado" />
+                <KpiCard label="PPC acumulado"
                     value={loadingKpis ? '…' : ppcAccum !== null ? `${ppcAccum}%` : '—'}
                     sub={loadingKpis ? '' : ppcLast !== null ? `Últ. sem.: ${ppcLast}%` : 'sem dados'}
                     color={ppcAccum === null ? 'gray' : ppcAccum >= 80 ? 'emerald' : ppcAccum >= 60 ? 'amber' : 'red'}
-                    icon={<CheckCircle2 className="w-4 h-4" />}
-                />
+                    icon={<CheckCircle2 className="w-4 h-4" />} />
             </div>
 
+            {/* ── KPI cards row 2 ── */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <KpiCard
-                    label="Término previsto"
-                    value={fmtDate(kpis.projectEnd)}
+                <KpiCard label="Término previsto" value={fmtDate(kpis.projectEnd)}
                     sub={kpis.devioDias !== null
                         ? kpis.devioDias === 0 ? 'no prazo da baseline'
                         : kpis.devioDias > 0 ? `${kpis.devioDias}d de atraso`
                         : `${Math.abs(kpis.devioDias)}d adiantado`
-                        : kpis.baselineEnd ? '' : 'sem baseline ativa'}
+                        : 'sem baseline ativa'}
                     color={kpis.devioDias === null ? 'gray' : kpis.devioDias <= 0 ? 'emerald' : kpis.devioDias <= 14 ? 'amber' : 'red'}
-                    icon={<Clock className="w-4 h-4" />}
-                />
-                <KpiCard
-                    label="Desvio de prazo"
+                    icon={<Clock className="w-4 h-4" />} />
+                <KpiCard label="Desvio de prazo"
                     value={kpis.devioDias !== null ? `${kpis.devioDias > 0 ? '+' : ''}${kpis.devioDias}d` : '—'}
                     sub={kpis.baselineEnd ? `Baseline: ${fmtDate(kpis.baselineEnd)}` : 'ative uma baseline'}
                     color={kpis.devioDias === null ? 'gray' : kpis.devioDias <= 0 ? 'emerald' : kpis.devioDias <= 14 ? 'amber' : 'red'}
-                    icon={kpis.devioDias !== null && kpis.devioDias > 0 ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
-                />
-                <KpiCard
-                    label="Atividades atrasadas"
-                    value={String(kpis.atrasadas)}
+                    icon={kpis.devioDias !== null && kpis.devioDias > 0 ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />} />
+                <KpiCard label="Atividades atrasadas" value={String(kpis.atrasadas)}
                     sub={`de ${kpis.totalLeaves} no total`}
                     color={kpis.atrasadas === 0 ? 'emerald' : kpis.atrasadas <= 3 ? 'amber' : 'red'}
-                    icon={<AlertTriangle className="w-4 h-4" />}
-                />
-                <KpiCard
-                    label="Restrições abertas"
+                    icon={<AlertTriangle className="w-4 h-4" />} />
+                <KpiCard label="Restrições abertas"
                     value={loadingKpis ? '…' : openConstraints !== null ? String(openConstraints) : '—'}
-                    sub={`${kpis.criticalCount} no caminho crítico`}
+                    sub={`${kpis.criticalCount} ativ. críticas`}
                     color={openConstraints === null ? 'gray' : openConstraints === 0 ? 'emerald' : openConstraints <= 3 ? 'amber' : 'red'}
-                    icon={<AlertTriangle className="w-4 h-4" />}
-                />
+                    icon={<AlertTriangle className="w-4 h-4" />} />
             </div>
 
-            {/* ── Physical S-Curve ── */}
+            {/* ── Curva S (reusa dados já calculados) ── */}
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h3 className="text-xs font-bold text-gray-700">Curva S — Avanço Físico</h3>
-                        <p className="text-[10px] text-gray-400 mt-0.5">Planejado vs. realizado por mês (R$ de obra executada)</p>
-                    </div>
-                </div>
-                {curveData.length === 0 ? (
+                <h3 className="text-xs font-bold text-gray-700 mb-1">Curva S — Desembolso Financeiro</h3>
+                <p className="text-[10px] text-gray-400 mb-4">Previsto × realizado por período (acumulado)</p>
+                {chartSlice.length === 0 ? (
                     <div className="flex items-center justify-center py-10 text-[11px] text-gray-400">
-                        Configure datas nas atividades para gerar a curva S física.
+                        Configure datas e distribuições nas atividades para gerar a curva S.
                     </div>
                 ) : (
-                    <BarCurveChart data={curveData} />
+                    <div className="h-72 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={chartSlice} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                                <YAxis yAxisId="left" tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={56} />
+                                <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={56} />
+                                <Tooltip
+                                    formatter={(value: unknown) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0)}
+                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: 11 }}
+                                />
+                                <Legend wrapperStyle={{ fontSize: 11 }} />
+                                <Bar yAxisId="left" dataKey="valor" name="Previsto (M)" barSize={20} fill="#bfdbfe" radius={[4, 4, 0, 0]} />
+                                <Bar yAxisId="left" dataKey="realizado" name="Realizado (M)" barSize={20} fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                                <Line yAxisId="right" type="monotone" dataKey="acumulado" name="Previsto (Acum)" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                                <Line yAxisId="right" type="monotone" dataKey="acumuladoRealizado" name="Realizado (Acum)" stroke="#10b981" strokeWidth={2} dot={false} />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </div>
                 )}
             </div>
 
-            {/* ── Critical path table ── */}
+            {/* ── Caminho crítico ── */}
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                        <span className="text-xs font-bold text-gray-700">Caminho Crítico ({kpis.criticalCount} atividades)</span>
-                    </div>
+                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-xs font-bold text-gray-700">Caminho Crítico ({kpis.criticalCount} atividades)</span>
                 </div>
                 {kpis.criticalItems.length === 0 ? (
                     <div className="px-5 py-8 text-center text-[11px] text-gray-400">
@@ -409,7 +329,7 @@ export const CommandCenterPanel: React.FC<Props> = ({
                 )}
             </div>
 
-            {/* ── Delay simulator ── */}
+            {/* ── Simulador de impacto ── */}
             <DelaySimulator
                 open={simulatorOpen}
                 setOpen={setSimulatorOpen}
@@ -433,12 +353,8 @@ const COLOR_MAP = {
 };
 
 const KpiCard: React.FC<{
-    label: string;
-    value: string;
-    sub?: string;
-    color: keyof typeof COLOR_MAP;
-    icon?: React.ReactNode;
-    tooltip?: string;
+    label: string; value: string; sub?: string;
+    color: keyof typeof COLOR_MAP; icon?: React.ReactNode; tooltip?: string;
 }> = ({ label, value, sub, color, icon, tooltip }) => {
     const c = COLOR_MAP[color];
     return (
@@ -453,91 +369,11 @@ const KpiCard: React.FC<{
     );
 };
 
-// ─── BarCurveChart (pure CSS bars, no deps) ───────────────────
-
-const BarCurveChart: React.FC<{ data: { month: string; planned: number; realized: number }[] }> = ({ data }) => {
-    const maxVal = Math.max(...data.map(d => Math.max(d.planned, d.realized)), 1);
-    // compute cumulative
-    let cumPlan = 0, cumReal = 0;
-    const withCum = data.map(d => {
-        cumPlan += d.planned;
-        cumReal += d.realized;
-        return { ...d, cumPlan, cumReal };
-    });
-    const maxCum = Math.max(cumPlan, 1);
-    const recent = withCum.slice(-14); // show up to 14 months
-    const todayStr = today();
-
-    return (
-        <div className="space-y-3">
-            {/* Bar chart */}
-            <div className="flex items-end gap-1 h-32">
-                {recent.map(d => {
-                    const isPast = (d.month + '-28') <= todayStr;
-                    return (
-                        <div key={d.month} className="flex-1 flex flex-col items-center gap-0.5 min-w-0">
-                            <div className="w-full flex items-end gap-0.5" style={{ height: 100 }}>
-                                <div
-                                    className="flex-1 rounded-t-sm bg-blue-100"
-                                    style={{ height: `${(d.planned / maxVal) * 100}%` }}
-                                    title={`Planejado: R$ ${Math.round(d.planned).toLocaleString('pt-BR')}`}
-                                />
-                                {isPast && (
-                                    <div
-                                        className="flex-1 rounded-t-sm bg-blue-500"
-                                        style={{ height: `${(d.realized / maxVal) * 100}%` }}
-                                        title={`Realizado: R$ ${Math.round(d.realized).toLocaleString('pt-BR')}`}
-                                    />
-                                )}
-                            </div>
-                            <span className="text-[8px] text-gray-400 text-center truncate w-full">
-                                {d.month.slice(5)}
-                            </span>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Cumulative S-curve as % */}
-            <div className="relative h-20 border-b border-l border-gray-200">
-                <svg className="w-full h-full" viewBox={`0 0 ${recent.length * 10} 100`} preserveAspectRatio="none">
-                    {/* Planned line */}
-                    <polyline
-                        fill="none"
-                        stroke="#93c5fd"
-                        strokeWidth="1.5"
-                        points={recent.map((d, i) => `${i * 10 + 5},${100 - (d.cumPlan / maxCum) * 95}`).join(' ')}
-                    />
-                    {/* Realized line */}
-                    <polyline
-                        fill="none"
-                        stroke="#3b82f6"
-                        strokeWidth="1.5"
-                        strokeDasharray="0"
-                        points={recent.filter(d => (d.month + '-28') <= todayStr).map((d, i) => `${i * 10 + 5},${100 - (d.cumReal / maxCum) * 95}`).join(' ')}
-                    />
-                </svg>
-            </div>
-
-            {/* Legend */}
-            <div className="flex items-center gap-4 text-[10px] text-gray-500">
-                <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-blue-100 inline-block" /> Planejado (mensal)</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-blue-500 inline-block" /> Realizado (mensal)</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-4 border-t border-blue-300" /> Curva S planejada</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-4 border-t border-blue-600" /> Curva S realizada</span>
-            </div>
-        </div>
-    );
-};
-
 // ─── DelaySimulator ───────────────────────────────────────────
 
 const DelaySimulator: React.FC<{
-    open: boolean;
-    setOpen: (v: boolean) => void;
-    criticalItems: HierarchyNode[];
-    schedule: ProjectSchedule;
-    projectEnd: string;
+    open: boolean; setOpen: (v: boolean) => void;
+    criticalItems: HierarchyNode[]; schedule: ProjectSchedule; projectEnd: string;
 }> = ({ open, setOpen, criticalItems, schedule, projectEnd }) => {
     const [selectedId, setSelectedId] = useState('');
     const [delayDays, setDelayDays] = useState(7);
@@ -566,7 +402,9 @@ const DelaySimulator: React.FC<{
             {open && (
                 <div className="px-5 py-4 space-y-4">
                     {criticalItems.length === 0 ? (
-                        <p className="text-[11px] text-gray-400 text-center py-4">Execute o Auto Programar para calcular o caminho crítico.</p>
+                        <p className="text-[11px] text-gray-400 text-center py-4">
+                            Execute o Auto Programar para calcular o caminho crítico.
+                        </p>
                     ) : (
                         <>
                             <div className="grid grid-cols-2 gap-4">
@@ -592,10 +430,7 @@ const DelaySimulator: React.FC<{
                                 <div>
                                     <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Atraso (dias)</label>
                                     <input
-                                        type="number"
-                                        min={1}
-                                        max={365}
-                                        value={delayDays}
+                                        type="number" min={1} max={365} value={delayDays}
                                         onChange={e => setDelayDays(Math.max(1, parseInt(e.target.value) || 1))}
                                         className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none"
                                     />

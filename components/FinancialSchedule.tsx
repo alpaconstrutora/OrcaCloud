@@ -3820,6 +3820,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             schedule={schedule}
                             budget={budget}
                             realizedValues={realizedState.realizedValues}
+                            chartData={chartDataWithCumulative}
                             organizationId={organizationId}
                             projectId={settings.id}
                         />

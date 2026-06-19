@@ -505,3 +505,29 @@ export interface CashFlowSummary {
     saldo_final: number;
     saldo_previsto_final: number;
 }
+
+// ────────────────────────────────────────────────────────────
+// Calendário Financeiro (Fase 4) — baseado em due_date
+// ────────────────────────────────────────────────────────────
+
+export interface CalendarEvent {
+    event_date: string;           // 'YYYY-MM-DD'
+    credit_previsto: number;
+    debit_previsto: number;
+    credit_realizado: number;
+    debit_realizado: number;
+    n_titulos: number;
+}
+
+export interface CalendarDayTitle {
+    id: string;
+    direction: 'CREDIT' | 'DEBIT';
+    amount: number;
+    description?: string;
+    party_name?: string;
+    project_name?: string;
+    business_status?: string;
+    status: string;               // InternalTransactionStatus
+    due_date?: string;
+    transaction_date: string;
+}

@@ -69,6 +69,7 @@ const ControladoriaModule   = React.lazy(() => import('./ControladoriaModule'));
 const FinancialDashboard    = React.lazy(() => import('./FinancialDashboard'));
 const ContasReceberManager  = React.lazy(() => import('./ContasReceberManager'));
 const FinancialApprovalModule = React.lazy(() => import('./FinancialApprovalModule'));
+const FinancialCalendar       = React.lazy(() => import('./FinancialCalendar'));
 const MasterDataBrowser     = React.lazy(() => import('./MasterDataBrowser'));
 const ProModule             = React.lazy(() => import('./ProModule'));
 const OfficesModule         = React.lazy(() => import('./OfficesModule'));
@@ -1056,6 +1057,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <FinancialDashboard
             organizationId={activeOrganizationId || organizations[0]?.id || ''}
             onNavigate={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    // ── Calendário Financeiro ──────────────────────────────────────────────────
+    case 'financial-calendar':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <FinancialCalendar
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
           />
         </React.Suspense>
       );

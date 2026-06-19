@@ -265,11 +265,17 @@ interface EmitModalProps {
     onClose: () => void;
 }
 function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onClose }: EmitModalProps) {
-    const [billingType, setBillingType] = useState<BillingType>('BOLETO');
+    const [billingType, setBillingType] = useState<BillingType>(existing?.billing_type ?? 'BOLETO');
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState<string | null>(null);
     const [result, setResult] = useState<ClientCharge | null>(existing ?? null);
     const [copied, setCopied] = useState(false);
+
+    // Edição p/ "cancelar e reemitir" (corrige dados antes de gerar novo boleto)
+    const [editMode, setEditMode] = useState(false);
+    const [editAmount, setEditAmount] = useState(String(receivable.amount ?? ''));
+    const [editDue, setEditDue] = useState(receivable.due_date ?? today());
+    const [editDesc, setEditDesc] = useState(receivable.description ?? '');
 
     async function handleEmit() {
         setLoading(true);
@@ -280,6 +286,34 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
             onDone();
         } catch (e) {
             setErr(e instanceof Error ? e.message : 'Erro ao emitir cobrança');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleReemit() {
+        const amountNum = parseFloat(editAmount.replace(',', '.'));
+        if (!amountNum || amountNum <= 0 || !editDue) {
+            setErr('Informe valor e vencimento válidos.'); return;
+        }
+        setLoading(true);
+        setErr(null);
+        try {
+            // 1. Cancela o boleto atual no Asaas e reverte para PREVISTO
+            await clientChargeService.cancel(organizationId, receivable.id);
+            // 2. Corrige os dados do recebível
+            await receivableService.update(receivable.id, {
+                amount:      amountNum,
+                due_date:    editDue,
+                description: editDesc || undefined,
+            });
+            // 3. Emite novo boleto com os dados corrigidos
+            const res = await clientChargeService.emit(organizationId, receivable.id, billingType);
+            setResult(res.charge);
+            setEditMode(false);
+            onDone();
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : 'Erro ao reemitir cobrança');
         } finally {
             setLoading(false);
         }
@@ -372,6 +406,94 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                     <Copy className="w-3.5 h-3.5" />
                                 </button>
                             )}
+
+                            {/* Cancelar e reemitir */}
+                            <div className="border-t border-gray-100 pt-3 mt-1">
+                                {!editMode ? (
+                                    <button
+                                        onClick={() => { setErr(null); setEditMode(true); }}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-amber-200 bg-amber-50 hover:bg-amber-100 rounded-xl text-sm font-bold text-amber-700 transition-colors"
+                                    >
+                                        <RefreshCw className="w-4 h-4" /> Editar e reemitir boleto
+                                    </button>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <p className="text-[11px] text-amber-700 font-semibold bg-amber-50 rounded-lg p-2.5 leading-snug">
+                                            O boleto atual será <b>cancelado no Asaas</b> e um novo será emitido com os dados corrigidos.
+                                        </p>
+                                        {err && <p className="text-xs text-red-600 font-semibold bg-red-50 rounded-lg p-3">{err}</p>}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Valor (R$)</label>
+                                                <input
+                                                    type="number" min={0} step="0.01"
+                                                    value={editAmount}
+                                                    onChange={e => setEditAmount(e.target.value)}
+                                                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Vencimento</label>
+                                                <input
+                                                    type="date"
+                                                    value={editDue}
+                                                    onChange={e => setEditDue(e.target.value)}
+                                                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Descrição</label>
+                                            <input
+                                                type="text"
+                                                value={editDesc}
+                                                onChange={e => setEditDesc(e.target.value)}
+                                                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Forma de cobrança</label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {([
+                                                    { v: 'BOLETO' as BillingType, label: 'Boleto', icon: FileText },
+                                                    { v: 'PIX' as BillingType, label: 'PIX', icon: QrCode },
+                                                    { v: 'UNDEFINED' as BillingType, label: 'Boleto+PIX', icon: Check },
+                                                ]).map(opt => (
+                                                    <button
+                                                        key={opt.v}
+                                                        onClick={() => setBillingType(opt.v)}
+                                                        className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                                                            billingType === opt.v
+                                                                ? 'border-amber-500 bg-amber-50 text-amber-700'
+                                                                : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                                                        }`}
+                                                    >
+                                                        <opt.icon className="w-4 h-4" />
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setEditMode(false)}
+                                                disabled={loading}
+                                                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                                            >
+                                                Voltar
+                                            </button>
+                                            <button
+                                                onClick={handleReemit}
+                                                disabled={loading}
+                                                className="flex-1 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-sm font-black transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                                Cancelar e reemitir
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>

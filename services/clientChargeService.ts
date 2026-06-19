@@ -63,6 +63,31 @@ export const clientChargeService = {
         return data as EmitChargeResult;
     },
 
+    /** Cancela a(s) cobrança(s) ativa(s) do recebível no Asaas e reverte para PREVISTO. */
+    async cancel(
+        organizationId: string,
+        transactionId: string,
+    ): Promise<{ ok: boolean; cancelled: number }> {
+        const { data, error } = await supabase.functions.invoke('asaas-charge', {
+            body: { organization_id: organizationId, transaction_id: transactionId, action: 'cancel' },
+        });
+        if (error) {
+            let detail = '';
+            const ctx = (error as { context?: Response }).context;
+            if (ctx && typeof ctx.json === 'function') {
+                try {
+                    const b = await ctx.json();
+                    detail = b?.error || (b?.detail ? JSON.stringify(b.detail) : '');
+                } catch { /* corpo não-JSON */ }
+            }
+            throw new Error(detail || error.message);
+        }
+        if (data && (data as { error?: string }).error) {
+            throw new Error((data as { error: string }).error);
+        }
+        return data as { ok: boolean; cancelled: number };
+    },
+
     /** Lista as cobranças de uma organização. */
     async list(
         organizationId: string,

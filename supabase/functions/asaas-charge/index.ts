@@ -55,13 +55,63 @@ serve(async (req: Request) => {
         organization_id?: string;
         transaction_id?: string;
         billing_type?: 'BOLETO' | 'PIX' | 'UNDEFINED';
+        action?: 'emit' | 'cancel';
     };
 
     const { organization_id, transaction_id } = body;
     const billingType = body.billing_type ?? 'BOLETO';
+    const action = body.action ?? 'emit';
 
     if (!organization_id || !transaction_id) {
         return json({ error: 'organization_id e transaction_id são obrigatórios.' }, 400);
+    }
+
+    const asaasHeadersBase = {
+        'Content-Type': 'application/json',
+        'access_token': asaasApiKey,
+        'User-Agent': 'OrcaCloud',
+    };
+
+    // ─── action: cancel ───────────────────────────────────────
+    // Cancela a(s) cobrança(s) ativa(s) do recebível no Asaas e
+    // reverte o recebível para PREVISTO, liberando reemissão.
+    if (action === 'cancel') {
+        const { data: charges, error: chListErr } = await admin
+            .from('client_charges')
+            .select('id,asaas_payment_id,status')
+            .eq('organization_id', organization_id)
+            .eq('transaction_id', transaction_id)
+            .neq('status', 'CANCELLED');
+        if (chListErr) return json({ error: 'Falha ao buscar cobranças', detail: chListErr.message }, 500);
+
+        for (const ch of charges ?? []) {
+            if (ch.asaas_payment_id) {
+                const delRes = await fetch(`${asaasBase}/payments/${ch.asaas_payment_id}`, {
+                    method: 'DELETE',
+                    headers: asaasHeadersBase,
+                });
+                // 404 = já removido no Asaas; trata como sucesso idempotente
+                if (!delRes.ok && delRes.status !== 404) {
+                    const delData = await delRes.json().catch(() => ({}));
+                    const msg = delData?.errors?.[0]?.description ?? `HTTP ${delRes.status}`;
+                    return json({ error: `Asaas (cancelamento): ${msg}`, detail: delData }, 502);
+                }
+            }
+            await admin
+                .from('client_charges')
+                .update({ status: 'CANCELLED' })
+                .eq('id', ch.id);
+        }
+
+        // Reverte o recebível para PREVISTO (só se ainda não foi recebido/cancelado)
+        await admin
+            .from('internal_transactions')
+            .update({ business_status: 'PREVISTO', updated_at: new Date().toISOString() })
+            .eq('id', transaction_id)
+            .eq('organization_id', organization_id)
+            .in('business_status', ['EMITIDO', 'ENVIADO']);
+
+        return json({ ok: true, cancelled: (charges ?? []).length });
     }
 
     // 1. Carrega o recebível
@@ -110,11 +160,7 @@ serve(async (req: Request) => {
         return json({ error: `Cliente "${client.name ?? tx.party_name ?? '—'}" sem CPF/CNPJ cadastrado. O Asaas exige documento para emitir cobrança.` }, 422);
     }
 
-    const asaasHeaders = {
-        'Content-Type': 'application/json',
-        'access_token': asaasApiKey,
-        'User-Agent': 'OrcaCloud',
-    };
+    const asaasHeaders = asaasHeadersBase;
 
     // 3. Garante o customer no Asaas (cache em clients.asaas_customer_id)
     let customerId = client?.asaas_customer_id ?? null;

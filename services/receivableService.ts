@@ -100,6 +100,23 @@ export const receivableService = {
         return { ...row, direction: 'CREDIT', effective_status: 'PREVISTO' } as Receivable;
     },
 
+    /** Corrige dados de negócio do recebível (valor, vencimento, descrição). */
+    async update(
+        id: string,
+        data: { amount?: number; due_date?: string; description?: string },
+    ): Promise<void> {
+        const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (data.amount      !== undefined) updates.amount = data.amount;
+        if (data.due_date    !== undefined) updates.due_date = data.due_date;
+        if (data.description !== undefined) updates.description = data.description;
+
+        const { error } = await supabase
+            .from('internal_transactions')
+            .update(updates)
+            .eq('id', id);
+        if (error) throw error;
+    },
+
     async getInadimplencia(organizationId: string): Promise<InadimplenciaFaixa[]> {
         const { data, error } = await supabase.rpc('fn_inadimplencia', {
             p_organization_id: organizationId,

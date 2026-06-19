@@ -54,7 +54,7 @@ import AIInsightCard from './AIInsightCard';
 import FinishSelection from './FinishSelection';
 import ClientList from './ClientList';
 import { clientService } from '../services/clientService';
-import { clientRequestsService, ClientRequest, ClientServiceOrder } from '../services/clientRequestsService';
+import { clientRequestsService, ClientRequest } from '../services/clientRequestsService';
 import { clientMessagesService, ClientPortalMessage } from '../services/clientMessagesService';
 import { exportService } from '../services/exportService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
@@ -73,7 +73,7 @@ interface ClientAreaProps {
     clientProfile?: Client | null;
     clients?: Client[]; // For admin selection
     organizationId?: string | null; // Fallback quando settings não traz organizationId (ex.: portal sem projeto aberto)
-    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao' | 'os';
+    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao';
     portalToken?: string;
     onUpdateSettings?: (settings: ProjectSettings) => void;
     onClientSelect?: (client: Client) => void;
@@ -85,7 +85,7 @@ const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'
 
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false }) => {
     const confirm = useConfirm();
-    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao' | 'os'>(initialTab || 'dashboard');
+    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao'>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
@@ -115,7 +115,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [clientContracts, setClientContracts] = React.useState<Contract[]>([]);
     const [viewingContract, setViewingContract] = React.useState<Contract | null>(null);
     const [clientRequests, setClientRequests] = React.useState<ClientRequest[]>([]);
-    const [clientServiceOrders, setClientServiceOrders] = React.useState<ClientServiceOrder[]>([]);
     const [requestsLoading, setRequestsLoading] = React.useState(false);
     const [showNewRequestForm, setShowNewRequestForm] = React.useState(false);
     const [newRequestForm, setNewRequestForm] = React.useState({ title: '', description: '', category: 'Geral', priority: 'Média' });
@@ -148,13 +147,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 ? clientRequestsService.getRequestsByToken(portalToken)
                 : (clientProfile && orgId ? clientRequestsService.listRequests(orgId, clientProfile.id) : Promise.resolve([]));
             load.then(setClientRequests).catch(console.error).finally(() => setRequestsLoading(false));
-        }
-        if (activeTab === 'os' || (activeTab === 'dashboard' && clientCategory === 'Serviços')) {
-            setRequestsLoading(true);
-            const load = portalToken
-                ? clientRequestsService.getServiceOrdersByToken(portalToken)
-                : (clientProfile && orgId ? clientRequestsService.listServiceOrders(orgId, clientProfile.id) : Promise.resolve([]));
-            load.then(setClientServiceOrders).catch(console.error).finally(() => setRequestsLoading(false));
         }
         // Dashboard de Locação/Serviços precisa dos contratos
         if (activeTab === 'dashboard' && (clientCategory === 'Locação' || clientCategory === 'Serviços') && clientProfile) {
@@ -307,7 +299,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden space-y-0">
                     {/* Hero */}
-                    <div className="-mx-4 bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 px-5 pt-4 pb-10">
+                    <div className="-mx-4 bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-10">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5">
                                 <span className="text-[10px] font-black text-white uppercase tracking-widest">Locação</span>
@@ -438,17 +430,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const renderDashboardServicos = () => {
         const activeContracts = clientContracts.filter(c => c.status === 'Ativo' || c.status === 'Assinado');
         const totalContratado = activeContracts.reduce((s, c) => s + (c.current_value || c.original_value || 0), 0);
-
-        const openOS    = clientServiceOrders.filter(o => o.status === 'Aberta');
-        const execOS    = clientServiceOrders.filter(o => o.status === 'Em Execução');
-        const doneOS    = clientServiceOrders.filter(o => o.status === 'Concluída');
-        const recentOS  = [...clientServiceOrders].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 3);
-
-        const nextScheduled = clientServiceOrders
-            .filter(o => o.scheduled_date && o.status !== 'Concluída' && o.status !== 'Cancelada')
-            .sort((a, b) => a.scheduled_date!.localeCompare(b.scheduled_date!))[0];
-
-        const STATUS_COLOR: Record<string, string> = { Aberta: 'bg-blue-100 text-blue-700', 'Em Execução': 'bg-amber-100 text-amber-700', Concluída: 'bg-emerald-100 text-emerald-700', Cancelada: 'bg-gray-100 text-gray-400' };
         const quickTabs = tabs.filter(t => t.id !== 'dashboard').slice(0, 4);
 
         return (
@@ -456,7 +437,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden space-y-0">
                     {/* Hero */}
-                    <div className="-mx-4 bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 px-5 pt-4 pb-10">
+                    <div className="-mx-4 bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-10">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5"><span className="text-[10px] font-black text-white uppercase tracking-widest">Serviços</span></div>
                             <div className="flex items-center gap-2">
@@ -465,8 +446,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </div>
                         </div>
                         <h2 className="text-2xl font-black text-white leading-tight">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
-                        <p className="text-blue-200 text-sm font-medium mt-1">Acompanhe suas ordens de serviço</p>
-                        {/* Ações rápidas (topo) */}
+                        <p className="text-blue-200 text-sm font-medium mt-1">Acompanhe seus contratos e serviços</p>
                         {quickTabs.length > 0 && (
                             <div className="mt-5 grid grid-cols-4 gap-2">
                                 {quickTabs.map(tab => (
@@ -478,45 +458,41 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </div>
                         )}
                         <div className="mt-4 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-                            <div className="grid grid-cols-2 gap-3 mb-3">
+                            <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Próximo Agendamento</p>
-                                    {nextScheduled ? (<><p className="text-base font-black text-white leading-tight truncate max-w-[130px]">{nextScheduled.title}</p><p className="text-[9px] text-blue-200 font-bold mt-0.5">{new Date(nextScheduled.scheduled_date! + 'T12:00:00').toLocaleDateString('pt-BR')}</p></>) : <p className="text-sm font-black text-white">Sem agendamento</p>}
+                                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Contratos Ativos</p>
+                                    <p className="text-lg font-black text-white">{activeContracts.length}</p>
                                 </div>
                                 <div className="border-l border-white/20 pl-3">
                                     <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Total Contratado</p>
                                     <p className="text-lg font-black text-white">R$ {totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
                                 </div>
                             </div>
-                            {enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="w-full py-2.5 bg-white text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"><ClipboardList className="w-3.5 h-3.5" /> Ver Ordens de Serviço <ArrowRight className="w-3 h-3" /></button>}
                         </div>
                     </div>
-                    {/* KPIs flutuantes */}
-                    <div className="px-4 -mt-4 grid grid-cols-3 gap-3">
-                        {[
-                            { label: 'Abertas', value: openOS.length, icon: <ClipboardList className="w-4 h-4" />, color: openOS.length > 0 ? 'blue' : 'gray', tab: 'os' as const },
-                            { label: 'Execução', value: execOS.length, icon: <Clock className="w-4 h-4" />, color: execOS.length > 0 ? 'amber' : 'gray', tab: 'os' as const },
-                            { label: 'Concluídas', value: doneOS.length, icon: <CheckCircle2 className="w-4 h-4" />, color: 'emerald', tab: 'os' as const },
-                        ].map(card => (
-                            <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-4 shadow-lg shadow-gray-900/5 border border-gray-100 flex flex-col items-center text-center gap-1.5 active:scale-95 transition-transform">
-                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500`}>{card.icon}</div>
-                                <p className="text-xl font-black text-gray-900">{card.value}</p>
-                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-wide leading-tight">{card.label}</p>
-                            </button>
-                        ))}
-                    </div>
-                    {/* OS recentes */}
-                    {recentOS.length > 0 && <div className="px-4 mt-4 pb-6 space-y-2">
-                        <div className="flex items-center justify-between mb-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">OS Recentes</p>{enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Ver todas</button>}</div>
-                        {recentOS.map(os => (<div key={os.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0 flex items-center gap-2"><span className="text-[9px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-lg shrink-0">{os.number}</span><p className="text-sm font-black text-gray-900 truncate">{os.title}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span></div>))}
-                    </div>}
-                    {/* Empty state + atalhos */}
-                    {recentOS.length === 0 && (
+                    {/* Contratos recentes */}
+                    {activeContracts.length > 0 ? (
+                        <div className="px-4 mt-4 pb-6 space-y-2">
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contratos Ativos</p>
+                                {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Ver todos</button>}
+                            </div>
+                            {activeContracts.slice(0, 3).map(c => (
+                                <div key={c.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-black text-gray-900 truncate">{c.title}</p>
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mt-0.5">{c.contract_type}</p>
+                                    </div>
+                                    <span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
                         <div className="px-4 mt-6 pb-6">
                             <div className="flex flex-col items-center text-center py-4">
-                                <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400 mb-3"><ClipboardList className="w-7 h-7" /></div>
-                                <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhuma ordem de serviço ainda</p>
-                                <p className="text-xs text-gray-400 font-medium mt-1 max-w-[240px]">Suas ordens de serviço e agendamentos aparecerão aqui.</p>
+                                <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400 mb-3"><FileText className="w-7 h-7" /></div>
+                                <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhum contrato ativo</p>
+                                <p className="text-xs text-gray-400 font-medium mt-1 max-w-[240px]">Seus contratos aparecerão aqui.</p>
                             </div>
                         </div>
                     )}
@@ -529,40 +505,35 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div>
                             <p className="text-indigo-200 text-xs font-black uppercase tracking-widest mb-1">Serviços</p>
                             <h2 className="text-2xl font-black text-white">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
-                            <p className="text-indigo-200 text-sm mt-1">Acompanhe suas ordens de serviço</p>
+                            <p className="text-indigo-200 text-sm mt-1">Acompanhe seus contratos e serviços</p>
                         </div>
-                        <div className="flex items-center gap-4">
-                            <div className="text-right">
-                                <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Próximo Agendamento</p>
-                                <p className="text-lg font-black text-white mt-0.5">{nextScheduled ? nextScheduled.title : 'Sem agendamento'}</p>
-                                {nextScheduled && <p className="text-[10px] text-indigo-200 font-bold">{new Date(nextScheduled.scheduled_date! + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
+                        <div className="text-right">
+                            <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Total Contratado</p>
+                            <p className="text-2xl font-black text-white mt-0.5">R$ {totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                            <p className="text-[10px] text-indigo-200 font-bold mt-0.5">{activeContracts.length} contrato{activeContracts.length !== 1 ? 's' : ''} ativo{activeContracts.length !== 1 ? 's' : ''}</p>
+                        </div>
+                    </div>
+                    {/* Contratos */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos Ativos</h3>
+                            {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Ver todos</button>}
+                        </div>
+                        {activeContracts.length === 0 ? (
+                            <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {activeContracts.slice(0, 5).map(c => (
+                                    <div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0">
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-bold text-gray-900 truncate">{c.title}</p>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase">{c.contract_type}{c.sla_days != null ? ` · SLA ${c.sla_days}d` : ''}</p>
+                                        </div>
+                                        <span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                                    </div>
+                                ))}
                             </div>
-                            {enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="flex items-center gap-2 px-5 py-3 bg-white text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-50 transition-all shadow"><ClipboardList className="w-4 h-4" /> Ver OS</button>}
-                        </div>
-                    </div>
-                    {/* KPIs */}
-                    <div className="grid grid-cols-3 gap-6">
-                        {[
-                            { label: 'OS Abertas', value: openOS.length, icon: <ClipboardList className="w-5 h-5" />, color: openOS.length > 0 ? 'blue' : 'gray', tab: 'os' as const },
-                            { label: 'Em Execução', value: execOS.length, icon: <Clock className="w-5 h-5" />, color: execOS.length > 0 ? 'amber' : 'gray', tab: 'os' as const },
-                            { label: 'Concluídas', value: doneOS.length, icon: <CheckCircle2 className="w-5 h-5" />, color: 'emerald', tab: 'os' as const },
-                        ].map(card => (
-                            <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center gap-4 hover:border-indigo-200 hover:shadow-md transition-all text-left">
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500 shrink-0`}>{card.icon}</div>
-                                <div><p className="text-2xl font-black text-gray-900">{card.value}</p><p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-0.5">{card.label}</p></div>
-                            </button>
-                        ))}
-                    </div>
-                    {/* Duas colunas: OS + contratos */}
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Ordens de Serviço Recentes</h3>{enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Ver todas</button>}</div>
-                            {recentOS.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhuma OS</p> : <div className="space-y-3">{recentOS.map(os => (<div key={os.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0 flex items-center gap-2"><span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-lg shrink-0">{os.number}</span><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{os.title}</p>{os.scheduled_date && <p className="text-[10px] font-bold text-gray-400 uppercase">{new Date(os.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}</div></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span></div>))}</div>}
-                        </div>
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos Ativos</h3>{enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
-                            {activeContracts.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p> : <div className="space-y-3">{activeContracts.slice(0, 3).map(c => (<div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{c.title}</p><p className="text-[10px] font-bold text-gray-400 uppercase">{c.contract_type}{c.sla_days != null ? ` · SLA ${c.sla_days}d` : ''}</p></div><span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span></div>))}</div>}
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -3072,13 +3043,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         { id: 'financeiro', label: 'Financeiro', icon: <DollarSign className="w-4 h-4" /> },
         { id: 'suporte', label: 'Suporte', icon: <ShieldCheck className="w-4 h-4" /> },
         { id: 'manutencao', label: 'Manutenção', icon: <Wrench className="w-4 h-4" /> },
-        { id: 'os', label: 'Ordens de Serviço', icon: <ClipboardList className="w-4 h-4" /> },
     ];
 
     const CATEGORY_TAB_PRESETS: Record<string, string[]> = {
         'Vendas':   ['dashboard', 'jornada', 'visual', 'personalizacao', 'diario', 'documentos', 'contratos', 'financeiro', 'suporte'],
         'Locação':  ['dashboard', 'financeiro', 'contratos', 'documentos', 'manutencao'],
-        'Serviços': ['dashboard', 'os', 'financeiro', 'contratos', 'documentos'],
+        'Serviços': ['dashboard', 'financeiro', 'contratos', 'documentos'],
     };
 
     const clientCategory = clientProfile?.category ?? '';
@@ -3861,85 +3831,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             </button>
                                         </div>
                                     </div>
-                                </div>
-                            )}
-                        </div>
-                    );
-                })()}
-                {activeTab === 'os' && (() => {
-                    const abertas     = clientServiceOrders.filter(o => o.status === 'Aberta').length;
-                    const emExecucao  = clientServiceOrders.filter(o => o.status === 'Em Execução').length;
-                    const concluidas  = clientServiceOrders.filter(o => o.status === 'Concluída').length;
-                    const STATUS_COLOR: Record<string, string> = { Aberta: 'bg-blue-100 text-blue-700', 'Em Execução': 'bg-amber-100 text-amber-700', Concluída: 'bg-emerald-100 text-emerald-700', Cancelada: 'bg-gray-100 text-gray-400' };
-                    const PRIORITY_COLOR: Record<string, string> = { Urgente: 'bg-red-100 text-red-600', Alta: 'bg-orange-100 text-orange-600', Média: 'bg-amber-100 text-amber-700', Baixa: 'bg-gray-100 text-gray-500' };
-                    return (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-                            <div className="flex items-center gap-3">
-                                <div className="w-1.5 h-6 bg-blue-500 rounded-full" />
-                                <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Ordens de Serviço</h3>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {[
-                                    { label: 'Abertas', value: abertas, icon: <ClipboardList className="w-5 h-5" />, cls: 'bg-blue-50 text-blue-500' },
-                                    { label: 'Em Execução', value: emExecucao, icon: <Clock className="w-5 h-5" />, cls: 'bg-amber-50 text-amber-500' },
-                                    { label: 'Concluídas', value: concluidas, icon: <CheckCircle2 className="w-5 h-5" />, cls: 'bg-emerald-50 text-emerald-500' },
-                                ].map(card => (
-                                    <div key={card.label} className="bg-white border border-gray-100 rounded-3xl p-6 flex items-center gap-4 shadow-sm">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${card.cls}`}>{card.icon}</div>
-                                        <div>
-                                            <p className="text-3xl font-black text-gray-900">{card.value}</p>
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {requestsLoading ? (
-                                <div className="flex justify-center py-12"><div className="w-6 h-6 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>
-                            ) : clientServiceOrders.length === 0 ? (
-                                <div className="bg-white border border-gray-100 rounded-[2.5rem] p-12 flex flex-col items-center text-center shadow-sm">
-                                    <ClipboardList className="w-12 h-12 text-gray-200 mb-4" />
-                                    <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Nenhuma ordem de serviço</p>
-                                    <p className="text-xs text-gray-400 mt-1">As ordens serão criadas pela equipe e aparecerão aqui</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {clientServiceOrders.map(os => (
-                                        <div key={os.id} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-blue-200 transition-all">
-                                            <div className="flex flex-col gap-1.5 min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-lg shrink-0">{os.number}</span>
-                                                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight truncate">{os.title}</span>
-                                                </div>
-                                                <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                                    {os.scheduled_date && <span>Agendada: {new Date(os.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
-                                                    {os.completed_date && <><span>·</span><span>Concluída: {new Date(os.completed_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span></>}
-                                                    {os.assigned_to && <><span>·</span><span>{os.assigned_to}</span></>}
-                                                    {os.value != null && <><span>·</span><span>R$ {os.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></>}
-                                                </div>
-                                                {os.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{os.description}</p>}
-                                            </div>
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${PRIORITY_COLOR[os.priority] ?? 'bg-gray-100 text-gray-500'}`}>{os.priority}</span>
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLOR[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span>
-                                                {isAdmin && (
-                                                    <select
-                                                        value={os.status}
-                                                        onChange={async e => {
-                                                            const newStatus = e.target.value as ClientServiceOrder['status'];
-                                                            await clientRequestsService.updateServiceOrder(os.id, { status: newStatus, completed_date: newStatus === 'Concluída' ? new Date().toISOString().split('T')[0] : undefined });
-                                                            setClientServiceOrders(prev => prev.map(o => o.id === os.id ? { ...o, status: newStatus } : o));
-                                                        }}
-                                                        className="text-[9px] font-black uppercase bg-gray-50 border border-gray-200 rounded-xl px-2 py-1 cursor-pointer"
-                                                        onClick={e => e.stopPropagation()}
-                                                    >
-                                                        {['Aberta','Em Execução','Concluída','Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}
-                                                    </select>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
                                 </div>
                             )}
                         </div>

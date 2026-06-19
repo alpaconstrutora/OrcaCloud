@@ -319,7 +319,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
                                                     <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
                                                     <YAxis type="category" dataKey="project_name" tick={{ fontSize: 10 }} width={120} />
-                                                    <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Margem']} />
+                                                    <Tooltip formatter={(v: unknown) => [`${(v as number).toFixed(1)}%`, 'Margem']} />
                                                     <Bar dataKey="margem_pct" radius={[0, 4, 4, 0]}>
                                                         {scorecards.slice(0, 10).map((s, i) => (
                                                             <Cell key={i} fill={s.margem_pct < 0 ? '#ef4444' : s.margem_pct < 10 ? '#f59e0b' : '#22c55e'} />
@@ -416,7 +416,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                                                     <XAxis dataKey="data_ref" tickFormatter={fmtDate} tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                                                     <YAxis tick={{ fontSize: 10 }} tickFormatter={v => fmt(v, true)} width={72} />
-                                                    <Tooltip content={<CashflowTooltip />} formatter={(v: number) => fmt(v)} labelFormatter={fmtDate} />
+                                                    <Tooltip content={<CashflowTooltip />} formatter={(v: unknown) => fmt(v as number)} labelFormatter={(iso: unknown) => fmtDate(iso as string)} />
                                                     <Area
                                                         type="monotone"
                                                         dataKey="saldo_acum"
@@ -440,7 +440,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                                                     <XAxis dataKey="data_ref" tickFormatter={fmtDate} tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                                                     <YAxis tick={{ fontSize: 10 }} tickFormatter={v => fmt(v, true)} width={72} />
-                                                    <Tooltip formatter={(v: number) => fmt(v)} labelFormatter={fmtDate} />
+                                                    <Tooltip formatter={(v: unknown) => fmt(v as number)} labelFormatter={(iso: unknown) => fmtDate(iso as string)} />
                                                     <Bar dataKey="cr_previsto" name="Entradas" fill="#22c55e" radius={[2, 2, 0, 0]} stackId="a" />
                                                     <Bar dataKey="db_previsto" name="Saídas"   fill="#f97316" radius={[2, 2, 0, 0]} stackId="b" />
                                                 </BarChart>

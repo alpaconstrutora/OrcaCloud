@@ -467,25 +467,29 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
               </button>
             </div>
 
-            {/* View controls */}
+            {/* View controls — linha 1: Lista | Kanban | Agrupar */}
             <div className="flex items-center gap-2 mt-2">
-              <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white">
-                <button className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-black uppercase bg-slate-900 text-white">
+              <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white flex-1">
+                <button className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-black uppercase bg-slate-900 text-white">
                   <AlignLeft className="w-3 h-3" />Lista
                 </button>
-                <button className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-black uppercase text-slate-400">
+                <button className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-black uppercase text-slate-400 border-l border-slate-100">
                   <Columns2 className="w-3 h-3" />Kanban
                 </button>
-                <button className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-black uppercase text-slate-400">
+                <button className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-black uppercase text-slate-400 border-l border-slate-100">
                   <Layers className="w-3 h-3" />Agrupar
                 </button>
               </div>
-              <button className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase border border-slate-200 text-slate-500 bg-white">
+            </div>
+
+            {/* View controls — linha 2: Status | + Nova */}
+            <div className="flex items-center gap-2 mt-1.5">
+              <button className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 text-slate-500 bg-white">
                 <Settings2 className="w-3 h-3" />Status
               </button>
               <button
                 onClick={() => setShowNewTask(true)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white shadow-sm"
               >
                 <Plus className="w-3 h-3" />Nova
               </button>

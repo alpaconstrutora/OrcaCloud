@@ -179,7 +179,7 @@ const TaskForm: React.FC<Props> = ({
     try {
       let taskId: string
       if (task?.id) {
-        const { error: e } = await supabase.from('tasks').update(payload).eq('id', task.id)
+        const { error: e } = await supabase.from('tasks').update({ ...payload, org_id: selectedOrgId }).eq('id', task.id)
         if (e) throw e
         taskId = task.id
       } else {
@@ -282,7 +282,19 @@ const TaskForm: React.FC<Props> = ({
           {orgs.length > 1 && !parentTaskId && (
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Organização</label>
-              <select value={selectedOrgId} onChange={(e) => { setSelectedOrgId(e.target.value); onOrgChange?.(e.target.value) }} className={inp} disabled={!!task?.id}>
+              <select
+                value={selectedOrgId}
+                onChange={(e) => {
+                  const newOrg = e.target.value
+                  setSelectedOrgId(newOrg)
+                  // Espaço, pasta e status são vinculados à org — resetar ao trocar
+                  setSpaceId('')
+                  setFolderId('')
+                  setStatusId('')
+                  onOrgChange?.(newOrg)
+                }}
+                className={inp}
+              >
                 <option value="">Selecione...</option>
                 {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
               </select>

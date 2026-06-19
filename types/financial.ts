@@ -434,6 +434,50 @@ export interface InadimplenciaFaixa {
 }
 
 // ────────────────────────────────────────────────────────────
+// Aprovação Financeira por Faixas
+// ────────────────────────────────────────────────────────────
+
+export type ApprovalStatus = 'RASCUNHO' | 'PENDENTE' | 'APROVADO' | 'REJEITADO';
+
+export interface ApprovalStep {
+    level: 1 | 2;
+    role: string;
+    action: 'APROVADO' | 'REJEITADO';
+    approved_by: string;
+    approved_at: string;
+    notes?: string;
+}
+
+export interface FinancialApprovalConfig {
+    id?: string;
+    organization_id: string;
+    faixa_min: number;
+    faixa_max: number | null;
+    required_levels: 1 | 2;
+    level1_label: string;
+    level2_label?: string;
+    is_active: boolean;
+    sort_order: number;
+    created_at?: string;
+}
+
+export interface ApprovalQueueItem {
+    id: string;
+    organization_id: string;
+    transaction_date: string;
+    due_date?: string;
+    amount: number;
+    description?: string;
+    party_name?: string;
+    project_name?: string;
+    approval_status: ApprovalStatus;
+    approval_chain: ApprovalStep[];
+    approval_required_levels: number;
+    business_status?: string;
+    created_at?: string;
+}
+
+// ────────────────────────────────────────────────────────────
 // Fluxo de Caixa
 // ────────────────────────────────────────────────────────────
 

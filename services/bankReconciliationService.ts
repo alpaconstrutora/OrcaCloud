@@ -242,12 +242,17 @@ export const bankReconciliationService = {
                         console.warn('[Aviso] Falha ao gravar log de auditoria, mas a regra continua:', logError);
                     }
 
+                    // auto_confirm: marca como CONFIRMED (transação já contabilizada externamente,
+                    // ex.: repasse de gateway) — sai do pool de matching de receita, evitando
+                    // dupla contagem com recebíveis já baixados via webhook.
+                    const nextStatus = rule.actions.auto_confirm ? 'CONFIRMED' : 'RULE_APPLIED';
+
                     const { error: updateError } = await supabase
                         .from('bank_transactions')
                         .update({
                             category: rule.actions.category,
                             counterparty_name: rule.actions.counterparty || tx.counterparty_name,
-                            status: 'RULE_APPLIED'
+                            status: nextStatus
                         })
                         .eq('id', tx.id);
                     

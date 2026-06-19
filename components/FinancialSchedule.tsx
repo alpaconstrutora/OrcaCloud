@@ -42,6 +42,7 @@ import { LastPlannerPanel } from './schedule/LastPlannerPanel';
 import { ScenariosPanel } from './schedule/ScenariosPanel';
 import { CommandCenterPanel } from './schedule/CommandCenterPanel';
 import { SupplyPanel } from './schedule/SupplyPanel';
+import { EapPanel } from './schedule/EapPanel';
 import { orderService } from '../services/orderService';
 import { projectService } from '../services/projectService';
 import ScheduleHeader from './schedule/ScheduleHeader';
@@ -544,17 +545,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         }
     );
 
-    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply'>(() => {
+    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap'>(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('schedule-view-mode');
-            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks' || saved === 'constraints' || saved === 'weekly' || saved === 'scenarios' || saved === 'command' || saved === 'supply') {
+            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks' || saved === 'constraints' || saved === 'weekly' || saved === 'scenarios' || saved === 'command' || saved === 'supply' || saved === 'eap') {
                 return saved;
             }
         }
         return 'table';
     });
 
-    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply') => {
+    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap') => {
         setViewModeState(mode);
         localStorage.setItem('schedule-view-mode', mode);
     };
@@ -1995,6 +1996,22 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 updatedSchedules.push({ id: itemId, manualRealPct: clampedValue });
             }
 
+            const newSchedule = { ...prev, itemSchedules: updatedSchedules };
+            persistSchedule(newSchedule);
+            return newSchedule;
+        });
+    };
+
+    const handleUpdateLocation = (itemId: string, location: import('../types/schedule').EapLocation) => {
+        setSchedule(prev => {
+            const currentItems = prev.itemSchedules || [];
+            const taskIdx = currentItems.findIndex(s => s.id === itemId);
+            const updatedSchedules = [...currentItems];
+            if (taskIdx >= 0) {
+                updatedSchedules[taskIdx] = { ...updatedSchedules[taskIdx], location };
+            } else {
+                updatedSchedules.push({ id: itemId, location });
+            }
             const newSchedule = { ...prev, itemSchedules: updatedSchedules };
             persistSchedule(newSchedule);
             return newSchedule;
@@ -3834,6 +3851,16 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             organizationId={organizationId}
                             projectId={settings.id}
                             onNavigateToProcurement={() => onBack?.()}
+                        />
+                    </div>
+                )}
+
+                {viewMode === 'eap' && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                        <EapPanel
+                            hierarchy={hierarchy}
+                            schedule={schedule}
+                            onUpdateLocation={handleUpdateLocation}
                         />
                     </div>
                 )}

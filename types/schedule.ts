@@ -89,6 +89,25 @@ export interface ItemDistribution {
     value: number;
 }
 
+export interface EapLocation {
+    bloco?: string;
+    pavimento?: string;
+    ambiente?: string;
+    disciplina?: string;
+}
+
+export interface EapNode {
+    key: string;          // unique path: "bloco|pavimento|ambiente"
+    label: string;
+    level: 'bloco' | 'pavimento' | 'ambiente' | 'disciplina' | 'unassigned';
+    children: EapNode[];
+    itemIds: string[];    // leaf schedule item IDs at this node
+    completionPct: number;
+    budgetedTotal: number;
+    startDate?: string;
+    endDate?: string;
+}
+
 export interface ItemScheduleDetails {
     id: string;
     startDate?: string;
@@ -124,6 +143,7 @@ export interface ItemScheduleDetails {
     mainWorkerProd?: number;
     helperProd?: number;
     autoDuration?: boolean;
+    location?: EapLocation;
 }
 
 export interface LevelingIssue {

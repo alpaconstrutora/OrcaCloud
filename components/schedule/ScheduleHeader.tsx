@@ -28,8 +28,8 @@ interface ScheduleHeaderProps {
     setIsProjectSelectorOpen: (open: boolean) => void;
     projects: any[];
     onLoadProject: (id: string, view: string) => void;
-    viewMode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply';
-    setViewMode: (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply') => void;
+    viewMode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap';
+    setViewMode: (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap') => void;
     timeScale: 'day' | 'week' | 'month' | 'year';
     setTimeScale: (scale: 'day' | 'week' | 'month' | 'year') => void;
     schedule: ProjectSchedule;
@@ -185,6 +185,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                         { key: 'scenarios', label: 'Cenários' },
                         { key: 'command', label: '⚡ Comando' },
                         { key: 'supply', label: '🛒 Suprimentos' },
+                        { key: 'eap',    label: '🏗️ EAP Física' },
                     ] as const).map(({ key, label }) => (
                         <button
                             key={key}

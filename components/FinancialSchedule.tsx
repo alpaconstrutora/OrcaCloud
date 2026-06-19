@@ -40,6 +40,7 @@ import { ScheduleRiskDashboard } from './schedule/ScheduleRiskDashboard';
 import { ConstraintsPanel } from './schedule/ConstraintsPanel';
 import { LastPlannerPanel } from './schedule/LastPlannerPanel';
 import { ScenariosPanel } from './schedule/ScenariosPanel';
+import { CommandCenterPanel } from './schedule/CommandCenterPanel';
 import { orderService } from '../services/orderService';
 import { projectService } from '../services/projectService';
 import ScheduleHeader from './schedule/ScheduleHeader';
@@ -542,17 +543,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         }
     );
 
-    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios'>(() => {
+    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command'>(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('schedule-view-mode');
-            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks' || saved === 'constraints' || saved === 'weekly' || saved === 'scenarios') {
+            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks' || saved === 'constraints' || saved === 'weekly' || saved === 'scenarios' || saved === 'command') {
                 return saved;
             }
         }
         return 'table';
     });
 
-    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios') => {
+    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command') => {
         setViewModeState(mode);
         localStorage.setItem('schedule-view-mode', mode);
     };
@@ -3808,6 +3809,19 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             schedule={schedule}
                             onApplyScenario={handleApplyScenario}
                             onDeleteScenario={handleDeleteScenario}
+                        />
+                    </div>
+                )}
+
+                {viewMode === 'command' && (
+                    <div className="bg-gray-50/50 rounded-2xl border border-gray-100 shadow-sm p-5">
+                        <CommandCenterPanel
+                            hierarchy={hierarchy}
+                            schedule={schedule}
+                            budget={budget}
+                            realizedValues={realizedState.realizedValues}
+                            organizationId={organizationId}
+                            projectId={settings.id}
                         />
                     </div>
                 )}

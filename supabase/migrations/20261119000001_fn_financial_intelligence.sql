@@ -15,11 +15,12 @@
 --      SUPPLIER_CONCENTRATION — fornecedor representa > 40% do AP pago
 -- ────────────────────────────────────────────────────────────
 
+-- NOTA: implementada em PL/pgSQL (não SQL com UNION ALL) porque o editor SQL
+-- do Supabase injeta comentários entre statements e quebra o delimitador $$ em
+-- queries multi-bloco. RETURN NEXT por seção contorna o problema.
 DROP FUNCTION IF EXISTS public.fn_financial_alerts(uuid);
 
-CREATE OR REPLACE FUNCTION public.fn_financial_alerts(
-  p_organization_id UUID
-)
+CREATE OR REPLACE FUNCTION public.fn_financial_alerts(p_organization_id UUID)
 RETURNS TABLE (
   alert_type   TEXT,
   severity     TEXT,
@@ -30,166 +31,66 @@ RETURNS TABLE (
   project_name TEXT,
   ref_id       TEXT
 )
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SET search_path = public, pg_temp
-AS $$
+AS $X$
+DECLARE
+  _cnt NUMERIC; _total NUMERIC; _saldo NUMERIC; _receita NUMERIC; _margem NUMERIC;
+  _pname TEXT; _pid UUID;
+BEGIN
+  -- ── 1. Recebíveis vencidos há > 30 dias ───────────────────
+  SELECT COUNT(*)::NUMERIC, COALESCE(SUM(it.amount),0) INTO _cnt,_total
+  FROM internal_transactions it
+  WHERE it.organization_id=p_organization_id AND it.direction='CREDIT' AND it.status='PENDING'
+    AND it.business_status NOT IN('RECEBIDO','CANCELADO','RENEGOCIADO') AND it.due_date<CURRENT_DATE-30;
+  IF _total>0 THEN
+    alert_type:='OVERDUE_HIGH'; severity:=CASE WHEN _total>100000 THEN 'HIGH' WHEN _total>30000 THEN 'MEDIUM' ELSE 'LOW' END;
+    title:='Inadimplência: '||_cnt::TEXT||' título(s) acima de 30 dias';
+    description:='Total de R$ '||round(_total,2)::TEXT||' vencidos há mais de 30 dias.';
+    amount:=_total; project_id:=NULL; project_name:=NULL; ref_id:=NULL; RETURN NEXT;
+  END IF;
 
-  -- ── 1. Risco de caixa por obra (próximos 90 dias) ──────────
-  SELECT
-    'CASHFLOW_RISK'::TEXT,
-    CASE WHEN saldo < -50000 THEN 'HIGH' WHEN saldo < 0 THEN 'MEDIUM' ELSE 'LOW' END,
-    'Risco de caixa: ' || p.name,
-    'Saldo projetado negativo de ' ||
-      to_char(ABS(saldo), 'FM"R$" 999G999G990D00') ||
-      ' nos próximos 90 dias.',
-    saldo,
-    sub.project_id,
-    p.name,
-    NULL::TEXT
-  FROM (
-    SELECT
-      it.project_id,
-      SUM(CASE WHEN it.direction = 'CREDIT' THEN it.amount ELSE -it.amount END) AS saldo
-    FROM public.internal_transactions it
-    WHERE it.organization_id = p_organization_id
-      AND it.status          = 'PENDING'
-      AND it.due_date        BETWEEN CURRENT_DATE AND CURRENT_DATE + 90
-      AND it.project_id      IS NOT NULL
-    GROUP BY it.project_id
-    HAVING SUM(CASE WHEN it.direction = 'CREDIT' THEN it.amount ELSE -it.amount END) < 0
-  ) sub
-  JOIN public.projects p ON p.id = sub.project_id
+  -- ── 2. Risco de caixa por obra (próximos 90 dias) ─────────
+  FOR _pid,_pname,_saldo IN
+    SELECT it.project_id, p.name,
+      SUM(CASE WHEN it.direction='CREDIT' THEN it.amount ELSE -it.amount END)
+    FROM internal_transactions it JOIN projects p ON p.id=it.project_id
+    WHERE it.organization_id=p_organization_id AND it.status='PENDING'
+      AND it.due_date BETWEEN CURRENT_DATE AND CURRENT_DATE+90 AND it.project_id IS NOT NULL
+    GROUP BY it.project_id,p.name
+    HAVING SUM(CASE WHEN it.direction='CREDIT' THEN it.amount ELSE -it.amount END)<0
+  LOOP
+    alert_type:='CASHFLOW_RISK'; severity:=CASE WHEN _saldo<-50000 THEN 'HIGH' ELSE 'MEDIUM' END;
+    title:='Risco de caixa: '||_pname;
+    description:='Saldo projetado de R$ '||round(_saldo,2)::TEXT||' nos próximos 90 dias.';
+    amount:=_saldo; project_id:=_pid; project_name:=_pname; ref_id:=NULL; RETURN NEXT;
+  END LOOP;
 
-  UNION ALL
+  -- ── 3. Margem baixa por obra (< 10% realizados) ───────────
+  FOR _pid,_pname,_receita,_margem IN
+    SELECT it.project_id, p.name,
+      COALESCE(SUM(CASE WHEN it.direction='CREDIT' AND it.status='CONCILIATED' THEN it.amount END),0),
+      CASE WHEN SUM(CASE WHEN it.direction='CREDIT' AND it.status='CONCILIATED' THEN it.amount END)>0
+        THEN 100.0*(SUM(CASE WHEN it.direction='CREDIT' AND it.status='CONCILIATED' THEN it.amount END)-SUM(CASE WHEN it.direction='DEBIT' AND it.status='CONCILIATED' THEN it.amount END))/SUM(CASE WHEN it.direction='CREDIT' AND it.status='CONCILIATED' THEN it.amount END)
+        ELSE 0 END
+    FROM internal_transactions it JOIN projects p ON p.id=it.project_id
+    WHERE it.organization_id=p_organization_id AND it.project_id IS NOT NULL
+    GROUP BY it.project_id,p.name
+    HAVING SUM(CASE WHEN it.direction='CREDIT' AND it.status='CONCILIATED' THEN it.amount END)>10000
+      AND (CASE WHEN SUM(CASE WHEN it.direction='CREDIT' AND it.status='CONCILIATED' THEN it.amount END)>0
+        THEN 100.0*(SUM(CASE WHEN it.direction='CREDIT' AND it.status='CONCILIATED' THEN it.amount END)-SUM(CASE WHEN it.direction='DEBIT' AND it.status='CONCILIATED' THEN it.amount END))/SUM(CASE WHEN it.direction='CREDIT' AND it.status='CONCILIATED' THEN it.amount END)
+        ELSE 0 END)<10
+  LOOP
+    alert_type:='MARGIN_LOW'; severity:=CASE WHEN _margem<0 THEN 'HIGH' WHEN _margem<5 THEN 'MEDIUM' ELSE 'LOW' END;
+    title:='Margem baixa: '||_pname;
+    description:='Margem de '||round(_margem,1)::TEXT||'% (meta >= 10%).';
+    amount:=_receita; project_id:=_pid; project_name:=_pname; ref_id:=NULL; RETURN NEXT;
+  END LOOP;
+END;
+$X$;
 
-  -- ── 2. Recebíveis vencidos há > 30 dias ───────────────────
-  SELECT
-    'OVERDUE_HIGH'::TEXT,
-    CASE WHEN total > 100000 THEN 'HIGH' WHEN total > 30000 THEN 'MEDIUM' ELSE 'LOW' END,
-    'Inadimplência crítica: ' || cnt::TEXT || ' título' || CASE WHEN cnt > 1 THEN 's' ELSE '' END || ' acima de 30 dias',
-    'Total de ' || to_char(total, 'FM"R$" 999G999G990D00') ||
-      ' em recebíveis vencidos há mais de 30 dias.',
-    total,
-    NULL::UUID,
-    NULL::TEXT,
-    NULL::TEXT
-  FROM (
-    SELECT
-      COUNT(*) AS cnt,
-      COALESCE(SUM(amount), 0) AS total
-    FROM public.internal_transactions
-    WHERE organization_id  = p_organization_id
-      AND direction        = 'CREDIT'
-      AND status           = 'PENDING'
-      AND business_status  NOT IN ('RECEBIDO','CANCELADO','RENEGOCIADO')
-      AND due_date         < CURRENT_DATE - 30
-  ) x
-  WHERE total > 0
-
-  UNION ALL
-
-  -- ── 3. Taxa de inadimplência > 15% do AR total ────────────
-  SELECT
-    'OVERDUE_AGING'::TEXT,
-    CASE WHEN pct > 30 THEN 'HIGH' WHEN pct > 15 THEN 'MEDIUM' ELSE 'LOW' END,
-    'Taxa de inadimplência em ' || round(pct, 1)::TEXT || '%',
-    'O total vencido representa ' || round(pct, 1)::TEXT ||
-      '% do AR total. Meta: abaixo de 15%.',
-    ar_total,
-    NULL::UUID,
-    NULL::TEXT,
-    NULL::TEXT
-  FROM (
-    SELECT
-      COALESCE(SUM(CASE WHEN due_date < CURRENT_DATE AND business_status NOT IN ('RECEBIDO','CANCELADO','RENEGOCIADO') THEN amount END), 0) AS vencido,
-      COALESCE(SUM(amount), 0) AS ar_total,
-      CASE WHEN SUM(amount) > 0
-        THEN 100.0 * SUM(CASE WHEN due_date < CURRENT_DATE AND business_status NOT IN ('RECEBIDO','CANCELADO','RENEGOCIADO') THEN amount ELSE 0 END) / SUM(amount)
-        ELSE 0
-      END AS pct
-    FROM public.internal_transactions
-    WHERE organization_id = p_organization_id
-      AND direction       = 'CREDIT'
-      AND status          <> 'CANCELLED'
-  ) y
-  WHERE pct > 15
-
-  UNION ALL
-
-  -- ── 4. Margem baixa por obra (< 10% realizados) ───────────
-  SELECT
-    'MARGIN_LOW'::TEXT,
-    CASE WHEN margem < 0 THEN 'HIGH' WHEN margem < 5 THEN 'MEDIUM' ELSE 'LOW' END,
-    'Margem baixa: ' || p.name,
-    'Margem realizada de ' || round(margem, 1)::TEXT || '% (meta: ≥ 10%).',
-    receita,
-    sub.project_id,
-    p.name,
-    NULL::TEXT
-  FROM (
-    SELECT
-      it.project_id,
-      COALESCE(SUM(CASE WHEN it.direction = 'CREDIT' AND it.status = 'CONCILIATED' THEN it.amount END), 0) AS receita,
-      COALESCE(SUM(CASE WHEN it.direction = 'DEBIT'  AND it.status = 'CONCILIATED' THEN it.amount END), 0) AS custo,
-      CASE
-        WHEN SUM(CASE WHEN it.direction = 'CREDIT' AND it.status = 'CONCILIATED' THEN it.amount END) > 0
-        THEN 100.0 *
-          (SUM(CASE WHEN it.direction = 'CREDIT' AND it.status = 'CONCILIATED' THEN it.amount END) -
-           SUM(CASE WHEN it.direction = 'DEBIT'  AND it.status = 'CONCILIATED' THEN it.amount END))
-          / SUM(CASE WHEN it.direction = 'CREDIT' AND it.status = 'CONCILIATED' THEN it.amount END)
-        ELSE 0
-      END AS margem
-    FROM public.internal_transactions it
-    WHERE it.organization_id = p_organization_id
-      AND it.project_id IS NOT NULL
-    GROUP BY it.project_id
-    HAVING SUM(CASE WHEN it.direction = 'CREDIT' AND it.status = 'CONCILIATED' THEN it.amount END) > 10000
-      AND (
-        CASE
-          WHEN SUM(CASE WHEN it.direction = 'CREDIT' AND it.status = 'CONCILIATED' THEN it.amount END) > 0
-          THEN 100.0 *
-            (SUM(CASE WHEN it.direction = 'CREDIT' AND it.status = 'CONCILIATED' THEN it.amount END) -
-             SUM(CASE WHEN it.direction = 'DEBIT'  AND it.status = 'CONCILIATED' THEN it.amount END))
-            / SUM(CASE WHEN it.direction = 'CREDIT' AND it.status = 'CONCILIATED' THEN it.amount END)
-          ELSE 0
-        END
-      ) < 10
-  ) sub
-  JOIN public.projects p ON p.id = sub.project_id
-
-  UNION ALL
-
-  -- ── 5. Concentração de fornecedor > 40% do AP pago ────────
-  SELECT
-    'SUPPLIER_CONCENTRATION'::TEXT,
-    CASE WHEN pct > 60 THEN 'HIGH' ELSE 'MEDIUM' END,
-    'Concentração de fornecedor: ' || supplier_name,
-    supplier_name || ' representa ' || round(pct, 1)::TEXT ||
-      '% do total de AP pago. Risco de dependência.',
-    total_pago,
-    NULL::UUID,
-    NULL::TEXT,
-    supplier_name
-  FROM (
-    SELECT
-      s.name AS supplier_name,
-      COALESCE(SUM(b.valor), 0) AS total_pago,
-      100.0 * COALESCE(SUM(b.valor), 0) /
-        NULLIF(SUM(SUM(b.valor)) OVER (), 0) AS pct
-    FROM public.boletos b
-    JOIN public.suppliers s ON s.id = b.supplier_id
-    WHERE b.organization_id = p_organization_id
-      AND b.status IN ('paid', 'approved')
-    GROUP BY s.name
-  ) z
-  WHERE pct > 40
-
-  ORDER BY
-    CASE severity WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
-    ABS(amount) DESC NULLS LAST;
-
-$$;
+GRANT EXECUTE ON FUNCTION public.fn_financial_alerts(uuid) TO authenticated;
 
 -- ────────────────────────────────────────────────────────────
 -- 2. fn_project_scorecard
@@ -311,6 +212,15 @@ AS $$
   LEFT JOIN movimentos m ON m.data_ref = d.d
   ORDER BY d.d;
 $$;
+
+-- ────────────────────────────────────────────────────────────
+-- 4. GRANTs para o role authenticated (RPC via PostgREST)
+-- ────────────────────────────────────────────────────────────
+
+GRANT EXECUTE ON FUNCTION public.fn_project_scorecard(uuid)        TO authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_cashflow_projection(uuid, int) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
 
 -- ────────────────────────────────────────────────────────────
 -- FIM: 20261119000001_fn_financial_intelligence.sql

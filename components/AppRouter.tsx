@@ -68,6 +68,7 @@ const BIDashboard           = React.lazy(() => import('./BIDashboard'));
 const ControladoriaModule   = React.lazy(() => import('./ControladoriaModule'));
 const FinancialDashboard       = React.lazy(() => import('./FinancialDashboard'));
 const FinancialIntelligence    = React.lazy(() => import('./FinancialIntelligence'));
+const ClientChargesModule      = React.lazy(() => import('./ClientChargesModule'));
 const ContasReceberManager  = React.lazy(() => import('./ContasReceberManager'));
 const FinancialApprovalModule = React.lazy(() => import('./FinancialApprovalModule'));
 const FinancialCalendar       = React.lazy(() => import('./FinancialCalendar'));
@@ -1077,6 +1078,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <FinancialDashboard
             organizationId={activeOrganizationId || organizations[0]?.id || ''}
             onNavigate={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    // ── Cobranças (boletos/PIX ao cliente) ─────────────────────────────────────
+    case 'client-charges':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <ClientChargesModule
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
           />
         </React.Suspense>
       );

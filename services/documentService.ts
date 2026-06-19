@@ -54,6 +54,33 @@ export const documentService = {
     // SE A CATEGORIA FOR CONTRATOS (juridico), INTEGRA OS CONTRATOS DA TABELA contracts
     if (!filters?.categoria || filters.categoria === 'juridico') {
       try {
+        let targetProjectIds: string[] = [];
+        if (filters?.projectId && organizationId) {
+          targetProjectIds.push(filters.projectId);
+          // Busca projetos com o mesmo nome na mesma organização para retrocompatibilidade/duplicados
+          try {
+            const { data: currentProj } = await supabase
+              .from('projects')
+              .select('name')
+              .eq('id', filters.projectId)
+              .maybeSingle();
+
+            if (currentProj?.name) {
+              const { data: siblings } = await supabase
+                .from('projects')
+                .select('id')
+                .eq('organization_id', organizationId)
+                .ilike('name', currentProj.name);
+
+              if (siblings && siblings.length > 0) {
+                targetProjectIds = siblings.map((s: any) => s.id);
+              }
+            }
+          } catch (e) {
+            console.error('[DocumentService] Erro ao buscar projetos irmãos por nome:', e);
+          }
+        }
+
         let contractQuery = supabase
           .from('contracts')
           .select('id, title, number, contract_type, status, start_date, end_date, signed_contract_url, minuta_versions, responsible_email, created_at, project_id, organization_id');
@@ -61,50 +88,50 @@ export const documentService = {
         if (organizationId) {
           contractQuery = contractQuery.eq('organization_id', organizationId);
         }
-        if (filters?.projectId) {
+        if (targetProjectIds.length > 0) {
+          contractQuery = contractQuery.in('project_id', targetProjectIds);
+        } else if (filters?.projectId) {
           contractQuery = contractQuery.eq('project_id', filters.projectId);
         }
 
         const { data: contractsData, error: contractsError } = await contractQuery;
 
         if (!contractsError && contractsData) {
-          const mappedContracts: OpuraDocument[] = contractsData
-            .filter((c) => c.signed_contract_url || (c.minuta_versions && Array.isArray(c.minuta_versions) && c.minuta_versions.length > 0))
-            .map((c) => {
-              const activeMinuta = c.minuta_versions && Array.isArray(c.minuta_versions) && c.minuta_versions.length > 0
-                ? c.minuta_versions[c.minuta_versions.length - 1]
-                : null;
+          const mappedContracts: OpuraDocument[] = contractsData.map((c) => {
+            const activeMinuta = c.minuta_versions && Array.isArray(c.minuta_versions) && c.minuta_versions.length > 0
+              ? c.minuta_versions[c.minuta_versions.length - 1]
+              : null;
 
-              const fileUrl = c.signed_contract_url || activeMinuta?.url || '';
+            const fileUrl = c.signed_contract_url || activeMinuta?.url || '';
 
-              return {
-                id: c.id,
-                organization_id: c.organization_id,
-                nome: c.title || `Contrato Nº ${c.number}`,
-                descricao: `Contrato de Serviço cadastrado via Suprimentos (Nº ${c.number})`,
-                categoria: 'juridico',
-                tipo_documento: c.contract_type || 'Contrato de Serviço',
-                status: c.status === 'Ativo' || c.status === 'Assinado' ? 'ativo' : 'arquivado',
-                data_emissao: c.start_date || undefined,
-                data_validade: c.end_date || undefined,
-                alerta_dias_antecedencia: 30,
-                tags: ['Suprimentos', c.number ? `Nº ${c.number}` : ''].filter(Boolean),
+            return {
+              id: c.id,
+              organization_id: c.organization_id,
+              nome: c.title || `Contrato Nº ${c.number}`,
+              descricao: `Contrato de Serviço cadastrado via Suprimentos (Nº ${c.number})`,
+              categoria: 'juridico',
+              tipo_documento: c.contract_type || 'Contrato de Serviço',
+              status: c.status === 'Ativo' || c.status === 'Assinado' ? 'ativo' : 'arquivado',
+              data_emissao: c.start_date || undefined,
+              data_validade: c.end_date || undefined,
+              alerta_dias_antecedencia: 30,
+              tags: ['Suprimentos', c.number ? `Nº ${c.number}` : '', !fileUrl ? 'Sem Arquivo' : ''].filter(Boolean),
+              criado_por: c.responsible_email || 'sistema',
+              created_at: c.created_at || new Date().toISOString(),
+              updated_at: c.created_at || new Date().toISOString(),
+              project_id: c.project_id || undefined,
+              active_version: fileUrl ? {
+                id: `ver-${c.id}`,
+                document_id: c.id,
+                version_number: activeMinuta?.v || 1,
+                storage_path: fileUrl,
+                tamanho: 0,
+                mime_type: 'application/pdf',
                 criado_por: c.responsible_email || 'sistema',
                 created_at: c.created_at || new Date().toISOString(),
-                updated_at: c.created_at || new Date().toISOString(),
-                project_id: c.project_id || undefined,
-                active_version: {
-                  id: `ver-${c.id}`,
-                  document_id: c.id,
-                  version_number: activeMinuta?.v || 1,
-                  storage_path: fileUrl,
-                  tamanho: 0,
-                  mime_type: 'application/pdf',
-                  criado_por: c.responsible_email || 'sistema',
-                  created_at: c.created_at || new Date().toISOString(),
-                },
-              };
-            });
+              } : undefined,
+            };
+          });
 
           result = [...result, ...mappedContracts];
         }

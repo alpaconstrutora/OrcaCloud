@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
 @import "tailwindcss";
 
 /* OrçaCloud SaaS - Global Styles */
@@ -64,5 +65,15 @@
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* Portal do Cliente — tipografia DM Sans SOMENTE no mobile (< md / 768px).
+   No desktop o portal mantém Inter. font-family herda para toda a subárvore,
+   inclusive nav fixa e bottom-sheets. */
+@media (max-width: 767px) {
+  .portal-mobile-font,
+  .portal-mobile-font * {
+    font-family: 'DM Sans', 'Inter', system-ui, -apple-system, sans-serif;
   }
 }

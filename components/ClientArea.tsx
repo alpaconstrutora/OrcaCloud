@@ -3113,7 +3113,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     }
 
     return (
-        <div className="min-h-screen bg-gray-50/30 pb-24 md:pb-0 space-y-4 md:space-y-8">
+        <div className="portal-mobile-font min-h-screen bg-gray-50/30 pb-24 md:pb-0 space-y-4 md:space-y-8">
             {/* Prévia Mobile — renderiza o portal como o cliente vê, dentro de um iframe estreito */}
             {showMobilePreview && !isPreview && (
                 <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Portal do Cliente">

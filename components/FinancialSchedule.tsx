@@ -41,6 +41,7 @@ import { ConstraintsPanel } from './schedule/ConstraintsPanel';
 import { LastPlannerPanel } from './schedule/LastPlannerPanel';
 import { ScenariosPanel } from './schedule/ScenariosPanel';
 import { CommandCenterPanel } from './schedule/CommandCenterPanel';
+import { SupplyPanel } from './schedule/SupplyPanel';
 import { orderService } from '../services/orderService';
 import { projectService } from '../services/projectService';
 import ScheduleHeader from './schedule/ScheduleHeader';
@@ -543,17 +544,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         }
     );
 
-    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command'>(() => {
+    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply'>(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('schedule-view-mode');
-            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks' || saved === 'constraints' || saved === 'weekly' || saved === 'scenarios' || saved === 'command') {
+            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks' || saved === 'constraints' || saved === 'weekly' || saved === 'scenarios' || saved === 'command' || saved === 'supply') {
                 return saved;
             }
         }
         return 'table';
     });
 
-    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command') => {
+    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply') => {
         setViewModeState(mode);
         localStorage.setItem('schedule-view-mode', mode);
     };
@@ -3823,6 +3824,16 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             chartData={chartDataWithCumulative}
                             organizationId={organizationId}
                             projectId={settings.id}
+                        />
+                    </div>
+                )}
+
+                {viewMode === 'supply' && organizationId && settings.id && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                        <SupplyPanel
+                            organizationId={organizationId}
+                            projectId={settings.id}
+                            onNavigateToProcurement={() => onBack?.()}
                         />
                     </div>
                 )}

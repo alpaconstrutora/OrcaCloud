@@ -33,6 +33,51 @@ export const documentService = {
       // Porém para a query ser correta, selecionamos tudo e o RLS filtra.
     }
 
+    let targetProjectIds: string[] = [];
+    if (filters?.projectId && organizationId) {
+      targetProjectIds.push(filters.projectId);
+      try {
+        const { data: currentProj } = await supabase
+          .from('projects')
+          .select('name')
+          .eq('id', filters.projectId)
+          .maybeSingle();
+
+        if (currentProj?.name) {
+          const normTarget = normalizeProjectName(currentProj.name);
+          
+          if (normTarget) {
+            const { data: allProjects } = await supabase
+              .from('projects')
+              .select('id, name')
+              .eq('organization_id', organizationId);
+
+            if (allProjects && allProjects.length > 0) {
+              const matchedSiblings = allProjects.filter((p: any) => {
+                const normSibling = normalizeProjectName(p.name);
+                return normSibling === normTarget || normSibling.includes(normTarget) || normTarget.includes(normSibling);
+              });
+              if (matchedSiblings.length > 0) {
+                targetProjectIds = matchedSiblings.map((s: any) => s.id);
+              }
+            }
+          } else {
+            const { data: siblings } = await supabase
+              .from('projects')
+              .select('id')
+              .eq('organization_id', organizationId)
+              .ilike('name', currentProj.name);
+
+            if (siblings && siblings.length > 0) {
+              targetProjectIds = siblings.map((s: any) => s.id);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[DocumentService] Erro ao buscar projetos irmãos por nome normalizado:', e);
+      }
+    }
+
     let query = supabase
       .from('opura_documents')
       .select('*, active_version:opura_document_versions!fk_active_version(*)');
@@ -41,7 +86,9 @@ export const documentService = {
       query = query.eq('organization_id', organizationId);
     }
 
-    if (filters?.projectId) {
+    if (targetProjectIds.length > 0) {
+      query = query.in('project_id', targetProjectIds);
+    } else if (filters?.projectId) {
       query = query.eq('project_id', filters.projectId);
     }
 
@@ -65,53 +112,6 @@ export const documentService = {
     // SE A CATEGORIA FOR CONTRATOS (juridico), INTEGRA OS CONTRATOS DA TABELA contracts
     if (!filters?.categoria || filters.categoria === 'juridico') {
       try {
-        let targetProjectIds: string[] = [];
-        if (filters?.projectId && organizationId) {
-          targetProjectIds.push(filters.projectId);
-          // Busca projetos com o mesmo nome normalizado na mesma organização para retrocompatibilidade/duplicados
-          try {
-            const { data: currentProj } = await supabase
-              .from('projects')
-              .select('name')
-              .eq('id', filters.projectId)
-              .maybeSingle();
-
-            if (currentProj?.name) {
-              const normTarget = normalizeProjectName(currentProj.name);
-              
-              if (normTarget) {
-                const { data: allProjects } = await supabase
-                  .from('projects')
-                  .select('id, name')
-                  .eq('organization_id', organizationId);
-
-                if (allProjects && allProjects.length > 0) {
-                  const matchedSiblings = allProjects.filter((p: any) => {
-                    const normSibling = normalizeProjectName(p.name);
-                    return normSibling === normTarget || normSibling.includes(normTarget) || normTarget.includes(normSibling);
-                  });
-                  if (matchedSiblings.length > 0) {
-                    targetProjectIds = matchedSiblings.map((s: any) => s.id);
-                  }
-                }
-              } else {
-                // Fallback de busca exata caso a normalização limpe todo o nome
-                const { data: siblings } = await supabase
-                  .from('projects')
-                  .select('id')
-                  .eq('organization_id', organizationId)
-                  .ilike('name', currentProj.name);
-
-                if (siblings && siblings.length > 0) {
-                  targetProjectIds = siblings.map((s: any) => s.id);
-                }
-              }
-            }
-          } catch (e) {
-            console.error('[DocumentService] Erro ao buscar projetos irmãos por nome normalizado:', e);
-          }
-        }
-
         let contractQuery = supabase
           .from('contracts')
           .select('id, title, number, contract_type, status, start_date, end_date, signed_contract_url, minuta_versions, responsible_email, created_at, project_id, organization_id');

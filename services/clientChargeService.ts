@@ -45,11 +45,15 @@ export const clientChargeService = {
             body: { organization_id: organizationId, transaction_id: transactionId, billing_type: billingType },
         });
         if (error) {
-            // Tenta extrair a mensagem do corpo de erro da function
-            const ctx = (error as { context?: { body?: unknown } }).context;
+            // A function retornou non-2xx; o corpo JSON tem { error, detail }.
+            // supabase-js expõe a Response em error.context — lê o body real.
             let detail = '';
-            if (ctx?.body) {
-                try { detail = JSON.parse(ctx.body as string).error ?? ''; } catch { /* ignore */ }
+            const ctx = (error as { context?: Response }).context;
+            if (ctx && typeof ctx.json === 'function') {
+                try {
+                    const body = await ctx.json();
+                    detail = body?.error || (body?.detail ? JSON.stringify(body.detail) : '');
+                } catch { /* corpo não-JSON */ }
             }
             throw new Error(detail || error.message);
         }

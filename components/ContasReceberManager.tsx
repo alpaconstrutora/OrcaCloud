@@ -2,8 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Building2, Check, ChevronDown, ChevronUp,
     Loader2, Plus, RefreshCw, Search, TrendingUp, X, Filter,
+    FileText, QrCode, Copy, ExternalLink,
 } from 'lucide-react';
 import { receivableService } from '../services/receivableService';
+import { clientChargeService } from '../services/clientChargeService';
+import type { ClientCharge, BillingType } from '../services/clientChargeService';
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
 import type { Organization } from '../types';
 
@@ -226,6 +229,146 @@ function BaixaModal({ receivable, onConfirm, onClose, saving }: BaixaModalProps)
     );
 }
 
+// ─── EmitirCobrancaModal ─────────────────────────────────────
+
+interface EmitModalProps {
+    organizationId: string;
+    receivable: Receivable;
+    existing?: ClientCharge;
+    onDone: () => void;
+    onClose: () => void;
+}
+function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onClose }: EmitModalProps) {
+    const [billingType, setBillingType] = useState<BillingType>('BOLETO');
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState<string | null>(null);
+    const [result, setResult] = useState<ClientCharge | null>(existing ?? null);
+    const [copied, setCopied] = useState(false);
+
+    async function handleEmit() {
+        setLoading(true);
+        setErr(null);
+        try {
+            const res = await clientChargeService.emit(organizationId, receivable.id, billingType);
+            setResult(res.charge);
+            onDone();
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : 'Erro ao emitir cobrança');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    function copyPix() {
+        if (!result?.pix_payload) return;
+        navigator.clipboard.writeText(result.pix_payload);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    }
+
+    return (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                    <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Emitir Cobrança</h2>
+                    <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                        <X className="w-4 h-4 text-gray-500" />
+                    </button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div className="bg-gray-50 rounded-xl p-3 space-y-1">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Cliente</span>
+                            <span className="font-bold text-gray-800">{receivable.party_name ?? '—'}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Valor</span>
+                            <span className="font-black text-gray-900">{fmt(receivable.amount)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Vencimento</span>
+                            <span className="font-mono text-gray-700">{fmtDate(receivable.due_date)}</span>
+                        </div>
+                    </div>
+
+                    {!result && (
+                        <>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Forma de cobrança</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {([
+                                        { v: 'BOLETO' as BillingType, label: 'Boleto', icon: FileText },
+                                        { v: 'PIX' as BillingType, label: 'PIX', icon: QrCode },
+                                        { v: 'UNDEFINED' as BillingType, label: 'Boleto+PIX', icon: Check },
+                                    ]).map(opt => (
+                                        <button
+                                            key={opt.v}
+                                            onClick={() => setBillingType(opt.v)}
+                                            className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-xs font-bold transition-all ${
+                                                billingType === opt.v
+                                                    ? 'border-green-500 bg-green-50 text-green-700'
+                                                    : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            <opt.icon className="w-4 h-4" />
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            {err && <p className="text-xs text-red-600 font-semibold bg-red-50 rounded-lg p-3">{err}</p>}
+                        </>
+                    )}
+
+                    {result && (
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-green-700 text-sm font-bold">
+                                <Check className="w-4 h-4" /> Cobrança emitida via Asaas
+                            </div>
+                            {result.bank_slip_url && (
+                                <a href={result.bank_slip_url} target="_blank" rel="noreferrer"
+                                    className="flex items-center justify-between px-4 py-3 bg-blue-50 hover:bg-blue-100 rounded-xl text-sm font-bold text-blue-700 transition-colors">
+                                    <span className="flex items-center gap-2"><FileText className="w-4 h-4" /> Abrir boleto (PDF)</span>
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                            )}
+                            {result.invoice_url && (
+                                <a href={result.invoice_url} target="_blank" rel="noreferrer"
+                                    className="flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm font-bold text-gray-700 transition-colors">
+                                    <span className="flex items-center gap-2"><ExternalLink className="w-4 h-4" /> Página de pagamento</span>
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                            )}
+                            {result.pix_payload && (
+                                <button onClick={copyPix}
+                                    className="w-full flex items-center justify-between px-4 py-3 bg-emerald-50 hover:bg-emerald-100 rounded-xl text-sm font-bold text-emerald-700 transition-colors">
+                                    <span className="flex items-center gap-2"><QrCode className="w-4 h-4" /> {copied ? 'Copiado!' : 'Copiar PIX copia-e-cola'}</span>
+                                    <Copy className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+                <div className="flex gap-3 px-6 pb-6">
+                    <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+                        {result ? 'Fechar' : 'Cancelar'}
+                    </button>
+                    {!result && (
+                        <button
+                            onClick={handleEmit}
+                            disabled={loading}
+                            className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl text-sm font-black transition-colors flex items-center justify-center gap-2"
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                            Emitir
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── main ────────────────────────────────────────────────────
 
 interface Props {
@@ -253,6 +396,8 @@ export default function ContasReceberManager({ organizationId, organizations, on
     const [baixando, setBaixando]         = useState<Receivable | null>(null);
     const [savingBaixa, setSavingBaixa]   = useState(false);
     const [changingStatus, setChangingStatus] = useState<string | null>(null);
+    const [charges, setCharges]           = useState<Record<string, ClientCharge>>({});
+    const [emitindo, setEmitindo]         = useState<Receivable | null>(null);
 
     const effectiveOrgId = selectedOrgId === 'ALL'
         ? (organizationId || organizations?.[0]?.id || '')
@@ -263,12 +408,14 @@ export default function ContasReceberManager({ organizationId, organizations, on
         setLoading(true);
         setError(null);
         try {
-            const [data, inad] = await Promise.all([
+            const [data, inad, chargeMap] = await Promise.all([
                 receivableService.list(effectiveOrgId, { search, status: statusFilter, dueFrom: dueFrom || undefined, dueTo: dueTo || undefined }),
                 receivableService.getInadimplencia(effectiveOrgId),
+                clientChargeService.byTransaction(effectiveOrgId).catch(() => ({} as Record<string, ClientCharge>)),
             ]);
             setRows(data);
             setInad(inad.filter(f => f.count > 0));
+            setCharges(chargeMap);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao carregar');
         } finally {
@@ -570,6 +717,25 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                                     </button>
                                                 )}
                                                 {!isRecebido && (
+                                                    charges[r.id] ? (
+                                                        <button
+                                                            onClick={() => setEmitindo(r)}
+                                                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                                            title="Ver cobrança emitida"
+                                                        >
+                                                            <FileText className="w-3 h-3" /> Cobrança
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setEmitindo(r)}
+                                                            className="px-2.5 py-1 bg-violet-50 hover:bg-violet-100 text-violet-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                                            title="Emitir boleto/PIX via Asaas"
+                                                        >
+                                                            <FileText className="w-3 h-3" /> Emitir
+                                                        </button>
+                                                    )
+                                                )}
+                                                {!isRecebido && (
                                                     <select
                                                         value={r.business_status}
                                                         disabled={changingStatus === r.id}
@@ -614,6 +780,15 @@ export default function ContasReceberManager({ organizationId, organizations, on
                     onConfirm={handleBaixa}
                     onClose={() => setBaixando(null)}
                     saving={savingBaixa}
+                />
+            )}
+            {emitindo && (
+                <EmitirCobrancaModal
+                    organizationId={effectiveOrgId}
+                    receivable={emitindo}
+                    existing={charges[emitindo.id]}
+                    onDone={load}
+                    onClose={() => setEmitindo(null)}
                 />
             )}
         </div>

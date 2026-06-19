@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2, Layers, List, Kanban, LayoutGrid, X } from 'lucide-react'
+import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2, Layers, List, Kanban, LayoutGrid, X, Smartphone } from 'lucide-react'
 
 export type GroupByField = 'none' | 'status' | 'assignee' | 'priority' | 'project' | 'source'
 export type FilterView   = 'today' | 'all' | 'overdue'
@@ -15,6 +15,8 @@ import TaskSpaceRail from './TaskSpaceRail'
 import TaskSpaceManager from './TaskSpaceManager'
 import TaskSpaceBottomSheet from './TaskSpaceBottomSheet'
 import TaskSpaceFolderView from './TaskSpaceFolderView'
+import MobilePreviewFrame from './MobilePreviewFrame'
+import TasksMobileApp from './TasksMobileApp'
 
 type ViewMode = 'list' | 'board'
 
@@ -55,7 +57,8 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   const [loading, setLoading]         = useState(true)
   const [editing, setEditing]         = useState<TaskRecord | null>(null)
   const [showForm, setShowForm]       = useState(false)
-  const [showStatusMgr, setShowStatusMgr] = useState(false)
+  const [showStatusMgr, setShowStatusMgr]       = useState(false)
+  const [showMobilePreview, setShowMobilePreview] = useState(false)
   const [groupBy, setGroupBy]             = useState<GroupByField>('none')
   const [viewMode, setViewMode]           = useState<ViewMode>('list')
   const [taskDefaults, setTaskDefaults]   = useState<TaskDefaults>({})
@@ -384,6 +387,13 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
 
   return (
     <div className="space-y-5">
+      {/* Prévia Mobile */}
+      {showMobilePreview && (
+        <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Minhas Tarefas">
+          <TasksMobileApp orgId={filterOrg || activeOrganizationId} />
+        </MobilePreviewFrame>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -466,6 +476,14 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               Status
             </button>
           )}
+          <button
+            onClick={() => setShowMobilePreview(true)}
+            title="Prévia Mobile"
+            className="hidden md:flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+          >
+            <Smartphone className="w-4 h-4" />
+            Mobile
+          </button>
           <button
             onClick={() => {
               setEditing(null)

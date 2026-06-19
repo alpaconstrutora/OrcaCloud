@@ -532,6 +532,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           budget={budget}
           projects={typedProjects}
           organizations={organizations}
+          organizationId={activeOrganizationId || undefined}
           onLoadProject={handleLoadProject}
           onUpdateSettings={handleUpdateSettings}
           onUpdateBudget={handleUpdateBudget}

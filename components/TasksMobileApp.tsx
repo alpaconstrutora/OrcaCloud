@@ -458,13 +458,6 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
                   )}
                 </button>
               ))}
-              <button
-                onClick={() => setNav('espacos')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wide flex-shrink-0 transition-all
-                  ${nav === 'espacos' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-slate-500 hover:bg-slate-50'}`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-              </button>
             </div>
 
             {/* View controls — linha 1: Lista | Kanban | Agrupar */}
@@ -550,18 +543,36 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
               />
             ))
           )}
-          <div className="h-16" />
+          <div className="h-20" />
         </div>
       )}
 
-      {/* FAB */}
-      <div className="absolute bottom-6 right-5 z-10">
+      {/* FAB — posicionado acima da bottom nav */}
+      <div className="absolute bottom-[72px] right-5 z-10">
         <button
           onClick={() => setShowNewTask(true)}
-          className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center shadow-xl active:scale-95 transition-transform"
+          className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-300 active:scale-95 transition-transform"
         >
           <Plus className="w-6 h-6 text-white" />
         </button>
+      </div>
+
+      {/* Bottom nav */}
+      <div className="bg-white border-t border-slate-100 px-8 py-3 flex items-center justify-around flex-shrink-0">
+        {([
+          { key: 'inbox',   icon: Inbox,      label: 'Inbox' },
+          { key: 'espacos', icon: LayoutGrid,  label: 'Espaços' },
+        ] as const).map(({ key, icon: Icon, label }) => (
+          <button
+            key={key}
+            onClick={() => { setNav(key); if (key === 'inbox') setSelectedSpace(null) }}
+            className={`flex flex-col items-center gap-1 transition-colors
+              ${nav === key ? 'text-blue-600' : 'text-slate-300'}`}
+          >
+            <Icon className="w-5 h-5" />
+            <span className="text-[9px] font-black uppercase tracking-widest">{label}</span>
+          </button>
+        ))}
       </div>
 
       {/* Nova tarefa sheet */}

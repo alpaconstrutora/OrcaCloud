@@ -132,7 +132,8 @@ serve(async (req: Request) => {
         });
         const custData = await custRes.json();
         if (!custRes.ok) {
-            return json({ error: 'Erro ao criar cliente no Asaas', detail: custData }, 502);
+            const msg = custData?.errors?.[0]?.description ?? JSON.stringify(custData);
+            return json({ error: `Asaas (cliente): ${msg}`, detail: custData }, 502);
         }
         customerId = custData.id;
         if (client?.id && customerId) {
@@ -156,7 +157,8 @@ serve(async (req: Request) => {
     });
     const payData = await payRes.json();
     if (!payRes.ok) {
-        return json({ error: 'Erro ao criar cobrança no Asaas', detail: payData }, 502);
+        const msg = payData?.errors?.[0]?.description ?? JSON.stringify(payData);
+        return json({ error: `Asaas (cobrança): ${msg}`, detail: payData }, 502);
     }
 
     // 5. Busca o copia-e-cola do PIX (endpoint separado), se aplicável

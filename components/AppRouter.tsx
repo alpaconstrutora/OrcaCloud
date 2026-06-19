@@ -66,7 +66,8 @@ const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplate
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
 const ControladoriaModule   = React.lazy(() => import('./ControladoriaModule'));
-const FinancialDashboard    = React.lazy(() => import('./FinancialDashboard'));
+const FinancialDashboard       = React.lazy(() => import('./FinancialDashboard'));
+const FinancialIntelligence    = React.lazy(() => import('./FinancialIntelligence'));
 const ContasReceberManager  = React.lazy(() => import('./ContasReceberManager'));
 const FinancialApprovalModule = React.lazy(() => import('./FinancialApprovalModule'));
 const FinancialCalendar       = React.lazy(() => import('./FinancialCalendar'));
@@ -87,6 +88,9 @@ const OpuraGovernanceModule = React.lazy(() => import('./OpuraGovernanceModule')
 const OpuraAssetsModule     = React.lazy(() => import('./OpuraAssetsModule'));
 const InventoryModule       = React.lazy(() => import('./InventoryModule').then(m => ({ default: m.InventoryModule })));
 const ProcurementModule     = React.lazy(() => import('./ProcurementModule').then(m => ({ default: m.ProcurementModule })));
+const PartnerPortal         = React.lazy(() => import('./partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
+const PartnerWorkspaceManager = React.lazy(() => import('./partner/PartnerWorkspaceManager').then(m => ({ default: m.PartnerWorkspaceManager })));
+
 
 
 // Suspense fallback
@@ -341,9 +345,23 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     };
     return <BrokerPortal profile={currentProfile} activeTab={(tabMap[activeView] || 'estoque') as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'} />;
   }
+  if (currentProfile.group === ProfileGroup.PARTNER) {
+    return (
+      <React.Suspense fallback={<Spinner />}>
+        <PartnerPortal userEmail={session?.user?.email || ''} />
+      </React.Suspense>
+    );
+  }
 
   // ── Roteamento principal ─────────────────────────────────────────────────────
   switch (activeView) {
+    case 'partner-workspaces-admin':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <PartnerWorkspaceManager organizationId={activeOrganizationId || ''} />
+        </React.Suspense>
+      );
+
     case 'opura-docs':
       return (
         <React.Suspense fallback={<Spinner />}>
@@ -1057,6 +1075,17 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <FinancialDashboard
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            onNavigate={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    // ── Inteligência Financeira ────────────────────────────────────────────────
+    case 'financial-intelligence':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <FinancialIntelligence
             organizationId={activeOrganizationId || organizations[0]?.id || ''}
             onNavigate={setActiveView}
           />

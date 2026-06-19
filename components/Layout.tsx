@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -313,10 +313,10 @@ const Layout: React.FC<LayoutProps> = ({
   const operacionalViews = ['operacional','quality','pos-obra','project-diary'];
   const [isOperacionalOpen, setIsOperacionalOpen] = React.useState(() => operacionalViews.includes(activeView));
   React.useEffect(() => { if (operacionalViews.includes(activeView)) setIsOperacionalOpen(true); }, [activeView]);
-  const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
+  const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado','partner-workspaces-admin'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['financial-dashboard','contas-a-receber','financial-approval','financial-calendar','dunning','project-financial','controladoria','fiscal-nfe','automation','compliance-dashboard','opura-cno'];
+  const financeiroViews = ['financial-dashboard','contas-a-receber','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','controladoria','fiscal-nfe','automation','compliance-dashboard','opura-cno'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
@@ -695,6 +695,7 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="supplies-quotations" label="Cotações" icon={FileText} />
                     <DropdownItem id="supplies-orders" label="Pedidos" icon={Package} />
                     <DropdownItem id="supplies-receipts" label="Recebimento" icon={Truck} />
+                    <DropdownItem id="partner-workspaces-admin" label="Partner Workspaces" icon={Users} />
                   </NavDropdown>
                 </>
               )}
@@ -719,6 +720,7 @@ const Layout: React.FC<LayoutProps> = ({
                         <DropdownItem id="financial-calendar" label="Calendário" icon={Calendar} />
                         <DropdownItem id="dunning" label="Cobrança Auto." icon={Bell} />
                         <DropdownItem id="financial-approval" label="Aprovações" icon={Shield} />
+                        <DropdownItem id="financial-intelligence" label="Inteligência" icon={Brain} />
                         <DropdownItem id="controladoria" label="Controladoria" icon={BarChart3} />
                       </>
                     )}

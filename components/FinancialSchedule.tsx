@@ -1003,6 +1003,12 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         });
     };
 
+    const handleCollapseAllGanttCols = () => {
+        const all = new Set<string>(GANTT_HIDEABLE_COLS);
+        setGanttCollapsedCols(all);
+        localStorage.setItem('gantt-collapsed-cols', JSON.stringify([...all]));
+    };
+
     useEffect(() => {
         const onMove = (e: MouseEvent) => {
             const ref = splitterDragRef.current;
@@ -3950,6 +3956,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 getGanttColStyle={getGanttColStyle}
                                                 collapsedCols={ganttCollapsedCols}
                                                 onToggleColumn={handleToggleGanttColumn}
+                                                onCollapseAll={handleCollapseAllGanttCols}
                                                 handleSplitterDblClick={handleGanttSplitterDblClick}
                                                 onSidebarResizeStart={handleSidebarResizeStart}
                                                 idToUid={idToUid}

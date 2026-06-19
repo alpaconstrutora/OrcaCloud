@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import {
-  Bell, Calendar, AlertTriangle, Plus, LayoutGrid, Inbox,
+  Bell, Calendar, AlertTriangle, Plus, LayoutGrid, Mail,
   ListChecks, ChevronRight, Loader2, Flag, Search,
   SlidersHorizontal, AlignLeft, Columns2, Layers,
   Settings2, Building2, Menu, CheckCircle2, X,
@@ -560,7 +560,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
       {/* Bottom nav */}
       <div className="bg-white border-t border-slate-100 px-8 py-3 flex items-center justify-around flex-shrink-0">
         {([
-          { key: 'inbox',   icon: Inbox,      label: 'Inbox' },
+          { key: 'inbox',   icon: Mail,       label: 'Inbox' },
           { key: 'espacos', icon: LayoutGrid,  label: 'Espaços' },
         ] as const).map(({ key, icon: Icon, label }) => (
           <button

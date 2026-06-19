@@ -223,6 +223,26 @@ export interface ProjectSchedule {
         workers: ResourceWorker[];
         teams: ResourceTeam[];
         };
+    scenarios?: ScheduleScenario[];
+}
+
+// ─── Fase 2 Planejamento: Cenários ────────────────────────────
+
+export interface ScheduleScenario {
+    id: string;
+    name: string;
+    createdAt: string;
+    // snapshot das datas resultantes (calculadas no momento do salvamento)
+    itemSchedules: ItemScheduleDetails[];
+    // resumo calculado no momento do salvamento
+    result: {
+        endDate: string;              // ISO YYYY-MM-DD da maior data de término
+        totalCost: number;            // soma dos valores planejados
+        criticalPathIds: string[];    // IDs dos itens no caminho crítico
+        durationDays: number;         // diferença entre startDate e endDate em dias corridos
+    };
+    // data de início do planejamento base (para calcular Δ)
+    baseStartDate: string;
 }
 
 // ─── Fase 1 Planejamento: Restrições + Last Planner ───────────

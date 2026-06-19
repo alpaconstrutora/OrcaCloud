@@ -39,6 +39,7 @@ import { ResourceManagement } from './ResourceManagement';
 import { ScheduleRiskDashboard } from './schedule/ScheduleRiskDashboard';
 import { ConstraintsPanel } from './schedule/ConstraintsPanel';
 import { LastPlannerPanel } from './schedule/LastPlannerPanel';
+import { ScenariosPanel } from './schedule/ScenariosPanel';
 import { orderService } from '../services/orderService';
 import { projectService } from '../services/projectService';
 import ScheduleHeader from './schedule/ScheduleHeader';
@@ -541,17 +542,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         }
     );
 
-    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly'>(() => {
+    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios'>(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('schedule-view-mode');
-            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks' || saved === 'constraints' || saved === 'weekly') {
+            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks' || saved === 'constraints' || saved === 'weekly' || saved === 'scenarios') {
                 return saved;
             }
         }
         return 'table';
     });
 
-    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly') => {
+    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios') => {
         setViewModeState(mode);
         localStorage.setItem('schedule-view-mode', mode);
     };
@@ -2450,8 +2451,57 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const handleSaveSimulation = () => {
         setIsSimulationMode(false);
         setOriginalScheduleBackup(null);
-        // Agora que isSimulationMode é false, podemos persistir o estado atual que estava "simulado"
         onUpdateSettings({ ...settings, schedule: schedule });
+    };
+
+    const handleSaveAsScenario = (name: string) => {
+        const itemSchedules = schedule.itemSchedules ?? [];
+        const endDate = itemSchedules.reduce((max, s) => {
+            if (!s.endDate) return max;
+            return !max || s.endDate > max ? s.endDate : max;
+        }, '');
+        const totalCost = itemSchedules.reduce((sum, s) => sum + (s.plannedValue ?? 0), 0);
+        const criticalPathIds = itemSchedules.filter(s => s.isCritical).map(s => s.id);
+        const durationDays = endDate && schedule.startDate
+            ? Math.round((new Date(endDate + 'T00:00:00Z').getTime() - new Date(schedule.startDate + 'T00:00:00Z').getTime()) / 86400000)
+            : 0;
+
+        const scenario = {
+            id: crypto.randomUUID(),
+            name,
+            createdAt: new Date().toISOString(),
+            itemSchedules: JSON.parse(JSON.stringify(itemSchedules)),
+            result: { endDate, totalCost, criticalPathIds, durationDays },
+            baseStartDate: schedule.startDate,
+        };
+
+        setSchedule(prev => {
+            const newSchedule = { ...prev, scenarios: [...(prev.scenarios ?? []), scenario] };
+            persistSchedule(newSchedule);
+            onUpdateSettings({ ...settings, schedule: newSchedule });
+            return newSchedule;
+        });
+        // Exit simulation mode, keeping the simulated dates
+        setIsSimulationMode(false);
+        setOriginalScheduleBackup(null);
+    };
+
+    const handleApplyScenario = (scenario: import('../types').ScheduleScenario) => {
+        setSchedule(prev => {
+            const newSchedule = { ...prev, itemSchedules: JSON.parse(JSON.stringify(scenario.itemSchedules)) };
+            persistSchedule(newSchedule);
+            onUpdateSettings({ ...settings, schedule: newSchedule });
+            return newSchedule;
+        });
+    };
+
+    const handleDeleteScenario = (id: string) => {
+        setSchedule(prev => {
+            const newSchedule = { ...prev, scenarios: (prev.scenarios ?? []).filter(s => s.id !== id) };
+            persistSchedule(newSchedule);
+            onUpdateSettings({ ...settings, schedule: newSchedule });
+            return newSchedule;
+        });
     };
 
     const handleExportPDF = async () => {
@@ -3601,6 +3651,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 schedule={schedule}
                 handleToggleSimulation={handleToggleSimulation}
                 handleSaveSimulation={handleSaveSimulation}
+                onSaveAsScenario={handleSaveAsScenario}
             />
 
             {/* Supply Risk Summary Panel */}
@@ -3747,6 +3798,16 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             organizationId={organizationId}
                             projectId={settings.id}
                             hierarchy={hierarchy}
+                        />
+                    </div>
+                )}
+
+                {viewMode === 'scenarios' && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                        <ScenariosPanel
+                            schedule={schedule}
+                            onApplyScenario={handleApplyScenario}
+                            onDeleteScenario={handleDeleteScenario}
                         />
                     </div>
                 )}

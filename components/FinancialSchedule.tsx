@@ -247,6 +247,16 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ProjectRecord = { id: string; name?: string; settings?: any };
 
+const OrgRequired = () => (
+    <div className="flex flex-col items-center justify-center py-16 text-center gap-2">
+        <span className="text-3xl">🏢</span>
+        <p className="text-sm font-bold text-gray-600">Selecione uma organização</p>
+        <p className="text-xs text-gray-400 max-w-xs">
+            Esta aba requer uma organização ativa. Selecione uma empresa no menu principal para continuar.
+        </p>
+    </div>
+);
+
 interface FinancialScheduleProps {
     settings: ProjectSettings;
     budget: BudgetEntry[];
@@ -3807,23 +3817,19 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     />
                 )}
 
-                {viewMode === 'constraints' && organizationId && settings.id && (
+                {viewMode === 'constraints' && (
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                        <ConstraintsPanel
-                            organizationId={organizationId}
-                            projectId={settings.id}
-                            hierarchy={hierarchy}
-                        />
+                        {organizationId && settings.id
+                            ? <ConstraintsPanel organizationId={organizationId} projectId={settings.id} hierarchy={hierarchy} />
+                            : <OrgRequired />}
                     </div>
                 )}
 
-                {viewMode === 'weekly' && organizationId && settings.id && (
+                {viewMode === 'weekly' && (
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                        <LastPlannerPanel
-                            organizationId={organizationId}
-                            projectId={settings.id}
-                            hierarchy={hierarchy}
-                        />
+                        {organizationId && settings.id
+                            ? <LastPlannerPanel organizationId={organizationId} projectId={settings.id} hierarchy={hierarchy} />
+                            : <OrgRequired />}
                     </div>
                 )}
 
@@ -3851,13 +3857,11 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     </div>
                 )}
 
-                {viewMode === 'supply' && organizationId && settings.id && (
+                {viewMode === 'supply' && (
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                        <SupplyPanel
-                            organizationId={organizationId}
-                            projectId={settings.id}
-                            onNavigateToProcurement={() => onBack?.()}
-                        />
+                        {organizationId && settings.id
+                            ? <SupplyPanel organizationId={organizationId} projectId={settings.id} onNavigateToProcurement={() => onBack?.()} />
+                            : <OrgRequired />}
                     </div>
                 )}
 

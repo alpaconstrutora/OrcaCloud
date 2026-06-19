@@ -174,9 +174,9 @@ AS $$
   FROM (
     SELECT
       s.name AS supplier_name,
-      COALESCE(SUM(b.amount), 0) AS total_pago,
-      100.0 * COALESCE(SUM(b.amount), 0) /
-        NULLIF(SUM(SUM(b.amount)) OVER (), 0) AS pct
+      COALESCE(SUM(b.valor), 0) AS total_pago,
+      100.0 * COALESCE(SUM(b.valor), 0) /
+        NULLIF(SUM(SUM(b.valor)) OVER (), 0) AS pct
     FROM public.boletos b
     JOIN public.suppliers s ON s.id = b.supplier_id
     WHERE b.organization_id = p_organization_id

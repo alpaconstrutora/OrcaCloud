@@ -110,7 +110,8 @@ export enum ProfileGroup {
     INVESTOR = 'INVESTIDOR',
     DEVELOPER = 'DESENVOLVEDOR',
     SUPPLIER = 'FORNECEDOR',
-    BROKER = 'CORRETOR'
+    BROKER = 'CORRETOR',
+    PARTNER = 'PARCEIRO'
 }
 
 export enum UserProfile {
@@ -122,7 +123,8 @@ export enum UserProfile {
     ADMINISTRATION = 'ADMINISTRACAO',
     INVESTOR = 'INVESTIDOR',
     SUPPLIER = 'FORNECEDOR',
-    BROKER = 'CORRETOR'
+    BROKER = 'CORRETOR',
+    PARTNER = 'PARCEIRO'
 }
 
 export interface UserPermissions {

@@ -40,9 +40,15 @@ export const clientChargeService = {
         organizationId: string,
         transactionId: string,
         billingType: BillingType = 'BOLETO',
+        charges?: { fine_percent?: number; interest_percent_month?: number; discount_percent?: number; discount_days?: number },
     ): Promise<EmitChargeResult> {
         const { data, error } = await supabase.functions.invoke('asaas-charge', {
-            body: { organization_id: organizationId, transaction_id: transactionId, billing_type: billingType },
+            body: {
+                organization_id: organizationId,
+                transaction_id: transactionId,
+                billing_type: billingType,
+                ...charges,
+            },
         });
         if (error) {
             // A function retornou non-2xx; o corpo JSON tem { error, detail }.

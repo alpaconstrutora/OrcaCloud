@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { receivableService } from '../services/receivableService';
 import { clientChargeService } from '../services/clientChargeService';
+import { asaasConfigService } from '../services/asaasConfigService';
 import { clientService } from '../services/clientService';
 import type { ClientCharge, BillingType } from '../services/clientChargeService';
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
@@ -277,11 +278,52 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
     const [editDue, setEditDue] = useState(receivable.due_date ?? today());
     const [editDesc, setEditDesc] = useState(receivable.description ?? '');
 
+    // Multa/juros/desconto — pré-carregados da config da org, ajustáveis por cobrança
+    const [fine, setFine] = useState('2');
+    const [interest, setInterest] = useState('1');
+    const [discount, setDiscount] = useState('0');
+    const [discountDays, setDiscountDays] = useState('0');
+    const [saveDefault, setSaveDefault] = useState(false);
+
+    useEffect(() => {
+        if (existing) return; // já emitida: não precisa de config
+        asaasConfigService.get(organizationId)
+            .then(cfg => {
+                setFine(String(cfg.fine_percent));
+                setInterest(String(cfg.interest_percent_month));
+                setDiscount(String(cfg.discount_percent));
+                setDiscountDays(String(cfg.discount_days));
+            })
+            .catch(() => { /* usa os defaults dos useState */ });
+    }, [organizationId, existing]);
+
+    function chargesPayload() {
+        return {
+            fine_percent:           parseFloat(fine.replace(',', '.')) || 0,
+            interest_percent_month: parseFloat(interest.replace(',', '.')) || 0,
+            discount_percent:       parseFloat(discount.replace(',', '.')) || 0,
+            discount_days:          parseInt(discountDays) || 0,
+        };
+    }
+
+    async function persistDefaultIfNeeded(p: ReturnType<typeof chargesPayload>) {
+        if (!saveDefault) return;
+        await asaasConfigService.save({
+            organization_id: organizationId,
+            fine_percent: p.fine_percent,
+            interest_percent_month: p.interest_percent_month,
+            discount_percent: p.discount_percent,
+            discount_days: p.discount_days,
+        }).catch(() => { /* não bloqueia a emissão */ });
+    }
+
     async function handleEmit() {
         setLoading(true);
         setErr(null);
         try {
-            const res = await clientChargeService.emit(organizationId, receivable.id, billingType);
+            const p = chargesPayload();
+            await persistDefaultIfNeeded(p);
+            const res = await clientChargeService.emit(organizationId, receivable.id, billingType, p);
             setResult(res.charge);
             onDone();
         } catch (e) {
@@ -308,7 +350,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                 description: editDesc || undefined,
             });
             // 3. Emite novo boleto com os dados corrigidos
-            const res = await clientChargeService.emit(organizationId, receivable.id, billingType);
+            const res = await clientChargeService.emit(organizationId, receivable.id, billingType, chargesPayload());
             setResult(res.charge);
             setEditMode(false);
             onDone();
@@ -376,6 +418,48 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                     ))}
                                 </div>
                             </div>
+
+                            {/* Multa, juros e desconto */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Encargos por atraso</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <span className="text-[10px] text-gray-400 font-bold">Multa (%)</span>
+                                        <input type="number" min={0} step="0.1" value={fine}
+                                            onChange={e => setFine(e.target.value)}
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                                    </div>
+                                    <div>
+                                        <span className="text-[10px] text-gray-400 font-bold">Juros ao mês (%)</span>
+                                        <input type="number" min={0} step="0.1" value={interest}
+                                            onChange={e => setInterest(e.target.value)}
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Desconto p/ pagamento antecipado</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <span className="text-[10px] text-gray-400 font-bold">Desconto (%)</span>
+                                        <input type="number" min={0} step="0.1" value={discount}
+                                            onChange={e => setDiscount(e.target.value)}
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                                    </div>
+                                    <div>
+                                        <span className="text-[10px] text-gray-400 font-bold">Até (dias antes)</span>
+                                        <input type="number" min={0} step="1" value={discountDays}
+                                            onChange={e => setDiscountDays(e.target.value)}
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                                    </div>
+                                </div>
+                            </div>
+                            <label className="flex items-center gap-2 text-xs text-gray-600 font-semibold cursor-pointer">
+                                <input type="checkbox" checked={saveDefault} onChange={e => setSaveDefault(e.target.checked)}
+                                    className="rounded border-gray-300 text-green-600 focus:ring-green-500" />
+                                Salvar como padrão da empresa
+                            </label>
+
                             {err && <p className="text-xs text-red-600 font-semibold bg-red-50 rounded-lg p-3">{err}</p>}
                         </>
                     )}

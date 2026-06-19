@@ -56,6 +56,11 @@ serve(async (req: Request) => {
         transaction_id?: string;
         billing_type?: 'BOLETO' | 'PIX' | 'UNDEFINED';
         action?: 'emit' | 'cancel';
+        // Overrides opcionais por cobrança (senão usa a config da org)
+        fine_percent?: number;
+        interest_percent_month?: number;
+        discount_percent?: number;
+        discount_days?: number;
     };
 
     const { organization_id, transaction_id } = body;
@@ -187,19 +192,39 @@ serve(async (req: Request) => {
         }
     }
 
-    // 4. Cria a cobrança (payment)
+    // 4. Resolve multa/juros/desconto: override do body → config da org → padrão
+    const { data: cfg } = await admin
+        .from('asaas_charge_config')
+        .select('fine_percent,interest_percent_month,discount_percent,discount_days')
+        .eq('organization_id', organization_id)
+        .maybeSingle();
+
+    const finePercent     = body.fine_percent             ?? cfg?.fine_percent             ?? 2;
+    const interestPercent = body.interest_percent_month   ?? cfg?.interest_percent_month   ?? 1;
+    const discountPercent = body.discount_percent         ?? cfg?.discount_percent         ?? 0;
+    const discountDays    = body.discount_days            ?? cfg?.discount_days            ?? 0;
+
+    // 5. Cria a cobrança (payment) com multa/juros/desconto
     const dueDate = tx.due_date ?? new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+    const paymentBody: Record<string, unknown> = {
+        customer: customerId,
+        billingType,
+        value: Number(tx.amount),
+        dueDate,
+        description: tx.description ?? 'Cobrança ORÇACLOUD',
+        externalReference: tx.id,
+    };
+    // Multa (% fixa sobre o valor, aplicada após o vencimento)
+    if (finePercent > 0)     paymentBody.fine     = { value: finePercent, type: 'PERCENTAGE' };
+    // Juros de mora (% ao mês)
+    if (interestPercent > 0) paymentBody.interest = { value: interestPercent };
+    // Desconto (% até N dias antes do vencimento)
+    if (discountPercent > 0) paymentBody.discount = { value: discountPercent, dueDateLimitDays: discountDays, type: 'PERCENTAGE' };
+
     const payRes = await fetch(`${asaasBase}/payments`, {
         method: 'POST',
         headers: asaasHeaders,
-        body: JSON.stringify({
-            customer: customerId,
-            billingType,
-            value: Number(tx.amount),
-            dueDate,
-            description: tx.description ?? 'Cobrança ORÇACLOUD',
-            externalReference: tx.id,
-        }),
+        body: JSON.stringify(paymentBody),
     });
     const payData = await payRes.json();
     if (!payRes.ok) {

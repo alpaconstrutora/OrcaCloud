@@ -6,6 +6,17 @@ import {
   OpuraDocumentVersion,
 } from '../types';
 
+function normalizeProjectName(name: string): string {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/\b(igreja|obra|reforma|condominio|edificio|residencial|casa|lote|galpao|terreno|projeto|de|da|do)\b/g, '') // remove stop words comuns de obras
+    .replace(/\s+/g, ' ') // normaliza espaços
+    .trim();
+}
+
 export const documentService = {
   // ─── LISTAGEM DE DOCUMENTOS ─────────────────────────────────
   async listDocuments(
@@ -57,7 +68,7 @@ export const documentService = {
         let targetProjectIds: string[] = [];
         if (filters?.projectId && organizationId) {
           targetProjectIds.push(filters.projectId);
-          // Busca projetos com o mesmo nome na mesma organização para retrocompatibilidade/duplicados
+          // Busca projetos com o mesmo nome normalizado na mesma organização para retrocompatibilidade/duplicados
           try {
             const { data: currentProj } = await supabase
               .from('projects')
@@ -66,18 +77,38 @@ export const documentService = {
               .maybeSingle();
 
             if (currentProj?.name) {
-              const { data: siblings } = await supabase
-                .from('projects')
-                .select('id')
-                .eq('organization_id', organizationId)
-                .ilike('name', currentProj.name);
+              const normTarget = normalizeProjectName(currentProj.name);
+              
+              if (normTarget) {
+                const { data: allProjects } = await supabase
+                  .from('projects')
+                  .select('id, name')
+                  .eq('organization_id', organizationId);
 
-              if (siblings && siblings.length > 0) {
-                targetProjectIds = siblings.map((s: any) => s.id);
+                if (allProjects && allProjects.length > 0) {
+                  const matchedSiblings = allProjects.filter((p: any) => {
+                    const normSibling = normalizeProjectName(p.name);
+                    return normSibling === normTarget || normSibling.includes(normTarget) || normTarget.includes(normSibling);
+                  });
+                  if (matchedSiblings.length > 0) {
+                    targetProjectIds = matchedSiblings.map((s: any) => s.id);
+                  }
+                }
+              } else {
+                // Fallback de busca exata caso a normalização limpe todo o nome
+                const { data: siblings } = await supabase
+                  .from('projects')
+                  .select('id')
+                  .eq('organization_id', organizationId)
+                  .ilike('name', currentProj.name);
+
+                if (siblings && siblings.length > 0) {
+                  targetProjectIds = siblings.map((s: any) => s.id);
+                }
               }
             }
           } catch (e) {
-            console.error('[DocumentService] Erro ao buscar projetos irmãos por nome:', e);
+            console.error('[DocumentService] Erro ao buscar projetos irmãos por nome normalizado:', e);
           }
         }
 

@@ -171,6 +171,246 @@ export const documentService = {
       }
     }
 
+    // SE A CATEGORIA FOR FINANCEIRO, INTEGRA NOTAS FISCAIS
+    if (!filters?.categoria || filters.categoria === 'financeiro') {
+      try {
+        const { data: invoicesData, error: invoicesError } = await supabase
+          .from('invoices')
+          .select(`
+            id,
+            file_name,
+            file_path,
+            amount,
+            status,
+            created_at,
+            purchase_orders!inner (
+              project_id,
+              organization_id
+            )
+          `)
+          .eq('purchase_orders.organization_id', organizationId)
+          .in('purchase_orders.project_id', targetProjectIds);
+
+        if (!invoicesError && invoicesData) {
+          const mappedInvoices: OpuraDocument[] = invoicesData.map((inv: any) => ({
+            id: inv.id,
+            organization_id: organizationId || '',
+            nome: inv.file_name || `Nota Fiscal ${inv.id}`,
+            descricao: `Nota Fiscal integrada via Financeiro (Valor: R$ ${inv.amount})`,
+            categoria: 'financeiro',
+            tipo_documento: 'Nota Fiscal',
+            status: inv.status === 'Paid' || inv.status === 'Pago' ? 'ativo' : 'arquivado',
+            data_emissao: inv.created_at || undefined,
+            alerta_dias_antecedencia: 30,
+            tags: ['Financeiro', 'Nota Fiscal', inv.amount ? `R$ ${inv.amount}` : ''].filter(Boolean),
+            criado_por: 'sistema',
+            created_at: inv.created_at || new Date().toISOString(),
+            updated_at: inv.created_at || new Date().toISOString(),
+            project_id: inv.purchase_orders?.project_id || undefined,
+            active_version: inv.file_path ? {
+              id: `ver-${inv.id}`,
+              document_id: inv.id,
+              version_number: 1,
+              storage_path: `invoices:${inv.file_path}`,
+              tamanho: 0,
+              mime_type: 'application/pdf',
+              criado_por: 'sistema',
+              created_at: inv.created_at || new Date().toISOString(),
+            } : undefined,
+          }));
+
+          result = [...result, ...mappedInvoices];
+        }
+      } catch (err) {
+        console.error('[DocumentService] Erro ao integrar Notas Fiscais no Docs:', err);
+      }
+    }
+
+    // SE A CATEGORIA FOR COMPLIANCE, INTEGRA EVIDÊNCIAS DE SST
+    if (!filters?.categoria || filters.categoria === 'compliance') {
+      try {
+        const { data: evidencesData, error: evidencesError } = await supabase
+          .from('compliance_evidences')
+          .select(`
+            id,
+            evidence_url,
+            created_at,
+            document_ref,
+            operator_email,
+            sst_checklists_obra!inner (
+              project_id,
+              org_id
+            )
+          `)
+          .eq('sst_checklists_obra.org_id', organizationId)
+          .in('sst_checklists_obra.project_id', targetProjectIds);
+
+        if (!evidencesError && evidencesData) {
+          const mappedEvidences: OpuraDocument[] = evidencesData.map((ev: any) => ({
+            id: ev.id,
+            organization_id: organizationId || '',
+            nome: ev.document_ref || `Evidência de Compliance ${ev.id}`,
+            descricao: `Evidência de checklist SST integrada via Segurança e Saúde`,
+            categoria: 'compliance',
+            tipo_documento: 'Licença / Alvará',
+            status: 'ativo',
+            data_emissao: ev.created_at || undefined,
+            alerta_dias_antecedencia: 30,
+            tags: ['Compliance', 'SST'].filter(Boolean),
+            criado_por: ev.operator_email || 'sistema',
+            created_at: ev.created_at || new Date().toISOString(),
+            updated_at: ev.created_at || new Date().toISOString(),
+            project_id: ev.sst_checklists_obra?.project_id || undefined,
+            active_version: ev.evidence_url ? {
+              id: `ver-${ev.id}`,
+              document_id: ev.id,
+              version_number: 1,
+              storage_path: `compliance-evidences:${ev.evidence_url}`,
+              tamanho: 0,
+              mime_type: 'application/pdf',
+              criado_por: 'sistema',
+              created_at: ev.created_at || new Date().toISOString(),
+            } : undefined,
+          }));
+
+          result = [...result, ...mappedEvidences];
+        }
+      } catch (err) {
+        console.error('[DocumentService] Erro ao integrar evidências de SST no Docs:', err);
+      }
+    }
+
+    // SE A CATEGORIA FOR COMERCIAL, INTEGRA PROPOSTAS E DOCUMENTOS COMERCIAIS
+    if (!filters?.categoria || filters.categoria === 'comercial') {
+      try {
+        // 1. Propostas comerciais
+        const { data: proposalsData, error: proposalsError } = await supabase
+          .from('services_proposals')
+          .select(`
+            id,
+            proposal_number,
+            total_value,
+            pdf_storage_path,
+            created_at,
+            services_opportunities!inner (
+              organization_id,
+              converted_project_id,
+              engineering_project_id
+            )
+          `)
+          .eq('services_opportunities.organization_id', organizationId);
+
+        if (!proposalsError && proposalsData) {
+          let filteredProposals = proposalsData;
+          if (targetProjectIds.length > 0) {
+            filteredProposals = proposalsData.filter((p: any) => {
+              const opp = p.services_opportunities;
+              return opp && (
+                targetProjectIds.includes(opp.converted_project_id) || 
+                targetProjectIds.includes(opp.engineering_project_id)
+              );
+            });
+          }
+
+          const mappedProposals: OpuraDocument[] = filteredProposals.map((p: any) => ({
+            id: p.id,
+            organization_id: organizationId || '',
+            nome: `Proposta Comercial nº ${p.proposal_number}`,
+            descricao: `Proposta de Serviço Comercial (Valor: R$ ${p.total_value})`,
+            categoria: 'comercial',
+            tipo_documento: 'Proposta Comercial',
+            status: 'ativo',
+            data_emissao: p.created_at || undefined,
+            alerta_dias_antecedencia: 30,
+            tags: ['Comercial', 'Vendas', p.proposal_number ? `Nº ${p.proposal_number}` : ''].filter(Boolean),
+            criado_por: 'sistema',
+            created_at: p.created_at || new Date().toISOString(),
+            updated_at: p.created_at || new Date().toISOString(),
+            project_id: p.services_opportunities?.converted_project_id || p.services_opportunities?.engineering_project_id || undefined,
+            active_version: p.pdf_storage_path ? {
+              id: `ver-${p.id}`,
+              document_id: p.id,
+              version_number: 1,
+              storage_path: `organization-assets:${p.pdf_storage_path}`,
+              tamanho: 0,
+              mime_type: 'application/pdf',
+              criado_por: 'sistema',
+              created_at: p.created_at || new Date().toISOString(),
+            } : undefined,
+          }));
+
+          result = [...result, ...mappedProposals];
+        }
+      } catch (err) {
+        console.error('[DocumentService] Erro ao integrar propostas no Docs:', err);
+      }
+
+      try {
+        // 2. Documentos de oportunidade
+        const { data: oppDocsData, error: oppDocsError } = await supabase
+          .from('opportunity_documents')
+          .select(`
+            id,
+            name,
+            description,
+            file_path,
+            mime_type,
+            created_at,
+            uploaded_by,
+            services_opportunities!inner (
+              organization_id,
+              converted_project_id,
+              engineering_project_id
+            )
+          `)
+          .eq('services_opportunities.organization_id', organizationId);
+
+        if (!oppDocsError && oppDocsData) {
+          let filteredOppDocs = oppDocsData;
+          if (targetProjectIds.length > 0) {
+            filteredOppDocs = oppDocsData.filter((od: any) => {
+              const opp = od.services_opportunities;
+              return opp && (
+                targetProjectIds.includes(opp.converted_project_id) || 
+                targetProjectIds.includes(opp.engineering_project_id)
+              );
+            });
+          }
+
+          const mappedOppDocs: OpuraDocument[] = filteredOppDocs.map((od: any) => ({
+            id: od.id,
+            organization_id: organizationId || '',
+            nome: od.name || `Documento Comercial ${od.id}`,
+            descricao: od.description || `Documento de Oportunidade Comercial`,
+            categoria: 'comercial',
+            tipo_documento: 'Documento Comercial',
+            status: 'ativo',
+            data_emissao: od.created_at || undefined,
+            alerta_dias_antecedencia: 30,
+            tags: ['Comercial', 'Oportunidade'].filter(Boolean),
+            criado_por: od.uploaded_by || 'sistema',
+            created_at: od.created_at || new Date().toISOString(),
+            updated_at: od.created_at || new Date().toISOString(),
+            project_id: od.services_opportunities?.converted_project_id || od.services_opportunities?.engineering_project_id || undefined,
+            active_version: od.file_path ? {
+              id: `ver-${od.id}`,
+              document_id: od.id,
+              version_number: 1,
+              storage_path: `opportunity-documents:${od.file_path}`,
+              tamanho: 0,
+              mime_type: od.mime_type || 'application/pdf',
+              criado_por: od.uploaded_by || 'sistema',
+              created_at: od.created_at || new Date().toISOString(),
+            } : undefined,
+          }));
+
+          result = [...result, ...mappedOppDocs];
+        }
+      } catch (err) {
+        console.error('[DocumentService] Erro ao integrar documentos de oportunidade no Docs:', err);
+      }
+    }
+
     // Ordena por data de criação de forma descendente
     result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
@@ -422,12 +662,22 @@ export const documentService = {
     if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
       return storagePath;
     }
+
+    let bucket = 'opura-docs';
+    let cleanPath = storagePath;
+
+    if (storagePath.includes(':')) {
+      const parts = storagePath.split(':');
+      bucket = parts[0];
+      cleanPath = parts[1];
+    }
+
     const { data, error } = await supabase.storage
-      .from('opura-docs')
-      .createSignedUrl(storagePath, 60 * 15); // Link válido por 15 minutos
+      .from(bucket)
+      .createSignedUrl(cleanPath, 60 * 15); // Link válido por 15 minutos
 
     if (error) {
-      console.error('[DocumentService] Erro ao gerar link assinado:', error);
+      console.error(`[DocumentService] Erro ao gerar link assinado para o bucket ${bucket}:`, error);
       throw new Error(`Erro ao gerar link de download: ${error.message}`);
     }
 

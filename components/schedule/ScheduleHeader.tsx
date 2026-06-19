@@ -28,8 +28,8 @@ interface ScheduleHeaderProps {
     setIsProjectSelectorOpen: (open: boolean) => void;
     projects: any[];
     onLoadProject: (id: string, view: string) => void;
-    viewMode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks';
-    setViewMode: (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks') => void;
+    viewMode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly';
+    setViewMode: (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly') => void;
     timeScale: 'day' | 'week' | 'month' | 'year';
     setTimeScale: (scale: 'day' | 'week' | 'month' | 'year') => void;
     schedule: ProjectSchedule;
@@ -180,6 +180,8 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                         { key: 's-curve', label: 'Curva S' },
                         { key: 'resources', label: 'Recursos' },
                         { key: 'risks', label: 'Riscos' },
+                        { key: 'constraints', label: 'Restrições' },
+                        { key: 'weekly', label: 'Last Planner' },
                     ] as const).map(({ key, label }) => (
                         <button
                             key={key}

@@ -37,6 +37,8 @@ import { ScheduleGantt } from './schedule/ScheduleGantt';
 import { SchedulingEngine } from '../utils/schedulingEngine';
 import { ResourceManagement } from './ResourceManagement';
 import { ScheduleRiskDashboard } from './schedule/ScheduleRiskDashboard';
+import { ConstraintsPanel } from './schedule/ConstraintsPanel';
+import { LastPlannerPanel } from './schedule/LastPlannerPanel';
 import { orderService } from '../services/orderService';
 import { projectService } from '../services/projectService';
 import ScheduleHeader from './schedule/ScheduleHeader';
@@ -520,7 +522,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     onLoadProject,
     onUpdateSettings,
     onUpdateBudget,
-    onBack
+    onBack,
+    organizationId,
 }) => {
     const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
     const [schedule, setSchedule] = useState<ProjectSchedule>(
@@ -538,17 +541,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         }
     );
 
-    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks'>(() => {
+    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly'>(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('schedule-view-mode');
-            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks') {
+            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks' || saved === 'constraints' || saved === 'weekly') {
                 return saved;
             }
         }
         return 'table';
     });
 
-    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks') => {
+    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly') => {
         setViewModeState(mode);
         localStorage.setItem('schedule-view-mode', mode);
     };
@@ -3726,6 +3729,26 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                         taskInsights={taskInsights}
                         realizedState={realizedState}
                     />
+                )}
+
+                {viewMode === 'constraints' && organizationId && settings.id && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                        <ConstraintsPanel
+                            organizationId={organizationId}
+                            projectId={settings.id}
+                            hierarchy={hierarchy}
+                        />
+                    </div>
+                )}
+
+                {viewMode === 'weekly' && organizationId && settings.id && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                        <LastPlannerPanel
+                            organizationId={organizationId}
+                            projectId={settings.id}
+                            hierarchy={hierarchy}
+                        />
+                    </div>
                 )}
 
                 {/* Content Area - Only visible in Table or Gantt mode */}

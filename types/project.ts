@@ -225,6 +225,55 @@ export interface ProjectSchedule {
         };
 }
 
+// ─── Fase 1 Planejamento: Restrições + Last Planner ───────────
+
+export type ConstraintCategory =
+    | 'projeto'
+    | 'material'
+    | 'contrato'
+    | 'equipe'
+    | 'equipamento'
+    | 'aprovacao';
+
+export interface ScheduleConstraint {
+    id: string;
+    organizationId: string;
+    projectId: string;
+    scheduleItemId: string;
+    category: ConstraintCategory;
+    description: string;
+    status: 'open' | 'removed';
+    responsible?: string;
+    dueDate?: string;      // YYYY-MM-DD
+    removedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface WeeklyCommitment {
+    id: string;
+    organizationId: string;
+    projectId: string;
+    scheduleItemId: string;
+    weekStart: string;     // YYYY-MM-DD (segunda-feira)
+    plannedQty?: number;
+    doneQty?: number;
+    isComplete?: boolean;
+    failureReason?: string;
+    notes?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface PpcWeek {
+    weekStart: string;
+    plannedCount: number;
+    completedCount: number;
+    ppc: number | null;
+}
+
+// ──────────────────────────────────────────────────────────────
+
 export interface BudgetVersion {
     id: string;
     item: number;

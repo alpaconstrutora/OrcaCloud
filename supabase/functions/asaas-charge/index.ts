@@ -67,28 +67,47 @@ serve(async (req: Request) => {
     // 1. Carrega o recebível
     const { data: tx, error: txErr } = await admin
         .from('internal_transactions')
-        .select('id,organization_id,amount,description,party_name,party_email,due_date,project_id,reference_id')
+        .select('id,organization_id,amount,description,party_id,party_name,party_email,due_date,project_id,reference_id')
         .eq('id', transaction_id)
         .eq('organization_id', organization_id)
         .single();
     if (txErr || !tx) return json({ error: 'Recebível não encontrado.' }, 404);
 
-    // 2. Resolve o cliente (document/email/phone) pelo party_name
-    let client: { id?: string; name?: string; email?: string; document?: string; phone?: string; asaas_customer_id?: string } | null = null;
-    if (tx.party_name) {
+    // 2. Resolve o cliente (document/email/phone):
+    //    (a) por party_id (vínculo direto) → (b) por nome exato → (c) por nome normalizado
+    type ClientRow = { id?: string; name?: string; email?: string; document?: string; phone?: string; asaas_customer_id?: string };
+    let client: ClientRow | null = null;
+    const clientCols = 'id,name,email,document,phone,asaas_customer_id';
+
+    if (tx.party_id) {
         const { data: c } = await admin
-            .from('clients')
-            .select('id,name,email,document,phone,asaas_customer_id')
+            .from('clients').select(clientCols).eq('id', tx.party_id).maybeSingle();
+        client = c;
+    }
+    if (!client && tx.party_name) {
+        const { data: c } = await admin
+            .from('clients').select(clientCols)
             .eq('organization_id', organization_id)
-            .ilike('name', tx.party_name)
-            .limit(1)
-            .maybeSingle();
+            .ilike('name', tx.party_name.trim())
+            .limit(1).maybeSingle();
+        client = c;
+    }
+    if (!client && tx.party_name) {
+        // fallback: match parcial (caso o nome tenha sufixos/diferenças)
+        const { data: c } = await admin
+            .from('clients').select(clientCols)
+            .eq('organization_id', organization_id)
+            .ilike('name', `%${tx.party_name.trim()}%`)
+            .limit(1).maybeSingle();
         client = c;
     }
 
-    const cpfCnpj = onlyDigits(client?.document);
+    if (!client) {
+        return json({ error: `Cliente "${tx.party_name ?? '—'}" não encontrado no cadastro de clientes. Vincule o recebível a um cliente cadastrado.` }, 422);
+    }
+    const cpfCnpj = onlyDigits(client.document);
     if (!cpfCnpj) {
-        return json({ error: `Cliente "${tx.party_name ?? '—'}" sem CPF/CNPJ cadastrado. O Asaas exige documento para emitir cobrança.` }, 422);
+        return json({ error: `Cliente "${client.name ?? tx.party_name ?? '—'}" sem CPF/CNPJ cadastrado. O Asaas exige documento para emitir cobrança.` }, 422);
     }
 
     const asaasHeaders = {

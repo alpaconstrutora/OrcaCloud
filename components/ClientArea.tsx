@@ -307,7 +307,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden space-y-0">
                     {/* Hero */}
-                    <div className="-mx-4 bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-400 px-5 pt-4 pb-10">
+                    <div className="-mx-4 bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 px-5 pt-4 pb-10">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5">
                                 <span className="text-[10px] font-black text-white uppercase tracking-widest">Locação</span>
@@ -354,7 +354,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {/* KPIs flutuantes */}
                     <div className="px-4 -mt-4 grid grid-cols-3 gap-3">
                         {[
-                            { label: 'Contratos', value: activeContracts.length, icon: <FileText className="w-4 h-4" />, color: 'indigo', tab: 'contratos' as const },
+                            { label: 'Contratos', value: activeContracts.length, icon: <FileText className="w-4 h-4" />, color: 'blue', tab: 'contratos' as const },
                             { label: 'Chamados', value: openRequests.length, icon: <Wrench className="w-4 h-4" />, color: openRequests.length > 0 ? 'amber' : 'emerald', tab: 'manutencao' as const },
                             { label: 'Pago', value: `${paidPct}%`, icon: <CheckCircle2 className="w-4 h-4" />, color: 'emerald', tab: 'financeiro' as const },
                         ].map(card => (
@@ -456,16 +456,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden space-y-0">
                     {/* Hero */}
-                    <div className="-mx-4 bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-400 px-5 pt-4 pb-10">
+                    <div className="-mx-4 bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 px-5 pt-4 pb-10">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5"><span className="text-[10px] font-black text-white uppercase tracking-widest">Serviços</span></div>
                             <div className="flex items-center gap-2">
                                 {portalToken && (<button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"><Bell className="w-3.5 h-3.5" />{unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[7px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}</button>)}
-                                <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-indigo-600 font-black text-sm shadow">{(clientProfile?.name || '?').charAt(0)}</div>
+                                <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-600 font-black text-sm shadow">{(clientProfile?.name || '?').charAt(0)}</div>
                             </div>
                         </div>
                         <h2 className="text-2xl font-black text-white leading-tight">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
-                        <p className="text-indigo-200 text-sm font-medium mt-1">Acompanhe suas ordens de serviço</p>
+                        <p className="text-blue-200 text-sm font-medium mt-1">Acompanhe suas ordens de serviço</p>
                         {/* Ações rápidas (topo) */}
                         {quickTabs.length > 0 && (
                             <div className="mt-5 grid grid-cols-4 gap-2">
@@ -480,15 +480,15 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="mt-4 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
                             <div className="grid grid-cols-2 gap-3 mb-3">
                                 <div>
-                                    <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mb-1">Próximo Agendamento</p>
-                                    {nextScheduled ? (<><p className="text-base font-black text-white leading-tight truncate max-w-[130px]">{nextScheduled.title}</p><p className="text-[9px] text-indigo-200 font-bold mt-0.5">{new Date(nextScheduled.scheduled_date! + 'T12:00:00').toLocaleDateString('pt-BR')}</p></>) : <p className="text-sm font-black text-white">Sem agendamento</p>}
+                                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Próximo Agendamento</p>
+                                    {nextScheduled ? (<><p className="text-base font-black text-white leading-tight truncate max-w-[130px]">{nextScheduled.title}</p><p className="text-[9px] text-blue-200 font-bold mt-0.5">{new Date(nextScheduled.scheduled_date! + 'T12:00:00').toLocaleDateString('pt-BR')}</p></>) : <p className="text-sm font-black text-white">Sem agendamento</p>}
                                 </div>
                                 <div className="border-l border-white/20 pl-3">
-                                    <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mb-1">Total Contratado</p>
+                                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Total Contratado</p>
                                     <p className="text-lg font-black text-white">R$ {totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
                                 </div>
                             </div>
-                            {enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="w-full py-2.5 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"><ClipboardList className="w-3.5 h-3.5" /> Ver Ordens de Serviço <ArrowRight className="w-3 h-3" /></button>}
+                            {enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="w-full py-2.5 bg-white text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"><ClipboardList className="w-3.5 h-3.5" /> Ver Ordens de Serviço <ArrowRight className="w-3 h-3" /></button>}
                         </div>
                     </div>
                     {/* KPIs flutuantes */}
@@ -507,14 +507,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </div>
                     {/* OS recentes */}
                     {recentOS.length > 0 && <div className="px-4 mt-4 pb-6 space-y-2">
-                        <div className="flex items-center justify-between mb-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">OS Recentes</p>{enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Ver todas</button>}</div>
-                        {recentOS.map(os => (<div key={os.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0 flex items-center gap-2"><span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-lg shrink-0">{os.number}</span><p className="text-sm font-black text-gray-900 truncate">{os.title}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span></div>))}
+                        <div className="flex items-center justify-between mb-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">OS Recentes</p>{enabledTabIds.includes('os') && <button onClick={() => setActiveTab('os')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Ver todas</button>}</div>
+                        {recentOS.map(os => (<div key={os.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0 flex items-center gap-2"><span className="text-[9px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-lg shrink-0">{os.number}</span><p className="text-sm font-black text-gray-900 truncate">{os.title}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span></div>))}
                     </div>}
                     {/* Empty state + atalhos */}
                     {recentOS.length === 0 && (
                         <div className="px-4 mt-6 pb-6">
                             <div className="flex flex-col items-center text-center py-4">
-                                <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-400 mb-3"><ClipboardList className="w-7 h-7" /></div>
+                                <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400 mb-3"><ClipboardList className="w-7 h-7" /></div>
                                 <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhuma ordem de serviço ainda</p>
                                 <p className="text-xs text-gray-400 font-medium mt-1 max-w-[240px]">Suas ordens de serviço e agendamentos aparecerão aqui.</p>
                             </div>
@@ -3489,11 +3489,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         key={tab.id}
                                         onClick={() => setActiveTab(tab.id as typeof activeTab)}
                                         className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
-                                            ${isActive ? 'text-indigo-600' : isAdmin && !isVisible ? 'text-gray-200' : 'text-gray-400'}
+                                            ${isActive ? 'text-blue-600' : isAdmin && !isVisible ? 'text-gray-200' : 'text-gray-400'}
                                         `}
                                     >
                                         {isActive && (
-                                            <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-600 rounded-full" />
+                                            <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-blue-600 rounded-full" />
                                         )}
                                         <span className={`transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}>
                                             {tab.icon}
@@ -3509,11 +3509,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <button
                                     onClick={() => setShowMoreSheet(true)}
                                     className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
-                                        ${moreActive ? 'text-indigo-600' : 'text-gray-400'}
+                                        ${moreActive ? 'text-blue-600' : 'text-gray-400'}
                                     `}
                                 >
                                     {moreActive && (
-                                        <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-600 rounded-full" />
+                                        <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-blue-600 rounded-full" />
                                     )}
                                     <span className={`transition-transform duration-200 ${moreActive ? 'scale-110' : ''}`}>
                                         <MoreHorizontal className="w-4 h-4" />
@@ -3553,11 +3553,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             onClick={() => { setActiveTab(tab.id as typeof activeTab); setShowMoreSheet(false); }}
                                             className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition-all ${
                                                 isActive
-                                                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                    ? 'bg-blue-50 border-blue-200 text-blue-700'
                                                     : 'bg-gray-50 border-gray-100 text-gray-600'
                                             }`}
                                         >
-                                            <span className={isActive ? 'text-indigo-500' : 'text-gray-400'}>{tab.icon}</span>
+                                            <span className={isActive ? 'text-blue-500' : 'text-gray-400'}>{tab.icon}</span>
                                             <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
                                             {isAdmin && !isVisible && <EyeOff className="w-3.5 h-3.5 ml-auto text-gray-300" />}
                                         </button>

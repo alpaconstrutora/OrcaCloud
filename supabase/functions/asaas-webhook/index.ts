@@ -21,6 +21,8 @@ serve(async (req: Request) => {
 
     // Asaas envia o token configurado no header asaas-access-token
     const incoming = req.headers.get('asaas-access-token') ?? '';
+    const mask = (s: string) => s ? `${s.slice(0, 4)}…${s.slice(-4)} (len=${s.length})` : '(vazio)';
+    console.log(`[asaas-webhook] incoming=${mask(incoming)} expected=${mask(webhookToken)} match=${incoming === webhookToken}`);
     if (webhookToken && incoming !== webhookToken) {
         return json({ error: 'Invalid webhook token' }, 401);
     }

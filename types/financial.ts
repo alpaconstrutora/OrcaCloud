@@ -418,6 +418,7 @@ export interface Receivable {
     status: InternalTransactionStatus;
     business_status: ReceivableBusinessStatus;
     effective_status: ReceivableEffectiveStatus;
+    party_id?: string;
     party_name?: string;
     party_type?: string;
     project_id?: string;

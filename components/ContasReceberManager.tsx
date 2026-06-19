@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { receivableService } from '../services/receivableService';
 import { clientChargeService } from '../services/clientChargeService';
+import { clientService } from '../services/clientService';
 import type { ClientCharge, BillingType } from '../services/clientChargeService';
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
 import type { Organization } from '../types';
@@ -79,6 +80,23 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
     });
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState<string | null>(null);
+    const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+
+    useEffect(() => {
+        let active = true;
+        clientService.listClients(organizationId)
+            .then(list => {
+                if (active) {
+                    setClients(
+                        (list || [])
+                            .filter((c: any) => c?.name)
+                            .map((c: any) => ({ id: c.id, name: c.name })),
+                    );
+                }
+            })
+            .catch(() => { /* lista de clientes é opcional; campo aceita texto livre */ });
+        return () => { active = false; };
+    }, [organizationId]);
 
     async function handleSave() {
         if (!form.amount || !form.due_date || !form.description) {
@@ -87,10 +105,14 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
         setSaving(true);
         setErr(null);
         try {
+            const matched = form.party_name
+                ? clients.find(c => c.name.trim().toLowerCase() === form.party_name.trim().toLowerCase())
+                : undefined;
             await receivableService.create(organizationId, {
                 due_date:    form.due_date,
                 amount:      parseFloat(form.amount.replace(',', '.')),
                 description: form.description,
+                party_id:    matched?.id,
                 party_name:  form.party_name || undefined,
                 party_type:  'CLIENT',
                 category:    form.category || undefined,
@@ -118,11 +140,15 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Cliente / Parte</label>
                         <input
                             type="text"
-                            placeholder="Nome do cliente"
+                            list="contas-receber-clientes"
+                            placeholder={clients.length ? 'Selecione ou digite o cliente' : 'Nome do cliente'}
                             value={form.party_name}
                             onChange={e => setForm(f => ({ ...f, party_name: e.target.value }))}
                             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
+                        <datalist id="contas-receber-clientes">
+                            {clients.map(c => <option key={c.id} value={c.name} />)}
+                        </datalist>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Descrição *</label>

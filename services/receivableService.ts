@@ -14,7 +14,7 @@ export const receivableService = {
     async list(organizationId: string, filters?: ReceivableFilters): Promise<Receivable[]> {
         let q = supabase
             .from('vw_receivables')
-            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,description,category,status,business_status,effective_status,party_name,party_type,project_id,project_name,created_at,updated_at')
+            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,description,category,status,business_status,effective_status,party_id,party_name,party_type,project_id,project_name,created_at,updated_at')
             .eq('organization_id', organizationId)
             .order('due_date', { ascending: true, nullsFirst: false });
 
@@ -69,6 +69,7 @@ export const receivableService = {
             due_date: string;
             amount: number;
             description: string;
+            party_id?: string;
             party_name?: string;
             party_type?: string;
             project_id?: string;
@@ -85,6 +86,7 @@ export const receivableService = {
                 due_date:        data.due_date,
                 amount:          data.amount,
                 description:     data.description,
+                party_id:        data.party_id ?? null,
                 party_name:      data.party_name ?? null,
                 party_type:      data.party_type ?? 'CLIENT',
                 project_id:      data.project_id ?? null,
@@ -92,7 +94,7 @@ export const receivableService = {
                 status:          'PENDING',
                 business_status: 'PREVISTO',
             })
-            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,description,category,status,business_status,party_name,party_type,project_id,created_at,updated_at')
+            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,description,category,status,business_status,party_id,party_name,party_type,project_id,created_at,updated_at')
             .single();
         if (error) throw error;
         return { ...row, direction: 'CREDIT', effective_status: 'PREVISTO' } as Receivable;

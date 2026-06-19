@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import {
-  Bell, Calendar, AlertTriangle, Plus, LayoutGrid,
+  Bell, Calendar, AlertTriangle, Plus, LayoutGrid, Inbox,
   ListChecks, ChevronRight, Loader2, Flag, Search,
   SlidersHorizontal, AlignLeft, Columns2, Layers,
   Settings2, Building2, Menu, CheckCircle2, X,

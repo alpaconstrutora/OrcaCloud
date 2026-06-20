@@ -310,9 +310,12 @@ const Layout: React.FC<LayoutProps> = ({
   const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
-  const operacionalViews = ['operacional','quality','pos-obra','project-diary'];
+  const operacionalViews = ['operacional','project-diary'];
   const [isOperacionalOpen, setIsOperacionalOpen] = React.useState(() => operacionalViews.includes(activeView));
   React.useEffect(() => { if (operacionalViews.includes(activeView)) setIsOperacionalOpen(true); }, [activeView]);
+  const qualidadeViews = ['quality','pos-obra'];
+  const [isQualidadeOpen, setIsQualidadeOpen] = React.useState(() => qualidadeViews.includes(activeView));
+  React.useEffect(() => { if (qualidadeViews.includes(activeView)) setIsQualidadeOpen(true); }, [activeView]);
   const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado','partner-workspaces-admin'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
@@ -615,9 +618,21 @@ const Layout: React.FC<LayoutProps> = ({
                     hasActiveChild={operacionalViews.includes(activeView)}
                   >
                     <DropdownItem id="operacional" label="Controle Operacional" icon={ClipboardList} />
+                    <DropdownItem id="project-diary" label="Diário de Obra" icon={BookOpen} />
+                  </NavDropdown>
+
+                  <NavDropdown
+                    label="Qualidade"
+                    icon={Activity}
+                    isOpen={isQualidadeOpen}
+                    onToggle={() => {
+                      if (isCollapsed) { onChangeView('quality'); }
+                      else { setIsQualidadeOpen(o => !o); }
+                    }}
+                    hasActiveChild={qualidadeViews.includes(activeView)}
+                  >
                     <DropdownItem id="quality" label="Qualidade e Entrega" icon={Activity} />
                     <DropdownItem id="pos-obra" label="Pós obra e garantia" icon={Shield} />
-                    <DropdownItem id="project-diary" label="Diário de Obra" icon={BookOpen} />
                   </NavDropdown>
                 </>
               )}

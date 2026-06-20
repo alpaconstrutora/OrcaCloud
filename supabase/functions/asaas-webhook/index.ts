@@ -29,7 +29,14 @@ serve(async (req: Request) => {
 
     const payload = await req.json().catch(() => null) as {
         event?: string;
-        payment?: { id?: string; status?: string; paymentDate?: string; clientPaymentDate?: string };
+        payment?: {
+            id?: string;
+            status?: string;
+            paymentDate?: string;
+            clientPaymentDate?: string;
+            value?: number;
+            netValue?: number;
+        };
     } | null;
 
     if (!payload?.event || !payload.payment?.id) {
@@ -58,6 +65,7 @@ serve(async (req: Request) => {
 
     if (PAID_EVENTS.includes(event)) {
         const paidAt = payload.payment.paymentDate ?? payload.payment.clientPaymentDate ?? new Date().toISOString();
+        const txDate = paidAt.split('T')[0]; // YYYY-MM-DD
 
         await admin.from('client_charges').update({
             status: asaasStatus ?? 'RECEIVED',
@@ -72,6 +80,35 @@ serve(async (req: Request) => {
                 status: 'CONCILIATED',
                 updated_at: new Date().toISOString(),
             }).eq('id', charge.transaction_id);
+
+            // Registra taxa gateway como despesa financeira
+            const grossValue = payload.payment.value  ?? 0;
+            const netValue   = payload.payment.netValue ?? grossValue;
+            const fee        = Math.round((grossValue - netValue) * 100) / 100;
+
+            if (fee > 0) {
+                const { data: parentTx } = await admin
+                    .from('internal_transactions')
+                    .select('project_id,cost_center_id')
+                    .eq('id', charge.transaction_id)
+                    .maybeSingle();
+
+                await admin.from('internal_transactions').insert({
+                    organization_id: charge.organization_id,
+                    source_system:   'ASAAS_FEE',
+                    direction:       'DEBIT',
+                    amount:          fee,
+                    transaction_date: txDate,
+                    due_date:         txDate,
+                    description:     `Taxa Gateway Asaas — ${paymentId}`,
+                    category:        'Taxa Gateway',
+                    business_status: 'PAGO',
+                    status:          'CONCILIATED',
+                    project_id:      parentTx?.project_id      ?? null,
+                    cost_center_id:  parentTx?.cost_center_id  ?? null,
+                    party_name:      'Asaas Tecnologia',
+                });
+            }
         }
         return json({ ok: true, action: 'paid' });
     }

@@ -1709,6 +1709,58 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
         return (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+                {/* ══ MOBILE ══ */}
+                <div className="md:hidden -mx-4">
+                    <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                        <h2 className="text-2xl font-black text-white leading-tight">Financeiro</h2>
+                        <p className="text-blue-200 text-sm font-medium mt-1">Cobranças e pagamentos do imóvel</p>
+                    </div>
+                    <div className="px-4 -mt-3 pb-2 grid grid-cols-3 gap-2 mb-2">
+                        {[
+                            { label: 'Vencimento', value: nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : 'Em dia', color: 'text-amber-600' },
+                            { label: 'Pago', value: `R$ ${totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, color: 'text-emerald-600' },
+                            { label: 'Pendente', value: `R$ ${totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, color: 'text-gray-900' },
+                        ].map((k, i) => (
+                            <div key={i} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 text-center">
+                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-wide mb-1">{k.label}</p>
+                                <p className={`text-xs font-black ${k.color} tabular-nums`}>{k.value}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="px-4 pb-6 space-y-2">
+                        {charges.length === 0 ? (
+                            <div className="flex flex-col items-center text-center py-8">
+                                <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400 mb-3"><DollarSign className="w-6 h-6" /></div>
+                                <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhuma cobrança</p>
+                            </div>
+                        ) : (
+                            charges.map(charge => {
+                                const overdue = charge.status !== 'PAID' && new Date(charge.dueDate + 'T12:00:00') < new Date();
+                                return (
+                                    <div key={charge.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${charge.status === 'PAID' ? 'bg-emerald-50 text-emerald-500' : overdue ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-500'}`}>
+                                            <DollarSign className="w-5 h-5" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-black text-gray-900 truncate">{charge.description}</p>
+                                            <p className="text-[10px] font-bold text-gray-400 mt-0.5">{new Date(charge.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                                        </div>
+                                        <div className="flex flex-col items-end shrink-0 gap-1">
+                                            <span className="text-sm font-black text-gray-900 tabular-nums">R$ {charge.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${charge.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : overdue ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
+                                                {charge.status === 'PAID' ? 'Pago' : overdue ? 'Vencido' : 'Pendente'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+
+                {/* ══ DESKTOP ══ */}
+                <div className="hidden md:block space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {[
                         { label: 'Próximo Vencimento', value: nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—', sub: nextDue ? new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Em dia', color: 'text-amber-600', icon: <Bell className="w-5 h-5 text-amber-500" /> },
@@ -1816,6 +1868,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </table>
                     )}
                 </div>
+                </div>{/* end hidden md:block */}
             </div>
         );
     };
@@ -1841,6 +1894,67 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
         return (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+                {/* ══ MOBILE ══ */}
+                <div className="md:hidden -mx-4">
+                    <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                        <h2 className="text-2xl font-black text-white leading-tight">Financeiro</h2>
+                        <p className="text-blue-200 text-sm font-medium mt-1">Medições e faturamento</p>
+                    </div>
+                    <div className="px-4 -mt-3 pb-2 grid grid-cols-3 gap-2 mb-2">
+                        {[
+                            { label: 'Contratado', value: `R$ ${totalContrato.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, color: 'text-gray-900' },
+                            { label: 'Medido', value: `R$ ${totalMedido.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, color: 'text-emerald-600' },
+                            { label: 'A Medir', value: `R$ ${totalAMedir.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, color: 'text-amber-600' },
+                        ].map((k, i) => (
+                            <div key={i} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 text-center">
+                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-wide mb-1">{k.label}</p>
+                                <p className={`text-xs font-black ${k.color} tabular-nums`}>{k.value}</p>
+                            </div>
+                        ))}
+                    </div>
+                    {pctMedido > 0 && (
+                        <div className="px-4 mb-3">
+                            <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100">
+                                <div className="flex justify-between text-[9px] font-black text-gray-400 uppercase mb-1.5">
+                                    <span>Progresso medido</span><span>{pctMedido.toFixed(1)}%</span>
+                                </div>
+                                <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                                    <div className="bg-emerald-500 h-full transition-all duration-1000" style={{ width: `${pctMedido}%` }} />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <div className="px-4 pb-6 space-y-2">
+                        {medicoes.length === 0 ? (
+                            <div className="flex flex-col items-center text-center py-8">
+                                <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400 mb-3"><ClipboardList className="w-6 h-6" /></div>
+                                <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhuma medição</p>
+                            </div>
+                        ) : (
+                            medicoes.map((med, idx) => (
+                                <div key={med.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${med.status === 'PAID' ? 'bg-emerald-50 text-emerald-500' : 'bg-amber-50 text-amber-500'}`}>
+                                        <span className="text-[11px] font-black">{idx + 1}</span>
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-black text-gray-900 truncate">{med.description}</p>
+                                        <p className="text-[10px] font-bold text-gray-400 mt-0.5">{new Date(med.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                                    </div>
+                                    <div className="flex flex-col items-end shrink-0 gap-1">
+                                        <span className="text-sm font-black text-gray-900 tabular-nums">R$ {med.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${med.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            {med.status === 'PAID' ? 'Aprovada' : 'Pendente'}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* ══ DESKTOP ══ */}
+                <div className="hidden md:block space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {[
                         { label: 'Total Contratado', value: totalContrato, sub: finInfo.paymentMethod || '—', color: 'text-gray-900', icon: <DollarSign className="w-5 h-5 text-indigo-500" /> },
@@ -1950,6 +2064,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </table>
                     )}
                 </div>
+                </div>{/* end hidden md:block */}
             </div>
         );
     };
@@ -2069,6 +2184,46 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
         return (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+                {/* ══ MOBILE ══ */}
+                <div className="md:hidden -mx-4">
+                    <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                        <h2 className="text-2xl font-black text-white leading-tight">Diário de Obra</h2>
+                        <p className="text-blue-200 text-sm font-medium mt-1">{entries.length} registro{entries.length !== 1 ? 's' : ''} do gestor</p>
+                    </div>
+                    <div className="px-4 -mt-3 pb-6 space-y-2">
+                        {entries.length === 0 ? (
+                            <div className="flex flex-col items-center text-center py-10">
+                                <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400 mb-3"><BookOpen className="w-7 h-7" /></div>
+                                <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhum registro ainda</p>
+                                <p className="text-xs text-gray-400 font-medium mt-1">As atualizações da obra aparecerão aqui.</p>
+                            </div>
+                        ) : (
+                            entries.map(item => (
+                                <div key={item.id} onClick={() => setSelectedEntry(item)}
+                                    className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3 active:scale-[0.98] transition-transform cursor-pointer">
+                                    <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 shrink-0">
+                                        <WeatherIcon type={item.weather} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-black text-gray-900">{new Date(item.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">{item.description}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        {(item.images?.length ?? 0) > 0 && (
+                                            <span className="text-[9px] font-black bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full">{item.images!.length} foto{item.images!.length !== 1 ? 's' : ''}</span>
+                                        )}
+                                        {item.impediments && <span className="text-[9px] font-black bg-red-50 text-red-500 px-2 py-0.5 rounded-full">Impedimento</span>}
+                                        <ChevronRight className="w-4 h-4 text-gray-300" />
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* ══ DESKTOP ══ */}
+                <div className="hidden md:block">
                 <div className="flex justify-between items-center mb-6">
                     <div className="flex items-center gap-6">
                         <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
@@ -2232,6 +2387,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </table>
                     </div>
                 )}
+                </div>{/* end hidden md:block */}
 
                 {/* Entry Details Modal */}
                 {selectedEntry && (
@@ -3779,15 +3935,35 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </>
                 )}
                 {activeTab === 'suporte' && (
-                    <div className="bg-white p-12 rounded-[2.5rem] border border-gray-100 flex flex-col items-center text-center">
-                        <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-600 mb-6">
-                            <ShieldCheck className="w-10 h-10" />
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {/* ══ MOBILE ══ */}
+                        <div className="md:hidden -mx-4">
+                            <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                                <h2 className="text-2xl font-black text-white leading-tight">Suporte</h2>
+                                <p className="text-blue-200 text-sm font-medium mt-1">Assistência e pós-obra</p>
+                            </div>
+                            <div className="px-4 -mt-3 pb-6">
+                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center">
+                                    <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 mb-4">
+                                        <ShieldCheck className="w-7 h-7" />
+                                    </div>
+                                    <p className="text-sm font-black text-gray-700 uppercase tracking-tight mb-2">Assistência e Pós-Obra</p>
+                                    <p className="text-xs text-gray-400 font-medium max-w-[260px]">Disponível após a entrega das chaves para abertura de chamados técnicos e garantia.</p>
+                                    <span className="mt-4 px-4 py-2 bg-gray-100 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest">Em breve</span>
+                                </div>
+                            </div>
                         </div>
-                        <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2">Assistência e Pós-Obra</h3>
-                        <p className="text-gray-500 max-w-md mx-auto mb-8 font-medium">Este módulo estará disponível após a entrega das chaves para abertura de chamados técnicos e garantia.</p>
-                        <button className="px-8 py-4 bg-gray-100 text-gray-400 rounded-2xl text-[10px] font-black uppercase tracking-widest cursor-not-allowed">
-                            Abrir Chamado (Em breve)
-                        </button>
+                        {/* ══ DESKTOP ══ */}
+                        <div className="hidden md:flex bg-white p-12 rounded-[2.5rem] border border-gray-100 flex-col items-center text-center">
+                            <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-600 mb-6">
+                                <ShieldCheck className="w-10 h-10" />
+                            </div>
+                            <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2">Assistência e Pós-Obra</h3>
+                            <p className="text-gray-500 max-w-md mx-auto mb-8 font-medium">Este módulo estará disponível após a entrega das chaves para abertura de chamados técnicos e garantia.</p>
+                            <button className="px-8 py-4 bg-gray-100 text-gray-400 rounded-2xl text-[10px] font-black uppercase tracking-widest cursor-not-allowed">
+                                Abrir Chamado (Em breve)
+                            </button>
+                        </div>
                     </div>
                 )}
                 {activeTab === 'manutencao' && (() => {

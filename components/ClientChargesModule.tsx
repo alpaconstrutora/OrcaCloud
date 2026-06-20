@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check, ChevronDown, ChevronUp, Copy, ExternalLink,
-    FileText, Loader2, QrCode, RefreshCw, Search, Slash, Landmark,
+    FileText, Loader2, Mail, QrCode, RefreshCw, Search, Slash, Landmark,
 } from 'lucide-react';
 import { clientChargeService } from '../services/clientChargeService';
 import type { ClientCharge } from '../services/clientChargeService';
@@ -63,7 +63,9 @@ export default function ClientChargesModule({ organizationId }: Props) {
     const [filter, setFilter]     = useState<StatusFilter>('all');
     const [expanded, setExpanded] = useState<string | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
-    const [cancelling, setCancelling] = useState<string | null>(null);
+    const [cancelling, setCancelling]   = useState<string | null>(null);
+    const [resending, setResending]     = useState<string | null>(null);
+    const [resentId, setResentId]       = useState<string | null>(null);
 
     const load = useCallback(async () => {
         if (!organizationId) return;
@@ -113,6 +115,20 @@ export default function ClientChargesModule({ organizationId }: Props) {
         navigator.clipboard.writeText(c.pix_payload);
         setCopiedId(c.id);
         setTimeout(() => setCopiedId(null), 2000);
+    }
+
+    async function handleResend(c: ClientCharge) {
+        setResending(c.id); setResentId(null);
+        try {
+            const r = await clientChargeService.resend(organizationId, c.id);
+            setResentId(c.id);
+            setTimeout(() => setResentId(null), 3000);
+            if (r.email) alert(`Boleto reenviado para ${r.email}`);
+        } catch (e) {
+            alert('Erro: ' + (e instanceof Error ? e.message : 'Falha ao reenviar'));
+        } finally {
+            setResending(null);
+        }
     }
 
     async function handleCancel(c: ClientCharge) {
@@ -258,6 +274,17 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                                                 className="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg text-xs font-bold text-blue-700 transition-colors">
                                                                 <FileText className="w-3.5 h-3.5" /> Boleto (PDF) <ExternalLink className="w-3 h-3" />
                                                             </a>
+                                                        )}
+                                                        {c.billing_type !== 'PIX' && !PAID.includes(c.status) && c.status !== 'CANCELLED' && c.asaas_payment_id && (
+                                                            <button onClick={() => handleResend(c)} disabled={resending === c.id}
+                                                                className="flex items-center gap-2 px-3 py-2 bg-violet-50 hover:bg-violet-100 rounded-lg text-xs font-bold text-violet-700 transition-colors disabled:opacity-50">
+                                                                {resending === c.id
+                                                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                    : resentId === c.id
+                                                                        ? <Check className="w-3.5 h-3.5" />
+                                                                        : <Mail className="w-3.5 h-3.5" />}
+                                                                {resentId === c.id ? 'Enviado!' : 'Segunda Via'}
+                                                            </button>
                                                         )}
                                                         {c.invoice_url && (
                                                             <a href={c.invoice_url} target="_blank" rel="noreferrer"

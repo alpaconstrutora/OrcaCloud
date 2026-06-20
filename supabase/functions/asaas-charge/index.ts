@@ -54,8 +54,10 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => ({})) as {
         organization_id?: string;
         transaction_id?: string;
+        charge_id?: string;
         billing_type?: 'BOLETO' | 'PIX' | 'UNDEFINED';
-        action?: 'emit' | 'cancel';
+        action?: 'emit' | 'cancel' | 'resend';
+        email?: string;
         // Overrides opcionais por cobrança (senão usa a config da org)
         fine_percent?: number;
         interest_percent_month?: number;
@@ -67,8 +69,45 @@ serve(async (req: Request) => {
     const billingType = body.billing_type ?? 'BOLETO';
     const action = body.action ?? 'emit';
 
-    if (!organization_id || !transaction_id) {
-        return json({ error: 'organization_id e transaction_id são obrigatórios.' }, 400);
+    if (!organization_id) {
+        return json({ error: 'organization_id é obrigatório.' }, 400);
+    }
+
+    // ─── action: resend ───────────────────────────────────────
+    // Reenvia o boleto por e-mail via Asaas (segunda via).
+    if (action === 'resend') {
+        const chargeId = body.charge_id;
+        if (!chargeId) return json({ error: 'charge_id é obrigatório para resend.' }, 400);
+
+        const { data: ch } = await admin
+            .from('client_charges')
+            .select('asaas_payment_id,billing_type,party_email,status')
+            .eq('id', chargeId)
+            .eq('organization_id', organization_id)
+            .maybeSingle();
+
+        if (!ch?.asaas_payment_id) return json({ error: 'Cobrança não encontrada ou sem ID Asaas.' }, 404);
+        if (ch.status === 'CANCELLED') return json({ error: 'Cobrança cancelada — não é possível reenviar.' }, 422);
+
+        const sendBody: Record<string, unknown> = {};
+        const emailOverride = body.email ?? ch.party_email;
+        if (emailOverride) sendBody.emails = [emailOverride];
+
+        const res = await fetch(`${asaasBase}/payments/${ch.asaas_payment_id}/sendByMail`, {
+            method: 'POST',
+            headers: asaasHeadersBase,
+            body: JSON.stringify(sendBody),
+        });
+        if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            const msg = d?.errors?.[0]?.description ?? `HTTP ${res.status}`;
+            return json({ error: `Asaas (reenvio): ${msg}`, detail: d }, 502);
+        }
+        return json({ ok: true, email: emailOverride ?? null });
+    }
+
+    if (!transaction_id) {
+        return json({ error: 'transaction_id é obrigatório.' }, 400);
     }
 
     const asaasHeadersBase = {

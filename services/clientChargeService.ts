@@ -112,6 +112,23 @@ export const clientChargeService = {
         return (data || []) as ClientCharge[];
     },
 
+    /** Reenvia o boleto por e-mail (segunda via). Apenas BOLETO; PIX não suporta. */
+    async resend(organizationId: string, chargeId: string, email?: string): Promise<{ ok: boolean; email: string | null }> {
+        const { data, error } = await supabase.functions.invoke('asaas-charge', {
+            body: { organization_id: organizationId, charge_id: chargeId, action: 'resend', email },
+        });
+        if (error) {
+            let detail = '';
+            const ctx = (error as { context?: Response }).context;
+            if (ctx && typeof ctx.json === 'function') {
+                try { const b = await ctx.json(); detail = b?.error || ''; } catch { /* noop */ }
+            }
+            throw new Error(detail || error.message);
+        }
+        if (data?.error) throw new Error(data.error);
+        return data as { ok: boolean; email: string | null };
+    },
+
     /** Mapa transaction_id → cobrança mais recente (para badge na grid de AR). */
     async byTransaction(organizationId: string): Promise<Record<string, ClientCharge>> {
         const rows = await this.list(organizationId, { limit: 500 });

@@ -854,40 +854,20 @@ export const payrollService = {
         const orgTerceirosTaxes = getOrgTerceirosTaxes(run.org_id);
         console.log(`[PAYROLL-SYNC] Resumo: ${summary.byWorksite.length} obras, custo total=${summary.total}`);
 
-        // 2.1 Limpeza global: remove TODOS os lançamentos antigos desta folha em TODOS os projetos
-        // (cobre casos de mudança de alocação onde o projeto antigo não recebe o cleanup padrão)
+        // 2.1 Limpeza: remove lançamentos anteriores desta folha em internal_transactions.
+        // O worksite loop abaixo cuida do cleanup no project.settings por obra individualmente.
         const laborPrefix = `labor-${runId}-`;
         try {
-            const { data: allProjects } = await supabase
-                .from('projects')
-                .select('id, settings')
-                .filter('settings->>organizationId', 'eq', run.org_id);
-            if (allProjects && allProjects.length > 0) {
-                for (const proj of allProjects) {
-                    const settings = proj.settings as ProjectSettings;
-                    const info = settings?.financialInfo;
-                    if (!info?.transactions?.length) continue;
-                    const cleaned = (info.transactions as ProjectFinancialTx[]).filter(t => !String(t.id || '').startsWith(laborPrefix));
-                    if (cleaned.length < info.transactions.length) {
-                        await supabase
-                            .from('projects')
-                            .update({ settings: { ...settings, financialInfo: { ...info, transactions: cleaned } } })
-                            .eq('id', proj.id);
-                        console.log(`[PAYROLL-SYNC] Limpeza: removidas ${info.transactions.length - cleaned.length} entradas antigas do projeto ${proj.id}`);
-                    }
-                }
-            }
-            // Limpa também internal_transactions para esta folha
             await supabase
                 .from('internal_transactions')
                 .delete()
                 .eq('organization_id', run.org_id)
                 .eq('source_system', 'LABOR')
                 .like('reference_id', `${laborPrefix}%`);
-            console.log(`[PAYROLL-SYNC] Limpeza global concluída`);
+            console.log(`[PAYROLL-SYNC] Limpeza de internal_transactions concluída`);
         } catch (cleanErr: unknown) {
             const msg = cleanErr instanceof Error ? cleanErr.message : String(cleanErr);
-            console.warn(`[PAYROLL-SYNC] Aviso na limpeza global: ${msg}`);
+            console.warn(`[PAYROLL-SYNC] Aviso na limpeza: ${msg}`);
         }
 
         // Helper: busca itens de payroll com fallback V1(run_id) → V2(payroll_run_id)
@@ -928,15 +908,21 @@ export const payrollService = {
 
             if (indivItems.length > 0) {
                 const empIds = [...new Set(indivItems.map(i => i.employee_id))];
-                const { data: empRows } = await supabase
-                    .from('employees')
-                    .select('id, name')
-                    .in('id', empIds as string[]);
+                const [{ data: empRows }, ...allocResults] = await Promise.all([
+                    supabase.from('employees').select('id, name').in('id', empIds as string[]),
+                    ...empIds.map(id => this.listAllocations(id, period)),
+                ]);
                 const empMap: Record<string, string> = Object.fromEntries(
                     (empRows || []).map((e: { id: string; name: string }) => [e.id, e.name])
                 );
+                const allocByEmpId: Record<string, Awaited<ReturnType<typeof this.listAllocations>>> = {};
+                empIds.forEach((id, idx) => { allocByEmpId[id] = allocResults[idx] as Awaited<ReturnType<typeof this.listAllocations>>; });
 
                 const [runYear, runMonth] = run.start_date.slice(0, 7).split('-');
+
+                // Coleta updates de project.settings para executar em paralelo
+                type IndivProjectUpdate = { projectId: string; refId: string; txEntry: ProjectFinancialTx };
+                const indivProjectUpdates: IndivProjectUpdate[] = [];
 
                 for (const item of indivItems) {
                     const rubric = rubricasIndiv.find(r => r.code === item.code);
@@ -947,7 +933,7 @@ export const payrollService = {
                         ? `${runYear}-${runMonth}-${String(rubric.dia_lancamento).padStart(2, '0')}`
                         : run.end_date;
                     const empName = empMap[item.employee_id] || item.employee_id;
-                    const empAllocations = await this.listAllocations(item.employee_id, period);
+                    const empAllocations = allocByEmpId[item.employee_id] || [];
 
                     if (empAllocations.length > 0) {
                         for (const alloc of empAllocations) {
@@ -964,38 +950,20 @@ export const payrollService = {
                                 ? `${rubric.name} - ${empName} - ${worksiteName} - Folha ${formattedPeriod}`
                                 : `${rubric.name} - ${empName} - Folha ${formattedPeriod}`;
 
-                            try {
-                                const project = await projectService.loadProject(alloc.project_id);
-                                if (project) {
-                                    const settings = project.settings as ProjectSettings;
-                                    const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
-                                    const filtered = (info.transactions as ProjectFinancialTx[] || []).filter(t => t.id !== refId);
-                                    await projectService.saveProject({
-                                        ...project,
-                                        settings: {
-                                            ...settings,
-                                            financialInfo: {
-                                                ...info,
-                                                transactions: [{
-                                                    id: refId,
-                                                    date: txDate,
-                                                    type: 'EXPENSE',
-                                                    category: 'Folha de Pagamento',
-                                                    description,
-                                                    value: allocAmount,
-                                                    status: 'PENDING',
-                                                    notes: `Parcela individualizada — ${rubric.name}. Folha ID: ${runId}`
-                                                }, ...filtered]
-                                            }
-                                        }
-                                    });
-                                }
-                            } catch (projErr: unknown) {
-                                const errMsg = projErr instanceof Error ? projErr.message : String(projErr);
-                                const msg = `Erro ao salvar ${rubric.name} em ${alloc.project_id}: ${errMsg}`;
-                                console.error(`[PAYROLL-SYNC] ${msg}`);
-                                errors.push(msg);
-                            }
+                            indivProjectUpdates.push({
+                                projectId: alloc.project_id,
+                                refId,
+                                txEntry: {
+                                    id: refId,
+                                    date: txDate,
+                                    type: 'EXPENSE',
+                                    category: 'Folha de Pagamento',
+                                    description,
+                                    value: allocAmount,
+                                    status: 'PENDING',
+                                    notes: `Parcela individualizada — ${rubric.name}. Folha ID: ${runId}`
+                                },
+                            });
 
                             internalTxs.push({
                                 organization_id:  run.org_id,
@@ -1027,142 +995,151 @@ export const payrollService = {
                         });
                     }
                 }
+
+                // Aplica updates de project.settings em paralelo (1 load+save por projeto único)
+                if (indivProjectUpdates.length > 0) {
+                    const uniqueIndivProjectIds = [...new Set(indivProjectUpdates.map(u => u.projectId))];
+                    const indivProjects = await Promise.all(uniqueIndivProjectIds.map(id => projectService.loadProject(id)));
+                    const indivProjectMap: Record<string, typeof indivProjects[0]> = {};
+                    uniqueIndivProjectIds.forEach((id, idx) => { indivProjectMap[id] = indivProjects[idx]; });
+
+                    await Promise.all(uniqueIndivProjectIds.map(async (projectId) => {
+                        const project = indivProjectMap[projectId];
+                        if (!project) return;
+                        const settings = project.settings as ProjectSettings;
+                        const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
+                        const updatesForProject = indivProjectUpdates.filter(u => u.projectId === projectId);
+                        const refIdsToRemove = new Set(updatesForProject.map(u => u.refId));
+                        const filtered = (info.transactions as ProjectFinancialTx[] || []).filter(t => !refIdsToRemove.has(t.id as string));
+                        try {
+                            await projectService.saveProject({
+                                ...project,
+                                settings: {
+                                    ...settings,
+                                    financialInfo: { ...info, transactions: [...updatesForProject.map(u => u.txEntry), ...filtered] }
+                                }
+                            });
+                        } catch (projErr: unknown) {
+                            const errMsg = projErr instanceof Error ? projErr.message : String(projErr);
+                            errors.push(`Erro ao salvar lançamentos individualizados em ${projectId}: ${errMsg}`);
+                        }
+                    }));
+                }
             }
         }
 
         console.log('[PAYROLL-SYNC] Deduções acumuladas por obra:', deductionByWorksite, '| Não alocado:', deductionUnallocated);
 
         // 3. Processar custos por obra — gera três lançamentos separados: salário, encargos e contribuições de terceiros
-        for (const worksite of summary.byWorksite) {
+        // Filtra obras com custo > 0 e pré-carrega todos os projetos em paralelo
+        type WorksiteEntry = { worksite: typeof summary.byWorksite[0]; netSalaryCost: number; encargosCost: number };
+        const activeWorksites: WorksiteEntry[] = summary.byWorksite.map(worksite => {
             const deduction = deductionByWorksite[worksite.id] || 0;
-            // Deduções (ex: adiantamentos) saem do salário líquido
-            const netSalaryCost     = Math.max(0, Math.round((worksite.netSalary - deduction) * 100) / 100);
-            const encargosCost      = Math.max(0, Math.round(worksite.encargos * 100) / 100);
+            return {
+                worksite,
+                netSalaryCost: Math.max(0, Math.round((worksite.netSalary - deduction) * 100) / 100),
+                encargosCost:  Math.max(0, Math.round(worksite.encargos * 100) / 100),
+            };
+        }).filter(e => e.netSalaryCost > 0 || e.encargosCost > 0 ||
+            orgTerceirosTaxes.some(t => Math.round(e.worksite.gross * t.rate * 100) / 100 > 0));
+
+        // Carrega todos os projetos em paralelo
+        const worksiteProjects = await Promise.all(activeWorksites.map(e => projectService.loadProject(e.worksite.id)));
+
+        // Coleta internalTxs e newTransactions por projeto (síncrono)
+        type WorksiteSavePayload = { project: Awaited<ReturnType<typeof projectService.loadProject>>; newTransactions: ProjectFinancialTx[]; filteredTransactions: ProjectFinancialTx[] };
+        const worksiteSavePayloads: WorksiteSavePayload[] = [];
+
+        for (let wi = 0; wi < activeWorksites.length; wi++) {
+            const { worksite, netSalaryCost, encargosCost } = activeWorksites[wi];
             const contribuicoesCost = Math.max(0, Math.round(worksite.contribuicoes * 100) / 100);
-            console.log(`[PAYROLL-SYNC] Obra ${worksite.name}: salário=${netSalaryCost}, encargos=${encargosCost}, contribuições=${contribuicoesCost}, dedução=${deduction}`);
-            if (netSalaryCost <= 0 && encargosCost <= 0 && contribuicoesCost <= 0) continue;
+            const project = worksiteProjects[wi];
+            if (!project) {
+                console.warn(`[PAYROLL-SYNC] Projeto ${worksite.id} não encontrado`);
+                continue;
+            }
 
-            try {
-                const project = await projectService.loadProject(worksite.id);
-                if (!project) {
-                    console.warn(`[PAYROLL-SYNC] Projeto ${worksite.id} não encontrado`);
-                    continue;
-                }
+            const settings = project.settings as ProjectSettings;
+            const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
+            const empLabel = worksite.employees?.length ? worksite.employees.join(', ') : '';
 
-                const settings = project.settings as ProjectSettings;
-                const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
-                const empLabel = worksite.employees?.length ? worksite.employees.join(', ') : '';
+            const refIdSalario  = `labor-${runId}-${worksite.id}-salario`;
+            const refIdEncargos = `labor-${runId}-${worksite.id}-encargos`;
+            const oldRefId      = `labor-${runId}-${worksite.id}`;
+            const worksitePrefix = `labor-${runId}-${worksite.id}-`;
+            const filteredTransactions = (info.transactions as ProjectFinancialTx[] || []).filter(t =>
+                t.id !== oldRefId && !String(t.id || '').startsWith(worksitePrefix)
+            );
 
-                const refIdSalario  = `labor-${runId}-${worksite.id}-salario`;
-                const refIdEncargos = `labor-${runId}-${worksite.id}-encargos`;
-                const oldRefId      = `labor-${runId}-${worksite.id}`; // referência legada (entrada única)
-
-                // Remove entradas anteriores desta folha para esta obra (entrada única legada + separadas)
-                const worksitePrefix = `labor-${runId}-${worksite.id}-`;
-                const filteredTransactions = (info.transactions as ProjectFinancialTx[] || []).filter(t =>
-                    t.id !== oldRefId && !String(t.id || '').startsWith(worksitePrefix)
-                );
-
-                const newTransactions: ProjectFinancialTx[] = [];
-                if (netSalaryCost > 0) {
-                    const descSalario = empLabel
-                        ? `Salários - ${empLabel} - ${worksite.name} - Folha ${formattedPeriod}`
-                        : `Salários - ${worksite.name} - Folha ${formattedPeriod}`;
-                    newTransactions.push({
-                        id: refIdSalario,
-                        date: run.end_date,
-                        type: 'EXPENSE',
-                        category: 'Folha de Pagamento',
-                        description: descSalario,
-                        value: netSalaryCost,
-                        status: 'PENDING',
-                        notes: `Salário líquido dos colaboradores. Folha ID: ${runId}`
-                    });
-                    internalTxs.push({
-                        organization_id: run.org_id,
-                        source_system: 'LABOR',
-                        reference_id: refIdSalario,
-                        transaction_date: run.end_date,
-                        amount: netSalaryCost,
-                        direction: 'DEBIT',
-                        description: descSalario,
-                        category: 'Folha de Pagamento',
-                        status: 'PENDING',
-                        project_id: worksite.id,
-                    });
-                }
-                if (encargosCost > 0) {
-                    const descEncargos = `Encargos Patronais - ${worksite.name} - Folha ${formattedPeriod}`;
-                    newTransactions.push({
-                        id: refIdEncargos,
-                        date: run.end_date,
-                        type: 'EXPENSE',
-                        category: 'Encargos Patronais',
-                        description: descEncargos,
-                        value: encargosCost,
-                        status: 'PENDING',
-                        notes: `Encargos patronais (FGTS e demais). Folha ID: ${runId}`
-                    });
-                    internalTxs.push({
-                        organization_id: run.org_id,
-                        source_system: 'LABOR',
-                        reference_id: refIdEncargos,
-                        transaction_date: run.end_date,
-                        amount: encargosCost,
-                        direction: 'DEBIT',
-                        description: descEncargos,
-                        category: 'Encargos Patronais',
-                        status: 'PENDING',
-                        project_id: worksite.id,
-                    });
-                }
-                for (const tax of orgTerceirosTaxes) {
-                    const taxCost = Math.max(0, Math.round(worksite.gross * tax.rate * 100) / 100);
-                    if (taxCost <= 0) continue;
-                    const refIdTax = `labor-${runId}-${worksite.id}-terceiros-${tax.code}`;
-                    const descTax = `${tax.name} (${(tax.rate * 100).toFixed(1)}%) - ${worksite.name} - Folha ${formattedPeriod}`;
-                    newTransactions.push({
-                        id: refIdTax,
-                        date: run.end_date,
-                        type: 'EXPENSE',
-                        category: 'Contribuições de Terceiros',
-                        description: descTax,
-                        value: taxCost,
-                        status: 'PENDING',
-                        notes: `Contribuição de terceiros — código ${tax.code}. Folha ID: ${runId}`
-                    });
-                    internalTxs.push({
-                        organization_id: run.org_id,
-                        source_system: 'LABOR',
-                        reference_id: refIdTax,
-                        transaction_date: run.end_date,
-                        amount: taxCost,
-                        direction: 'DEBIT',
-                        description: descTax,
-                        category: 'Contribuições de Terceiros',
-                        status: 'PENDING',
-                        project_id: worksite.id,
-                    });
-                }
-
-                await projectService.saveProject({
-                    ...project,
-                    settings: {
-                        ...settings,
-                        financialInfo: {
-                            ...info,
-                            transactions: [...newTransactions, ...filteredTransactions]
-                        }
-                    }
+            const newTransactions: ProjectFinancialTx[] = [];
+            if (netSalaryCost > 0) {
+                const descSalario = empLabel
+                    ? `Salários - ${empLabel} - ${worksite.name} - Folha ${formattedPeriod}`
+                    : `Salários - ${worksite.name} - Folha ${formattedPeriod}`;
+                newTransactions.push({
+                    id: refIdSalario, date: run.end_date, type: 'EXPENSE',
+                    category: 'Folha de Pagamento', description: descSalario,
+                    value: netSalaryCost, status: 'PENDING',
+                    notes: `Salário líquido dos colaboradores. Folha ID: ${runId}`
                 });
-                console.log(`[PAYROLL-SYNC] Obra ${worksite.name}: salário=${netSalaryCost} | encargos=${encargosCost} | contribuições=${contribuicoesCost}`);
+                internalTxs.push({
+                    organization_id: run.org_id, source_system: 'LABOR', reference_id: refIdSalario,
+                    transaction_date: run.end_date, amount: netSalaryCost, direction: 'DEBIT',
+                    description: descSalario, category: 'Folha de Pagamento', status: 'PENDING',
+                    project_id: worksite.id,
+                });
+            }
+            if (encargosCost > 0) {
+                const descEncargos = `Encargos Patronais - ${worksite.name} - Folha ${formattedPeriod}`;
+                newTransactions.push({
+                    id: refIdEncargos, date: run.end_date, type: 'EXPENSE',
+                    category: 'Encargos Patronais', description: descEncargos,
+                    value: encargosCost, status: 'PENDING',
+                    notes: `Encargos patronais (FGTS e demais). Folha ID: ${runId}`
+                });
+                internalTxs.push({
+                    organization_id: run.org_id, source_system: 'LABOR', reference_id: refIdEncargos,
+                    transaction_date: run.end_date, amount: encargosCost, direction: 'DEBIT',
+                    description: descEncargos, category: 'Encargos Patronais', status: 'PENDING',
+                    project_id: worksite.id,
+                });
+            }
+            for (const tax of orgTerceirosTaxes) {
+                const taxCost = Math.max(0, Math.round(worksite.gross * tax.rate * 100) / 100);
+                if (taxCost <= 0) continue;
+                const refIdTax = `labor-${runId}-${worksite.id}-terceiros-${tax.code}`;
+                const descTax = `${tax.name} (${(tax.rate * 100).toFixed(1)}%) - ${worksite.name} - Folha ${formattedPeriod}`;
+                newTransactions.push({
+                    id: refIdTax, date: run.end_date, type: 'EXPENSE',
+                    category: 'Contribuições de Terceiros', description: descTax,
+                    value: taxCost, status: 'PENDING',
+                    notes: `Contribuição de terceiros — código ${tax.code}. Folha ID: ${runId}`
+                });
+                internalTxs.push({
+                    organization_id: run.org_id, source_system: 'LABOR', reference_id: refIdTax,
+                    transaction_date: run.end_date, amount: taxCost, direction: 'DEBIT',
+                    description: descTax, category: 'Contribuições de Terceiros', status: 'PENDING',
+                    project_id: worksite.id,
+                });
+            }
+            console.log(`[PAYROLL-SYNC] Obra ${worksite.name}: salário=${netSalaryCost} | encargos=${encargosCost} | contribuições=${contribuicoesCost}`);
+            worksiteSavePayloads.push({ project, newTransactions, filteredTransactions });
+        }
+
+        // Salva todos os projetos em paralelo
+        await Promise.all(worksiteSavePayloads.map(async ({ project, newTransactions, filteredTransactions }) => {
+            const settings = project!.settings as ProjectSettings;
+            const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
+            try {
+                await projectService.saveProject({
+                    ...project!,
+                    settings: { ...settings, financialInfo: { ...info, transactions: [...newTransactions, ...filteredTransactions] } }
+                });
             } catch (err: unknown) {
                 const errMsg = err instanceof Error ? err.message : String(err);
-                const msg = `Erro ao sincronizar obra ${worksite.name}: ${errMsg}`;
-                console.error(`[PAYROLL-SYNC] ${msg}`);
-                errors.push(msg);
+                errors.push(`Erro ao salvar projeto ${project!.id}: ${errMsg}`);
             }
-        }
+        }));
 
         // 3.b. Custos não alocados — separados em salário, encargos e contribuições individuais
         const netSalarioUnallocated  = Math.max(0, Math.round((summary.unallocatedNetSalary - deductionUnallocated) * 100) / 100);

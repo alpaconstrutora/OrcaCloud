@@ -128,11 +128,14 @@ interface InternalTransaction {
     source_system: 'LABOR';
     reference_id: string;
     transaction_date: string;
+    due_date?: string;
     amount: number;
     direction: 'DEBIT' | 'CREDIT';
     description: string;
     category: string;
     status: 'PENDING' | 'PAID';
+    business_status?: string;
+    project_id?: string;
 }
 
 // Lançamento financeiro interno a projetos (settings.financialInfo.transactions)
@@ -839,6 +842,13 @@ export const payrollService = {
         const [year, month] = period.split('-');
         const formattedPeriod = `${month}/${year}`;
 
+        // Data de vencimento estimada para AP: dia 5 do mês seguinte à competência
+        const paymentDueDate = (() => {
+            const nextMonth = Number(month) === 12 ? 1 : Number(month) + 1;
+            const nextYear  = Number(month) === 12 ? Number(year) + 1 : Number(year);
+            return `${nextYear}-${String(nextMonth).padStart(2, '0')}-05`;
+        })();
+
         // 2. Obter resumo de custos por obra
         const summary = await this.getWorksiteCostSummary(runId);
         const orgTerceirosTaxes = getOrgTerceirosTaxes(run.org_id);
@@ -996,7 +1006,8 @@ export const payrollService = {
                                 direction:        'DEBIT',
                                 description,
                                 category:         rubric.name,
-                                status:           'PENDING'
+                                status:           'PENDING',
+                                project_id:       alloc.project_id,
                             });
                         }
                     } else {
@@ -1076,7 +1087,8 @@ export const payrollService = {
                         direction: 'DEBIT',
                         description: descSalario,
                         category: 'Folha de Pagamento',
-                        status: 'PENDING'
+                        status: 'PENDING',
+                        project_id: worksite.id,
                     });
                 }
                 if (encargosCost > 0) {
@@ -1100,7 +1112,8 @@ export const payrollService = {
                         direction: 'DEBIT',
                         description: descEncargos,
                         category: 'Encargos Patronais',
-                        status: 'PENDING'
+                        status: 'PENDING',
+                        project_id: worksite.id,
                     });
                 }
                 for (const tax of orgTerceirosTaxes) {
@@ -1127,7 +1140,8 @@ export const payrollService = {
                         direction: 'DEBIT',
                         description: descTax,
                         category: 'Contribuições de Terceiros',
-                        status: 'PENDING'
+                        status: 'PENDING',
+                        project_id: worksite.id,
                     });
                 }
 
@@ -1199,14 +1213,20 @@ export const payrollService = {
 
         // 5. Upsert na tabela centralizada internal_transactions
         if (internalTxs.length > 0) {
+            // Enriquece com campos de AP: due_date e business_status
+            const enrichedTxs = internalTxs.map(tx => ({
+                ...tx,
+                due_date:        tx.due_date        ?? paymentDueDate,
+                business_status: tx.business_status ?? 'PREVISTO',
+            }));
             const { error } = await supabase
                 .from('internal_transactions')
-                .upsert(internalTxs, { onConflict: 'organization_id,reference_id' });
+                .upsert(enrichedTxs, { onConflict: 'organization_id,reference_id' });
             if (error) {
                 console.error('[PAYROLL-SYNC] Erro no upsert de internal_transactions:', error);
                 errors.push(`Erro interno_transactions: ${error.message}`);
             } else {
-                console.log(`[PAYROLL-SYNC] Sincronizados ${internalTxs.length} registros`);
+                console.log(`[PAYROLL-SYNC] Sincronizados ${enrichedTxs.length} registros (due_date=${paymentDueDate})`);
             }
         }
 

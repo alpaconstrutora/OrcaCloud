@@ -184,15 +184,14 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
         try {
             setExecuting(true);
             await payrollService.updateRunStatus(selectedRun.id, 'FECHADO');
-            try {
-                await payrollService.syncPayrollToFinance(selectedRun.id);
-            } catch (syncErr) {
-                console.error('[LaborPayroll] Erro na sincronização financeira:', syncErr);
-            }
             const updated = await payrollService.getRun(selectedRun.id);
             setSelectedRun(updated);
             loadRuns();
-            alert('Folha fechada e custos sincronizados com o financeiro com sucesso!');
+            // Sync financeiro em background — não bloqueia a UI
+            payrollService.syncPayrollToFinance(selectedRun.id).catch(syncErr => {
+                console.error('[LaborPayroll] Erro na sincronização financeira:', syncErr);
+            });
+            alert('Folha fechada! Os lançamentos financeiros serão sincronizados em instantes.');
         } catch (err) {
             console.error(err);
             alert('Erro ao fechar folha.');

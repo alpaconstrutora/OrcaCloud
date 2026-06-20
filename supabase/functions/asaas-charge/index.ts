@@ -106,6 +106,9 @@ serve(async (req: Request) => {
         });
         if (!res.ok) {
             const d = await res.json().catch(() => ({}));
+            if (res.status === 404) {
+                return json({ error: 'Boleto não encontrado no Asaas. Em ambiente sandbox pagamentos de teste expiram. Em produção isso indica que o boleto foi cancelado diretamente no painel Asaas.' }, 404);
+            }
             const msg = d?.errors?.[0]?.description ?? `HTTP ${res.status}`;
             return json({ error: `Asaas (reenvio): ${msg}`, detail: d }, 502);
         }

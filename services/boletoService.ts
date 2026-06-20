@@ -132,8 +132,10 @@ export const boletoService = {
         file: File;
         userEmail?: string;
         projectId?: string;
+        /** Extração já calculada no cliente (evita reparsear o PDF). */
+        extraction?: BoletoExtractionResult | null;
     }): Promise<{ boleto: Boleto; extraction: BoletoExtractionResult; duplicate: boolean }> {
-        const { organizationId, file, userEmail, projectId } = params;
+        const { organizationId, file, userEmail, projectId, extraction: precomputed } = params;
 
         // 1. Hash para dedup
         const hash = await sha256File(file);
@@ -163,9 +165,10 @@ export const boletoService = {
         if (upErr) throw upErr;
 
         // 4. Extração client-side (PDF apenas; imagens caem em fallback manual)
+        //    Reaproveita a extração já feita pelo formulário, se houver.
         let extraction: BoletoExtractionResult;
         try {
-            extraction = await extractFromPdfFile(file);
+            extraction = precomputed ?? await extractFromPdfFile(file);
         } catch (err) {
             console.warn('[boletoService] extração falhou, seguindo com fallback manual', err);
             extraction = {

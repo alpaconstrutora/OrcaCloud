@@ -3,7 +3,7 @@ import {
     Plus, Search, FileText, Loader2, RefreshCw,
     Building2, Calendar, AlertTriangle, ChevronDown,
     Wallet, Clock, CheckCircle2, SlidersHorizontal, X,
-    ArrowUpDown, Download, LayoutGrid, List,
+    ArrowUpDown, Download, LayoutGrid, List, Upload,
 } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -11,6 +11,7 @@ import { projectService } from '../services/projectService';
 import { supplierService } from '../services/supplierService';
 import type { Boleto, BoletoStatus, BoletoFilters, Organization, CostCenter } from '../types';
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
+import BoletoLoteModal from './BoletoLoteModal';
 
 interface BoletoManagerProps {
     organizationId: string;
@@ -48,6 +49,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isLoteOpen, setIsLoteOpen] = useState(false);
     const [editing, setEditing] = useState<Boleto | undefined>(undefined);
     const [exporting, setExporting] = useState(false);
 
@@ -286,6 +288,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     >
                         <RefreshCw className="w-4 h-4" />
                         Atualizar
+                    </button>
+                    <button
+                        onClick={() => setIsLoteOpen(true)}
+                        className="flex items-center gap-2 px-4 py-3 bg-white text-blue-600 border border-blue-200 rounded-[1.25rem] hover:bg-blue-50 font-bold text-xs uppercase tracking-widest transition-all"
+                    >
+                        <Upload className="w-4 h-4" />
+                        Importar em Lote
                     </button>
                     <button
                         onClick={abrirNovo}
@@ -673,6 +682,17 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     boleto={editing}
                     onClose={() => { setIsModalOpen(false); setEditing(undefined); }}
                     onSaved={handleSaved}
+                />
+            )}
+
+            {isLoteOpen && (
+                <BoletoLoteModal
+                    organizationId={effectiveOrgId ?? organizationId}
+                    organizations={organizations}
+                    userEmail={userEmail}
+                    projectId={projectId}
+                    onClose={() => setIsLoteOpen(false)}
+                    onConcluir={() => { setIsLoteOpen(false); carregar(effectiveOrgId); }}
                 />
             )}
         </div>

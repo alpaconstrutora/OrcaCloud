@@ -188,6 +188,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             const result = await boletoService.uploadBoleto({
                 organizationId, file: pendingFile, userEmail,
                 projectId: selectedProjectId || projectId,
+                extraction: pendingExtraction,
             });
             // Aplica associações do formulário
             const updated = await boletoService.associar(result.boleto.id, organizationId, {

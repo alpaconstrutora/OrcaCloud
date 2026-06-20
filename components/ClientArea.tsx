@@ -737,13 +737,61 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
         return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+            {/* ══ MOBILE ══ */}
+            <div className="md:hidden -mx-4">
+                {/* Mini hero */}
+                <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                    <h2 className="text-2xl font-black text-white leading-tight">Contratos</h2>
+                    <p className="text-blue-200 text-sm font-medium mt-1">{clientContracts.length} contrato{clientContracts.length !== 1 ? 's' : ''} disponíve{clientContracts.length !== 1 ? 'is' : 'l'}</p>
+                </div>
+                <div className="px-4 -mt-3 pb-6 space-y-2">
+                    {clientContracts.length === 0 ? (
+                        <div className="flex flex-col items-center text-center py-10">
+                            <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400 mb-3"><FileText className="w-7 h-7" /></div>
+                            <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhum contrato ainda</p>
+                            <p className="text-xs text-gray-400 font-medium mt-1">Seus contratos aparecerão aqui quando disponíveis.</p>
+                        </div>
+                    ) : (
+                        clientContracts.map(contract => {
+                            const isSigned = contract.signature_status === 'SIGNED' || contract.status === 'Assinado';
+                            const reajusteAlerta = contract.reajuste_proximo
+                                ? (new Date(contract.reajuste_proximo + 'T12:00:00').getTime() - Date.now()) / 86400000 <= 30
+                                : false;
+                            return (
+                                <div key={contract.id} onClick={() => setViewingContract(contract)}
+                                    className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3 active:scale-[0.98] transition-transform cursor-pointer">
+                                    <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 shrink-0">
+                                        <FileText className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-black text-gray-900 truncate">{contract.title}</p>
+                                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                            <span className="text-[10px] font-bold text-gray-400 tabular-nums">R$ {(contract.current_value || contract.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                                            {reajusteAlerta && <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Reajuste próximo</span>}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase ${isSigned ? 'bg-emerald-100 text-emerald-700' : contract.status === 'Ativo' ? 'bg-blue-100 text-blue-700' : contract.status === 'Minuta' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            {isSigned ? 'Assinado' : contract.status === 'Minuta' ? 'Minuta' : (contract.status || 'Ativo')}
+                                        </span>
+                                        <ChevronRight className="w-4 h-4 text-gray-300" />
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
+
+            {/* ══ DESKTOP ══ */}
             {clientContracts.length === 0 ? (
-                <div className="bg-white p-20 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center text-center">
+                <div className="hidden md:flex bg-white p-20 rounded-[2rem] shadow-sm border border-gray-100 flex-col items-center text-center">
                     <FileText className="w-16 h-16 text-gray-200 mb-6" />
                     <p className="text-lg font-black text-gray-400 uppercase tracking-widest">Nenhum contrato disponível</p>
                 </div>
             ) : (
-                <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                <div className="hidden md:block bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
                     <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight flex items-center gap-3 mb-6">
                         <FileText className="w-5 h-5 text-indigo-500" />
                         Meus Contratos

@@ -2362,7 +2362,54 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     className="hidden"
                     onChange={handleFileUpload}
                 />
-                <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
+
+                {/* ══ MOBILE ══ */}
+                <div className="md:hidden -mx-4">
+                    {/* Mini hero */}
+                    <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                        <h2 className="text-2xl font-black text-white leading-tight">Documentos</h2>
+                        <p className="text-blue-200 text-sm font-medium mt-1">Arquivos compartilhados pelo gestor</p>
+                    </div>
+                    {/* Lista */}
+                    <div className="px-4 -mt-3 pb-6 space-y-2">
+                        {isAdmin && (
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest mb-3 active:scale-95 transition-transform"
+                            >
+                                <Plus className="w-4 h-4" /> Adicionar Documento
+                            </button>
+                        )}
+                        {displayDocs.length === 0 ? (
+                            <div className="flex flex-col items-center text-center py-10">
+                                <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400 mb-3"><FileText className="w-7 h-7" /></div>
+                                <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhum documento ainda</p>
+                                <p className="text-xs text-gray-400 font-medium mt-1">Os arquivos compartilhados pelo gestor aparecerão aqui.</p>
+                            </div>
+                        ) : (
+                            displayDocs.map((doc, i) => (
+                                <div key={i} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 shrink-0">
+                                        <FileText className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-black text-gray-900 truncate">{doc.name}</p>
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">{doc.category || 'Documento'}</span>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDownload(doc)}
+                                        className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0 active:scale-95 transition-transform"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* ══ DESKTOP ══ */}
+                <div className="hidden md:block bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-4">

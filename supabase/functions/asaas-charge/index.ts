@@ -73,6 +73,12 @@ serve(async (req: Request) => {
         return json({ error: 'organization_id é obrigatório.' }, 400);
     }
 
+    const asaasHeadersBase = {
+        'Content-Type': 'application/json',
+        'access_token': asaasApiKey,
+        'User-Agent': 'OrcaCloud',
+    };
+
     // ─── action: resend ───────────────────────────────────────
     // Reenvia o boleto por e-mail via Asaas (segunda via).
     if (action === 'resend') {
@@ -109,12 +115,6 @@ serve(async (req: Request) => {
     if (!transaction_id) {
         return json({ error: 'transaction_id é obrigatório.' }, 400);
     }
-
-    const asaasHeadersBase = {
-        'Content-Type': 'application/json',
-        'access_token': asaasApiKey,
-        'User-Agent': 'OrcaCloud',
-    };
 
     // ─── action: cancel ───────────────────────────────────────
     // Cancela a(s) cobrança(s) ativa(s) do recebível no Asaas e

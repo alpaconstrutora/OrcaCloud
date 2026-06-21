@@ -599,6 +599,7 @@ export const bankReconciliationService = {
         const autoMatches: { bankId: string; internalId: string; score: number }[] = [];
         const suggestionRows: { bank_transaction_id: string; candidate_internal_transaction_id: string; confidence: number; reason: string }[] = [];
         const claimedInternal = new Set<string>();
+        const partyUpdates = new Map<string, string[]>(); // nome reconhecido → ids do extrato
 
         for (const bTx of bankTxs) {
             const bDate = new Date(bTx.transaction_date).getTime();
@@ -607,6 +608,13 @@ export const bankReconciliationService = {
             const amtMin = bTx.amount * 0.90;
             const amtMax = bTx.amount * 1.01;
             const resolved = this.resolveBankParty(bTx, partyIndex);
+
+            // Persiste a contraparte reconhecida (alias/CNPJ) quando o extrato ainda não a tem
+            if (resolved?.party_name && !bTx.counterparty_name) {
+                const arr = partyUpdates.get(resolved.party_name) ?? [];
+                arr.push(bTx.id);
+                partyUpdates.set(resolved.party_name, arr);
+            }
 
             const ranked = candidatesAll
                 .filter(c => {
@@ -647,6 +655,18 @@ export const bankReconciliationService = {
         }
         for (let i = 0; i < suggestionRows.length; i += 200) {
             await supabase.from('reconciliation_suggestions').insert(suggestionRows.slice(i, i + 200));
+        }
+
+        // 3.5) Carimba a contraparte reconhecida no extrato (mudança de reclassificação,
+        // liberada mesmo em período fechado pela trigger de hard-lock)
+        for (const [name, ids] of partyUpdates) {
+            for (let i = 0; i < ids.length; i += 100) {
+                try {
+                    await supabase.from('bank_transactions').update({ counterparty_name: name }).in('id', ids.slice(i, i + 100));
+                } catch (e) {
+                    console.warn('[Motor] carimbo de contraparte ignorado:', e);
+                }
+            }
         }
 
         // 4) Aplica auto-conciliações (poucas; isoladas p/ não abortar o lote em período fechado)

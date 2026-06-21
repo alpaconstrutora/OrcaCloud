@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus, LayoutGrid, Mail, ChevronRight, ChevronDown,
   Loader2, Menu, CheckCircle2, X, ArrowLeft, FolderOpen,
+  Folder, Calendar,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -15,6 +16,7 @@ interface Task {
   status_id: string | null
   source_module: string
   space_id: string | null
+  folder_id: string | null
   project_id: string | null
   alert_at: string | null
   parent_task_id: string | null
@@ -22,6 +24,7 @@ interface Task {
 }
 
 interface Space     { id: string; name: string; color: string; task_count?: number }
+interface Folder_   { id: string; space_id: string; name: string; color: string | null }
 interface Project   { id: string; name: string }
 interface Props     { orgId?: string }
 
@@ -32,6 +35,9 @@ const PRIORITY_COLOR: Record<number, string> = {
   3: '#6366f1',
   4: '#94a3b8',
 }
+const PRIORITY_LABEL: Record<number, string> = {
+  1: 'Urgente', 2: 'Alta', 3: 'Normal', 4: 'Baixa',
+}
 
 const DAY_LETTER = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
 const MONTH_PT   = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
@@ -39,19 +45,16 @@ const MONTH_PT   = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
 
 // Module-level stable date constants — computed once at load time
 const _TODAY = new Date(); _TODAY.setHours(0, 0, 0, 0)
-const TODAY_MS  = _TODAY.getTime()
-const NOW_48H   = Date.now() - 48 * 3600 * 1000
+const TODAY_MS = _TODAY.getTime()
+const NOW_48H  = Date.now() - 48 * 3600 * 1000
 
 function isoDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
-// Stable module-level values (no Date allocations per-render)
-const TODAY_ISO = isoDate(_TODAY)
+const TODAY_ISO  = isoDate(_TODAY)
 const STRIP: Date[] = Array.from({ length: 14 }, (_, i) => {
-  const d = new Date(_TODAY)
-  d.setDate(_TODAY.getDate() + i - 3)
-  return d
+  const d = new Date(_TODAY); d.setDate(_TODAY.getDate() + i - 3); return d
 })
 const STRIP_ISOS = STRIP.map(isoDate)
 
@@ -80,18 +83,22 @@ const TaskCard = React.memo<{
   spaces:   Space[]
   projects: Project[]
   onToggle: (id: string) => void
+  onPress:  (task: Task) => void
   isDone:   boolean
-}>(({ task, spaces, projects, onToggle, isDone }) => {
-  const overdue   = isOverdue(task.due_date)
-  const space     = spaces.find(s => s.id === task.space_id)
-  const proj      = projects.find(p => p.id === task.project_id)
-  const context   = proj?.name ?? space?.name
-  const dotColor  = PRIORITY_COLOR[task.priority] ?? PRIORITY_COLOR[3]
-  const showNew   = isNewTask(task.created_at)
-  const dateStr   = fmtShort(task.due_date)
+}>(({ task, spaces, projects, onToggle, onPress, isDone }) => {
+  const overdue  = isOverdue(task.due_date)
+  const space    = spaces.find(s => s.id === task.space_id)
+  const proj     = projects.find(p => p.id === task.project_id)
+  const context  = proj?.name ?? space?.name
+  const dotColor = PRIORITY_COLOR[task.priority] ?? PRIORITY_COLOR[3]
+  const showNew  = isNewTask(task.created_at)
+  const dateStr  = fmtShort(task.due_date)
 
   return (
-    <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3.5 flex items-center gap-3 transition-opacity ${isDone ? 'opacity-40' : ''}`}>
+    <div
+      onClick={() => onPress(task)}
+      className={`bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3.5 flex items-center gap-3 transition-opacity active:bg-slate-50 cursor-pointer ${isDone ? 'opacity-40' : ''}`}
+    >
       {/* Priority dot */}
       <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
 
@@ -119,9 +126,9 @@ const TaskCard = React.memo<{
         </div>
       </div>
 
-      {/* Circular checkbox */}
+      {/* Circular checkbox — stopPropagation to avoid opening edit sheet */}
       <button
-        onClick={() => onToggle(task.id)}
+        onClick={e => { e.stopPropagation(); onToggle(task.id) }}
         className={`w-7 h-7 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all active:scale-90
           ${isDone ? 'bg-blue-600 border-blue-600' : 'border-slate-200 hover:border-blue-400'}`}
       >
@@ -164,6 +171,169 @@ const EspacosScreen = React.memo<{
   </div>
 ))
 
+// ── Pastas screen ─────────────────────────────────────────────────────────────
+const FoldersScreen = React.memo<{
+  folders:  Folder_[]
+  loading:  boolean
+  onSelect: (f: Folder_) => void
+}>(({ folders, loading, onSelect }) => (
+  <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+    {loading ? (
+      <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-blue-400" /></div>
+    ) : folders.length === 0 ? (
+      <div className="flex flex-col items-center py-16 gap-3">
+        <FolderOpen className="w-10 h-10 text-slate-200" />
+        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Nenhuma pasta</p>
+      </div>
+    ) : folders.map(folder => (
+      <button
+        key={folder.id}
+        onClick={() => onSelect(folder)}
+        className="w-full bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-3 active:scale-[0.98] transition-all text-left"
+      >
+        <span
+          className="w-9 h-9 rounded-xl flex items-center justify-center"
+          style={{ backgroundColor: (folder.color ?? '#6366f1') + '22' }}
+        >
+          <Folder className="w-4 h-4" style={{ color: folder.color ?? '#6366f1' }} />
+        </span>
+        <p className="flex-1 text-sm font-bold text-slate-800 truncate">{folder.name}</p>
+        <ChevronRight className="w-4 h-4 text-slate-200" />
+      </button>
+    ))}
+  </div>
+))
+
+// ── Task Edit sheet ───────────────────────────────────────────────────────────
+const TaskEditSheet: React.FC<{
+  task:    Task
+  onClose: () => void
+  onSaved: () => void
+}> = ({ task, onClose, onSaved }) => {
+  const [title,    setTitle]    = useState(task.title)
+  const [dueDate,  setDueDate]  = useState(task.due_date ? task.due_date.split('T')[0] : '')
+  const [priority, setPriority] = useState(task.priority)
+  const [saving,   setSaving]   = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
+
+  const tmrw    = new Date(_TODAY); tmrw.setDate(_TODAY.getDate() + 1)
+  const daysToSat = (6 - _TODAY.getDay() + 7) % 7 || 7
+  const weekend = new Date(_TODAY); weekend.setDate(_TODAY.getDate() + daysToSat)
+
+  const QUICK = [
+    { label: 'Hoje',     value: TODAY_ISO         },
+    { label: 'Amanhã',   value: isoDate(tmrw)     },
+    { label: 'Este fds', value: isoDate(weekend)  },
+  ]
+
+  const PRIOS = [1, 2, 3, 4] as const
+
+  const save = async () => {
+    if (!title.trim()) { setError('Informe o título'); return }
+    setSaving(true); setError(null)
+    const { error: e } = await supabase.from('tasks').update({
+      title:    title.trim(),
+      priority,
+      due_date: dueDate ? new Date(dueDate + 'T12:00:00').toISOString() : null,
+    }).eq('id', task.id)
+    setSaving(false)
+    if (e) { setError(e.message); return }
+    onSaved()
+  }
+
+  return (
+    <>
+      <div className="absolute inset-0 bg-black/40 z-20" onClick={onClose} />
+      <div className="absolute bottom-0 left-0 right-0 z-30 bg-white rounded-t-3xl shadow-2xl">
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 bg-slate-200 rounded-full" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-2 pb-3">
+          <h2 className="text-base font-black text-slate-900">Editar tarefa</h2>
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="px-5 pb-8 space-y-4">
+          {/* Title */}
+          <input
+            autoFocus
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && save()}
+            className="w-full text-sm font-semibold text-slate-800 border-b border-slate-200 pb-2.5 outline-none focus:border-blue-500 transition-colors"
+          />
+
+          {/* Quick date pills */}
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Prazo</p>
+            <div className="flex gap-2">
+              {QUICK.map(({ label, value }) => (
+                <button
+                  key={value}
+                  onClick={() => setDueDate(dueDate === value ? '' : value)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border
+                    ${dueDate === value
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200'
+                      : 'bg-white text-slate-600 border-slate-200'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {dueDate && !QUICK.some(q => q.value === dueDate) && (
+              <div className="flex items-center gap-2 mt-2">
+                <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                <span className="text-xs font-semibold text-blue-600">{fmtShort(dueDate)}</span>
+                <button onClick={() => setDueDate('')} className="text-slate-300 hover:text-slate-500 ml-auto">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Priority */}
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Prioridade</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              {PRIOS.map(v => (
+                <button
+                  key={v}
+                  onClick={() => setPriority(v)}
+                  className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wide border transition-all
+                    ${priority === v
+                      ? 'text-white border-transparent shadow-md'
+                      : 'bg-white text-slate-400 border-slate-100'}`}
+                  style={priority === v ? { backgroundColor: PRIORITY_COLOR[v] } : undefined}
+                >
+                  {PRIORITY_LABEL[v]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-xs font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>
+          )}
+
+          <button
+            onClick={save}
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-blue-200 disabled:opacity-50 active:scale-[0.98] transition-all"
+          >
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            Salvar alterações
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ── Add Task modal ────────────────────────────────────────────────────────────
 const AddTaskModal: React.FC<{
   orgId?:   string
@@ -177,15 +347,14 @@ const AddTaskModal: React.FC<{
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState<string | null>(null)
 
-  const today   = new Date(); today.setHours(0, 0, 0, 0)
-  const tmrw    = new Date(today); tmrw.setDate(today.getDate() + 1)
-  const daysToSat = (6 - today.getDay() + 7) % 7 || 7
-  const weekend = new Date(today); weekend.setDate(today.getDate() + daysToSat)
+  const tmrw    = new Date(_TODAY); tmrw.setDate(_TODAY.getDate() + 1)
+  const daysToSat = (6 - _TODAY.getDay() + 7) % 7 || 7
+  const weekend = new Date(_TODAY); weekend.setDate(_TODAY.getDate() + daysToSat)
 
   const QUICK = [
-    { label: 'Hoje',      value: isoDate(today)   },
-    { label: 'Amanhã',    value: isoDate(tmrw)    },
-    { label: 'Este fds',  value: isoDate(weekend) },
+    { label: 'Hoje',     value: TODAY_ISO        },
+    { label: 'Amanhã',   value: isoDate(tmrw)    },
+    { label: 'Este fds', value: isoDate(weekend) },
   ]
 
   const save = async () => {
@@ -211,7 +380,6 @@ const AddTaskModal: React.FC<{
     <>
       <div className="absolute inset-0 bg-black/40 z-20" onClick={onClose} />
       <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 z-30 bg-white rounded-3xl shadow-2xl overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4">
           <h2 className="text-lg font-black text-slate-900">Add task</h2>
           <button onClick={onClose} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
@@ -220,60 +388,34 @@ const AddTaskModal: React.FC<{
         </div>
 
         <div className="px-5 pb-6 space-y-4">
-          {/* Name */}
           <input
-            autoFocus
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && save()}
-            placeholder="Name"
+            autoFocus value={title} onChange={e => setTitle(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && save()} placeholder="Name"
             className="w-full text-sm font-semibold text-slate-800 border-b border-slate-200 pb-2.5 outline-none placeholder:text-slate-300 focus:border-blue-500 transition-colors"
           />
-
-          {/* Description */}
           <textarea
-            value={desc}
-            onChange={e => setDesc(e.target.value)}
-            placeholder="Task description..."
-            rows={2}
+            value={desc} onChange={e => setDesc(e.target.value)}
+            placeholder="Task description..." rows={2}
             className="w-full text-xs text-slate-500 border-b border-slate-100 pb-2 outline-none resize-none placeholder:text-slate-300 bg-transparent focus:border-blue-300 transition-colors"
           />
-
-          {/* Quick date pills */}
           <div className="flex gap-2">
             {QUICK.map(({ label, value }) => (
-              <button
-                key={value}
-                onClick={() => setDueDate(dueDate === value ? '' : value)}
+              <button key={value} onClick={() => setDueDate(dueDate === value ? '' : value)}
                 className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border
-                  ${dueDate === value
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200'
-                    : 'bg-white text-slate-600 border-slate-200'}`}
-              >
-                {label}
-              </button>
+                  ${dueDate === value ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200' : 'bg-white text-slate-600 border-slate-200'}`}
+              >{label}</button>
             ))}
           </div>
-
-          {/* High priority toggle */}
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700">Alta prioridade</span>
-            <button
-              onClick={() => setHighPrio(!highPrio)}
+            <button onClick={() => setHighPrio(!highPrio)}
               className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${highPrio ? 'bg-blue-600' : 'bg-slate-200'}`}
             >
               <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${highPrio ? 'left-7' : 'left-1'}`} />
             </button>
           </div>
-
-          {error && (
-            <p className="text-xs font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>
-          )}
-
-          {/* Submit */}
-          <button
-            onClick={save}
-            disabled={saving}
+          {error && <p className="text-xs font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+          <button onClick={save} disabled={saving}
             className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-blue-200 disabled:opacity-50 active:scale-[0.98] transition-all"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -287,39 +429,43 @@ const AddTaskModal: React.FC<{
 
 // ── App ───────────────────────────────────────────────────────────────────────
 const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
-  const [tasks,         setTasks]         = useState<Task[]>([])
-  const [spaces,        setSpaces]        = useState<Space[]>([])
-  const [projects,      setProjects]      = useState<Project[]>([])
-  const [loadingTasks,  setLoading]       = useState(true)
-  const [loadingSpaces, setLoadingSpaces] = useState(false)
-  const [filterTab,     setFilterTab]     = useState<FilterTab>('todas')
-  const [nav,           setNav]           = useState<NavTab>('inbox')
-  const [selectedSpace, setSelectedSpace] = useState<Space | null>(null)
-  const [done,          setDone]          = useState<Set<string>>(new Set())
-  const [showAddTask,   setShowAddTask]   = useState(false)
-  const [selectedDate,  setSelectedDate]  = useState<string>(TODAY_ISO)
+  const [tasks,          setTasks]          = useState<Task[]>([])
+  const [spaces,         setSpaces]         = useState<Space[]>([])
+  const [folders,        setFolders]        = useState<Folder_[]>([])
+  const [projects,       setProjects]       = useState<Project[]>([])
+  const [loadingTasks,   setLoading]        = useState(true)
+  const [loadingSpaces,  setLoadingSpaces]  = useState(false)
+  const [loadingFolders, setLoadingFolders] = useState(false)
+  const [filterTab,      setFilterTab]      = useState<FilterTab>('todas')
+  const [nav,            setNav]            = useState<NavTab>('inbox')
+  const [selectedSpace,  setSelectedSpace]  = useState<Space | null>(null)
+  const [selectedFolder, setSelectedFolder] = useState<Folder_ | null>(null)
+  const [editingTask,    setEditingTask]     = useState<Task | null>(null)
+  const [done,           setDone]           = useState<Set<string>>(new Set())
+  const [showAddTask,    setShowAddTask]    = useState(false)
+  const [selectedDate,   setSelectedDate]   = useState<string>(TODAY_ISO)
 
-  const stripRef      = useRef<HTMLDivElement>(null)
-  const spacesLoaded  = useRef(false)
+  const stripRef     = useRef<HTMLDivElement>(null)
+  const spacesLoaded = useRef(false)
 
-  // Scroll strip to today on mount
   useEffect(() => {
-    const activeDay = stripRef.current?.querySelector('[data-today="true"]') as HTMLElement
-    activeDay?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+    const el = stripRef.current?.querySelector('[data-today="true"]') as HTMLElement
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
   }, [])
 
-  const loadTasks = useCallback(async (spaceId?: string | null) => {
+  const loadTasks = useCallback(async (folderId?: string | null, spaceId?: string | null) => {
     setLoading(true)
     let q = supabase
       .from('tasks')
-      .select('id, title, due_date, priority, status, status_id, source_module, space_id, project_id, alert_at, parent_task_id, created_at')
+      .select('id, title, due_date, priority, status, status_id, source_module, space_id, folder_id, project_id, alert_at, parent_task_id, created_at')
       .eq('status', 'open')
       .is('parent_task_id', null)
-      .order('priority',  { ascending: true })
+      .order('priority', { ascending: true })
       .order('due_date',  { ascending: true, nullsFirst: false })
       .limit(80)
-    if (orgId)   q = q.eq('org_id', orgId)
-    if (spaceId) q = q.eq('space_id', spaceId)
+    if (orgId)    q = q.eq('org_id', orgId)
+    if (folderId) q = q.eq('folder_id', folderId)
+    else if (spaceId) q = q.eq('space_id', spaceId)
     const { data } = await q
     setTasks((data ?? []) as Task[])
     setLoading(false)
@@ -346,9 +492,19 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
     setLoadingSpaces(false)
   }, [orgId])
 
+  const loadFolders = useCallback(async (spaceId: string) => {
+    setLoadingFolders(true)
+    const { data } = await supabase
+      .from('task_folders')
+      .select('id, space_id, name, color')
+      .eq('space_id', spaceId)
+      .order('position')
+    setFolders((data ?? []) as Folder_[])
+    setLoadingFolders(false)
+  }, [])
+
   useEffect(() => { loadTasks(); loadMeta() }, [loadTasks, loadMeta])
 
-  // Load spaces only once per session (not on every tab switch)
   useEffect(() => {
     if (nav === 'espacos' && !spacesLoaded.current) {
       spacesLoaded.current = true
@@ -361,7 +517,6 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
     supabase.from('tasks').update({ status: 'done' }).eq('id', id)
   }, [])
 
-  // Memoize expensive derivations
   const overdueCount = useMemo(
     () => tasks.filter(t => !done.has(t.id) && isOverdue(t.due_date)).length,
     [tasks, done]
@@ -371,20 +526,41 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
     [tasks, done]
   )
   const visible = useMemo(() => tasks.filter(t => {
-    if (done.has(t.id))                    return false
-    if (selectedSpace)                     return true
-    if (filterTab === 'atrasadas')         return isOverdue(t.due_date)
-    if (!t.due_date)                       return true
-    if (isOverdue(t.due_date))             return true
+    if (done.has(t.id))            return false
+    if (selectedFolder)            return true  // already filtered by server
+    if (filterTab === 'atrasadas') return isOverdue(t.due_date)
+    if (!t.due_date)               return true
+    if (isOverdue(t.due_date))     return true
     return t.due_date.split('T')[0] === selectedDate
-  }), [tasks, done, selectedSpace, filterTab, selectedDate])
+  }), [tasks, done, selectedFolder, filterTab, selectedDate])
 
-  // Stable time string — recomputed only on mount (preview context)
-  const timeStr = useMemo(
-    () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-    []
-  )
+  const timeStr  = useMemo(() => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), [])
   const monthName = MONTH_PT[_TODAY.getMonth()]
+
+  // Navigation helpers
+  const goBackFromFolder = useCallback(() => {
+    setSelectedFolder(null)
+    loadTasks()  // reset to inbox tasks
+  }, [loadTasks])
+
+  const goBackFromSpace = useCallback(() => {
+    setSelectedSpace(null)
+    setSelectedFolder(null)
+    setFolders([])
+  }, [])
+
+  // Determine what screen to show in main content
+  const inFolderList = nav === 'espacos' && selectedSpace && !selectedFolder
+  const inTaskList   = nav === 'inbox' || (nav === 'espacos' && selectedFolder)
+  const inSpacesList = nav === 'espacos' && !selectedSpace
+
+  // Header state
+  const showFullHeader = !selectedSpace && !selectedFolder && nav === 'inbox'
+  const headerTitle    = selectedFolder
+    ? selectedFolder.name
+    : selectedSpace
+      ? selectedSpace.name
+      : null
 
   return (
     <div className="flex flex-col h-screen bg-[#eef2ff] font-sans select-none overflow-hidden relative">
@@ -407,23 +583,38 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
 
       {/* App header */}
       <div className="bg-white px-4 pt-2 pb-0 flex-shrink-0 border-b border-slate-100">
-        {selectedSpace ? (
+        {/* Breadcrumb header (space or folder selected) */}
+        {headerTitle ? (
           <div className="flex items-center gap-2 pb-3">
             <button
-              onClick={() => { setSelectedSpace(null); setNav('inbox'); loadTasks() }}
+              onClick={selectedFolder ? goBackFromFolder : goBackFromSpace}
               className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
-            <span className="w-7 h-7 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: selectedSpace.color + '22' }}>
-              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedSpace.color }} />
-            </span>
-            <h1 className="text-lg font-black text-slate-900 flex-1 truncate">{selectedSpace.name}</h1>
+            {selectedSpace && (
+              <span
+                className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: selectedSpace.color + '22' }}
+              >
+                {selectedFolder
+                  ? <Folder className="w-3.5 h-3.5" style={{ color: selectedFolder.color ?? selectedSpace.color }} />
+                  : <span className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedSpace.color }} />
+                }
+              </span>
+            )}
+            <div className="flex-1 min-w-0">
+              {selectedFolder && (
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5 truncate">
+                  {selectedSpace?.name}
+                </p>
+              )}
+              <h1 className="text-base font-black text-slate-900 leading-tight truncate">{headerTitle}</h1>
+            </div>
           </div>
         ) : (
           <>
-            {/* Top row: hamburger · title · avatar */}
+            {/* Full header: hamburger · title · avatar */}
             <div className="flex items-center justify-between mb-3">
               <button className="p-1 text-slate-500"><Menu className="w-5 h-5" /></button>
               <span className="text-sm font-black text-slate-800">Tarefas</span>
@@ -438,7 +629,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
               <ChevronDown className="w-4 h-4 text-slate-400 mt-0.5" />
             </div>
 
-            {/* Date strip — STRIP and STRIP_ISOS are module-level constants */}
+            {/* Date strip */}
             <div ref={stripRef} className="flex gap-1.5 overflow-x-auto pb-3 scrollbar-none -mx-4 px-4">
               {STRIP.map((d, i) => {
                 const iso        = STRIP_ISOS[i]
@@ -463,19 +654,17 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
               })}
             </div>
 
-            {/* Tabs underline */}
+            {/* Tabs */}
             <div className="flex">
               {([
-                { key: 'todas',     label: 'All tasks',  count: allCount },
-                { key: 'atrasadas', label: 'Atrasadas',  count: overdueCount },
+                { key: 'todas',     label: 'All tasks', count: allCount     },
+                { key: 'atrasadas', label: 'Atrasadas', count: overdueCount },
               ] as const).map(({ key, label, count }) => (
                 <button
                   key={key}
                   onClick={() => setFilterTab(key)}
                   className={`flex items-center gap-1.5 px-1 py-2.5 mr-5 text-xs font-black border-b-2 -mb-px transition-colors
-                    ${filterTab === key
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-slate-400'}`}
+                    ${filterTab === key ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}
                 >
                   {label}
                   <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md
@@ -490,11 +679,17 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
       </div>
 
       {/* Main content */}
-      {nav === 'espacos' && !selectedSpace ? (
+      {inSpacesList ? (
         <EspacosScreen
           spaces={spaces}
           loading={loadingSpaces}
-          onSelect={s => { setSelectedSpace(s); loadTasks(s.id) }}
+          onSelect={s => { setSelectedSpace(s); loadFolders(s.id) }}
+        />
+      ) : inFolderList ? (
+        <FoldersScreen
+          folders={folders}
+          loading={loadingFolders}
+          onSelect={f => { setSelectedFolder(f); loadTasks(f.id) }}
         />
       ) : (
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
@@ -505,13 +700,13 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
           ) : visible.length === 0 ? (
             <div className="flex flex-col items-center py-16 gap-3">
               <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-sm">
-                {selectedSpace
+                {selectedFolder
                   ? <FolderOpen className="w-8 h-8 text-slate-300" />
                   : <CheckCircle2 className="w-8 h-8 text-blue-200" />}
               </div>
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest text-center">
-                {selectedSpace
-                  ? 'Nenhuma tarefa neste espaço'
+                {selectedFolder
+                  ? 'Nenhuma tarefa nesta pasta'
                   : filterTab === 'atrasadas'
                     ? 'Nenhuma atrasada'
                     : 'Sem tarefas para este dia'}
@@ -525,6 +720,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
                 spaces={spaces}
                 projects={projects}
                 onToggle={toggleDone}
+                onPress={setEditingTask}
                 isDone={done.has(task.id)}
               />
             ))
@@ -533,7 +729,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
         </div>
       )}
 
-      {/* FAB — circular, acima do bottom nav */}
+      {/* FAB */}
       <div className="absolute bottom-[72px] right-5 z-10">
         <button
           onClick={() => setShowAddTask(true)}
@@ -551,9 +747,11 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
         ] as const).map(({ key, icon: Icon, label }) => (
           <button
             key={key}
-            onClick={() => { setNav(key); if (key === 'inbox') setSelectedSpace(null) }}
-            className={`flex flex-col items-center gap-1 transition-colors
-              ${nav === key ? 'text-blue-600' : 'text-slate-300'}`}
+            onClick={() => {
+              setNav(key)
+              if (key === 'inbox') { setSelectedSpace(null); setSelectedFolder(null); setFolders([]) }
+            }}
+            className={`flex flex-col items-center gap-1 transition-colors ${nav === key ? 'text-blue-600' : 'text-slate-300'}`}
           >
             <Icon className="w-5 h-5" />
             <span className="text-[9px] font-black uppercase tracking-widest">{label}</span>
@@ -566,7 +764,22 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
         <AddTaskModal
           orgId={orgId}
           onClose={() => setShowAddTask(false)}
-          onSaved={() => { setShowAddTask(false); loadTasks(selectedSpace?.id) }}
+          onSaved={() => {
+            setShowAddTask(false)
+            loadTasks(selectedFolder?.id ?? null, selectedSpace?.id ?? null)
+          }}
+        />
+      )}
+
+      {/* Task edit sheet */}
+      {editingTask && (
+        <TaskEditSheet
+          task={editingTask}
+          onClose={() => setEditingTask(null)}
+          onSaved={() => {
+            setEditingTask(null)
+            loadTasks(selectedFolder?.id ?? null, selectedSpace?.id ?? null)
+          }}
         />
       )}
     </div>

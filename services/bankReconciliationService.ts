@@ -455,36 +455,46 @@ export const bankReconciliationService = {
         const settings = await this.loadSettings(organizationId);
         const AUTO_THRESHOLD = settings.auto_threshold;
         const MIN_SUGGESTION = settings.suggestion_min;
+        const DAY = 86_400_000;
 
-        const { data: bankTxs } = await supabase
-            .from('bank_transactions')
-            .select('id, organization_id, bank_account_id, external_id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, transaction_type, fingerprint, category, status, project_id, created_at')
-            .eq('bank_account_id', bankAccountId)
-            .in('status', ['NORMALIZED', 'RULE_APPLIED']);
+        // 1) Carrega de uma vez: movimentos do extrato a casar + todos os títulos pendentes
+        const [{ data: bankTxs }, { data: pending }] = await Promise.all([
+            supabase
+                .from('bank_transactions')
+                .select('id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name')
+                .eq('bank_account_id', bankAccountId)
+                .in('status', ['NORMALIZED', 'RULE_APPLIED'])
+                .limit(5000),
+            supabase
+                .from('internal_transactions')
+                .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name')
+                .eq('organization_id', organizationId)
+                .eq('status', 'PENDING')
+                .limit(8000),
+        ]);
 
-        if (!bankTxs) return;
+        if (!bankTxs || bankTxs.length === 0) return;
+        const candidatesAll = pending || [];
+
+        // 2) Casa em memória (sem ida ao banco por transação)
+        const autoMatches: { bankId: string; internalId: string; score: number }[] = [];
+        const suggestionRows: { bank_transaction_id: string; candidate_internal_transaction_id: string; confidence: number; reason: string }[] = [];
+        const claimedInternal = new Set<string>();
 
         for (const bTx of bankTxs) {
-            const date = new Date(bTx.transaction_date);
-            const minDate = new Date(date); minDate.setDate(date.getDate() - 60); // títulos vencidos pagos semanas depois
-            const maxDate = new Date(date); maxDate.setDate(date.getDate() + 5);
+            const bDate = new Date(bTx.transaction_date).getTime();
+            const minT = bDate - 60 * DAY; // títulos vencidos pagos semanas depois
+            const maxT = bDate + 5 * DAY;
+            const amtMin = bTx.amount * 0.90;
+            const amtMax = bTx.amount * 1.01;
 
-            // Candidatos: mesma direção, faixa de valor (cobre encargos até ~11%) e janela de data
-            const { data: candidates } = await supabase
-                .from('internal_transactions')
-                .select('id, organization_id, source_system, reference_id, transaction_date, due_date, amount, direction, description, entity_name, party_name, category, status, project_id, cost_center_id, category_id, created_at')
-                .eq('organization_id', organizationId)
-                .eq('direction', bTx.direction)
-                .eq('status', 'PENDING')
-                .gte('amount', Math.round(bTx.amount * 0.90 * 100) / 100)
-                .lte('amount', Math.round(bTx.amount * 1.01 * 100) / 100)
-                .gte('transaction_date', minDate.toISOString().split('T')[0])
-                .lte('transaction_date', maxDate.toISOString().split('T')[0])
-                .limit(50);
-
-            if (!candidates || candidates.length === 0) continue;
-
-            const ranked = candidates
+            const ranked = candidatesAll
+                .filter(c => {
+                    if (c.direction !== bTx.direction) return false;
+                    if (c.amount < amtMin || c.amount > amtMax) return false;
+                    const t = new Date(c.transaction_date).getTime();
+                    return t >= minT && t <= maxT;
+                })
                 .map(c => ({ c, ...this.scoreCandidate(bTx, c, settings) }))
                 .filter(r => r.score >= MIN_SUGGESTION)
                 .sort((a, b) => b.score - a.score);
@@ -495,13 +505,36 @@ export const bankReconciliationService = {
             const second = ranked[1];
             const clearWinner = !second || (top.score - second.score) >= 20;
 
-            if (top.score >= AUTO_THRESHOLD && clearWinner) {
-                await this.createMatch(bTx.id, top.c.id, 'HEURISTIC', Math.min(top.score, 100));
+            if (top.score >= AUTO_THRESHOLD && clearWinner && !claimedInternal.has(top.c.id)) {
+                autoMatches.push({ bankId: bTx.id, internalId: top.c.id, score: Math.min(top.score, 100) });
+                claimedInternal.add(top.c.id);
             } else {
-                // Sugestões explicadas (top 5)
                 for (const r of ranked.slice(0, 5)) {
-                    await this.upsertSuggestion(bTx.id, r.c.id, r.score, r.reasons.join(' · '));
+                    suggestionRows.push({
+                        bank_transaction_id: bTx.id,
+                        candidate_internal_transaction_id: r.c.id,
+                        confidence: Math.min(Math.round(r.score), 100),
+                        reason: r.reasons.join(' · '),
+                    });
                 }
+            }
+        }
+
+        // 3) Grava em lote: limpa sugestões antigas e insere as novas (poucas requisições)
+        const allBankIds = bankTxs.map(b => b.id);
+        for (let i = 0; i < allBankIds.length; i += 100) {
+            await supabase.from('reconciliation_suggestions').delete().in('bank_transaction_id', allBankIds.slice(i, i + 100));
+        }
+        for (let i = 0; i < suggestionRows.length; i += 200) {
+            await supabase.from('reconciliation_suggestions').insert(suggestionRows.slice(i, i + 200));
+        }
+
+        // 4) Aplica auto-conciliações (poucas; isoladas p/ não abortar o lote em período fechado)
+        for (const m of autoMatches) {
+            try {
+                await this.createMatch(m.bankId, m.internalId, 'HEURISTIC', m.score);
+            } catch (e) {
+                console.warn('[Motor] auto-match ignorado:', e);
             }
         }
     },

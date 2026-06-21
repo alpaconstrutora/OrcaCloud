@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Layers, Split, Check, RefreshCw, Landmark, FileText } from 'lucide-react';
+import { Layers, Split, Check, RefreshCw, Landmark, FileText, Building2 } from 'lucide-react';
 import { reconciliationGroupService } from '../services/reconciliationGroupService';
 import type { GroupSuggestions } from '../services/reconciliationGroupService';
 import { useToast } from '../hooks/useToast';
@@ -11,6 +11,11 @@ function formatDate(d?: string | null): string {
     if (!d) return '—';
     const [y, m, day] = d.split('T')[0].split('-');
     return `${day}/${m}/${y}`;
+}
+function partyOf(t: { entity_name?: string; party_name?: string; direction?: string }): { label: string; name: string } | null {
+    const name = t.entity_name || t.party_name;
+    if (!name) return null;
+    return { label: t.direction === 'CREDIT' ? 'Cliente' : 'Fornecedor', name };
 }
 
 interface GroupMatchPanelProps {
@@ -90,6 +95,11 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
                         <div>
                             <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1"><Landmark className="w-3.5 h-3.5" /> Extrato</div>
                             <p className="text-sm font-bold text-gray-800 truncate">{g.bank.description_normalized || g.bank.description_raw}</p>
+                            {g.bank.counterparty_name && (
+                                <p className="text-[11px] font-bold text-gray-600 flex items-center gap-1 mt-0.5" title={g.bank.counterparty_name}>
+                                    <Building2 className="w-3 h-3 flex-shrink-0" /><span className="truncate">{g.bank.direction === 'CREDIT' ? 'Pagador' : 'Favorecido'}: {g.bank.counterparty_name}</span>
+                                </p>
+                            )}
                             <p className="text-[11px] text-gray-400 font-medium">{formatDate(g.bank.transaction_date)}</p>
                             <p className={`text-base font-black tabular-nums mt-1 ${g.bank.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>{formatBRL(g.bank.amount)}</p>
                         </div>
@@ -128,6 +138,11 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
                         <div>
                             <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1"><FileText className="w-3.5 h-3.5" /> Título</div>
                             <p className="text-sm font-bold text-gray-800 truncate">{g.title.description || g.title.entity_name || g.title.party_name || 'Título'}</p>
+                            {partyOf(g.title) && (
+                                <p className="text-[11px] font-bold text-indigo-600 flex items-center gap-1 mt-0.5" title={partyOf(g.title)!.name}>
+                                    <Building2 className="w-3 h-3 flex-shrink-0" /><span className="truncate">{partyOf(g.title)!.label}: {partyOf(g.title)!.name}</span>
+                                </p>
+                            )}
                             <p className="text-[11px] text-gray-400 font-medium">venc. {formatDate(g.title.due_date || g.title.transaction_date)}</p>
                             <p className="text-base font-black tabular-nums mt-1 text-gray-900">{formatBRL(g.title.amount)}</p>
                         </div>

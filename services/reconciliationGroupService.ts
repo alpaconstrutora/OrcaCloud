@@ -64,7 +64,9 @@ function findSubset<T extends { amount: number }>(target: number, items: T[], to
     return best;
 }
 
-const tolOf = (amount: number, absTol: number, pctTol: number) => Math.max(absTol, amount * (pctTol / 100));
+// Tolerância de agrupamento APERTADA: a soma dos itens deve bater quase exatamente
+// com o pagamento/título (≤ 1% ou R$1). Diferente do 1:1, aqui folga grande gera lixo.
+const groupTol = (target: number) => Math.max(1, target * 0.01);
 
 export const reconciliationGroupService = {
     /**
@@ -73,7 +75,6 @@ export const reconciliationGroupService = {
      *  • 1 título → N pagamentos
      */
     async findGroups(bankAccountId: string, organizationId: string): Promise<GroupSuggestions> {
-        const settings = await bankReconciliationService.loadSettings(organizationId);
         const [{ data: bankTxs }, { data: titles }] = await Promise.all([
             supabase.from('bank_transactions')
                 .select('id, transaction_date, amount, direction, description_normalized, description_raw, counterparty_name')
@@ -103,7 +104,7 @@ export const reconciliationGroupService = {
             );
             // pula se já há um título 1:1 (caso simples já coberto pelo motor)
             if (pool.some(t => Math.abs(t.amount - b.amount) < 0.01)) continue;
-            const subset = findSubset(b.amount, pool.sort((a, c) => c.amount - a.amount), tolOf(b.amount, settings.value_tol_abs, settings.value_tol_pct), 3);
+            const subset = findSubset(b.amount, pool.sort((a, c) => c.amount - a.amount), groupTol(b.amount), 3);
             if (subset && subset.length >= 2) {
                 const total = subset.reduce((s, x) => s + x.amount, 0);
                 bankToTitles.push({ bank: b, titles: subset, total: Math.round(total * 100) / 100, diff: Math.round((b.amount - total) * 100) / 100 });
@@ -120,7 +121,7 @@ export const reconciliationGroupService = {
                 (() => { const x = new Date(b.transaction_date).getTime(); return x >= tT - 5 * DAY && x <= tT + 60 * DAY; })(),
             );
             if (pool.some(b => Math.abs(b.amount - t.amount) < 0.01)) continue;
-            const subset = findSubset(t.amount, pool.sort((a, c) => c.amount - a.amount), tolOf(t.amount, settings.value_tol_abs, settings.value_tol_pct), 3);
+            const subset = findSubset(t.amount, pool.sort((a, c) => c.amount - a.amount), groupTol(t.amount), 3);
             if (subset && subset.length >= 2) {
                 const total = subset.reduce((s, x) => s + x.amount, 0);
                 titleToBanks.push({ title: t, banks: subset, total: Math.round(total * 100) / 100, diff: Math.round((t.amount - total) * 100) / 100 });

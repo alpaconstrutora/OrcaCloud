@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Landmark, ShieldCheck, AlertTriangle, BookOpen, RefreshCw,
-    Pencil, Check, X, Tag, Receipt, Scale,
+    Pencil, Check, X, Tag, Receipt, Scale, Building2, HardHat,
 } from 'lucide-react';
 import { reconciliationDashboardService } from '../services/reconciliationDashboardService';
 import { useToast } from '../hooks/useToast';
-import type { ReconciliationDashboard as DashboardData, ReconciliationAccountBalance } from '../types/financial';
+import type {
+    ReconciliationDashboard as DashboardData, ReconciliationAccountBalance,
+    ReconciliationConsolidated,
+} from '../types/financial';
 
 function formatBRL(v: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -51,6 +54,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
     const { showToast } = useToast();
     const [asOf, setAsOf] = useState(new Date().toISOString().split('T')[0]);
     const [data, setData] = useState<DashboardData | null>(null);
+    const [consolidated, setConsolidated] = useState<ReconciliationConsolidated | null>(null);
     const [loading, setLoading] = useState(false);
 
     // Edição de saldo inicial inline
@@ -63,8 +67,12 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
         if (!organizationId) return;
         setLoading(true);
         try {
-            const d = await reconciliationDashboardService.getDashboard(organizationId, asOf);
+            const [d, cons] = await Promise.all([
+                reconciliationDashboardService.getDashboard(organizationId, asOf),
+                reconciliationDashboardService.getConsolidated(organizationId, asOf),
+            ]);
             setData(d);
+            setConsolidated(cons);
         } catch (e) {
             console.error('[ReconciliationDashboard]', e);
             showToast('Erro ao carregar dashboard de conciliação', 'error');
@@ -331,6 +339,94 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                     </table>
                 </div>
             </div>
+
+            {/* Consolidado por empresa (SPE) */}
+            {consolidated && consolidated.by_empresa.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-50 flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-indigo-500" />
+                        <h5 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                            Caixa Consolidado por Empresa
+                        </h5>
+                        <span className="text-[10px] text-gray-300 font-bold">
+                            {consolidated.totals.empresa_count} empresa(s) · {consolidated.totals.account_count} conta(s)
+                        </span>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">
+                                    <th className="text-left  px-5 py-3">Empresa</th>
+                                    <th className="text-right px-3 py-3">Contas</th>
+                                    <th className="text-right px-3 py-3">Saldo Bancário</th>
+                                    <th className="text-right px-3 py-3">Conciliado</th>
+                                    <th className="text-right px-3 py-3">Diferença</th>
+                                    <th className="text-right px-5 py-3">Pendentes</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {consolidated.by_empresa.map(e => (
+                                    <tr key={e.empresa_id ?? 'none'} className="hover:bg-gray-50/50">
+                                        <td className="px-5 py-3 font-bold text-gray-800">{e.empresa_name}</td>
+                                        <td className="px-3 py-3 text-right tabular-nums text-gray-500">{e.account_count}</td>
+                                        <td className="px-3 py-3 text-right tabular-nums font-bold text-gray-900">{formatBRL(e.bank_balance)}</td>
+                                        <td className="px-3 py-3 text-right tabular-nums text-emerald-600 font-semibold">{formatBRL(e.reconciled_balance)}</td>
+                                        <td className={`px-3 py-3 text-right tabular-nums font-bold ${Math.abs(e.difference) <= EPS ? 'text-gray-300' : 'text-amber-600'}`}>
+                                            {Math.abs(e.difference) <= EPS ? '—' : formatBRL(e.difference)}
+                                        </td>
+                                        <td className="px-5 py-3 text-right tabular-nums">{e.pending_count || '—'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot>
+                                <tr className="border-t-2 border-gray-100 bg-gray-50/50 font-black text-gray-900">
+                                    <td className="px-5 py-3 text-[11px] uppercase tracking-widest text-gray-500">Grupo</td>
+                                    <td className="px-3 py-3 text-right tabular-nums">{consolidated.totals.account_count}</td>
+                                    <td className="px-3 py-3 text-right tabular-nums">{formatBRL(consolidated.totals.bank_balance)}</td>
+                                    <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{formatBRL(consolidated.totals.reconciled_balance)}</td>
+                                    <td className="px-3 py-3"></td>
+                                    <td className="px-5 py-3"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Caixa realizado por obra */}
+            {consolidated && consolidated.by_project.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-50 flex items-center gap-2">
+                        <HardHat className="w-4 h-4 text-orange-500" />
+                        <h5 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                            Caixa Realizado por Obra
+                        </h5>
+                        <span className="text-[10px] text-gray-300 font-bold">conciliado até a data</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">
+                                    <th className="text-left  px-5 py-3">Obra</th>
+                                    <th className="text-right px-3 py-3">Entradas</th>
+                                    <th className="text-right px-3 py-3">Saídas</th>
+                                    <th className="text-right px-5 py-3">Caixa Líquido</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {consolidated.by_project.map(p => (
+                                    <tr key={p.project_id} className="hover:bg-gray-50/50">
+                                        <td className="px-5 py-3 font-bold text-gray-800">{p.project_name}</td>
+                                        <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{formatBRL(p.credit)}</td>
+                                        <td className="px-3 py-3 text-right tabular-nums text-red-600">{formatBRL(p.debit)}</td>
+                                        <td className={`px-5 py-3 text-right tabular-nums font-black ${p.net >= 0 ? 'text-gray-900' : 'text-red-600'}`}>{formatBRL(p.net)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -264,6 +264,39 @@ export interface ReconciliationDashboard {
     fees: { value: number; count: number };
 }
 
+export interface ConsolidatedEmpresa {
+    empresa_id: string | null;
+    empresa_name: string;
+    account_count: number;
+    bank_balance: number;
+    reconciled_balance: number;
+    difference: number;
+    pending_value: number;
+    pending_count: number;
+}
+
+export interface ConsolidatedProject {
+    project_id: string;
+    project_name: string;
+    credit: number;
+    debit: number;
+    net: number;         // caixa realizado da obra (CREDIT − DEBIT conciliado)
+    n: number;
+}
+
+export interface ReconciliationConsolidated {
+    as_of: string;
+    totals: {
+        bank_balance: number;
+        reconciled_balance: number;
+        pending_value: number;
+        account_count: number;
+        empresa_count: number;
+    };
+    by_empresa: ConsolidatedEmpresa[];
+    by_project: ConsolidatedProject[];
+}
+
 // ────────────────────────────────────────────────────────────
 // Detecção de Anomalias (Tier A+)
 // ────────────────────────────────────────────────────────────

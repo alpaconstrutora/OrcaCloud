@@ -16,6 +16,10 @@ export const financialSyncService = {
         // Dimensão obra: só carimba quando há um project.id real (vaults org-level ficam null)
         const projectId = project.id ?? null;
 
+        // Vault comercial é isento do hard-lock de período fechado (decisão de produto):
+        // marca source_system='COMMERCIAL' para a trigger trg_block_period_internal_tx liberar.
+        const sourceSystem = project.name === 'Gestão Comercial' ? 'COMMERCIAL' : 'PROJECT';
+
         const internalTxs: Record<string, unknown>[] = [];
 
         // 1. Processar Parcelas (Receitas)
@@ -23,7 +27,7 @@ export const financialSyncService = {
             info.installments.forEach(inst => {
                 internalTxs.push({
                     organization_id: organizationId,
-                    source_system: 'PROJECT',
+                    source_system: sourceSystem,
                     reference_id: inst.id,
                     project_id: projectId,
                     transaction_date: inst.dueDate,
@@ -42,7 +46,7 @@ export const financialSyncService = {
             info.transactions.forEach(tx => {
                 internalTxs.push({
                     organization_id: organizationId,
-                    source_system: 'PROJECT',
+                    source_system: sourceSystem,
                     reference_id: tx.id,
                     project_id: projectId,
                     transaction_date: tx.date,

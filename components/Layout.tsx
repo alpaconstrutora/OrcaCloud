@@ -319,7 +319,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado','partner-workspaces-admin'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','controladoria','fiscal-nfe','automation','compliance-dashboard','opura-cno'];
+  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','controladoria','fiscal-nfe','automation','compliance-dashboard','opura-cno'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
@@ -731,7 +731,7 @@ const Layout: React.FC<LayoutProps> = ({
                       <>
                         <DropdownItem id="financial-dashboard" label="Dashboard" icon={LayoutDashboard} />
                         <DropdownItem id="contas-a-receber" label="Contas a Receber" icon={TrendingUp} />
-                        <DropdownItem id="client-charges" label="Cobranças" icon={Landmark} />
+                        <DropdownItem id="financial-boletos" label="Boletos ao Cliente" icon={Receipt} />
                         <DropdownItem id="project-financial" label="Contas a Pagar" icon={DollarSign} />
                         <DropdownItem id="financial-calendar" label="Calendário" icon={Calendar} />
                         <DropdownItem id="dunning" label="Cobrança Auto." icon={Bell} />

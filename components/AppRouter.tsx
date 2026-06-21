@@ -677,7 +677,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     case 'financial-categories':
     case 'bank-reconciliation':
-    case 'financial-boletos':
     case 'contas-a-pagar':
     case 'project-financial':
       return (
@@ -1082,7 +1081,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         </React.Suspense>
       );
 
-    // ── Cobranças (boletos/PIX ao cliente) ─────────────────────────────────────
+    // ── Cobranças / Boletos ao cliente ─────────────────────────────────────────
+    case 'financial-boletos':
     case 'client-charges':
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>

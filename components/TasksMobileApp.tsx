@@ -1,15 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Plus, LayoutGrid, Mail, ChevronRight, ChevronDown,
+  Plus, LayoutGrid, Mail, ChevronRight, ChevronDown, ChevronUp,
   Loader2, Menu, CheckCircle2, X, ArrowLeft, FolderOpen,
-  Folder, ChevronLeft,
+  Folder, ChevronLeft, User, AlignLeft, Tag,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Task {
   id: string
+  org_id: string
   title: string
+  description: string | null
+  start_date: string | null
   due_date: string | null
   priority: number
   status: 'open' | 'done' | 'snoozed'
@@ -18,10 +21,14 @@ interface Task {
   space_id: string | null
   folder_id: string | null
   project_id: string | null
+  assignee_employee_id: string | null
   alert_at: string | null
   parent_task_id: string | null
   created_at: string
 }
+
+interface TaskStatusOption { id: string; name: string; color: string; is_done: boolean }
+interface EmployeeOption   { id: string; name: string }
 
 interface Space     { id: string; name: string; color: string; task_count?: number }
 interface Folder_   { id: string; space_id: string; name: string; color: string | null }
@@ -290,79 +297,138 @@ const TaskEditSheet: React.FC<{
   onClose: () => void
   onSaved: () => void
 }> = ({ task, onClose, onSaved }) => {
-  const [title,    setTitle]    = useState(task.title)
-  const [dueDate,  setDueDate]  = useState(task.due_date ? task.due_date.split('T')[0] : '')
-  const [priority, setPriority] = useState(task.priority)
-  const [saving,   setSaving]   = useState(false)
-  const [error,    setError]    = useState<string | null>(null)
+  const [title,      setTitle]      = useState(task.title)
+  const [desc,       setDesc]       = useState(task.description ?? '')
+  const [startDate,  setStartDate]  = useState(task.start_date  ? task.start_date.split('T')[0]  : '')
+  const [dueDate,    setDueDate]    = useState(task.due_date    ? task.due_date.split('T')[0]    : '')
+  const [priority,   setPriority]   = useState(task.priority)
+  const [statusId,   setStatusId]   = useState(task.status_id ?? '')
+  const [assigneeId, setAssigneeId] = useState(task.assignee_employee_id ?? '')
+  const [saving,     setSaving]     = useState(false)
+  const [error,      setError]      = useState<string | null>(null)
 
-  const PRIOS = [1, 2, 3, 4] as const
+  // Calendar: which field is open ('start' | 'end' | null)
+  const [calFor, setCalFor] = useState<'start' | 'end' | null>(null)
+
+  // Remote data loaded on open
+  const [statuses,   setStatuses]   = useState<TaskStatusOption[]>([])
+  const [employees,  setEmployees]  = useState<EmployeeOption[]>([])
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('task_statuses').select('id,name,color,is_done').eq('org_id', task.org_id).order('position'),
+      supabase.from('employees').select('id,name').order('name').limit(200),
+    ]).then(([{ data: sd }, { data: ed }]) => {
+      setStatuses((sd ?? []) as TaskStatusOption[])
+      setEmployees((ed ?? []) as EmployeeOption[])
+    })
+  }, [task.org_id])
+
+  const handleCalChange = (iso: string) => {
+    if (calFor === 'start') setStartDate(iso)
+    else                    setDueDate(iso)
+    if (iso) setCalFor(null)   // fecha ao selecionar
+  }
 
   const save = async () => {
     if (!title.trim()) { setError('Informe o título'); return }
     setSaving(true); setError(null)
     const { error: e } = await supabase.from('tasks').update({
-      title:    title.trim(),
+      title:                title.trim(),
+      description:          desc.trim() || null,
+      start_date:           startDate ? new Date(startDate + 'T12:00:00').toISOString() : null,
+      due_date:             dueDate   ? new Date(dueDate   + 'T12:00:00').toISOString() : null,
       priority,
-      due_date: dueDate ? new Date(dueDate + 'T12:00:00').toISOString() : null,
+      status_id:            statusId   || null,
+      assignee_employee_id: assigneeId || null,
     }).eq('id', task.id)
     setSaving(false)
     if (e) { setError(e.message); return }
     onSaved()
   }
 
+  // Date field button
+  const DateBtn = ({ field, label, value, onClear }: {
+    field: 'start' | 'end'; label: string; value: string; onClear: () => void
+  }) => {
+    const active = calFor === field
+    return (
+      <div className="flex-1">
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setCalFor(active ? null : field)}
+            className={`flex-1 flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-bold transition-all
+              ${active
+                ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200'
+                : value
+                  ? 'bg-slate-50 text-slate-700 border-slate-200'
+                  : 'bg-white text-slate-400 border-slate-100'}`}
+          >
+            <span>{value ? fmtShort(value) : 'Definir'}</span>
+            {active ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+          {value && !active && (
+            <button onClick={onClear} className="text-slate-300 hover:text-red-400 transition-colors">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
       <div className="absolute inset-0 bg-black/40 z-20" onClick={onClose} />
-      <div className="absolute bottom-0 left-0 right-0 z-30 bg-white rounded-t-3xl shadow-2xl">
+      <div className="absolute bottom-0 left-0 right-0 z-30 bg-white rounded-t-3xl shadow-2xl max-h-[94%] flex flex-col">
         {/* Handle */}
-        <div className="flex justify-center pt-3 pb-1">
+        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
           <div className="w-10 h-1 bg-slate-200 rounded-full" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-2 pb-3">
+        <div className="flex items-center justify-between px-5 pt-2 pb-3 flex-shrink-0">
           <h2 className="text-base font-black text-slate-900">Editar tarefa</h2>
           <button onClick={onClose} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div className="px-5 pb-8 space-y-4">
+        <div className="overflow-y-auto flex-1 px-5 pb-8 space-y-4">
           {/* Title */}
           <input
-            autoFocus
-            value={title}
-            onChange={e => setTitle(e.target.value)}
+            autoFocus value={title} onChange={e => setTitle(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && save()}
-            className="w-full text-sm font-semibold text-slate-800 border-b border-slate-200 pb-2.5 outline-none focus:border-blue-500 transition-colors"
+            placeholder="Título da tarefa"
+            className="w-full text-sm font-semibold text-slate-800 border-b border-slate-200 pb-2.5 outline-none placeholder:text-slate-300 focus:border-blue-500 transition-colors"
           />
 
-          {/* Calendar date picker */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prazo</p>
-              {dueDate && (
-                <button onClick={() => setDueDate('')} className="text-[10px] font-bold text-red-400 hover:text-red-600">
-                  Limpar
-                </button>
-              )}
+          {/* Datas: Início + Término lado a lado */}
+          <div className="space-y-2">
+            <div className="flex gap-3">
+              <DateBtn field="start" label="Início"   value={startDate} onClear={() => setStartDate('')} />
+              <DateBtn field="end"   label="Término"  value={dueDate}   onClear={() => setDueDate('')}   />
             </div>
-            <MiniCalendar value={dueDate} onChange={setDueDate} />
+            {calFor && (
+              <MiniCalendar
+                value={calFor === 'start' ? startDate : dueDate}
+                onChange={handleCalChange}
+              />
+            )}
           </div>
 
-          {/* Priority */}
+          {/* Prioridade */}
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Prioridade</p>
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Tag className="w-3 h-3 text-slate-400" />
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prioridade</p>
+            </div>
             <div className="grid grid-cols-4 gap-1.5">
-              {PRIOS.map(v => (
-                <button
-                  key={v}
-                  onClick={() => setPriority(v)}
+              {([1, 2, 3, 4] as const).map(v => (
+                <button key={v} onClick={() => setPriority(v)}
                   className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wide border transition-all
-                    ${priority === v
-                      ? 'text-white border-transparent shadow-md'
-                      : 'bg-white text-slate-400 border-slate-100'}`}
+                    ${priority === v ? 'text-white border-transparent shadow-md' : 'bg-white text-slate-400 border-slate-100'}`}
                   style={priority === v ? { backgroundColor: PRIORITY_COLOR[v] } : undefined}
                 >
                   {PRIORITY_LABEL[v]}
@@ -371,13 +437,71 @@ const TaskEditSheet: React.FC<{
             </div>
           </div>
 
+          {/* Status */}
+          {statuses.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <CheckCircle2 className="w-3 h-3 text-slate-400" />
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {statuses.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => setStatusId(statusId === s.id ? '' : s.id)}
+                    className="px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all"
+                    style={statusId === s.id
+                      ? { backgroundColor: s.color + '22', color: s.color, borderColor: s.color + '44' }
+                      : { backgroundColor: 'white', color: '#94a3b8', borderColor: '#f1f5f9' }}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Responsável */}
+          {employees.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <User className="w-3 h-3 text-slate-400" />
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Responsável</p>
+              </div>
+              <select
+                value={assigneeId}
+                onChange={e => setAssigneeId(e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-100 rounded-xl text-sm text-slate-700 bg-slate-50 outline-none focus:border-blue-400"
+              >
+                <option value="">Sem responsável</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Descrição */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <AlignLeft className="w-3 h-3 text-slate-400" />
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Descrição</p>
+            </div>
+            <textarea
+              value={desc}
+              onChange={e => setDesc(e.target.value)}
+              placeholder="Adicione uma descrição..."
+              rows={3}
+              className="w-full px-3 py-2.5 border border-slate-100 rounded-xl text-sm text-slate-700 bg-slate-50 outline-none placeholder:text-slate-300 focus:border-blue-400 resize-none"
+            />
+          </div>
+
           {error && (
             <p className="text-xs font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>
           )}
 
           <button
-            onClick={save}
-            disabled={saving}
+            onClick={save} disabled={saving}
             className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-blue-200 disabled:opacity-50 active:scale-[0.98] transition-all"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -395,12 +519,20 @@ const AddTaskModal: React.FC<{
   onClose:  () => void
   onSaved:  () => void
 }> = ({ orgId, onClose, onSaved }) => {
-  const [title,    setTitle]    = useState('')
-  const [desc,     setDesc]     = useState('')
-  const [dueDate,  setDueDate]  = useState('')
-  const [highPrio, setHighPrio] = useState(false)
-  const [saving,   setSaving]   = useState(false)
-  const [error,    setError]    = useState<string | null>(null)
+  const [title,     setTitle]     = useState('')
+  const [desc,      setDesc]      = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [dueDate,   setDueDate]   = useState('')
+  const [highPrio,  setHighPrio]  = useState(false)
+  const [calFor,    setCalFor]    = useState<'start' | 'end' | null>(null)
+  const [saving,    setSaving]    = useState(false)
+  const [error,     setError]     = useState<string | null>(null)
+
+  const handleCalChange = (iso: string) => {
+    if (calFor === 'start') setStartDate(iso)
+    else                    setDueDate(iso)
+    if (iso) setCalFor(null)
+  }
 
   const save = async () => {
     if (!title.trim()) { setError('Informe o título'); return }
@@ -409,8 +541,10 @@ const AddTaskModal: React.FC<{
     if (!user) { setError('Não autenticado'); setSaving(false); return }
     const { error: e } = await supabase.from('tasks').insert({
       title:         title.trim(),
+      description:   desc.trim() || null,
+      start_date:    startDate ? new Date(startDate + 'T12:00:00').toISOString() : null,
+      due_date:      dueDate   ? new Date(dueDate   + 'T12:00:00').toISOString() : null,
       priority:      highPrio ? 1 : 3,
-      due_date:      dueDate ? new Date(dueDate + 'T12:00:00').toISOString() : null,
       status:        'open',
       source_module: 'manual',
       org_id:        orgId ?? null,
@@ -421,41 +555,66 @@ const AddTaskModal: React.FC<{
     onSaved()
   }
 
+  const DateBtn2 = ({ field, label, value, onClear }: {
+    field: 'start' | 'end'; label: string; value: string; onClear: () => void
+  }) => {
+    const active = calFor === field
+    return (
+      <div className="flex-1">
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setCalFor(active ? null : field)}
+            className={`flex-1 flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-bold transition-all
+              ${active ? 'bg-blue-600 text-white border-blue-600' : value ? 'bg-slate-50 text-slate-700 border-slate-200' : 'bg-white text-slate-400 border-slate-100'}`}
+          >
+            <span>{value ? fmtShort(value) : 'Definir'}</span>
+            {active ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+          {value && !active && (
+            <button onClick={onClear} className="text-slate-300 hover:text-red-400"><X className="w-3.5 h-3.5" /></button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
       <div className="absolute inset-0 bg-black/40 z-20" onClick={onClose} />
-      <div className="absolute bottom-0 left-0 right-0 z-30 bg-white rounded-t-3xl shadow-2xl max-h-[92%] overflow-y-auto">
-        <div className="flex justify-center pt-3 pb-1">
+      <div className="absolute bottom-0 left-0 right-0 z-30 bg-white rounded-t-3xl shadow-2xl max-h-[94%] flex flex-col">
+        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
           <div className="w-10 h-1 bg-slate-200 rounded-full" />
         </div>
-        <div className="flex items-center justify-between px-5 pt-2 pb-4">
-          <h2 className="text-lg font-black text-slate-900">Add task</h2>
+        <div className="flex items-center justify-between px-5 pt-2 pb-4 flex-shrink-0">
+          <h2 className="text-lg font-black text-slate-900">Nova tarefa</h2>
           <button onClick={onClose} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div className="px-5 pb-6 space-y-4">
+        <div className="overflow-y-auto flex-1 px-5 pb-6 space-y-4">
           <input
             autoFocus value={title} onChange={e => setTitle(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && save()} placeholder="Name"
+            onKeyDown={e => e.key === 'Enter' && save()} placeholder="Nome da tarefa *"
             className="w-full text-sm font-semibold text-slate-800 border-b border-slate-200 pb-2.5 outline-none placeholder:text-slate-300 focus:border-blue-500 transition-colors"
           />
           <textarea
             value={desc} onChange={e => setDesc(e.target.value)}
-            placeholder="Task description..." rows={2}
+            placeholder="Descrição..." rows={2}
             className="w-full text-xs text-slate-500 border-b border-slate-100 pb-2 outline-none resize-none placeholder:text-slate-300 bg-transparent focus:border-blue-300 transition-colors"
           />
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prazo</p>
-              {dueDate && (
-                <button onClick={() => setDueDate('')} className="text-[10px] font-bold text-red-400 hover:text-red-600">
-                  Limpar
-                </button>
-              )}
+          <div className="space-y-2">
+            <div className="flex gap-3">
+              <DateBtn2 field="start" label="Início"   value={startDate} onClear={() => setStartDate('')} />
+              <DateBtn2 field="end"   label="Término"  value={dueDate}   onClear={() => setDueDate('')}   />
             </div>
-            <MiniCalendar value={dueDate} onChange={setDueDate} />
+            {calFor && (
+              <MiniCalendar
+                value={calFor === 'start' ? startDate : dueDate}
+                onChange={handleCalChange}
+              />
+            )}
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700">Alta prioridade</span>
@@ -508,7 +667,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
     setLoading(true)
     let q = supabase
       .from('tasks')
-      .select('id, title, due_date, priority, status, status_id, source_module, space_id, folder_id, project_id, alert_at, parent_task_id, created_at')
+      .select('id, org_id, title, description, start_date, due_date, priority, status, status_id, source_module, space_id, folder_id, project_id, assignee_employee_id, alert_at, parent_task_id, created_at')
       .eq('status', 'open')
       .is('parent_task_id', null)
       .order('priority', { ascending: true })

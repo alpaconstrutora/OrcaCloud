@@ -17,6 +17,13 @@
 --     mexer em colunas financeiras materiais → permitido.
 -- ============================================================
 
+-- CREATE/DROP TRIGGER exige AccessExclusiveLock na tabela. Se o app
+-- estiver escrevendo ao mesmo tempo, pode ocorrer deadlock (40P01).
+-- lock_timeout faz a migration abortar rápido e limpa para re-execução,
+-- em vez de ficar presa. Se falhar, basta rodar de novo (idempotente),
+-- de preferência em momento de baixo uso.
+SET lock_timeout = '4s';
+
 -- ─────────────────────────────────────────────────────────────
 -- internal_transactions
 -- ─────────────────────────────────────────────────────────────

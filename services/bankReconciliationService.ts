@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import {
     BankTransaction,
@@ -67,30 +68,36 @@ export const bankReconciliationService = {
         for (const file of files) {
             try {
                 const fileName = file.name.toLowerCase();
-                let text: string;
-                if (fileName.endsWith('.ofx')) {
-                    // OFX de bancos brasileiros costuma usar Windows-1252/ISO-8859-1
-                    const buffer = await file.arrayBuffer();
-                    try {
-                        text = new TextDecoder('windows-1252').decode(buffer);
-                    } catch {
-                        text = new TextDecoder('utf-8').decode(buffer);
-                    }
-                } else {
-                    text = await file.text();
-                }
                 const rawTransactions: RawTransaction[] = [];
 
-                if (fileName.endsWith('.ofx')) {
-                    rawTransactions.push(...this.parseOFX(text));
-                } else if (fileName.endsWith('.csv')) {
-                    rawTransactions.push(...this.parseCSV(text));
-                } else if (fileName.endsWith('.ret') || fileName.endsWith('.txt') || fileName.endsWith('.cnab')) {
-                    const firstLine = text.split('\n')[0];
-                    if (firstLine.length >= 400) {
-                        rawTransactions.push(...this.parseCNAB400(text));
+                if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                    const buffer = await file.arrayBuffer();
+                    rawTransactions.push(...this.parseXLSX(buffer));
+                } else {
+                    let text: string;
+                    if (fileName.endsWith('.ofx')) {
+                        // OFX de bancos brasileiros costuma usar Windows-1252/ISO-8859-1
+                        const buffer = await file.arrayBuffer();
+                        try {
+                            text = new TextDecoder('windows-1252').decode(buffer);
+                        } catch {
+                            text = new TextDecoder('utf-8').decode(buffer);
+                        }
                     } else {
-                        rawTransactions.push(...this.parseCNAB240(text));
+                        text = await file.text();
+                    }
+
+                    if (fileName.endsWith('.ofx')) {
+                        rawTransactions.push(...this.parseOFX(text));
+                    } else if (fileName.endsWith('.csv')) {
+                        rawTransactions.push(...this.parseCSV(text));
+                    } else if (fileName.endsWith('.ret') || fileName.endsWith('.txt') || fileName.endsWith('.cnab')) {
+                        const firstLine = text.split('\n')[0];
+                        if (firstLine.length >= 400) {
+                            rawTransactions.push(...this.parseCNAB400(text));
+                        } else {
+                            rawTransactions.push(...this.parseCNAB240(text));
+                        }
                     }
                 }
 
@@ -588,6 +595,138 @@ export const bankReconciliationService = {
                 }
             });
         }
+        return transactions;
+    },
+
+    /**
+     * Converte um valor monetário (number ou string BR "1.234,56") para number.
+     */
+    parseAmountBR(raw: unknown): number {
+        if (typeof raw === 'number') return raw;
+        let s = String(raw ?? '').trim();
+        if (!s) return NaN;
+        s = s.replace(/r\$/i, '').replace(/\s/g, '');
+        const neg = /^-/.test(s) || /\(.*\)/.test(s); // -123 ou (123)
+        s = s.replace(/[()]/g, '').replace(/^-/, '');
+        if (s.includes('.') && s.includes(',')) {
+            // '.' = milhar, ',' = decimal
+            s = s.replace(/\./g, '').replace(',', '.');
+        } else if (s.includes(',')) {
+            s = s.replace(',', '.');
+        }
+        const n = parseFloat(s);
+        if (isNaN(n)) return NaN;
+        return neg ? -n : n;
+    },
+
+    /**
+     * Normaliza uma data (Date, serial Excel ou string dd/mm/aaaa | aaaa-mm-dd) para 'YYYY-MM-DD'.
+     */
+    parseDateCell(raw: unknown): string | null {
+        if (raw instanceof Date && !isNaN(raw.getTime())) {
+            return `${raw.getFullYear()}-${String(raw.getMonth() + 1).padStart(2, '0')}-${String(raw.getDate()).padStart(2, '0')}`;
+        }
+        if (typeof raw === 'number' && raw > 0) {
+            // Serial Excel (dias desde 1899-12-30)
+            const d = XLSX.SSF?.parse_date_code?.(raw);
+            if (d) return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+        }
+        const s = String(raw ?? '').trim();
+        if (!s) return null;
+        let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+        m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+        if (m) {
+            const year = m[3].length === 2 ? `20${m[3]}` : m[3];
+            return `${year}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+        }
+        return null;
+    },
+
+    /**
+     * Parser de extrato em XLSX/XLS. Detecta a linha de cabeçalho e identifica
+     * as colunas de data, valor (ou crédito/débito separados) e descrição pelo nome.
+     */
+    parseXLSX(buffer: ArrayBuffer): RawTransaction[] {
+        const transactions: RawTransaction[] = [];
+        const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        if (!ws) return transactions;
+
+        const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+        if (rows.length === 0) return transactions;
+
+        const norm = (v: unknown) => String(v ?? '')
+            .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+
+        const reDate = /^(data|date|dt)\b|lancamento|movimento/;
+        const reAmount = /valor|amount|value|montante/;
+        const reCredit = /credito|entrada|^c$|deposito/;
+        const reDebit = /debito|saida|^d$|saque/;
+        const reDesc = /hist|descri|lancamento|memo|detalhe|complemento/;
+        const reType = /tipo|natureza|d\/c|c\/d|debito\/credito/;
+
+        // Localiza o cabeçalho nas primeiras 20 linhas
+        let headerIdx = -1;
+        let cols = { date: -1, amount: -1, credit: -1, debit: -1, desc: -1, type: -1 };
+        for (let i = 0; i < Math.min(rows.length, 20); i++) {
+            const cells = rows[i].map(norm);
+            const find = (re: RegExp) => cells.findIndex(c => re.test(c));
+            const dateC = find(reDate);
+            const amountC = cells.findIndex(c => reAmount.test(c));
+            const creditC = cells.findIndex(c => reCredit.test(c));
+            const debitC = cells.findIndex(c => reDebit.test(c));
+            if (dateC >= 0 && (amountC >= 0 || (creditC >= 0 && debitC >= 0))) {
+                headerIdx = i;
+                cols = {
+                    date: dateC,
+                    amount: amountC,
+                    credit: creditC,
+                    debit: debitC,
+                    desc: find(reDesc),
+                    type: find(reType),
+                };
+                break;
+            }
+        }
+
+        if (headerIdx === -1) {
+            // Sem cabeçalho reconhecido: fallback posicional (data, valor, descrição)
+            cols = { date: 0, amount: 1, credit: -1, debit: -1, desc: 2, type: -1 };
+            headerIdx = 0;
+        }
+
+        for (let i = headerIdx + 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length === 0) continue;
+
+            const date = this.parseDateCell(row[cols.date]);
+            if (!date) continue;
+
+            let amount: number;
+            if (cols.amount >= 0) {
+                amount = this.parseAmountBR(row[cols.amount]);
+                if (cols.type >= 0) {
+                    const t = norm(row[cols.type]);
+                    if (reDebit.test(t)) amount = -Math.abs(amount);
+                    else if (reCredit.test(t)) amount = Math.abs(amount);
+                }
+            } else {
+                const credit = this.parseAmountBR(row[cols.credit]) || 0;
+                const debit = this.parseAmountBR(row[cols.debit]) || 0;
+                amount = credit - debit;
+            }
+            if (isNaN(amount) || amount === 0) continue;
+
+            const description = cols.desc >= 0 ? String(row[cols.desc] ?? '').trim() : '';
+            transactions.push({
+                date,
+                amount,
+                description: description || 'Sem descrição',
+                id: `xlsx-${Math.random().toString(36).substring(7)}`,
+            });
+        }
+
         return transactions;
     },
 

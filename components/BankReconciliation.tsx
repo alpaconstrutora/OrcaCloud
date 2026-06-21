@@ -1502,7 +1502,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             if (result.inserted === 0 && result.duplicates > 0) {
                 alert(`Este extrato já foi importado anteriormente.\n${result.duplicates} transação(ões) duplicada(s) ignorada(s).`);
             } else if (result.inserted === 0) {
-                alert('Nenhuma transação encontrada no arquivo. Verifique se o formato é OFX válido.');
+                alert('Nenhuma transação encontrada no arquivo. Verifique se é um extrato válido (OFX, CSV, CNAB ou Excel).');
             } else {
                 setActionFeedback({ message: `${result.inserted} transação(ões) importada(s) com sucesso!`, type: 'success' });
                 setTimeout(() => setActionFeedback(null), 4000);
@@ -2186,7 +2186,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 type="file" 
                 ref={fileInputRef} 
                 className="hidden" 
-                accept=".ofx,.csv,.txt,.ret,.cnab"
+                accept=".ofx,.csv,.txt,.ret,.cnab,.xlsx,.xls"
                 onChange={handleFileUpload}
                 multiple
             />
@@ -3003,7 +3003,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                         <FileText className="w-10 h-10" />
                                     </div>
                                     <h5 className="text-sm font-black text-gray-400 uppercase mb-2">Sem extrato importado</h5>
-                                    <p className="text-xs text-gray-400 max-w-[200px]">Importe um arquivo OFX, CSV ou CNAB para iniciar a conciliação.</p>
+                                    <p className="text-xs text-gray-400 max-w-[200px]">Importe um arquivo OFX, CSV, CNAB ou Excel (XLSX) para iniciar a conciliação.</p>
                                 </div>
                             ) : (
                                 <div className={pendentesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "flex flex-col gap-3 p-3"}>

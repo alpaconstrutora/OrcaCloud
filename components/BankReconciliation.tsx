@@ -962,11 +962,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         }
     };
 
-    const handleRejectSuggestion = async (suggestionId: string) => {
+    const handleRejectSuggestion = async (bankTransactionId: string) => {
+        // Dispensa todas as sugestões do movimento (some da Central até reprocessar)
         const { error } = await supabase
             .from('reconciliation_suggestions')
             .delete()
-            .eq('id', suggestionId);
+            .eq('bank_transaction_id', bankTransactionId);
         if (error) throw error;
         await loadTransactions();
         await loadStats();

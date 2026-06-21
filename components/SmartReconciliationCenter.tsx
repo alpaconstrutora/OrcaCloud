@@ -66,7 +66,7 @@ interface SmartReconciliationCenterProps {
     suggestions: SuggestionRow[];
     bankTransactions: BankTx[];
     onConfirm: (bankTxId: string, internalTxId: string) => Promise<void> | void;
-    onReject: (suggestionId: string) => Promise<void> | void;
+    onReject: (bankTransactionId: string) => Promise<void> | void;
     onReload: () => Promise<void> | void;
 }
 
@@ -133,8 +133,9 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
 
     const reject = (sug: SuggestionRow) =>
         run(sug.id, async () => {
-            await onReject(sug.id);
-            showToast('Sugestão descartada', 'success');
+            // Dispensa o movimento inteiro (todas as sugestões dele), não só o candidato exibido
+            await onReject(sug.bank_transaction_id);
+            showToast('Sugestões descartadas', 'success');
         });
 
     const confirmAllHigh = () =>

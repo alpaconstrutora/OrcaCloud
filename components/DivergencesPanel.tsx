@@ -4,11 +4,20 @@ import {
     Plus, CheckCircle2, Undo2, RotateCcw, ArrowDownLeft, ArrowUpRight, Link2,
 } from 'lucide-react';
 import { divergenceService } from '../services/divergenceService';
+import { supabase } from '../lib/supabase';
 import { useToast } from '../hooks/useToast';
 import { useConfirm } from './ui/confirm';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
 import type {
     ReconciliationDivergences, BankWithoutInternal, InternalWithoutBank, ValueMismatch,
 } from '../types/financial';
+
+interface CreateForm {
+    category: string;
+    projectId: string;
+    entityName: string;
+    description: string;
+}
 
 function formatBRL(v: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -70,6 +79,12 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
     const [loading, setLoading] = useState(false);
     const [busyId, setBusyId] = useState<string | null>(null);
 
+    // Opções de classificação para o modal "Criar lançamento"
+    const [categories, setCategories] = useState<string[]>([]);
+    const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
+    const [formBank, setFormBank] = useState<BankWithoutInternal | null>(null);
+    const [form, setForm] = useState<CreateForm>({ category: '', projectId: '', entityName: '', description: '' });
+
     const load = useCallback(async () => {
         if (!organizationId) return;
         setLoading(true);
@@ -83,7 +98,24 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
         }
     }, [organizationId, showToast]);
 
-    useEffect(() => { load(); }, [load]);
+    const loadOptions = useCallback(async () => {
+        if (!organizationId) return;
+        try {
+            const [cats, projs] = await Promise.all([
+                supabase.from('financial_categories').select('name').order('name', { ascending: true }),
+                supabase.from('projects').select('id, name')
+                    .filter('settings->>organizationId', 'eq', organizationId)
+                    .neq('name', 'Gestão Comercial')
+                    .order('name', { ascending: true }),
+            ]);
+            if (cats.data) setCategories(cats.data.map(c => c.name).filter(Boolean));
+            if (projs.data) setProjects(Array.from(new Map(projs.data.map(p => [p.name, p])).values()));
+        } catch (e) {
+            console.error('[DivergencesPanel] loadOptions', e);
+        }
+    }, [organizationId]);
+
+    useEffect(() => { load(); loadOptions(); }, [load, loadOptions]);
 
     const run = async (key: string, fn: () => Promise<void>, okMsg: string) => {
         setBusyId(key);
@@ -100,8 +132,27 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
         }
     };
 
-    const onCreateInternal = (b: BankWithoutInternal) =>
-        run(b.id, () => divergenceService.createInternalAndMatch(organizationId, b), 'Lançamento criado e conciliado');
+    const openCreateModal = (b: BankWithoutInternal) => {
+        setFormBank(b);
+        setForm({
+            category: b.category || '',
+            projectId: '',
+            entityName: '',
+            description: b.description || '',
+        });
+    };
+
+    const submitCreate = async () => {
+        if (!formBank) return;
+        const bank = formBank;
+        setFormBank(null);
+        await run(bank.id, () => divergenceService.createInternalAndMatch(organizationId, bank, {
+            category: form.category || undefined,
+            project_id: form.projectId || null,
+            entity_name: form.entityName || null,
+            description: form.description || undefined,
+        }), 'Lançamento criado e conciliado');
+    };
 
     const onConfirmNoTitle = async (b: BankWithoutInternal) => {
         if (!await confirm({
@@ -174,7 +225,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         </span>
                         <div className="flex items-center gap-1.5">
                             <button
-                                onClick={() => onCreateInternal(b)}
+                                onClick={() => openCreateModal(b)}
                                 disabled={busyId === b.id}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 disabled:opacity-50"
                             >
@@ -263,6 +314,84 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                     </div>
                 ))}
             </Section>
+
+            {/* Modal: classificar lançamento antes de criar */}
+            <Modal open={!!formBank} onClose={() => setFormBank(null)} size="md" dismissable={false}>
+                <ModalHeader
+                    title="Criar lançamento"
+                    description="Classifique o lançamento que será gerado e conciliado com o movimento bancário."
+                    icon={<div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center"><Plus className="w-5 h-5 text-blue-600" /></div>}
+                    onClose={() => setFormBank(null)}
+                />
+                <ModalBody className="space-y-4">
+                    {formBank && (
+                        <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+                            <div className="min-w-0">
+                                <p className="text-sm font-bold text-gray-800 truncate">{formBank.description}</p>
+                                <p className="text-[11px] text-gray-400 font-medium">{formBank.account_name} · {formatDate(formBank.transaction_date)}</p>
+                            </div>
+                            <span className={`tabular-nums font-black text-sm ${formBank.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {formatBRL(formBank.amount)}
+                            </span>
+                        </div>
+                    )}
+                    <div>
+                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Categoria</label>
+                        <input
+                            list="divergence-categories"
+                            value={form.category}
+                            onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                            placeholder="Geral"
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <datalist id="divergence-categories">
+                            {categories.map(c => <option key={c} value={c} />)}
+                        </datalist>
+                    </div>
+                    <div>
+                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Obra / Projeto</label>
+                        <select
+                            value={form.projectId}
+                            onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">— Sem obra —</option>
+                            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Contraparte (cliente/fornecedor)</label>
+                        <input
+                            value={form.entityName}
+                            onChange={e => setForm(f => ({ ...f, entityName: e.target.value }))}
+                            placeholder="Opcional"
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Descrição</label>
+                        <input
+                            value={form.description}
+                            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                </ModalBody>
+                <ModalFooter>
+                    <button
+                        onClick={() => setFormBank(null)}
+                        className="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={submitCreate}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-black hover:bg-blue-700"
+                    >
+                        <Plus className="w-4 h-4" /> Criar e conciliar
+                    </button>
+                </ModalFooter>
+            </Modal>
         </div>
     );
 };

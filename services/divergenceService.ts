@@ -52,8 +52,18 @@ export const divergenceService = {
     /**
      * Tipo 1 — cria um lançamento interno espelhando o movimento bancário
      * e o vincula automaticamente (ambos passam a CONCILIADO).
+     * `overrides` permite classificar (categoria, obra, contraparte) antes de criar.
      */
-    async createInternalAndMatch(organizationId: string, bank: BankWithoutInternal): Promise<void> {
+    async createInternalAndMatch(
+        organizationId: string,
+        bank: BankWithoutInternal,
+        overrides?: {
+            category?: string;
+            project_id?: string | null;
+            entity_name?: string | null;
+            description?: string;
+        },
+    ): Promise<void> {
         await assertPeriodOpen(organizationId, bank.transaction_date);
         const { data: inserted, error } = await supabase
             .from('internal_transactions')
@@ -63,8 +73,10 @@ export const divergenceService = {
                 transaction_date: bank.transaction_date,
                 amount: bank.amount,
                 direction: bank.direction,
-                description: bank.description || 'Lançamento gerado da conciliação',
-                category: bank.category || 'Geral',
+                description: overrides?.description?.trim() || bank.description || 'Lançamento gerado da conciliação',
+                category: overrides?.category?.trim() || bank.category || 'Geral',
+                project_id: overrides?.project_id || null,
+                entity_name: overrides?.entity_name?.trim() || null,
                 status: 'PENDING',
             })
             .select('id')
@@ -72,7 +84,10 @@ export const divergenceService = {
         if (error) throw error;
         await bankReconciliationService.createMatch(bank.id, inserted!.id, 'MANUAL', 100);
         await this.audit(organizationId, 'MANUAL_CREATE', bank.id, {
-            action: 'CREATE_INTERNAL_FROM_BANK', internal_id: inserted!.id,
+            action: 'CREATE_INTERNAL_FROM_BANK',
+            internal_id: inserted!.id,
+            category: overrides?.category || bank.category,
+            project_id: overrides?.project_id ?? null,
         });
     },
 

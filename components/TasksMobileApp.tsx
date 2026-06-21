@@ -1,10 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
-  Bell, Calendar, AlertTriangle, Plus, LayoutGrid, Mail,
-  ListChecks, ChevronRight, Loader2, Flag, Search,
-  SlidersHorizontal, AlignLeft, Columns2, Layers,
-  Settings2, Building2, Menu, CheckCircle2, X,
-  Save, ArrowLeft, FolderOpen,
+  Plus, LayoutGrid, Mail, ChevronRight, ChevronDown,
+  Loader2, Menu, CheckCircle2, X, ArrowLeft, FolderOpen,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -21,43 +18,34 @@ interface Task {
   project_id: string | null
   alert_at: string | null
   parent_task_id: string | null
+  created_at: string
 }
 
-interface TaskStatus {
-  id: string
-  name: string
-  color: string
-  is_done: boolean
-}
-
-interface Space {
-  id: string
-  name: string
-  color: string
-  task_count?: number
-}
-
-interface Project {
-  id: string
-  name: string
-}
-
-interface Props {
-  orgId?: string
-}
+interface TaskStatus { id: string; name: string; color: string; is_done: boolean }
+interface Space     { id: string; name: string; color: string; task_count?: number }
+interface Project   { id: string; name: string }
+interface Props     { orgId?: string }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const PRIORITY_FLAG: Record<number, { color: string; label: string }> = {
-  1: { color: 'text-red-500',    label: 'Urgente' },
-  2: { color: 'text-orange-400', label: 'Alta'    },
-  3: { color: 'text-blue-400',   label: 'Normal'  },
-  4: { color: 'text-slate-300',  label: 'Baixa'   },
+const PRIORITY_COLOR: Record<number, string> = {
+  1: '#ef4444',
+  2: '#f97316',
+  3: '#6366f1',
+  4: '#94a3b8',
 }
 
-function fmtDate(iso: string | null) {
+const DAY_LETTER = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
+const MONTH_PT   = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                    'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+
+function isoDate(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
+function fmtShort(iso: string | null) {
   if (!iso) return null
-  const [y, m, d] = iso.split('T')[0].split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  const [, m, d] = iso.split('T')[0].split('-').map(Number)
+  return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}`
 }
 
 function isOverdue(iso: string | null) {
@@ -68,108 +56,82 @@ function isOverdue(iso: string | null) {
   return due < today
 }
 
-function isToday(iso: string | null) {
-  if (!iso) return false
-  const [y, m, d] = iso.split('T')[0].split('-').map(Number)
-  const due = new Date(y, m - 1, d)
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
-  return due >= today && due < tomorrow
+function isNewTask(created_at: string) {
+  return Date.now() - new Date(created_at).getTime() < 48 * 3600 * 1000
 }
 
-type FilterView = 'hoje' | 'atrasadas' | 'todas'
-type NavTab = 'inbox' | 'espacos'
+function buildStrip(center: Date): Date[] {
+  return Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(center)
+    d.setDate(center.getDate() + i - 3)
+    return d
+  })
+}
+
+type NavTab    = 'inbox' | 'espacos'
+type FilterTab = 'todas' | 'atrasadas'
 
 // ── Task Card ─────────────────────────────────────────────────────────────────
 const TaskCard: React.FC<{
-  task: Task
-  statuses: TaskStatus[]
-  spaces: Space[]
+  task:     Task
+  spaces:   Space[]
   projects: Project[]
   onToggle: (id: string) => void
-  onAddSubtask: () => void
-}> = ({ task, statuses, spaces, projects, onToggle }) => {
+  isDone:   boolean
+}> = ({ task, spaces, projects, onToggle, isDone }) => {
   const overdue   = isOverdue(task.due_date)
-  const pFlag     = PRIORITY_FLAG[task.priority] ?? PRIORITY_FLAG[3]
-  const status    = statuses.find(s => s.id === task.status_id)
-  const spaceName = spaces.find(s => s.id === task.space_id)?.name
-  const projName  = projects.find(p => p.id === task.project_id)?.name
+  const space     = spaces.find(s => s.id === task.space_id)
+  const proj      = projects.find(p => p.id === task.project_id)
+  const context   = proj?.name ?? space?.name
+  const dotColor  = PRIORITY_COLOR[task.priority] ?? PRIORITY_COLOR[3]
+  const showNew   = isNewTask(task.created_at)
+  const dateStr   = fmtShort(task.due_date)
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 pt-4 pb-3 space-y-2">
-      <div className="flex items-start gap-3">
-        {/* Dashed circle checkbox */}
-        <button
-          onClick={() => onToggle(task.id)}
-          className="mt-0.5 w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center transition-all"
-          style={{ border: '2px dashed #94a3b8' }}
-        />
+    <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3.5 flex items-center gap-3 transition-opacity ${isDone ? 'opacity-40' : ''}`}>
+      {/* Priority dot */}
+      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
 
-        {/* Title + alert bell */}
-        <div className="flex-1 min-w-0 flex items-start gap-1.5">
-          <p className="text-sm font-bold text-slate-800 leading-snug flex-1">{task.title}</p>
-          {task.alert_at && <Bell className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />}
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+          {showNew && (
+            <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[8px] font-black uppercase tracking-wide rounded-md flex-shrink-0">
+              NEW
+            </span>
+          )}
+          <p className={`text-sm font-bold leading-snug ${isDone ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+            {task.title}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {dateStr && (
+            <span className={`text-[11px] font-semibold ${overdue ? 'text-red-500' : 'text-slate-400'}`}>
+              Até {dateStr}
+            </span>
+          )}
+          {context && (
+            <span className="text-[11px] text-slate-300 truncate">· {context}</span>
+          )}
         </div>
       </div>
 
-      {/* Badges row */}
-      <div className="flex flex-wrap items-center gap-1.5 pl-8">
-        {task.due_date && (
-          <span className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold border
-            ${overdue ? 'bg-red-50 border-red-100 text-red-500' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
-            <Calendar className="w-3 h-3" />
-            {fmtDate(task.due_date)}
-          </span>
-        )}
-
-        {task.priority <= 2 && (
-          <span className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-slate-50 border border-slate-100 ${pFlag.color}`}>
-            <Flag className="w-3 h-3" />
-            {pFlag.label}
-          </span>
-        )}
-
-        {status && (
-          <span
-            className="px-2 py-0.5 rounded-lg text-[11px] font-black uppercase tracking-wide"
-            style={{ backgroundColor: status.color + '22', color: status.color }}
-          >
-            {status.name}
-          </span>
-        )}
-
-        {!status && (
-          <span className="px-2 py-0.5 rounded-lg text-[11px] font-black uppercase tracking-wide bg-slate-100 text-slate-500">
-            {task.status === 'done' ? 'Concluída' : 'Aberta'}
-          </span>
-        )}
-      </div>
-
-      {/* Space / projeto */}
-      {(spaceName || projName) && (
-        <div className="flex items-center gap-1.5 pl-8">
-          <Building2 className="w-3 h-3 text-slate-300 flex-shrink-0" />
-          <span className="text-[11px] text-slate-400 font-medium truncate">
-            {projName ?? spaceName}
-          </span>
-        </div>
-      )}
-
-      {/* + Subtarefa */}
-      <div className="pl-8 pt-0.5">
-        <button className="flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-blue-500 transition-colors">
-          <Plus className="w-3 h-3" />
-          Subtarefa
-        </button>
-      </div>
+      {/* Circular checkbox */}
+      <button
+        onClick={() => onToggle(task.id)}
+        className={`w-7 h-7 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all active:scale-90
+          ${isDone ? 'bg-blue-600 border-blue-600' : 'border-slate-200 hover:border-blue-400'}`}
+      >
+        {isDone && <CheckCircle2 className="w-4 h-4 text-white" />}
+      </button>
     </div>
   )
 }
 
 // ── Espaços screen ────────────────────────────────────────────────────────────
 const EspacosScreen: React.FC<{
-  spaces: Space[]
-  loading: boolean
+  spaces:   Space[]
+  loading:  boolean
   onSelect: (s: Space) => void
 }> = ({ spaces, loading, onSelect }) => (
   <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
@@ -199,17 +161,29 @@ const EspacosScreen: React.FC<{
   </div>
 )
 
-// ── Nova Tarefa bottom sheet ──────────────────────────────────────────────────
-const NewTaskSheet: React.FC<{
-  orgId?: string
-  onClose: () => void
-  onSaved: () => void
+// ── Add Task modal ────────────────────────────────────────────────────────────
+const AddTaskModal: React.FC<{
+  orgId?:   string
+  onClose:  () => void
+  onSaved:  () => void
 }> = ({ orgId, onClose, onSaved }) => {
-  const [title, setTitle]       = useState('')
-  const [priority, setPriority] = useState(3)
-  const [dueDate, setDueDate]   = useState('')
-  const [saving, setSaving]     = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+  const [title,    setTitle]    = useState('')
+  const [desc,     setDesc]     = useState('')
+  const [dueDate,  setDueDate]  = useState('')
+  const [highPrio, setHighPrio] = useState(false)
+  const [saving,   setSaving]   = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
+
+  const today   = new Date(); today.setHours(0, 0, 0, 0)
+  const tmrw    = new Date(today); tmrw.setDate(today.getDate() + 1)
+  const daysToSat = (6 - today.getDay() + 7) % 7 || 7
+  const weekend = new Date(today); weekend.setDate(today.getDate() + daysToSat)
+
+  const QUICK = [
+    { label: 'Hoje',      value: isoDate(today)   },
+    { label: 'Amanhã',    value: isoDate(tmrw)    },
+    { label: 'Este fds',  value: isoDate(weekend) },
+  ]
 
   const save = async () => {
     if (!title.trim()) { setError('Informe o título'); return }
@@ -218,8 +192,8 @@ const NewTaskSheet: React.FC<{
     if (!user) { setError('Não autenticado'); setSaving(false); return }
     const { error: e } = await supabase.from('tasks').insert({
       title:         title.trim(),
-      priority,
-      due_date:      dueDate ? new Date(dueDate).toISOString() : null,
+      priority:      highPrio ? 1 : 3,
+      due_date:      dueDate ? new Date(dueDate + 'T12:00:00').toISOString() : null,
       status:        'open',
       source_module: 'manual',
       org_id:        orgId ?? null,
@@ -230,70 +204,77 @@ const NewTaskSheet: React.FC<{
     onSaved()
   }
 
-  const PRIOS = [
-    { v: 1, label: 'Urgente', cls: 'bg-red-100 text-red-600 border-red-200' },
-    { v: 2, label: 'Alta',    cls: 'bg-orange-100 text-orange-600 border-orange-200' },
-    { v: 3, label: 'Normal',  cls: 'bg-slate-100 text-slate-600 border-slate-200' },
-    { v: 4, label: 'Baixa',   cls: 'bg-blue-50 text-blue-600 border-blue-100' },
-  ]
-
   return (
     <>
       <div className="absolute inset-0 bg-black/40 z-20" onClick={onClose} />
-      <div className="absolute bottom-0 left-0 right-0 z-30 bg-white rounded-t-3xl shadow-2xl">
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 bg-slate-200 rounded-full" />
-        </div>
-        <div className="px-5 pb-1 flex items-center justify-between">
-          <h2 className="text-base font-black text-slate-900">Nova Tarefa</h2>
-          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400">
-            <X className="w-4 h-4" />
+      <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 z-30 bg-white rounded-3xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4">
+          <h2 className="text-lg font-black text-slate-900">Add task</h2>
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
-        <div className="px-5 pb-7 space-y-4">
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título *</label>
-            <input
-              autoFocus
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && save()}
-              placeholder="O que precisa ser feito?"
-              className="mt-1 w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
-            />
+
+        <div className="px-5 pb-6 space-y-4">
+          {/* Name */}
+          <input
+            autoFocus
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && save()}
+            placeholder="Name"
+            className="w-full text-sm font-semibold text-slate-800 border-b border-slate-200 pb-2.5 outline-none placeholder:text-slate-300 focus:border-blue-500 transition-colors"
+          />
+
+          {/* Description */}
+          <textarea
+            value={desc}
+            onChange={e => setDesc(e.target.value)}
+            placeholder="Task description..."
+            rows={2}
+            className="w-full text-xs text-slate-500 border-b border-slate-100 pb-2 outline-none resize-none placeholder:text-slate-300 bg-transparent focus:border-blue-300 transition-colors"
+          />
+
+          {/* Quick date pills */}
+          <div className="flex gap-2">
+            {QUICK.map(({ label, value }) => (
+              <button
+                key={value}
+                onClick={() => setDueDate(dueDate === value ? '' : value)}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border
+                  ${dueDate === value
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200'
+                    : 'bg-white text-slate-600 border-slate-200'}`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prioridade</label>
-            <div className="mt-1 grid grid-cols-4 gap-1.5">
-              {PRIOS.map(({ v, label, cls }) => (
-                <button
-                  key={v}
-                  onClick={() => setPriority(v)}
-                  className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wide border transition-all
-                    ${priority === v ? cls + ' ring-2 ring-offset-1 ring-slate-200' : 'bg-white text-slate-400 border-slate-100'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+
+          {/* High priority toggle */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700">Alta prioridade</span>
+            <button
+              onClick={() => setHighPrio(!highPrio)}
+              className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${highPrio ? 'bg-blue-600' : 'bg-slate-200'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${highPrio ? 'left-7' : 'left-1'}`} />
+            </button>
           </div>
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prazo</label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              className="mt-1 w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
-            />
-          </div>
-          {error && <p className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</p>}
+
+          {error && (
+            <p className="text-xs font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>
+          )}
+
+          {/* Submit */}
           <button
             onClick={save}
             disabled={saving}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-200 disabled:opacity-50 active:scale-[0.98] transition-all"
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-blue-200 disabled:opacity-50 active:scale-[0.98] transition-all"
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Salvar
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            Add task
           </button>
         </div>
       </div>
@@ -303,27 +284,36 @@ const NewTaskSheet: React.FC<{
 
 // ── App ───────────────────────────────────────────────────────────────────────
 const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
-  const [tasks, setTasks]           = useState<Task[]>([])
-  const [statuses, setStatuses]     = useState<TaskStatus[]>([])
-  const [spaces, setSpaces]         = useState<Space[]>([])
-  const [projects, setProjects]     = useState<Project[]>([])
-  const [loadingTasks, setLoading]  = useState(true)
+  const [tasks,         setTasks]         = useState<Task[]>([])
+  const [statuses,      setStatuses]      = useState<TaskStatus[]>([])
+  const [spaces,        setSpaces]        = useState<Space[]>([])
+  const [projects,      setProjects]      = useState<Project[]>([])
+  const [loadingTasks,  setLoading]       = useState(true)
   const [loadingSpaces, setLoadingSpaces] = useState(false)
-  const [filter, setFilter]         = useState<FilterView>('hoje')
-  const [nav, setNav]               = useState<NavTab>('inbox')
+  const [filterTab,     setFilterTab]     = useState<FilterTab>('todas')
+  const [nav,           setNav]           = useState<NavTab>('inbox')
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null)
-  const [done, setDone]             = useState<Set<string>>(new Set())
-  const [search, setSearch]         = useState('')
-  const [showNewTask, setShowNewTask] = useState(false)
+  const [done,          setDone]          = useState<Set<string>>(new Set())
+  const [showAddTask,   setShowAddTask]   = useState(false)
+
+  const [today] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d })
+  const [selectedDate, setSelectedDate]   = useState<string>(isoDate(today))
+  const strip    = buildStrip(today)
+  const stripRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const activeDay = stripRef.current?.querySelector('[data-today="true"]') as HTMLElement
+    activeDay?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }, [])
 
   const loadTasks = async (spaceId?: string | null) => {
     setLoading(true)
     let q = supabase
       .from('tasks')
-      .select('id, title, due_date, priority, status, status_id, source_module, space_id, project_id, alert_at, parent_task_id')
+      .select('id, title, due_date, priority, status, status_id, source_module, space_id, project_id, alert_at, parent_task_id, created_at')
       .eq('status', 'open')
       .is('parent_task_id', null)
-      .order('priority', { ascending: true })
+      .order('priority',  { ascending: true })
       .order('due_date',  { ascending: true, nullsFirst: false })
       .limit(80)
     if (orgId)   q = q.eq('org_id', orgId)
@@ -334,13 +324,11 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
   }
 
   const loadMeta = async () => {
-    // statuses
     let sq = supabase.from('task_statuses').select('id, name, color, is_done').order('position')
     if (orgId) sq = sq.eq('org_id', orgId)
     const { data: sd } = await sq
     setStatuses((sd ?? []) as TaskStatus[])
 
-    // projects
     let pq = supabase.from('projects').select('id, name').order('name').limit(200)
     if (orgId) pq = pq.filter('settings->>organizationId', 'eq', orgId)
     const { data: pd } = await pq
@@ -357,7 +345,6 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
       .from('tasks').select('space_id').eq('status', 'open').is('parent_task_id', null).not('space_id', 'is', null)
     const counts: Record<string, number> = {}
     ;(cd ?? []).forEach((t: { space_id: string }) => { counts[t.space_id] = (counts[t.space_id] ?? 0) + 1 })
-
     setSpaces((sd ?? []).map((s: Space) => ({ ...s, task_count: counts[s.id] ?? 0 })))
     setLoadingSpaces(false)
   }
@@ -370,31 +357,33 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
     supabase.from('tasks').update({ status: 'done' }).eq('id', id)
   }
 
-  const now = new Date()
+  const now     = new Date()
   const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
   const visible = tasks.filter(t => {
     if (done.has(t.id)) return false
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false
-    if (selectedSpace) return true
-    if (filter === 'hoje')      return isToday(t.due_date) || !t.due_date
-    if (filter === 'atrasadas') return isOverdue(t.due_date)
-    return true
+    if (selectedSpace)  return true
+    if (filterTab === 'atrasadas') return isOverdue(t.due_date)
+    // 'todas': show undated + overdue + tasks matching selected date
+    if (!t.due_date)                                       return true
+    if (isOverdue(t.due_date))                             return true
+    return t.due_date.split('T')[0] === selectedDate
   })
 
   const overdueCount = tasks.filter(t => !done.has(t.id) && isOverdue(t.due_date)).length
-  const todayCount   = tasks.filter(t => !done.has(t.id) && isToday(t.due_date)).length
   const allCount     = tasks.filter(t => !done.has(t.id)).length
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 font-sans select-none overflow-hidden relative">
+    <div className="flex flex-col h-screen bg-[#eef2ff] font-sans select-none overflow-hidden relative">
 
       {/* Status bar */}
       <div className="flex items-center justify-between px-5 pt-3 pb-1 bg-white flex-shrink-0">
         <span className="text-[11px] font-black text-slate-700">{timeStr}</span>
         <div className="flex items-center gap-1.5">
           <div className="flex gap-0.5 items-end h-3">
-            {[3,5,7,9].map((h,i) => <div key={i} className="w-1 bg-slate-700 rounded-sm" style={{ height: h }} />)}
+            {[3, 5, 7, 9].map((h, i) => (
+              <div key={i} className="w-1 bg-slate-700 rounded-sm" style={{ height: h }} />
+            ))}
           </div>
           <div className="w-6 h-3 border border-slate-700 rounded-sm relative">
             <div className="absolute inset-0.5 bg-slate-700 rounded-[1px]" style={{ width: '70%' }} />
@@ -404,130 +393,115 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
       </div>
 
       {/* App header */}
-      <div className="bg-white px-4 pt-2 pb-3 border-b border-slate-100 flex-shrink-0">
+      <div className="bg-white px-4 pt-2 pb-0 flex-shrink-0 border-b border-slate-100">
         {selectedSpace ? (
-          <div className="flex items-center gap-2 mb-2">
-            <button onClick={() => { setSelectedSpace(null); setNav('inbox'); loadTasks() }}
-              className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+          <div className="flex items-center gap-2 pb-3">
+            <button
+              onClick={() => { setSelectedSpace(null); setNav('inbox'); loadTasks() }}
+              className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600"
+            >
               <ArrowLeft className="w-4 h-4" />
             </button>
-            <span className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ backgroundColor: selectedSpace.color + '22' }}>
+            <span className="w-7 h-7 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: selectedSpace.color + '22' }}>
               <span className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedSpace.color }} />
             </span>
             <h1 className="text-lg font-black text-slate-900 flex-1 truncate">{selectedSpace.name}</h1>
           </div>
         ) : (
           <>
-            {/* Top row */}
-            <div className="flex items-center justify-between mb-2">
-              <button className="p-1 text-slate-600"><Menu className="w-5 h-5" /></button>
-              <button className="relative p-1 text-slate-500">
-                <Bell className="w-5 h-5" />
-                {overdueCount > 0 && (
-                  <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-red-500 rounded-full text-[8px] font-black text-white flex items-center justify-center">{overdueCount}</span>
-                )}
-              </button>
-            </div>
-
-            {/* Title */}
-            <h1 className="text-2xl font-black text-slate-900 leading-tight">Tarefas</h1>
-            <p className="text-xs text-slate-400 font-medium mt-0.5 mb-3">Sua agenda pessoal de pendências</p>
-
-            {/* Filter tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-              {([
-                { key: 'hoje',      label: 'Hoje',      icon: Calendar,    count: todayCount },
-                { key: 'atrasadas', label: 'Atrasadas', icon: AlertTriangle, count: overdueCount },
-                { key: 'todas',     label: 'Todas',     icon: ListChecks,  count: allCount },
-              ] as const).map(({ key, label, icon: Icon, count }) => (
-                <button
-                  key={key}
-                  onClick={() => { setFilter(key); setNav('inbox') }}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wide flex-shrink-0 transition-all
-                    ${nav === 'inbox' && filter === key
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-                      : 'text-slate-500 hover:bg-slate-50'}`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {label}
-                  {count > 0 && (
-                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-black
-                      ${nav === 'inbox' && filter === key ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
-                      {count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* View controls — linha 1: Lista | Kanban | Agrupar */}
-            <div className="flex items-center gap-2 mt-2">
-              <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white flex-1">
-                <button className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-black uppercase bg-slate-900 text-white">
-                  <AlignLeft className="w-3 h-3" />Lista
-                </button>
-                <button className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-black uppercase text-slate-400 border-l border-slate-100">
-                  <Columns2 className="w-3 h-3" />Kanban
-                </button>
-                <button className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-black uppercase text-slate-400 border-l border-slate-100">
-                  <Layers className="w-3 h-3" />Agrupar
-                </button>
+            {/* Top row: hamburger · title · avatar */}
+            <div className="flex items-center justify-between mb-3">
+              <button className="p-1 text-slate-500"><Menu className="w-5 h-5" /></button>
+              <span className="text-sm font-black text-slate-800">Tarefas</span>
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shadow-md shadow-blue-200">
+                <span className="text-[9px] font-black text-white tracking-tight">EU</span>
               </div>
             </div>
 
-            {/* View controls — linha 2: Status | + Nova */}
-            <div className="flex items-center gap-2 mt-1.5">
-              <button className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 text-slate-500 bg-white">
-                <Settings2 className="w-3 h-3" />Status
-              </button>
-              <button
-                onClick={() => setShowNewTask(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white shadow-sm"
-              >
-                <Plus className="w-3 h-3" />Nova
-              </button>
+            {/* Month selector */}
+            <div className="flex items-center gap-1 mb-3">
+              <span className="text-xl font-black text-slate-900">{MONTH_PT[now.getMonth()]}</span>
+              <ChevronDown className="w-4 h-4 text-slate-400 mt-0.5" />
+            </div>
+
+            {/* Date strip */}
+            <div ref={stripRef} className="flex gap-1.5 overflow-x-auto pb-3 scrollbar-none -mx-4 px-4">
+              {strip.map((d, i) => {
+                const iso        = isoDate(d)
+                const isSelected = iso === selectedDate
+                const isToday_   = iso === isoDate(today)
+                return (
+                  <button
+                    key={i}
+                    data-today={isToday_ ? 'true' : undefined}
+                    onClick={() => setSelectedDate(iso)}
+                    className={`flex flex-col items-center gap-1 px-2.5 py-2 rounded-2xl flex-shrink-0 min-w-[44px] transition-all
+                      ${isSelected
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                        : isToday_
+                          ? 'bg-blue-50 text-blue-600'
+                          : 'text-slate-400 hover:bg-slate-50'}`}
+                  >
+                    <span className="text-[9px] font-black uppercase">{DAY_LETTER[d.getDay()]}</span>
+                    <span className="text-[15px] font-black leading-none">{d.getDate()}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Tabs underline */}
+            <div className="flex">
+              {([
+                { key: 'todas',     label: 'All tasks',  count: allCount },
+                { key: 'atrasadas', label: 'Atrasadas',  count: overdueCount },
+              ] as const).map(({ key, label, count }) => (
+                <button
+                  key={key}
+                  onClick={() => setFilterTab(key)}
+                  className={`flex items-center gap-1.5 px-1 py-2.5 mr-5 text-xs font-black border-b-2 -mb-px transition-colors
+                    ${filterTab === key
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-slate-400'}`}
+                >
+                  {label}
+                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md
+                    ${filterTab === key ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
+                    {count}
+                  </span>
+                </button>
+              ))}
             </div>
           </>
-        )}
-
-        {/* Search */}
-        {nav === 'inbox' && (
-          <div className="flex items-center gap-2 mt-2">
-            <div className="flex-1 flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-              <Search className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Buscar tarefa..."
-                className="flex-1 text-xs text-slate-600 bg-transparent outline-none placeholder:text-slate-300 font-medium"
-              />
-              {search && <button onClick={() => setSearch('')}><X className="w-3 h-3 text-slate-300" /></button>}
-            </div>
-            <button className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl border border-slate-100 bg-white text-[10px] font-black text-slate-500 uppercase tracking-wide">
-              <SlidersHorizontal className="w-3 h-3" />Filtros
-            </button>
-            <span className="text-[10px] font-black text-slate-400 whitespace-nowrap">{visible.length} tarefas</span>
-          </div>
         )}
       </div>
 
       {/* Main content */}
       {nav === 'espacos' && !selectedSpace ? (
-        <EspacosScreen spaces={spaces} loading={loadingSpaces} onSelect={s => { setSelectedSpace(s); loadTasks(s.id) }} />
+        <EspacosScreen
+          spaces={spaces}
+          loading={loadingSpaces}
+          onSelect={s => { setSelectedSpace(s); loadTasks(s.id) }}
+        />
       ) : (
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
           {loadingTasks ? (
-            <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-slate-300" /></div>
+            <div className="flex justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
+            </div>
           ) : visible.length === 0 ? (
             <div className="flex flex-col items-center py-16 gap-3">
-              <div className="w-16 h-16 bg-slate-100 rounded-3xl flex items-center justify-center">
-                {selectedSpace ? <FolderOpen className="w-8 h-8 text-slate-300" /> : <CheckCircle2 className="w-8 h-8 text-slate-300" />}
+              <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-sm">
+                {selectedSpace
+                  ? <FolderOpen className="w-8 h-8 text-slate-300" />
+                  : <CheckCircle2 className="w-8 h-8 text-blue-200" />}
               </div>
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest text-center">
-                {selectedSpace ? 'Nenhuma tarefa neste espaço'
-                  : filter === 'hoje' ? 'Sem tarefas para hoje'
-                  : filter === 'atrasadas' ? 'Nenhuma atrasada'
-                  : 'Nenhuma tarefa'}
+                {selectedSpace
+                  ? 'Nenhuma tarefa neste espaço'
+                  : filterTab === 'atrasadas'
+                    ? 'Nenhuma atrasada'
+                    : 'Sem tarefas para este dia'}
               </p>
             </div>
           ) : (
@@ -539,19 +513,19 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
                 spaces={spaces}
                 projects={projects}
                 onToggle={toggleDone}
-                onAddSubtask={() => {}}
+                isDone={done.has(task.id)}
               />
             ))
           )}
-          <div className="h-20" />
+          <div className="h-24" />
         </div>
       )}
 
-      {/* FAB — posicionado acima da bottom nav */}
+      {/* FAB — circular, acima do bottom nav */}
       <div className="absolute bottom-[72px] right-5 z-10">
         <button
-          onClick={() => setShowNewTask(true)}
-          className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-300 active:scale-95 transition-transform"
+          onClick={() => setShowAddTask(true)}
+          className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center shadow-xl shadow-blue-300 active:scale-95 transition-transform"
         >
           <Plus className="w-6 h-6 text-white" />
         </button>
@@ -560,7 +534,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
       {/* Bottom nav */}
       <div className="bg-white border-t border-slate-100 px-8 py-3 flex items-center justify-around flex-shrink-0">
         {([
-          { key: 'inbox',   icon: Mail,       label: 'Inbox' },
+          { key: 'inbox',   icon: Mail,       label: 'Inbox'   },
           { key: 'espacos', icon: LayoutGrid,  label: 'Espaços' },
         ] as const).map(({ key, icon: Icon, label }) => (
           <button
@@ -575,12 +549,12 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
         ))}
       </div>
 
-      {/* Nova tarefa sheet */}
-      {showNewTask && (
-        <NewTaskSheet
+      {/* Add task modal */}
+      {showAddTask && (
+        <AddTaskModal
           orgId={orgId}
-          onClose={() => setShowNewTask(false)}
-          onSaved={() => { setShowNewTask(false); loadTasks(selectedSpace?.id) }}
+          onClose={() => setShowAddTask(false)}
+          onSaved={() => { setShowAddTask(false); loadTasks(selectedSpace?.id) }}
         />
       )}
     </div>

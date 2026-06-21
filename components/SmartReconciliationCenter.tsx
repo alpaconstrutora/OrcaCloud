@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
     Sparkles, Zap, Check, X, RefreshCw, Settings2, ArrowLeftRight,
-    Landmark, FileText, ShieldCheck,
+    Landmark, FileText, ShieldCheck, Building2, User,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { bankReconciliationService } from '../services/bankReconciliationService';
@@ -24,8 +24,16 @@ interface CandidateTx {
     amount?: number;
     entity_name?: string;
     party_name?: string;
+    party_type?: 'SUPPLIER' | 'CLIENT' | string;
     due_date?: string;
     transaction_date?: string;
+}
+
+/** Rótulo + nome da contraparte, inferindo o tipo pela direção quando não há party_type. */
+function partyInfo(name?: string | null, partyType?: string, direction?: 'CREDIT' | 'DEBIT') {
+    if (!name) return null;
+    const isClient = partyType ? partyType === 'CLIENT' : direction === 'CREDIT';
+    return { label: isClient ? 'Cliente' : 'Fornecedor', name, isClient };
 }
 interface SuggestionRow {
     id: string;
@@ -250,6 +258,10 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                     const bank = bankMap.get(sug.bank_transaction_id);
                     const bnd = bandOf(sug.confidence);
                     const reasons = (sug.reason || '').split(' · ').filter(Boolean);
+                    const candParty = partyInfo(cand?.entity_name || cand?.party_name, cand?.party_type, bank?.direction);
+                    const bankParty = bank?.counterparty_name
+                        ? { label: bank.direction === 'CREDIT' ? 'Pagador' : 'Favorecido', name: bank.counterparty_name }
+                        : null;
                     return (
                         <div key={sug.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                             <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-0">
@@ -259,10 +271,13 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                                         <FileText className="w-3.5 h-3.5" /> Sistema
                                     </div>
                                     <p className="text-sm font-bold text-gray-800 truncate" title={cand?.description}>{cand?.description || '—'}</p>
-                                    <p className="text-[11px] text-gray-400 font-medium">
-                                        {(cand?.entity_name || cand?.party_name) ? `${cand?.entity_name || cand?.party_name} · ` : ''}
-                                        venc. {formatDate(cand?.due_date || cand?.transaction_date)}
-                                    </p>
+                                    {candParty && (
+                                        <p className={`text-[11px] font-bold flex items-center gap-1 mt-0.5 ${candParty.isClient ? 'text-emerald-600' : 'text-indigo-600'}`} title={`${candParty.label}: ${candParty.name}`}>
+                                            {candParty.isClient ? <User className="w-3 h-3 flex-shrink-0" /> : <Building2 className="w-3 h-3 flex-shrink-0" />}
+                                            <span className="truncate">{candParty.label}: {candParty.name}</span>
+                                        </p>
+                                    )}
+                                    <p className="text-[11px] text-gray-400 font-medium">venc. {formatDate(cand?.due_date || cand?.transaction_date)}</p>
                                     <p className="text-sm font-black text-gray-900 tabular-nums mt-1">{formatBRL(cand?.amount)}</p>
                                 </div>
 
@@ -285,6 +300,12 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                                         <Landmark className="w-3.5 h-3.5" /> Extrato
                                     </div>
                                     <p className="text-sm font-bold text-gray-800 truncate" title={bank?.description_raw}>{bank?.description_normalized || bank?.description_raw || '—'}</p>
+                                    {bankParty && (
+                                        <p className="text-[11px] font-bold text-gray-600 flex items-center gap-1 mt-0.5" title={`${bankParty.label}: ${bankParty.name}`}>
+                                            <Building2 className="w-3 h-3 flex-shrink-0" />
+                                            <span className="truncate">{bankParty.label}: {bankParty.name}</span>
+                                        </p>
+                                    )}
                                     <p className="text-[11px] text-gray-400 font-medium">{bank ? formatDate(bank.transaction_date) : '—'}</p>
                                     <p className={`text-sm font-black tabular-nums mt-1 ${bank?.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>{formatBRL(bank?.amount)}</p>
                                 </div>

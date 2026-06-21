@@ -22,6 +22,34 @@ async function resolveSupplierName(supplierId: string | undefined, fallback: str
     } catch { return fallback; }
 }
 
+/**
+ * Resolve a contraparte cadastrada de um contrato para popular party_id/party_type/party_name
+ * nos lançamentos internos (permite a Central exibir e reconhecer o fornecedor/cliente).
+ * CREDIT = recebível (cliente); demais = pagável (fornecedor).
+ */
+async function resolveContractParty(
+    contract: Contract,
+    fallbackName: string,
+): Promise<{ party_id: string | null; party_type: 'SUPPLIER' | 'CLIENT' | null; party_name: string | null }> {
+    const cAny = contract as unknown as { direction?: string; client_id?: string; supplier_id?: string };
+    const preferClient = cAny.direction === 'CREDIT' && !!cAny.client_id;
+    try {
+        if (preferClient && cAny.client_id) {
+            const { data } = await supabase.from('clients').select('name').eq('id', cAny.client_id).maybeSingle();
+            return { party_id: cAny.client_id, party_type: 'CLIENT', party_name: data?.name || fallbackName };
+        }
+        if (cAny.supplier_id) {
+            const name = await resolveSupplierName(cAny.supplier_id, fallbackName);
+            return { party_id: cAny.supplier_id, party_type: 'SUPPLIER', party_name: name };
+        }
+        if (cAny.client_id) {
+            const { data } = await supabase.from('clients').select('name').eq('id', cAny.client_id).maybeSingle();
+            return { party_id: cAny.client_id, party_type: 'CLIENT', party_name: data?.name || fallbackName };
+        }
+    } catch { /* ignora; cai no default */ }
+    return { party_id: null, party_type: null, party_name: null };
+}
+
 // Find the "Gestão Comercial" vault for an org
 async function findVault(orgId: string) {
     const { data } = await supabase
@@ -167,6 +195,7 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             }
 
             // Insert one row per installment with unique reference_id
+            const party = await resolveContractParty(contract, supplierName);
             const internalRows = newTxs.map((tx, i) => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_PARCELADO',
@@ -177,7 +206,10 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 direction: 'DEBIT',
                 description: tx.description,
                 category: 'Mão de Obra / Serviço',
-                entity_name: supplierName,
+                entity_name: party.party_name ?? supplierName,
+                party_id: party.party_id,
+                party_type: party.party_type,
+                party_name: party.party_name,
                 status: 'PENDING',
             }));
             await supabase.from('internal_transactions').insert(internalRows);
@@ -294,6 +326,7 @@ async function syncRecurringToFinance(contract: Contract) {
                 notes: tx.notes,
             })));
         } else if (contract.organization_id) {
+            const party = await resolveContractParty(contract, supplierName);
             await supabase.from('internal_transactions').insert(transactions.map(tx => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_RECURRING',
@@ -304,7 +337,10 @@ async function syncRecurringToFinance(contract: Contract) {
                 direction: 'DEBIT',
                 description: tx.description,
                 category: 'Mão de Obra / Serviço',
-                entity_name: supplierName,
+                entity_name: party.party_name ?? supplierName,
+                party_id: party.party_id,
+                party_type: party.party_type,
+                party_name: party.party_name,
                 status: 'PENDING',
             })));
         }
@@ -369,6 +405,7 @@ async function syncAVistaToFinance(contract: Contract) {
                 .eq('source_system', 'CONTRACT_AVISTA')
                 .eq('reference_id', contract.id);
 
+            const party = await resolveContractParty(contract, supplierName);
             await supabase.from('internal_transactions').insert({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_AVISTA',
@@ -379,7 +416,10 @@ async function syncAVistaToFinance(contract: Contract) {
                 direction: 'DEBIT',
                 description: tx.description,
                 category: 'Mão de Obra / Serviço',
-                entity_name: supplierName,
+                entity_name: party.party_name ?? supplierName,
+                party_id: party.party_id,
+                party_type: party.party_type,
+                party_name: party.party_name,
                 status: 'PENDING',
             });
         }

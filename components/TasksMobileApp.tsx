@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus, LayoutGrid, Mail, ChevronRight, ChevronDown,
   Loader2, Menu, CheckCircle2, X, ArrowLeft, FolderOpen,
@@ -21,7 +21,6 @@ interface Task {
   created_at: string
 }
 
-interface TaskStatus { id: string; name: string; color: string; is_done: boolean }
 interface Space     { id: string; name: string; color: string; task_count?: number }
 interface Project   { id: string; name: string }
 interface Props     { orgId?: string }
@@ -38,9 +37,23 @@ const DAY_LETTER = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
 const MONTH_PT   = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                     'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
+// Module-level stable date constants — computed once at load time
+const _TODAY = new Date(); _TODAY.setHours(0, 0, 0, 0)
+const TODAY_MS  = _TODAY.getTime()
+const NOW_48H   = Date.now() - 48 * 3600 * 1000
+
 function isoDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
+
+// Stable module-level values (no Date allocations per-render)
+const TODAY_ISO = isoDate(_TODAY)
+const STRIP: Date[] = Array.from({ length: 14 }, (_, i) => {
+  const d = new Date(_TODAY)
+  d.setDate(_TODAY.getDate() + i - 3)
+  return d
+})
+const STRIP_ISOS = STRIP.map(isoDate)
 
 function fmtShort(iso: string | null) {
   if (!iso) return null
@@ -51,34 +64,24 @@ function fmtShort(iso: string | null) {
 function isOverdue(iso: string | null) {
   if (!iso) return false
   const [y, m, d] = iso.split('T')[0].split('-').map(Number)
-  const due = new Date(y, m - 1, d)
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  return due < today
+  return new Date(y, m - 1, d).getTime() < TODAY_MS
 }
 
 function isNewTask(created_at: string) {
-  return Date.now() - new Date(created_at).getTime() < 48 * 3600 * 1000
-}
-
-function buildStrip(center: Date): Date[] {
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(center)
-    d.setDate(center.getDate() + i - 3)
-    return d
-  })
+  return new Date(created_at).getTime() > NOW_48H
 }
 
 type NavTab    = 'inbox' | 'espacos'
 type FilterTab = 'todas' | 'atrasadas'
 
 // ── Task Card ─────────────────────────────────────────────────────────────────
-const TaskCard: React.FC<{
+const TaskCard = React.memo<{
   task:     Task
   spaces:   Space[]
   projects: Project[]
   onToggle: (id: string) => void
   isDone:   boolean
-}> = ({ task, spaces, projects, onToggle, isDone }) => {
+}>(({ task, spaces, projects, onToggle, isDone }) => {
   const overdue   = isOverdue(task.due_date)
   const space     = spaces.find(s => s.id === task.space_id)
   const proj      = projects.find(p => p.id === task.project_id)
@@ -126,14 +129,14 @@ const TaskCard: React.FC<{
       </button>
     </div>
   )
-}
+})
 
 // ── Espaços screen ────────────────────────────────────────────────────────────
-const EspacosScreen: React.FC<{
+const EspacosScreen = React.memo<{
   spaces:   Space[]
   loading:  boolean
   onSelect: (s: Space) => void
-}> = ({ spaces, loading, onSelect }) => (
+}>(({ spaces, loading, onSelect }) => (
   <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
     {loading ? (
       <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-slate-300" /></div>
@@ -159,7 +162,7 @@ const EspacosScreen: React.FC<{
       </button>
     ))}
   </div>
-)
+))
 
 // ── Add Task modal ────────────────────────────────────────────────────────────
 const AddTaskModal: React.FC<{
@@ -285,7 +288,6 @@ const AddTaskModal: React.FC<{
 // ── App ───────────────────────────────────────────────────────────────────────
 const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
   const [tasks,         setTasks]         = useState<Task[]>([])
-  const [statuses,      setStatuses]      = useState<TaskStatus[]>([])
   const [spaces,        setSpaces]        = useState<Space[]>([])
   const [projects,      setProjects]      = useState<Project[]>([])
   const [loadingTasks,  setLoading]       = useState(true)
@@ -295,18 +297,18 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null)
   const [done,          setDone]          = useState<Set<string>>(new Set())
   const [showAddTask,   setShowAddTask]   = useState(false)
+  const [selectedDate,  setSelectedDate]  = useState<string>(TODAY_ISO)
 
-  const [today] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d })
-  const [selectedDate, setSelectedDate]   = useState<string>(isoDate(today))
-  const strip    = buildStrip(today)
-  const stripRef = useRef<HTMLDivElement>(null)
+  const stripRef      = useRef<HTMLDivElement>(null)
+  const spacesLoaded  = useRef(false)
 
+  // Scroll strip to today on mount
   useEffect(() => {
     const activeDay = stripRef.current?.querySelector('[data-today="true"]') as HTMLElement
     activeDay?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
   }, [])
 
-  const loadTasks = async (spaceId?: string | null) => {
+  const loadTasks = useCallback(async (spaceId?: string | null) => {
     setLoading(true)
     let q = supabase
       .from('tasks')
@@ -321,21 +323,16 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
     const { data } = await q
     setTasks((data ?? []) as Task[])
     setLoading(false)
-  }
+  }, [orgId])
 
-  const loadMeta = async () => {
-    let sq = supabase.from('task_statuses').select('id, name, color, is_done').order('position')
-    if (orgId) sq = sq.eq('org_id', orgId)
-    const { data: sd } = await sq
-    setStatuses((sd ?? []) as TaskStatus[])
-
+  const loadMeta = useCallback(async () => {
     let pq = supabase.from('projects').select('id, name').order('name').limit(200)
     if (orgId) pq = pq.filter('settings->>organizationId', 'eq', orgId)
     const { data: pd } = await pq
     setProjects((pd ?? []) as Project[])
-  }
+  }, [orgId])
 
-  const loadSpaces = async () => {
+  const loadSpaces = useCallback(async () => {
     setLoadingSpaces(true)
     let q = supabase.from('task_spaces').select('id, name, color').order('position')
     if (orgId) q = q.eq('org_id', orgId)
@@ -347,31 +344,47 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
     ;(cd ?? []).forEach((t: { space_id: string }) => { counts[t.space_id] = (counts[t.space_id] ?? 0) + 1 })
     setSpaces((sd ?? []).map((s: Space) => ({ ...s, task_count: counts[s.id] ?? 0 })))
     setLoadingSpaces(false)
-  }
+  }, [orgId])
 
-  useEffect(() => { loadTasks(); loadMeta() }, [orgId])
-  useEffect(() => { if (nav === 'espacos') loadSpaces() }, [nav, orgId])
+  useEffect(() => { loadTasks(); loadMeta() }, [loadTasks, loadMeta])
 
-  const toggleDone = (id: string) => {
+  // Load spaces only once per session (not on every tab switch)
+  useEffect(() => {
+    if (nav === 'espacos' && !spacesLoaded.current) {
+      spacesLoaded.current = true
+      loadSpaces()
+    }
+  }, [nav, loadSpaces])
+
+  const toggleDone = useCallback((id: string) => {
     setDone(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
     supabase.from('tasks').update({ status: 'done' }).eq('id', id)
-  }
+  }, [])
 
-  const now     = new Date()
-  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-
-  const visible = tasks.filter(t => {
-    if (done.has(t.id)) return false
-    if (selectedSpace)  return true
-    if (filterTab === 'atrasadas') return isOverdue(t.due_date)
-    // 'todas': show undated + overdue + tasks matching selected date
-    if (!t.due_date)                                       return true
-    if (isOverdue(t.due_date))                             return true
+  // Memoize expensive derivations
+  const overdueCount = useMemo(
+    () => tasks.filter(t => !done.has(t.id) && isOverdue(t.due_date)).length,
+    [tasks, done]
+  )
+  const allCount = useMemo(
+    () => tasks.filter(t => !done.has(t.id)).length,
+    [tasks, done]
+  )
+  const visible = useMemo(() => tasks.filter(t => {
+    if (done.has(t.id))                    return false
+    if (selectedSpace)                     return true
+    if (filterTab === 'atrasadas')         return isOverdue(t.due_date)
+    if (!t.due_date)                       return true
+    if (isOverdue(t.due_date))             return true
     return t.due_date.split('T')[0] === selectedDate
-  })
+  }), [tasks, done, selectedSpace, filterTab, selectedDate])
 
-  const overdueCount = tasks.filter(t => !done.has(t.id) && isOverdue(t.due_date)).length
-  const allCount     = tasks.filter(t => !done.has(t.id)).length
+  // Stable time string — recomputed only on mount (preview context)
+  const timeStr = useMemo(
+    () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    []
+  )
+  const monthName = MONTH_PT[_TODAY.getMonth()]
 
   return (
     <div className="flex flex-col h-screen bg-[#eef2ff] font-sans select-none overflow-hidden relative">
@@ -421,16 +434,16 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
 
             {/* Month selector */}
             <div className="flex items-center gap-1 mb-3">
-              <span className="text-xl font-black text-slate-900">{MONTH_PT[now.getMonth()]}</span>
+              <span className="text-xl font-black text-slate-900">{monthName}</span>
               <ChevronDown className="w-4 h-4 text-slate-400 mt-0.5" />
             </div>
 
-            {/* Date strip */}
+            {/* Date strip — STRIP and STRIP_ISOS are module-level constants */}
             <div ref={stripRef} className="flex gap-1.5 overflow-x-auto pb-3 scrollbar-none -mx-4 px-4">
-              {strip.map((d, i) => {
-                const iso        = isoDate(d)
+              {STRIP.map((d, i) => {
+                const iso        = STRIP_ISOS[i]
                 const isSelected = iso === selectedDate
-                const isToday_   = iso === isoDate(today)
+                const isToday_   = iso === TODAY_ISO
                 return (
                   <button
                     key={i}

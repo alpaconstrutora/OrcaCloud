@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus, LayoutGrid, Mail, ChevronRight, ChevronDown,
   Loader2, Menu, CheckCircle2, X, ArrowLeft, FolderOpen,
-  Folder, Calendar,
+  Folder, ChevronLeft,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -204,6 +204,86 @@ const FoldersScreen = React.memo<{
   </div>
 ))
 
+// ── Mini Calendar ─────────────────────────────────────────────────────────────
+const MiniCalendar: React.FC<{
+  value:    string   // YYYY-MM-DD or ''
+  onChange: (iso: string) => void
+}> = ({ value, onChange }) => {
+  const init = value ? new Date(value + 'T12:00:00') : new Date()
+  const [year,  setYear]  = useState(init.getFullYear())
+  const [month, setMonth] = useState(init.getMonth())   // 0-based
+
+  const selectedISO = value
+
+  function prevMonth() {
+    if (month === 0) { setMonth(11); setYear(y => y - 1) }
+    else              setMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (month === 11) { setMonth(0); setYear(y => y + 1) }
+    else               setMonth(m => m + 1)
+  }
+
+  // Build calendar grid
+  const firstDay = new Date(year, month, 1).getDay()  // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+
+  const cells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+  // Pad to full rows
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  return (
+    <div className="bg-slate-50 rounded-2xl p-3">
+      {/* Month navigation */}
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={prevMonth} className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:bg-white hover:text-slate-700 transition-colors">
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <span className="text-xs font-black text-slate-700 uppercase tracking-widest">
+          {MONTH_PT[month].substring(0, 3)} {year}
+        </span>
+        <button onClick={nextMonth} className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:bg-white hover:text-slate-700 transition-colors">
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Day headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {DAY_LETTER.map((l, i) => (
+          <div key={i} className="text-center text-[9px] font-black text-slate-300 uppercase py-1">{l}</div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} />
+          const iso      = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+          const isToday_ = iso === TODAY_ISO
+          const isSel    = iso === selectedISO
+          return (
+            <button
+              key={i}
+              onClick={() => onChange(isSel ? '' : iso)}
+              className={`w-8 h-8 mx-auto rounded-full text-xs font-bold transition-all flex items-center justify-center
+                ${isSel
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
+                  : isToday_
+                    ? 'bg-blue-50 text-blue-600 font-black'
+                    : 'text-slate-600 hover:bg-white'}`}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Task Edit sheet ───────────────────────────────────────────────────────────
 const TaskEditSheet: React.FC<{
   task:    Task
@@ -215,16 +295,6 @@ const TaskEditSheet: React.FC<{
   const [priority, setPriority] = useState(task.priority)
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState<string | null>(null)
-
-  const tmrw    = new Date(_TODAY); tmrw.setDate(_TODAY.getDate() + 1)
-  const daysToSat = (6 - _TODAY.getDay() + 7) % 7 || 7
-  const weekend = new Date(_TODAY); weekend.setDate(_TODAY.getDate() + daysToSat)
-
-  const QUICK = [
-    { label: 'Hoje',     value: TODAY_ISO         },
-    { label: 'Amanhã',   value: isoDate(tmrw)     },
-    { label: 'Este fds', value: isoDate(weekend)  },
-  ]
 
   const PRIOS = [1, 2, 3, 4] as const
 
@@ -268,32 +338,17 @@ const TaskEditSheet: React.FC<{
             className="w-full text-sm font-semibold text-slate-800 border-b border-slate-200 pb-2.5 outline-none focus:border-blue-500 transition-colors"
           />
 
-          {/* Quick date pills */}
+          {/* Calendar date picker */}
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Prazo</p>
-            <div className="flex gap-2">
-              {QUICK.map(({ label, value }) => (
-                <button
-                  key={value}
-                  onClick={() => setDueDate(dueDate === value ? '' : value)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border
-                    ${dueDate === value
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200'
-                      : 'bg-white text-slate-600 border-slate-200'}`}
-                >
-                  {label}
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prazo</p>
+              {dueDate && (
+                <button onClick={() => setDueDate('')} className="text-[10px] font-bold text-red-400 hover:text-red-600">
+                  Limpar
                 </button>
-              ))}
+              )}
             </div>
-            {dueDate && !QUICK.some(q => q.value === dueDate) && (
-              <div className="flex items-center gap-2 mt-2">
-                <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                <span className="text-xs font-semibold text-blue-600">{fmtShort(dueDate)}</span>
-                <button onClick={() => setDueDate('')} className="text-slate-300 hover:text-slate-500 ml-auto">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
+            <MiniCalendar value={dueDate} onChange={setDueDate} />
           </div>
 
           {/* Priority */}
@@ -347,16 +402,6 @@ const AddTaskModal: React.FC<{
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState<string | null>(null)
 
-  const tmrw    = new Date(_TODAY); tmrw.setDate(_TODAY.getDate() + 1)
-  const daysToSat = (6 - _TODAY.getDay() + 7) % 7 || 7
-  const weekend = new Date(_TODAY); weekend.setDate(_TODAY.getDate() + daysToSat)
-
-  const QUICK = [
-    { label: 'Hoje',     value: TODAY_ISO        },
-    { label: 'Amanhã',   value: isoDate(tmrw)    },
-    { label: 'Este fds', value: isoDate(weekend) },
-  ]
-
   const save = async () => {
     if (!title.trim()) { setError('Informe o título'); return }
     setSaving(true); setError(null)
@@ -379,8 +424,11 @@ const AddTaskModal: React.FC<{
   return (
     <>
       <div className="absolute inset-0 bg-black/40 z-20" onClick={onClose} />
-      <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 z-30 bg-white rounded-3xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 pt-5 pb-4">
+      <div className="absolute bottom-0 left-0 right-0 z-30 bg-white rounded-t-3xl shadow-2xl max-h-[92%] overflow-y-auto">
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 bg-slate-200 rounded-full" />
+        </div>
+        <div className="flex items-center justify-between px-5 pt-2 pb-4">
           <h2 className="text-lg font-black text-slate-900">Add task</h2>
           <button onClick={onClose} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
             <X className="w-3.5 h-3.5" />
@@ -398,13 +446,16 @@ const AddTaskModal: React.FC<{
             placeholder="Task description..." rows={2}
             className="w-full text-xs text-slate-500 border-b border-slate-100 pb-2 outline-none resize-none placeholder:text-slate-300 bg-transparent focus:border-blue-300 transition-colors"
           />
-          <div className="flex gap-2">
-            {QUICK.map(({ label, value }) => (
-              <button key={value} onClick={() => setDueDate(dueDate === value ? '' : value)}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border
-                  ${dueDate === value ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200' : 'bg-white text-slate-600 border-slate-200'}`}
-              >{label}</button>
-            ))}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prazo</p>
+              {dueDate && (
+                <button onClick={() => setDueDate('')} className="text-[10px] font-bold text-red-400 hover:text-red-600">
+                  Limpar
+                </button>
+              )}
+            </div>
+            <MiniCalendar value={dueDate} onChange={setDueDate} />
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700">Alta prioridade</span>

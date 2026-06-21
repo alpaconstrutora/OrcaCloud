@@ -3312,9 +3312,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                     <span className="text-[9px] font-black text-purple-600 uppercase tracking-widest">Sugestão Inteligente</span>
                                                                     <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-white text-purple-500">{suggestion.confidence}% Match</span>
                                                                 </div>
-                                                                <p className="text-[10px] font-bold text-gray-700 mt-0.5 max-w-[180px] truncate" title={cand.description}>
+                                                                <p className="text-[10px] font-bold text-gray-700 mt-0.5 max-w-[220px] truncate" title={cand.description}>
                                                                     {cand.description}
                                                                 </p>
+                                                                {typeof suggestion.reason === 'string' && suggestion.reason && (
+                                                                    <p className="text-[9px] text-gray-500 mt-0.5 max-w-[260px] leading-snug" title={suggestion.reason}>
+                                                                        {suggestion.reason}
+                                                                    </p>
+                                                                )}
                                                             </div>
                                                         </div>
                                                             <button 

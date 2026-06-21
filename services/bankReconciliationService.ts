@@ -33,12 +33,6 @@ interface RuleCondition {
     value: string;
 }
 
-interface InternalTxCandidate {
-    id: string;
-    description?: string;
-    transaction_date: string;
-}
-
 export const bankReconciliationService = {
     /**
      * Unifica a normalização de texto para garantir paridade entre regras e descrições.
@@ -331,9 +325,117 @@ export const bankReconciliationService = {
     },
 
     /**
-     * Executa o motor de matching (Layer 1 e Layer 2).
+     * Carrega a configuração de multa/juros da organização (reaproveita asaas_charge_config).
+     * Default: multa 2% + juros 1% a.m. de mora.
+     */
+    async loadInterestConfig(organizationId: string): Promise<{ fine_percent: number; interest_percent_month: number }> {
+        try {
+            const { data } = await supabase
+                .from('asaas_charge_config')
+                .select('fine_percent, interest_percent_month')
+                .eq('organization_id', organizationId)
+                .maybeSingle();
+            return {
+                fine_percent: data?.fine_percent ?? 2,
+                interest_percent_month: data?.interest_percent_month ?? 1,
+            };
+        } catch {
+            return { fine_percent: 2, interest_percent_month: 1 };
+        }
+    },
+
+    /**
+     * Calcula o valor esperado de um título pago em atraso (multa + juros pró-rata).
+     * Retorna null se o pagamento não foi após o vencimento.
+     */
+    computeInterestExpectation(
+        amount: number,
+        dueDate: string,
+        payDate: string,
+        config: { fine_percent: number; interest_percent_month: number },
+    ): { daysLate: number; multa: number; juros: number; expected: number } | null {
+        const due = new Date(dueDate);
+        const pay = new Date(payDate);
+        if (isNaN(due.getTime()) || isNaN(pay.getTime())) return null;
+        const daysLate = Math.floor((pay.getTime() - due.getTime()) / 86_400_000);
+        if (daysLate <= 0) return null;
+        const multa = amount * (config.fine_percent / 100);
+        const juros = amount * (config.interest_percent_month / 100) * (daysLate / 30);
+        return { daysLate, multa, juros, expected: Math.round((amount + multa + juros) * 100) / 100 };
+    },
+
+    /** Procura um nº de documento (NF) da transação interna dentro da descrição do extrato. */
+    documentMatches(internalDesc: string, bankText: string): boolean {
+        const tokens = (internalDesc || '').match(/\d{4,8}/g) || [];
+        if (tokens.length === 0) return false;
+        const bankDigits = (bankText || '').replace(/\D/g, '');
+        if (!bankDigits) return false;
+        return tokens.some(t => bankDigits.includes(t));
+    },
+
+    /**
+     * Pontua um candidato interno contra um movimento bancário, com motivos explicáveis.
+     * Pesos: valor exato +40 / encargos compatíveis +35 / valor próximo +20;
+     *        mesma data +20 / próxima +15..8; fornecedor +30/+15; documento +40.
+     */
+    scoreCandidate(
+        bTx: { amount: number; direction: string; transaction_date: string; description_normalized?: string; description_raw?: string; counterparty_name?: string },
+        c: { amount: number; transaction_date: string; due_date?: string; description?: string; entity_name?: string; party_name?: string },
+        config: { fine_percent: number; interest_percent_month: number },
+    ): { score: number; reasons: string[] } {
+        const reasons: string[] = [];
+        let score = 0;
+        const fmt = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
+        const diff = Math.round((bTx.amount - c.amount) * 100) / 100;
+
+        // ── Valor (com inteligência de juros/multa) ──
+        if (Math.abs(diff) < 0.01) {
+            score += 40; reasons.push('Valor exato');
+        } else {
+            const interest = this.computeInterestExpectation(c.amount, c.due_date || c.transaction_date, bTx.transaction_date, config);
+            const interestOk = diff > 0 && interest
+                && Math.abs(bTx.amount - interest.expected) <= Math.max(0.5, c.amount * 0.005);
+            if (interestOk && interest) {
+                score += 35;
+                reasons.push(`Diferença compatível com encargos: multa ${fmt(interest.multa)} + juros ${fmt(interest.juros)} (${interest.daysLate}d) → esperado ${fmt(interest.expected)}`);
+            } else if (Math.abs(diff) <= Math.max(50, c.amount * 0.03)) {
+                score += 20; reasons.push(`Valor próximo (dif ${fmt(Math.abs(diff))})`);
+            }
+        }
+
+        // ── Data ──
+        const dDays = Math.abs(Math.round((new Date(bTx.transaction_date).getTime() - new Date(c.transaction_date).getTime()) / 86_400_000));
+        if (c.transaction_date === bTx.transaction_date) { score += 20; reasons.push('Mesma data'); }
+        else if (dDays <= 3) { score += 15; reasons.push(`Data próxima (${dDays}d)`); }
+        else if (dDays <= 10) { score += 8; reasons.push(`Data dentro de ${dDays}d`); }
+
+        // ── Fornecedor / contraparte (similaridade textual) ──
+        const bankParty = bTx.counterparty_name || bTx.description_normalized || '';
+        const intParty = c.entity_name || c.party_name || c.description || '';
+        const sim = this.calculateSimilarity(bankParty, intParty);
+        if (sim >= 0.8) { score += 30; reasons.push('Mesmo fornecedor (alta similaridade)'); }
+        else if (sim >= 0.5) { score += 15; reasons.push('Fornecedor similar'); }
+
+        // ── Documento (NF) ──
+        if (this.documentMatches(c.description || '', bTx.description_normalized || bTx.description_raw || '')) {
+            score += 40; reasons.push('Documento encontrado no extrato');
+        }
+
+        return { score: Math.round(score), reasons };
+    },
+
+    /**
+     * Motor de matching com score aditivo explicável (Fase 1 da Central Inteligente).
+     * Considera valor, juros/multa, data, fornecedor e documento. Auto-concilia
+     * apenas vencedores muito claros (≥100 e à frente do 2º); o resto vira sugestão
+     * explicada (confidence = score, reason = motivos).
      */
     async runMatchingEngine(bankAccountId: string, organizationId: string) {
+        const AUTO_THRESHOLD = 100;
+        const MIN_SUGGESTION = 40;
+
+        const config = await this.loadInterestConfig(organizationId);
+
         const { data: bankTxs } = await supabase
             .from('bank_transactions')
             .select('id, organization_id, bank_account_id, external_id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, transaction_type, fingerprint, category, status, project_id, created_at')
@@ -344,57 +446,41 @@ export const bankReconciliationService = {
 
         for (const bTx of bankTxs) {
             const date = new Date(bTx.transaction_date);
-            const minDate = new Date(date);
-            minDate.setDate(date.getDate() - 3); // Janela padrão de 3 dias
-            const maxDate = new Date(date);
-            maxDate.setDate(date.getDate() + 3);
+            const minDate = new Date(date); minDate.setDate(date.getDate() - 60); // títulos vencidos pagos semanas depois
+            const maxDate = new Date(date); maxDate.setDate(date.getDate() + 5);
 
-            // Layer 1: Valor Exato e Direção
+            // Candidatos: mesma direção, faixa de valor (cobre encargos até ~11%) e janela de data
             const { data: candidates } = await supabase
                 .from('internal_transactions')
-                .select('id, organization_id, source_system, reference_id, transaction_date, amount, direction, description, category, status, project_id, cost_center_id, category_id, created_at')
+                .select('id, organization_id, source_system, reference_id, transaction_date, due_date, amount, direction, description, entity_name, party_name, category, status, project_id, cost_center_id, category_id, created_at')
                 .eq('organization_id', organizationId)
-                .eq('amount', bTx.amount)
                 .eq('direction', bTx.direction)
                 .eq('status', 'PENDING')
+                .gte('amount', Math.round(bTx.amount * 0.90 * 100) / 100)
+                .lte('amount', Math.round(bTx.amount * 1.01 * 100) / 100)
                 .gte('transaction_date', minDate.toISOString().split('T')[0])
-                .lte('transaction_date', maxDate.toISOString().split('T')[0]);
+                .lte('transaction_date', maxDate.toISOString().split('T')[0])
+                .limit(50);
 
-            if (candidates && candidates.length > 0) {
-                // Nova Lógica: Layer 1.5 - Match Exato de Data
-                const exactDateCandidates = candidates.filter(c => c.transaction_date === bTx.transaction_date);
-                
-                if (exactDateCandidates.length === 1) {
-                    // Match exato de data e valor único -> Confiança Máxima (95%)
-                    await this.createSuggestion(bTx.id, [exactDateCandidates[0]], 95);
-                    continue;
-                } else if (exactDateCandidates.length > 1) {
-                    // Múltiplos no mesmo dia com mesmo valor, sugere todos com alta confiança
-                    await this.createSuggestion(bTx.id, exactDateCandidates, 90);
-                    continue; 
-                }
+            if (!candidates || candidates.length === 0) continue;
 
-                // Se não achou na data exata, volta pro Layer 2: Similaridade de Texto
-                if (candidates.length === 1) {
-                    const similarity = this.calculateSimilarity(bTx.description_normalized || '', candidates[0].description || '');
-                    if (similarity > 0.85) {
-                        await this.createMatch(bTx.id, candidates[0].id, 'RULE', similarity * 100);
-                    } else {
-                        await this.createSuggestion(bTx.id, [candidates[0]], similarity * 100);
-                    }
-                } else {
-                    // Ranking por similaridade
-                    const ranked = candidates.map(c => ({
-                        ...c,
-                        score: this.calculateSimilarity(bTx.description_normalized || '', c.description || '')
-                    })).sort((a, b) => b.score - a.score);
+            const ranked = candidates
+                .map(c => ({ c, ...this.scoreCandidate(bTx, c, config) }))
+                .filter(r => r.score >= MIN_SUGGESTION)
+                .sort((a, b) => b.score - a.score);
 
-                    // Se houver um vencedor claro
-                    if (ranked[0].score > 0.9 && (ranked.length === 1 || ranked[0].score > ranked[1].score + 0.2)) {
-                        await this.createMatch(bTx.id, ranked[0].id, 'HEURISTIC', ranked[0].score * 100);
-                    } else {
-                        await this.createSuggestion(bTx.id, ranked, ranked[0].score * 100);
-                    }
+            if (ranked.length === 0) continue;
+
+            const top = ranked[0];
+            const second = ranked[1];
+            const clearWinner = !second || (top.score - second.score) >= 20;
+
+            if (top.score >= AUTO_THRESHOLD && clearWinner) {
+                await this.createMatch(bTx.id, top.c.id, 'HEURISTIC', Math.min(top.score, 100));
+            } else {
+                // Sugestões explicadas (top 5)
+                for (const r of ranked.slice(0, 5)) {
+                    await this.upsertSuggestion(bTx.id, r.c.id, r.score, r.reasons.join(' · '));
                 }
             }
         }
@@ -446,26 +532,30 @@ export const bankReconciliationService = {
         }
     },
 
-    async createSuggestion(bankTxId: string, candidates: InternalTxCandidate[], score: number) {
-        for (const candidate of candidates) {
-            // Verifica se já existe a sugestão para evitar duplicidade
-            const { data: existing } = await supabase
-                .from('reconciliation_suggestions')
-                .select('id')
-                .eq('bank_transaction_id', bankTxId)
-                .eq('candidate_internal_transaction_id', candidate.id)
-                .single();
-            
-            if (!existing) {
-                await supabase
-                    .from('reconciliation_suggestions')
-                    .insert({
-                        bank_transaction_id: bankTxId,
-                        candidate_internal_transaction_id: candidate.id,
-                        confidence: score || 80,
-                        reason: score > 0.5 ? 'Similaridade de descrição detectada.' : 'Valor idêntico em data próxima.'
-                    });
-            }
+    /**
+     * Grava (ou atualiza) uma sugestão de conciliação com score e motivos explicáveis.
+     */
+    async upsertSuggestion(bankTxId: string, candidateId: string, score: number, reason: string) {
+        const { data: existing } = await supabase
+            .from('reconciliation_suggestions')
+            .select('id')
+            .eq('bank_transaction_id', bankTxId)
+            .eq('candidate_internal_transaction_id', candidateId)
+            .maybeSingle();
+
+        const payload = {
+            confidence: Math.min(Math.round(score), 100),
+            reason: reason || 'Sugestão de conciliação.',
+        };
+
+        if (existing) {
+            await supabase.from('reconciliation_suggestions').update(payload).eq('id', existing.id);
+        } else {
+            await supabase.from('reconciliation_suggestions').insert({
+                bank_transaction_id: bankTxId,
+                candidate_internal_transaction_id: candidateId,
+                ...payload,
+            });
         }
     },
 

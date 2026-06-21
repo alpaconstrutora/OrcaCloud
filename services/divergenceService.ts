@@ -60,11 +60,16 @@ export const divergenceService = {
         overrides?: {
             category?: string;
             project_id?: string | null;
+            cost_center_id?: string | null;
+            party_id?: string | null;
+            party_name?: string | null;
+            party_type?: 'CLIENT' | 'SUPPLIER' | null;
             entity_name?: string | null;
             description?: string;
         },
     ): Promise<void> {
         await assertPeriodOpen(organizationId, bank.transaction_date);
+        const entityName = overrides?.party_name?.trim() || overrides?.entity_name?.trim() || null;
         const { data: inserted, error } = await supabase
             .from('internal_transactions')
             .insert({
@@ -76,7 +81,11 @@ export const divergenceService = {
                 description: overrides?.description?.trim() || bank.description || 'Lançamento gerado da conciliação',
                 category: overrides?.category?.trim() || bank.category || 'Geral',
                 project_id: overrides?.project_id || null,
-                entity_name: overrides?.entity_name?.trim() || null,
+                cost_center_id: overrides?.cost_center_id || null,
+                party_id: overrides?.party_id || null,
+                party_name: entityName,
+                party_type: overrides?.party_type || null,
+                entity_name: entityName,
                 status: 'PENDING',
             })
             .select('id')
@@ -88,6 +97,8 @@ export const divergenceService = {
             internal_id: inserted!.id,
             category: overrides?.category || bank.category,
             project_id: overrides?.project_id ?? null,
+            cost_center_id: overrides?.cost_center_id ?? null,
+            party_id: overrides?.party_id ?? null,
         });
     },
 

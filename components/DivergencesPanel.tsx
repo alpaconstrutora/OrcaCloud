@@ -15,9 +15,12 @@ import type {
 interface CreateForm {
     category: string;
     projectId: string;
-    entityName: string;
+    costCenterId: string;
+    partyKey: string;   // `${type}:${id}` ou '' para sem contraparte
     description: string;
 }
+
+interface Party { id: string; name: string; type: 'CLIENT' | 'SUPPLIER' }
 
 function formatBRL(v: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -82,8 +85,11 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
     // Opções de classificação para o modal "Criar lançamento"
     const [categories, setCategories] = useState<string[]>([]);
     const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
+    const [costCenters, setCostCenters] = useState<Array<{ id: string; name: string }>>([]);
+    const [clients, setClients] = useState<Party[]>([]);
+    const [suppliers, setSuppliers] = useState<Party[]>([]);
     const [formBank, setFormBank] = useState<BankWithoutInternal | null>(null);
-    const [form, setForm] = useState<CreateForm>({ category: '', projectId: '', entityName: '', description: '' });
+    const [form, setForm] = useState<CreateForm>({ category: '', projectId: '', costCenterId: '', partyKey: '', description: '' });
 
     const load = useCallback(async () => {
         if (!organizationId) return;
@@ -101,15 +107,22 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
     const loadOptions = useCallback(async () => {
         if (!organizationId) return;
         try {
-            const [cats, projs] = await Promise.all([
+            const orgOrNull = `organization_id.eq.${organizationId},organization_id.is.null`;
+            const [cats, projs, ccs, cls, sups] = await Promise.all([
                 supabase.from('financial_categories').select('name').order('name', { ascending: true }),
                 supabase.from('projects').select('id, name')
                     .filter('settings->>organizationId', 'eq', organizationId)
                     .neq('name', 'Gestão Comercial')
                     .order('name', { ascending: true }),
+                supabase.from('cost_centers').select('id, name').eq('organization_id', organizationId).order('name', { ascending: true }),
+                supabase.from('clients').select('id, name').or(orgOrNull).order('name', { ascending: true }),
+                supabase.from('suppliers').select('id, name').or(orgOrNull).order('name', { ascending: true }),
             ]);
             if (cats.data) setCategories(cats.data.map(c => c.name).filter(Boolean));
             if (projs.data) setProjects(Array.from(new Map(projs.data.map(p => [p.name, p])).values()));
+            if (ccs.data) setCostCenters(ccs.data);
+            if (cls.data) setClients(cls.data.map(c => ({ id: c.id, name: c.name, type: 'CLIENT' as const })));
+            if (sups.data) setSuppliers(sups.data.map(s => ({ id: s.id, name: s.name, type: 'SUPPLIER' as const })));
         } catch (e) {
             console.error('[DivergencesPanel] loadOptions', e);
         }
@@ -137,7 +150,8 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
         setForm({
             category: b.category || '',
             projectId: '',
-            entityName: '',
+            costCenterId: '',
+            partyKey: '',
             description: b.description || '',
         });
     };
@@ -145,14 +159,30 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
     const submitCreate = async () => {
         if (!formBank) return;
         const bank = formBank;
+        // Resolve contraparte a partir do partyKey `${type}:${id}`
+        let party: Party | undefined;
+        if (form.partyKey) {
+            const [type, id] = form.partyKey.split(':');
+            const pool = type === 'CLIENT' ? clients : suppliers;
+            party = pool.find(p => p.id === id);
+        }
         setFormBank(null);
         await run(bank.id, () => divergenceService.createInternalAndMatch(organizationId, bank, {
             category: form.category || undefined,
             project_id: form.projectId || null,
-            entity_name: form.entityName || null,
+            cost_center_id: form.costCenterId || null,
+            party_id: party?.id || null,
+            party_name: party?.name || null,
+            party_type: party?.type || null,
             description: form.description || undefined,
         }), 'Lançamento criado e conciliado');
     };
+
+    // Contrapartes priorizadas pela direção: CREDIT→clientes, DEBIT→fornecedores
+    const partyPrimary = formBank?.direction === 'CREDIT' ? clients : suppliers;
+    const partySecondary = formBank?.direction === 'CREDIT' ? suppliers : clients;
+    const partyPrimaryLabel = formBank?.direction === 'CREDIT' ? 'Clientes' : 'Fornecedores';
+    const partySecondaryLabel = formBank?.direction === 'CREDIT' ? 'Fornecedores' : 'Clientes';
 
     const onConfirmNoTitle = async (b: BankWithoutInternal) => {
         if (!await confirm({
@@ -359,14 +389,38 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                     </div>
-                    <div>
-                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Contraparte (cliente/fornecedor)</label>
-                        <input
-                            value={form.entityName}
-                            onChange={e => setForm(f => ({ ...f, entityName: e.target.value }))}
-                            placeholder="Opcional"
-                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Centro de Custo</label>
+                            <select
+                                value={form.costCenterId}
+                                onChange={e => setForm(f => ({ ...f, costCenterId: e.target.value }))}
+                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">— Sem CC —</option>
+                                {costCenters.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Contraparte</label>
+                            <select
+                                value={form.partyKey}
+                                onChange={e => setForm(f => ({ ...f, partyKey: e.target.value }))}
+                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">— Sem contraparte —</option>
+                                {partyPrimary.length > 0 && (
+                                    <optgroup label={partyPrimaryLabel}>
+                                        {partyPrimary.map(p => <option key={p.type + p.id} value={`${p.type}:${p.id}`}>{p.name}</option>)}
+                                    </optgroup>
+                                )}
+                                {partySecondary.length > 0 && (
+                                    <optgroup label={partySecondaryLabel}>
+                                        {partySecondary.map(p => <option key={p.type + p.id} value={`${p.type}:${p.id}`}>{p.name}</option>)}
+                                    </optgroup>
+                                )}
+                            </select>
+                        </div>
                     </div>
                     <div>
                         <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Descrição</label>

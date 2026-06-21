@@ -265,6 +265,38 @@ export interface ReconciliationDashboard {
 }
 
 // ────────────────────────────────────────────────────────────
+// Fechamento Financeiro Mensal
+// ────────────────────────────────────────────────────────────
+
+export interface FinancialCloseChecklist {
+    year: number;
+    month: number;
+    pending_bank_count: number;
+    unclassified_count: number;
+    fees_uncategorized_count: number;
+    internal_pending_count: number;
+    total_entradas: number;
+    total_saidas: number;
+    is_closed: boolean;
+}
+
+export interface FinancialPeriodLock {
+    id: string;
+    organization_id: string;
+    period_year: number;
+    period_month: number;
+    is_closed: boolean;
+    checklist?: FinancialCloseChecklist | null;
+    notes?: string | null;
+    closed_at?: string | null;
+    closed_by?: string | null;
+    reopened_at?: string | null;
+    reopened_by?: string | null;
+    created_at?: string;
+    updated_at?: string;
+}
+
+// ────────────────────────────────────────────────────────────
 // Gestão de Divergências de Conciliação
 // ────────────────────────────────────────────────────────────
 

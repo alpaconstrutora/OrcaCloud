@@ -19,6 +19,7 @@ import { commercialFinanceService } from '../services/commercialFinanceService';
 import { useConfirm } from './ui/confirm';
 import ReconciliationDashboardView from './ReconciliationDashboard';
 import DivergencesPanel from './DivergencesPanel';
+import FinancialClosePanel from './FinancialClosePanel';
 
 interface BankReconciliationProps {
     organizationId: string;
@@ -94,8 +95,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [matches, setMatches] = useState<ReconciliationMatch[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [accountsLoading, setAccountsLoading] = useState(false);
-    const [activeView, setActiveView] = useState<'dashboard' | 'divergences' | 'pending' | 'conciliated' | 'rules' | 'categories'>(
-        (localStorage.getItem('reconciliation_active_tab') as 'dashboard' | 'divergences' | 'pending' | 'conciliated' | 'rules' | 'categories') || 'dashboard'
+    const [activeView, setActiveView] = useState<'dashboard' | 'divergences' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close'>(
+        (localStorage.getItem('reconciliation_active_tab') as 'dashboard' | 'divergences' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close') || 'dashboard'
     );
     const [rulesViewMode, setRulesViewMode] = useState<'grid' | 'list'>(
         (localStorage.getItem('reconciliation_rules_view_mode') as 'grid' | 'list') || 'list'
@@ -2438,6 +2439,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                     >
                         Categorias
                     </button>
+                    <button
+                        onClick={() => setActiveView('close')}
+                        className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${activeView === 'close' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Fechamento
+                    </button>
                 </div>
             </div>
 
@@ -2619,6 +2626,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 <ReconciliationDashboardView organizationId={organizationId} />
             ) : activeView === 'divergences' ? (
                 <DivergencesPanel organizationId={organizationId} onChanged={() => { loadTransactions(); loadStats(); }} />
+            ) : activeView === 'close' ? (
+                <FinancialClosePanel organizationId={organizationId} />
             ) : activeView === 'rules' ? (
                 renderRules()
             ) : activeView === 'categories' ? (

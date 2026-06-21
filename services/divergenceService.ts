@@ -13,6 +13,16 @@ interface DivergenceOptions {
     limit?: number;
 }
 
+/** Bloqueia mutações em datas dentro de um período já fechado. */
+async function assertPeriodOpen(organizationId: string, date: string): Promise<void> {
+    const { data, error } = await supabase.rpc('fn_period_is_closed', {
+        p_organization_id: organizationId,
+        p_date:            date,
+    });
+    if (error) throw error;
+    if (data) throw new Error('Período fechado: reabra o mês no Fechamento Mensal para alterar lançamentos.');
+}
+
 export const divergenceService = {
     /**
      * Retorna as divergências de conciliação classificadas em três tipos.
@@ -44,6 +54,7 @@ export const divergenceService = {
      * e o vincula automaticamente (ambos passam a CONCILIADO).
      */
     async createInternalAndMatch(organizationId: string, bank: BankWithoutInternal): Promise<void> {
+        await assertPeriodOpen(organizationId, bank.transaction_date);
         const { data: inserted, error } = await supabase
             .from('internal_transactions')
             .insert({
@@ -107,6 +118,7 @@ export const divergenceService = {
         m: ValueMismatch,
         adjustmentCategory = 'Tarifas Bancárias',
     ): Promise<void> {
+        await assertPeriodOpen(organizationId, m.bank_date);
         // Vincula extrato ao título (ambos CONCILIADO).
         await bankReconciliationService.createMatch(m.bank_id, m.internal_id, 'MANUAL', 100);
 

@@ -69,6 +69,8 @@ const ControladoriaModule   = React.lazy(() => import('./ControladoriaModule'));
 const FinancialDashboard       = React.lazy(() => import('./FinancialDashboard'));
 const FinancialIntelligence    = React.lazy(() => import('./FinancialIntelligence'));
 const ClientChargesModule      = React.lazy(() => import('./ClientChargesModule'));
+const BoletoManager            = React.lazy(() => import('./BoletoManager'));
+const BankReconciliation       = React.lazy(() => import('./BankReconciliation'));
 const ContasReceberManager  = React.lazy(() => import('./ContasReceberManager'));
 const FinancialApprovalModule = React.lazy(() => import('./FinancialApprovalModule'));
 const FinancialCalendar       = React.lazy(() => import('./FinancialCalendar'));
@@ -676,7 +678,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       );
 
     case 'financial-categories':
-    case 'bank-reconciliation':
     case 'contas-a-pagar':
     case 'project-financial':
       return (
@@ -1087,6 +1088,30 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <ClientChargesModule
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          />
+        </React.Suspense>
+      );
+
+    // ── Boletos a Pagar (fornecedores) ─────────────────────────────────────────
+    case 'boletos-pagar':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <BoletoManager
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            userEmail={session?.user?.email}
+            organizations={organizations}
+            onOrgChange={(id) => setActiveOrganizationId(id)}
+          />
+        </React.Suspense>
+      );
+
+    // ── Extrato + Conciliação Bancária ─────────────────────────────────────────
+    case 'extrato-bancario':
+    case 'bank-reconciliation':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <BankReconciliation
             organizationId={activeOrganizationId || organizations[0]?.id || ''}
           />
         </React.Suspense>

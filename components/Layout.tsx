@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, Landmark } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, Landmark, ArrowRightLeft, Banknote, LineChart } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -319,7 +319,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado','partner-workspaces-admin'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','controladoria','fiscal-nfe','automation','compliance-dashboard','opura-cno'];
+  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','controladoria','fiscal-nfe','automation','compliance-dashboard','opura-cno'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
@@ -730,9 +730,13 @@ const Layout: React.FC<LayoutProps> = ({
                     {(mod.financeiro || isDev) && (
                       <>
                         <DropdownItem id="financial-dashboard" label="Dashboard" icon={LayoutDashboard} />
+                        <DropdownItem id="financial-cashflow" label="Fluxo de Caixa" icon={LineChart} />
                         <DropdownItem id="contas-a-receber" label="Contas a Receber" icon={TrendingUp} />
                         <DropdownItem id="financial-boletos" label="Boletos ao Cliente" icon={Receipt} />
                         <DropdownItem id="project-financial" label="Contas a Pagar" icon={DollarSign} />
+                        <DropdownItem id="boletos-pagar" label="Boletos a Pagar" icon={Banknote} />
+                        <DropdownItem id="extrato-bancario" label="Extrato Bancário" icon={FileText} />
+                        <DropdownItem id="bank-reconciliation" label="Conciliação Bancária" icon={ArrowRightLeft} />
                         <DropdownItem id="financial-calendar" label="Calendário" icon={Calendar} />
                         <DropdownItem id="dunning" label="Cobrança Auto." icon={Bell} />
                         <DropdownItem id="financial-approval" label="Aprovações" icon={Shield} />

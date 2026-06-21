@@ -509,7 +509,6 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
               <TaskCard
                 key={task.id}
                 task={task}
-                statuses={statuses}
                 spaces={spaces}
                 projects={projects}
                 onToggle={toggleDone}

@@ -265,6 +265,40 @@ export interface ReconciliationDashboard {
 }
 
 // ────────────────────────────────────────────────────────────
+// Detecção de Anomalias (Tier A+)
+// ────────────────────────────────────────────────────────────
+
+export interface DuplicateAnomaly {
+    source: 'BANK' | 'INTERNAL';
+    direction: 'CREDIT' | 'DEBIT';
+    amount: number;
+    party: string;
+    id_a: string;
+    id_b: string;
+    date_a: string;
+    date_b: string;
+    days_apart: number;
+}
+
+export interface ValueOutlierAnomaly {
+    id: string;
+    dt: string;
+    amount: number;
+    party: string;
+    category: string | null;
+    avg_a: number;       // média histórica da contraparte
+    n: number;           // nº de amostras
+    z: number;           // z-score
+}
+
+export interface ReconciliationAnomalies {
+    as_of: string;
+    counts: { duplicates: number; value_outliers: number };
+    duplicates: DuplicateAnomaly[];
+    value_outliers: ValueOutlierAnomaly[];
+}
+
+// ────────────────────────────────────────────────────────────
 // Fechamento Financeiro Mensal
 // ────────────────────────────────────────────────────────────
 

@@ -25,14 +25,14 @@ async function resolveSupplierName(supplierId: string | undefined, fallback: str
 /**
  * Resolve a contraparte cadastrada de um contrato para popular party_id/party_type/party_name
  * nos lançamentos internos (permite a Central exibir e reconhecer o fornecedor/cliente).
- * CREDIT = recebível (cliente); demais = pagável (fornecedor).
+ * INCOMING = recebível (cliente); OUTGOING/indefinido = pagável (fornecedor).
  */
 async function resolveContractParty(
     contract: Contract,
     fallbackName: string,
 ): Promise<{ party_id: string | null; party_type: 'SUPPLIER' | 'CLIENT' | null; party_name: string | null }> {
     const cAny = contract as unknown as { direction?: string; client_id?: string; supplier_id?: string };
-    const preferClient = cAny.direction === 'CREDIT' && !!cAny.client_id;
+    const preferClient = cAny.direction === 'INCOMING' && !!cAny.client_id;
     try {
         if (preferClient && cAny.client_id) {
             const { data } = await supabase.from('clients').select('name').eq('id', cAny.client_id).maybeSingle();
@@ -196,6 +196,7 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
 
             // Insert one row per installment with unique reference_id
             const party = await resolveContractParty(contract, supplierName);
+            const txDirection = contract.direction === 'INCOMING' ? 'CREDIT' : 'DEBIT';
             const internalRows = newTxs.map((tx, i) => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_PARCELADO',
@@ -203,7 +204,7 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 project_id: contract.project_id ?? null,
                 transaction_date: tx.date.split('T')[0],
                 amount: tx.value,
-                direction: 'DEBIT',
+                direction: txDirection,
                 description: tx.description,
                 category: 'Mão de Obra / Serviço',
                 entity_name: party.party_name ?? supplierName,
@@ -327,6 +328,7 @@ async function syncRecurringToFinance(contract: Contract) {
             })));
         } else if (contract.organization_id) {
             const party = await resolveContractParty(contract, supplierName);
+            const txDirection = contract.direction === 'INCOMING' ? 'CREDIT' : 'DEBIT';
             await supabase.from('internal_transactions').insert(transactions.map(tx => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_RECURRING',
@@ -334,7 +336,7 @@ async function syncRecurringToFinance(contract: Contract) {
                 project_id: contract.project_id ?? null,
                 transaction_date: tx.date.split('T')[0],
                 amount: tx.value,
-                direction: 'DEBIT',
+                direction: txDirection,
                 description: tx.description,
                 category: 'Mão de Obra / Serviço',
                 entity_name: party.party_name ?? supplierName,
@@ -406,6 +408,7 @@ async function syncAVistaToFinance(contract: Contract) {
                 .eq('reference_id', contract.id);
 
             const party = await resolveContractParty(contract, supplierName);
+            const txDirection = contract.direction === 'INCOMING' ? 'CREDIT' : 'DEBIT';
             await supabase.from('internal_transactions').insert({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_AVISTA',
@@ -413,7 +416,7 @@ async function syncAVistaToFinance(contract: Contract) {
                 project_id: contract.project_id ?? null,
                 transaction_date: dueDate,
                 amount: contract.original_value,
-                direction: 'DEBIT',
+                direction: txDirection,
                 description: tx.description,
                 category: 'Mão de Obra / Serviço',
                 entity_name: party.party_name ?? supplierName,

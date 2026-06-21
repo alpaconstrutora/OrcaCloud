@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { bankReconciliationService } from '../services/bankReconciliationService';
 import { useToast } from '../hooks/useToast';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
+import GroupMatchPanel from './GroupMatchPanel';
 
 function formatBRL(v?: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -322,6 +323,9 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                     </div>
                 )}
             </div>
+
+            {/* Conciliação agrupada (match parcial / agrupado) */}
+            <GroupMatchPanel organizationId={organizationId} selectedAccountId={selectedAccountId} onReload={onReload} />
 
             {/* Modal de tolerâncias */}
             <Modal open={showSettings} onClose={() => setShowSettings(false)} size="md">

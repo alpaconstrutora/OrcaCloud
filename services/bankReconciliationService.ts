@@ -33,6 +33,17 @@ interface RuleCondition {
     value: string;
 }
 
+export interface ReconciliationEngineSettings {
+    fine_percent: number;
+    interest_percent_month: number;
+    value_tol_abs: number;       // R$
+    value_tol_pct: number;       // %
+    encargos_tol_pct: number;    // %
+    date_window_days: number;
+    auto_threshold: number;
+    suggestion_min: number;
+}
+
 export const bankReconciliationService = {
     /**
      * Unifica a normalização de texto para garantir paridade entre regras e descrições.
@@ -325,22 +336,32 @@ export const bankReconciliationService = {
     },
 
     /**
-     * Carrega a configuração de multa/juros da organização (reaproveita asaas_charge_config).
-     * Default: multa 2% + juros 1% a.m. de mora.
+     * Carrega as configurações do motor: tolerâncias/limiares (reconciliation_settings)
+     * + multa/juros (asaas_charge_config). Aplica defaults quando ausente.
      */
-    async loadInterestConfig(organizationId: string): Promise<{ fine_percent: number; interest_percent_month: number }> {
+    async loadSettings(organizationId: string): Promise<ReconciliationEngineSettings> {
+        const defaults: ReconciliationEngineSettings = {
+            fine_percent: 2, interest_percent_month: 1,
+            value_tol_abs: 50, value_tol_pct: 3, encargos_tol_pct: 0.5,
+            date_window_days: 10, auto_threshold: 100, suggestion_min: 40,
+        };
         try {
-            const { data } = await supabase
-                .from('asaas_charge_config')
-                .select('fine_percent, interest_percent_month')
-                .eq('organization_id', organizationId)
-                .maybeSingle();
+            const [{ data: asaas }, { data: rs }] = await Promise.all([
+                supabase.from('asaas_charge_config').select('fine_percent, interest_percent_month').eq('organization_id', organizationId).maybeSingle(),
+                supabase.from('reconciliation_settings').select('value_tol_abs, value_tol_pct, encargos_tol_pct, date_window_days, auto_threshold, suggestion_min').eq('organization_id', organizationId).maybeSingle(),
+            ]);
             return {
-                fine_percent: data?.fine_percent ?? 2,
-                interest_percent_month: data?.interest_percent_month ?? 1,
+                fine_percent:           asaas?.fine_percent ?? defaults.fine_percent,
+                interest_percent_month: asaas?.interest_percent_month ?? defaults.interest_percent_month,
+                value_tol_abs:          rs?.value_tol_abs ?? defaults.value_tol_abs,
+                value_tol_pct:          rs?.value_tol_pct ?? defaults.value_tol_pct,
+                encargos_tol_pct:       rs?.encargos_tol_pct ?? defaults.encargos_tol_pct,
+                date_window_days:       rs?.date_window_days ?? defaults.date_window_days,
+                auto_threshold:         rs?.auto_threshold ?? defaults.auto_threshold,
+                suggestion_min:         rs?.suggestion_min ?? defaults.suggestion_min,
             };
         } catch {
-            return { fine_percent: 2, interest_percent_month: 1 };
+            return defaults;
         }
     },
 
@@ -381,7 +402,7 @@ export const bankReconciliationService = {
     scoreCandidate(
         bTx: { amount: number; direction: string; transaction_date: string; description_normalized?: string; description_raw?: string; counterparty_name?: string },
         c: { amount: number; transaction_date: string; due_date?: string; description?: string; entity_name?: string; party_name?: string },
-        config: { fine_percent: number; interest_percent_month: number },
+        s: ReconciliationEngineSettings,
     ): { score: number; reasons: string[] } {
         const reasons: string[] = [];
         let score = 0;
@@ -392,13 +413,13 @@ export const bankReconciliationService = {
         if (Math.abs(diff) < 0.01) {
             score += 40; reasons.push('Valor exato');
         } else {
-            const interest = this.computeInterestExpectation(c.amount, c.due_date || c.transaction_date, bTx.transaction_date, config);
+            const interest = this.computeInterestExpectation(c.amount, c.due_date || c.transaction_date, bTx.transaction_date, s);
             const interestOk = diff > 0 && interest
-                && Math.abs(bTx.amount - interest.expected) <= Math.max(0.5, c.amount * 0.005);
+                && Math.abs(bTx.amount - interest.expected) <= Math.max(0.5, c.amount * (s.encargos_tol_pct / 100));
             if (interestOk && interest) {
                 score += 35;
                 reasons.push(`Diferença compatível com encargos: multa ${fmt(interest.multa)} + juros ${fmt(interest.juros)} (${interest.daysLate}d) → esperado ${fmt(interest.expected)}`);
-            } else if (Math.abs(diff) <= Math.max(50, c.amount * 0.03)) {
+            } else if (Math.abs(diff) <= Math.max(s.value_tol_abs, c.amount * (s.value_tol_pct / 100))) {
                 score += 20; reasons.push(`Valor próximo (dif ${fmt(Math.abs(diff))})`);
             }
         }
@@ -407,7 +428,7 @@ export const bankReconciliationService = {
         const dDays = Math.abs(Math.round((new Date(bTx.transaction_date).getTime() - new Date(c.transaction_date).getTime()) / 86_400_000));
         if (c.transaction_date === bTx.transaction_date) { score += 20; reasons.push('Mesma data'); }
         else if (dDays <= 3) { score += 15; reasons.push(`Data próxima (${dDays}d)`); }
-        else if (dDays <= 10) { score += 8; reasons.push(`Data dentro de ${dDays}d`); }
+        else if (dDays <= s.date_window_days) { score += 8; reasons.push(`Data dentro de ${dDays}d`); }
 
         // ── Fornecedor / contraparte (similaridade textual) ──
         const bankParty = bTx.counterparty_name || bTx.description_normalized || '';
@@ -431,10 +452,9 @@ export const bankReconciliationService = {
      * explicada (confidence = score, reason = motivos).
      */
     async runMatchingEngine(bankAccountId: string, organizationId: string) {
-        const AUTO_THRESHOLD = 100;
-        const MIN_SUGGESTION = 40;
-
-        const config = await this.loadInterestConfig(organizationId);
+        const settings = await this.loadSettings(organizationId);
+        const AUTO_THRESHOLD = settings.auto_threshold;
+        const MIN_SUGGESTION = settings.suggestion_min;
 
         const { data: bankTxs } = await supabase
             .from('bank_transactions')
@@ -465,7 +485,7 @@ export const bankReconciliationService = {
             if (!candidates || candidates.length === 0) continue;
 
             const ranked = candidates
-                .map(c => ({ c, ...this.scoreCandidate(bTx, c, config) }))
+                .map(c => ({ c, ...this.scoreCandidate(bTx, c, settings) }))
                 .filter(r => r.score >= MIN_SUGGESTION)
                 .sort((a, b) => b.score - a.score);
 

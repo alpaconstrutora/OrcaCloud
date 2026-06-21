@@ -21,6 +21,7 @@ import ReconciliationDashboardView from './ReconciliationDashboard';
 import DivergencesPanel from './DivergencesPanel';
 import FinancialClosePanel from './FinancialClosePanel';
 import AnomaliesPanel from './AnomaliesPanel';
+import SmartReconciliationCenter from './SmartReconciliationCenter';
 
 interface BankReconciliationProps {
     organizationId: string;
@@ -96,8 +97,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [matches, setMatches] = useState<ReconciliationMatch[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [accountsLoading, setAccountsLoading] = useState(false);
-    const [activeView, setActiveView] = useState<'dashboard' | 'divergences' | 'anomalies' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close'>(
-        (localStorage.getItem('reconciliation_active_tab') as 'dashboard' | 'divergences' | 'anomalies' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close') || 'dashboard'
+    const [activeView, setActiveView] = useState<'dashboard' | 'center' | 'divergences' | 'anomalies' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close'>(
+        (localStorage.getItem('reconciliation_active_tab') as 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close') || 'dashboard'
     );
     const [rulesViewMode, setRulesViewMode] = useState<'grid' | 'list'>(
         (localStorage.getItem('reconciliation_rules_view_mode') as 'grid' | 'list') || 'list'
@@ -666,7 +667,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 .select('*')
                 .eq('bank_account_id', selectedAccountId);
             
-            if (activeView === 'pending') {
+            if (activeView === 'pending' || activeView === 'center') {
                 bankQuery = bankQuery.in('status', ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED', 'CONFIRMED']);
             } else {
                 bankQuery = bankQuery.in('status', ['MATCHED']);
@@ -692,7 +693,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 iTxQuery = iTxQuery.eq('organization_id', organizationId);
             }
 
-            if (activeView === 'pending') {
+            if (activeView === 'pending' || activeView === 'center') {
                 iTxQuery = iTxQuery.eq('status', 'PENDING');
             } else {
                 iTxQuery = iTxQuery.eq('status', 'CONCILIATED');
@@ -768,7 +769,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             setInternalTransactions(finalITxs);
 
             // Load Suggestions for pending transactions in batches to avoid URL length limits
-            if (activeView === 'pending' && bTxs && bTxs.length > 0) {
+            if ((activeView === 'pending' || activeView === 'center') && bTxs && bTxs.length > 0) {
                 const bTxIds = bTxs.map(t => t.id);
                 const batchSize = 100;
                 let allSuggestions: ReconciliationSuggestion[] = [];
@@ -959,6 +960,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         } catch (error) {
             console.error('Error confirming match:', error);
         }
+    };
+
+    const handleRejectSuggestion = async (suggestionId: string) => {
+        const { error } = await supabase
+            .from('reconciliation_suggestions')
+            .delete()
+            .eq('id', suggestionId);
+        if (error) throw error;
+        await loadTransactions();
+        await loadStats();
     };
 
     const handleRejectRule = async (bankTxId: string) => {
@@ -2411,6 +2422,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                         Dashboard
                     </button>
                     <button
+                        onClick={() => setActiveView('center')}
+                        className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${activeView === 'center' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Central
+                    </button>
+                    <button
                         onClick={() => setActiveView('divergences')}
                         className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${activeView === 'divergences' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
@@ -2631,6 +2648,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             {/* Main Content Area */}
             {activeView === 'dashboard' ? (
                 <ReconciliationDashboardView organizationId={organizationId} />
+            ) : activeView === 'center' ? (
+                <SmartReconciliationCenter
+                    organizationId={organizationId}
+                    selectedAccountId={selectedAccountId}
+                    suggestions={suggestions as never}
+                    bankTransactions={bankTransactions as never}
+                    onConfirm={handleConfirmMatch}
+                    onReject={handleRejectSuggestion}
+                    onReload={async () => { await loadTransactions(); await loadStats(); }}
+                />
             ) : activeView === 'divergences' ? (
                 <DivergencesPanel organizationId={organizationId} onChanged={() => { loadTransactions(); loadStats(); }} />
             ) : activeView === 'anomalies' ? (

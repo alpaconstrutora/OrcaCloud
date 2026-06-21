@@ -44,6 +44,18 @@ export interface ReconciliationEngineSettings {
     suggestion_min: number;
 }
 
+interface ResolvedParty {
+    party_id: string;
+    party_type: 'SUPPLIER' | 'CLIENT';
+    party_name?: string | null;
+    via: string;                 // 'aprendido' | 'CNPJ'
+}
+
+interface PartyIndex {
+    docIndex: Map<string, { party_id: string; party_type: 'SUPPLIER' | 'CLIENT'; party_name?: string | null }>;
+    aliases: { token: string; party_id: string; party_type: 'SUPPLIER' | 'CLIENT'; party_name?: string | null; hit: number }[];
+}
+
 export const bankReconciliationService = {
     /**
      * Unifica a normalização de texto para garantir paridade entre regras e descrições.
@@ -366,6 +378,104 @@ export const bankReconciliationService = {
     },
 
     /**
+     * Carrega o índice de contrapartes: aliases aprendidos + documentos (CNPJ/CPF/PIX)
+     * de fornecedores, clientes e contas bancárias de fornecedor.
+     */
+    async loadPartyIndex(organizationId: string): Promise<PartyIndex> {
+        const onlyDigits = (v?: string | null) => (v || '').replace(/\D/g, '');
+        const orgOrNull = `organization_id.eq.${organizationId},organization_id.is.null`;
+        const [aliasesRes, supRes, cliRes, sbaRes] = await Promise.all([
+            supabase.from('reconciliation_aliases').select('alias_token, party_type, party_id, party_name, hit_count').eq('organization_id', organizationId).order('hit_count', { ascending: false }).limit(2000),
+            supabase.from('suppliers').select('id, name, document').or(orgOrNull),
+            supabase.from('clients').select('id, name, document').or(orgOrNull),
+            supabase.from('supplier_bank_accounts').select('supplier_id, pix_key, pix_key_type, beneficiary_document').eq('organization_id', organizationId),
+        ]);
+
+        const docIndex: PartyIndex['docIndex'] = new Map();
+        const supName = new Map<string, string>();
+        (supRes.data || []).forEach(s => {
+            supName.set(s.id, s.name);
+            const d = onlyDigits(s.document);
+            if (d.length >= 11) docIndex.set(d, { party_id: s.id, party_type: 'SUPPLIER', party_name: s.name });
+        });
+        (cliRes.data || []).forEach(c => {
+            const d = onlyDigits(c.document);
+            if (d.length >= 11) docIndex.set(d, { party_id: c.id, party_type: 'CLIENT', party_name: c.name });
+        });
+        (sbaRes.data || []).forEach(a => {
+            const name = supName.get(a.supplier_id) ?? null;
+            const docs = [a.beneficiary_document, (a.pix_key_type === 'cnpj' || a.pix_key_type === 'cpf') ? a.pix_key : null];
+            docs.forEach(v => {
+                const d = onlyDigits(v);
+                if (d.length >= 11 && !docIndex.has(d)) docIndex.set(d, { party_id: a.supplier_id, party_type: 'SUPPLIER', party_name: name });
+            });
+        });
+
+        const aliases = (aliasesRes.data || []).map(a => ({
+            token: a.alias_token, party_id: a.party_id, party_type: a.party_type as 'SUPPLIER' | 'CLIENT', party_name: a.party_name, hit: a.hit_count,
+        }));
+        return { docIndex, aliases };
+    },
+
+    /** Reconhece a contraparte de um movimento bancário por alias aprendido ou CNPJ/CPF/PIX. */
+    resolveBankParty(
+        bTx: { description_raw?: string; description_normalized?: string; counterparty_name?: string },
+        index: PartyIndex,
+    ): ResolvedParty | null {
+        const descNorm = this.normalizeText(bTx.counterparty_name || bTx.description_normalized || bTx.description_raw || '');
+        // 1) Alias aprendido (já ordenado por hit_count desc)
+        for (const a of index.aliases) {
+            if (a.token && descNorm.includes(a.token)) {
+                return { party_id: a.party_id, party_type: a.party_type, party_name: a.party_name, via: 'aprendido' };
+            }
+        }
+        // 2) CNPJ/CPF/PIX presente no texto bruto
+        const rawDigits = `${bTx.description_raw || ''} ${bTx.counterparty_name || ''}`.replace(/\D/g, '');
+        if (rawDigits.length >= 11) {
+            for (const [doc, party] of index.docIndex) {
+                if (rawDigits.includes(doc)) return { ...party, via: 'CNPJ' };
+            }
+        }
+        return null;
+    },
+
+    /** Extrai um token significativo da descrição do extrato para virar alias. */
+    extractAliasToken(text: string): string {
+        const NOISE = new Set(['PIX', 'TED', 'DOC', 'TEV', 'TRANSFERENCIA', 'TRANSF', 'RECEBIDO', 'ENVIADO', 'PAGAMENTO', 'PAGTO', 'COBRANCA', 'BOLETO', 'DEB', 'CRED', 'DEBITO', 'CREDITO', 'CARTAO', 'COMPRA', 'SAQUE', 'TARIFA', 'LIQUIDACAO', 'REF', 'NOME', 'LTDA', 'ME', 'EPP', 'SA', 'EIRELI', 'DA', 'DE', 'DO', 'DAS', 'DOS', 'E']);
+        const words = this.normalizeText(text).split(' ').filter(w => w && !/^\d+$/.test(w) && !NOISE.has(w));
+        return words.slice(0, 4).join(' ').trim();
+    },
+
+    /** Aprende a associação extrato→contraparte ao confirmar um match (só com contraparte cadastrada). */
+    async learnAliasFromMatch(bankTxId: string, internalTxId: string, organizationId: string) {
+        try {
+            const [{ data: bt }, { data: it }] = await Promise.all([
+                supabase.from('bank_transactions').select('description_normalized, counterparty_name, description_raw').eq('id', bankTxId).maybeSingle(),
+                supabase.from('internal_transactions').select('party_id, party_type, party_name, entity_name').eq('id', internalTxId).maybeSingle(),
+            ]);
+            if (!bt || !it || !it.party_id) return;
+            const token = this.extractAliasToken(bt.counterparty_name || bt.description_normalized || bt.description_raw || '');
+            if (!token || token.length < 3) return;
+            const partyType: 'SUPPLIER' | 'CLIENT' = it.party_type === 'CLIENT' ? 'CLIENT' : 'SUPPLIER';
+
+            const { data: existing } = await supabase.from('reconciliation_aliases')
+                .select('id, hit_count')
+                .eq('organization_id', organizationId).eq('alias_token', token).eq('party_id', it.party_id)
+                .maybeSingle();
+            if (existing) {
+                await supabase.from('reconciliation_aliases').update({ hit_count: (existing.hit_count || 1) + 1, updated_at: new Date().toISOString() }).eq('id', existing.id);
+            } else {
+                await supabase.from('reconciliation_aliases').insert({
+                    organization_id: organizationId, alias_token: token, party_type: partyType,
+                    party_id: it.party_id, party_name: it.party_name || it.entity_name || null,
+                });
+            }
+        } catch (e) {
+            console.warn('[Alias] aprendizado falhou (ignorado):', e);
+        }
+    },
+
+    /**
      * Calcula o valor esperado de um título pago em atraso (multa + juros pró-rata).
      * Retorna null se o pagamento não foi após o vencimento.
      */
@@ -401,8 +511,9 @@ export const bankReconciliationService = {
      */
     scoreCandidate(
         bTx: { amount: number; direction: string; transaction_date: string; description_normalized?: string; description_raw?: string; counterparty_name?: string },
-        c: { amount: number; transaction_date: string; due_date?: string; description?: string; entity_name?: string; party_name?: string },
+        c: { amount: number; transaction_date: string; due_date?: string; description?: string; entity_name?: string; party_name?: string; party_id?: string },
         s: ReconciliationEngineSettings,
+        resolved?: ResolvedParty | null,
     ): { score: number; reasons: string[] } {
         const reasons: string[] = [];
         let score = 0;
@@ -430,12 +541,19 @@ export const bankReconciliationService = {
         else if (dDays <= 3) { score += 15; reasons.push(`Data próxima (${dDays}d)`); }
         else if (dDays <= s.date_window_days) { score += 8; reasons.push(`Data dentro de ${dDays}d`); }
 
-        // ── Fornecedor / contraparte (similaridade textual) ──
-        const bankParty = bTx.counterparty_name || bTx.description_normalized || '';
+        // ── Fornecedor reconhecido por CNPJ/PIX/alias (sinal forte) ──
         const intParty = c.entity_name || c.party_name || c.description || '';
-        const sim = this.calculateSimilarity(bankParty, intParty);
-        if (sim >= 0.8) { score += 30; reasons.push('Mesmo fornecedor (alta similaridade)'); }
-        else if (sim >= 0.5) { score += 15; reasons.push('Fornecedor similar'); }
+        if (resolved && resolved.party_id && c.party_id && c.party_id === resolved.party_id) {
+            score += 50; reasons.push(`Mesmo fornecedor (${resolved.via})`);
+        } else if (resolved && resolved.party_name && this.calculateSimilarity(intParty, resolved.party_name) >= 0.7) {
+            score += 25; reasons.push(`Fornecedor reconhecido (${resolved.via})`);
+        } else {
+            // ── Fornecedor por similaridade textual (fallback) ──
+            const bankParty = bTx.counterparty_name || bTx.description_normalized || '';
+            const sim = this.calculateSimilarity(bankParty, intParty);
+            if (sim >= 0.8) { score += 30; reasons.push('Mesmo fornecedor (alta similaridade)'); }
+            else if (sim >= 0.5) { score += 15; reasons.push('Fornecedor similar'); }
+        }
 
         // ── Documento (NF) ──
         if (this.documentMatches(c.description || '', bTx.description_normalized || bTx.description_raw || '')) {
@@ -457,8 +575,8 @@ export const bankReconciliationService = {
         const MIN_SUGGESTION = settings.suggestion_min;
         const DAY = 86_400_000;
 
-        // 1) Carrega de uma vez: movimentos do extrato a casar + todos os títulos pendentes
-        const [{ data: bankTxs }, { data: pending }] = await Promise.all([
+        // 1) Carrega de uma vez: extrato + títulos pendentes + índice de contrapartes
+        const [{ data: bankTxs }, { data: pending }, partyIndex] = await Promise.all([
             supabase
                 .from('bank_transactions')
                 .select('id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name')
@@ -467,10 +585,11 @@ export const bankReconciliationService = {
                 .limit(5000),
             supabase
                 .from('internal_transactions')
-                .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name')
+                .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id')
                 .eq('organization_id', organizationId)
                 .eq('status', 'PENDING')
                 .limit(8000),
+            this.loadPartyIndex(organizationId),
         ]);
 
         if (!bankTxs || bankTxs.length === 0) return;
@@ -487,6 +606,7 @@ export const bankReconciliationService = {
             const maxT = bDate + 5 * DAY;
             const amtMin = bTx.amount * 0.90;
             const amtMax = bTx.amount * 1.01;
+            const resolved = this.resolveBankParty(bTx, partyIndex);
 
             const ranked = candidatesAll
                 .filter(c => {
@@ -495,7 +615,7 @@ export const bankReconciliationService = {
                     const t = new Date(c.transaction_date).getTime();
                     return t >= minT && t <= maxT;
                 })
-                .map(c => ({ c, ...this.scoreCandidate(bTx, c, settings) }))
+                .map(c => ({ c, ...this.scoreCandidate(bTx, c, settings, resolved) }))
                 .filter(r => r.score >= MIN_SUGGESTION)
                 .sort((a, b) => b.score - a.score);
 
@@ -618,7 +738,10 @@ export const bankReconciliationService = {
      */
     async confirmTransaction(bankTxId: string, internalTxId?: string, organizationId?: string) {
         if (internalTxId) {
-            return this.createMatch(bankTxId, internalTxId, 'MANUAL', 100);
+            await this.createMatch(bankTxId, internalTxId, 'MANUAL', 100);
+            // Aprende a associação extrato→contraparte para reconhecer nos próximos matches
+            if (organizationId) await this.learnAliasFromMatch(bankTxId, internalTxId, organizationId);
+            return;
         }
 
         // Se não houver internalTxId, apenas confirmamos a categorização externa

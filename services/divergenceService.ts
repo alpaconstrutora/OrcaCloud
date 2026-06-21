@@ -1,0 +1,156 @@
+import { supabase } from '../lib/supabase';
+import { bankReconciliationService } from './bankReconciliationService';
+import type {
+    ReconciliationDivergences,
+    BankWithoutInternal,
+    ValueMismatch,
+} from '../types/financial';
+
+interface DivergenceOptions {
+    asOf?: string;
+    agingDays?: number;
+    valueTolerance?: number;
+    limit?: number;
+}
+
+export const divergenceService = {
+    /**
+     * Retorna as divergências de conciliação classificadas em três tipos.
+     */
+    async getDivergences(
+        organizationId: string,
+        opts: DivergenceOptions = {},
+    ): Promise<ReconciliationDivergences> {
+        const asOf = opts.asOf ?? new Date().toISOString().split('T')[0];
+        const { data, error } = await supabase.rpc('fn_reconciliation_divergences', {
+            p_organization_id: organizationId,
+            p_as_of:           asOf,
+            p_aging_days:      opts.agingDays ?? 5,
+            p_value_tolerance: opts.valueTolerance ?? 50,
+            p_limit:           opts.limit ?? 100,
+        });
+        if (error) throw error;
+        return (data as ReconciliationDivergences) ?? {
+            as_of: asOf,
+            counts: { bank_without_internal: 0, internal_without_bank: 0, value_mismatch: 0 },
+            bank_without_internal: [],
+            internal_without_bank: [],
+            value_mismatch: [],
+        };
+    },
+
+    /**
+     * Tipo 1 — cria um lançamento interno espelhando o movimento bancário
+     * e o vincula automaticamente (ambos passam a CONCILIADO).
+     */
+    async createInternalAndMatch(organizationId: string, bank: BankWithoutInternal): Promise<void> {
+        const { data: inserted, error } = await supabase
+            .from('internal_transactions')
+            .insert({
+                organization_id: organizationId,
+                source_system: 'MANUAL',
+                transaction_date: bank.transaction_date,
+                amount: bank.amount,
+                direction: bank.direction,
+                description: bank.description || 'Lançamento gerado da conciliação',
+                category: bank.category || 'Geral',
+                status: 'PENDING',
+            })
+            .select('id')
+            .single();
+        if (error) throw error;
+        await bankReconciliationService.createMatch(bank.id, inserted!.id, 'MANUAL', 100);
+        await this.audit(organizationId, 'MANUAL_CREATE', bank.id, {
+            action: 'CREATE_INTERNAL_FROM_BANK', internal_id: inserted!.id,
+        });
+    },
+
+    /**
+     * Tipo 1 (alternativa) — confirma o movimento sem criar título
+     * (ex.: tarifas/impostos já contabilizados externamente).
+     */
+    async confirmWithoutTitle(organizationId: string, bankTxId: string): Promise<void> {
+        await bankReconciliationService.confirmTransaction(bankTxId, undefined, organizationId);
+    },
+
+    /**
+     * Tipo 2 — estorna um título sem movimento bancário (status CANCELLED).
+     */
+    async reverseInternal(organizationId: string, internalTxId: string): Promise<void> {
+        const { error } = await supabase
+            .from('internal_transactions')
+            .update({ status: 'CANCELLED' })
+            .eq('id', internalTxId);
+        if (error) throw error;
+        await this.audit(organizationId, 'REJECT', internalTxId, { action: 'REVERSE_INTERNAL' });
+    },
+
+    /**
+     * Tipo 2 — reabre um título previamente cancelado/baixado (volta a PENDING).
+     */
+    async reopenInternal(organizationId: string, internalTxId: string): Promise<void> {
+        const { error } = await supabase
+            .from('internal_transactions')
+            .update({ status: 'PENDING' })
+            .eq('id', internalTxId);
+        if (error) throw error;
+        await this.audit(organizationId, 'MANUAL_CREATE', internalTxId, { action: 'REOPEN_INTERNAL' });
+    },
+
+    /**
+     * Tipo 3 — concilia extrato × título com diferença de valor.
+     * Cria o vínculo e gera um lançamento de ajuste (tarifa/juros/desconto)
+     * para o resíduo, mantendo o saldo contábil igual ao bancário.
+     */
+    async reconcileWithDifference(
+        organizationId: string,
+        m: ValueMismatch,
+        adjustmentCategory = 'Tarifas Bancárias',
+    ): Promise<void> {
+        // Vincula extrato ao título (ambos CONCILIADO).
+        await bankReconciliationService.createMatch(m.bank_id, m.internal_id, 'MANUAL', 100);
+
+        // Resíduo (signed) que falta para o saldo contábil bater com o bancário.
+        const sign = m.direction === 'CREDIT' ? 1 : -1;
+        const residualSigned = sign * (m.bank_amount - m.internal_amount);
+        if (Math.abs(residualSigned) >= 0.01) {
+            const { error } = await supabase
+                .from('internal_transactions')
+                .insert({
+                    organization_id: organizationId,
+                    source_system: 'MANUAL',
+                    transaction_date: m.bank_date,
+                    amount: Math.abs(residualSigned),
+                    direction: residualSigned > 0 ? 'CREDIT' : 'DEBIT',
+                    description: `Ajuste de conciliação (${adjustmentCategory})`,
+                    category: adjustmentCategory,
+                    status: 'CONCILIATED',
+                });
+            if (error) throw error;
+        }
+        await this.audit(organizationId, 'MATCH', m.bank_id, {
+            action: 'RECONCILE_WITH_DIFFERENCE',
+            internal_id: m.internal_id,
+            difference: m.difference,
+            adjustment_category: adjustmentCategory,
+        });
+    },
+
+    async audit(
+        organizationId: string,
+        eventType: 'IMPORT' | 'MATCH' | 'REJECT' | 'MANUAL_CREATE',
+        targetId: string,
+        payload: Record<string, unknown>,
+    ): Promise<void> {
+        try {
+            await supabase.from('reconciliation_audit_log').insert({
+                organization_id: organizationId,
+                event_type: eventType,
+                target_id: targetId,
+                payload,
+            });
+        } catch (e) {
+            console.warn('[divergenceService] audit falhou (ignorado):', e);
+        }
+    },
+};

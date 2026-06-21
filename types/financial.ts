@@ -103,6 +103,8 @@ export interface PaymentAccount {
     bank?: string;
     branch?: string;
     account_number?: string;
+    opening_balance?: number;
+    opening_balance_date?: string;
     created_at?: string;
 }
 
@@ -225,6 +227,97 @@ export interface ReconciliationAuditLog {
     payload?: Record<string, unknown>;
     integrity_hash?: string;
     created_at?: string;
+}
+
+// ────────────────────────────────────────────────────────────
+// Dashboard de Conciliação — Saldo Bancário vs. Contábil
+// ────────────────────────────────────────────────────────────
+
+export interface ReconciliationAccountBalance {
+    account_id: string;
+    account_name: string;
+    bank_name: string | null;
+    opening_balance: number;
+    bank_balance: number;        // saldo inicial + extrato (CREDIT − DEBIT)
+    reconciled_balance: number;  // saldo inicial + extrato já conciliado
+    difference: number;          // bank_balance − reconciled_balance
+    pending_value: number;       // soma bruta dos lançamentos pendentes
+    pending_count: number;
+    unclassified_count: number;
+}
+
+export interface ReconciliationDashboardTotals {
+    opening_balance: number;
+    bank_balance: number;
+    reconciled_balance: number;
+    difference: number;
+    pending_value: number;
+    pending_count: number;
+    unclassified_count: number;
+}
+
+export interface ReconciliationDashboard {
+    as_of: string;
+    accounts: ReconciliationAccountBalance[];
+    totals: ReconciliationDashboardTotals;
+    system_balance: number;      // saldo inicial + lançamentos internos conciliados
+    fees: { value: number; count: number };
+}
+
+// ────────────────────────────────────────────────────────────
+// Gestão de Divergências de Conciliação
+// ────────────────────────────────────────────────────────────
+
+export interface BankWithoutInternal {
+    id: string;
+    bank_account_id: string;
+    account_name: string;
+    transaction_date: string;
+    amount: number;
+    direction: 'CREDIT' | 'DEBIT';
+    description: string;
+    category: string | null;
+}
+
+export interface InternalWithoutBank {
+    id: string;
+    transaction_date: string;
+    due_date: string | null;
+    ref_date: string;
+    days_overdue: number;
+    amount: number;
+    direction: 'CREDIT' | 'DEBIT';
+    description: string | null;
+    category: string | null;
+    party_name: string | null;
+    business_status: string | null;
+    project_id: string | null;
+}
+
+export interface ValueMismatch {
+    bank_id: string;
+    internal_id: string;
+    bank_amount: number;
+    internal_amount: number;
+    difference: number;           // bank − internal
+    bank_date: string;
+    internal_date: string;
+    bank_description: string;
+    internal_description: string | null;
+    direction: 'CREDIT' | 'DEBIT';
+    account_name: string;
+}
+
+export interface ReconciliationDivergences {
+    as_of: string;
+    counts: {
+        bank_without_internal: number;
+        internal_without_bank: number;
+        value_mismatch: number;
+    };
+    bank_without_internal: BankWithoutInternal[];
+    internal_without_bank: InternalWithoutBank[];
+    value_mismatch: ValueMismatch[];
 }
 
 // ────────────────────────────────────────────────────────────

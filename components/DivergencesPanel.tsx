@@ -1,0 +1,270 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+    AlertTriangle, Landmark, FileWarning, Scale, RefreshCw,
+    Plus, CheckCircle2, Undo2, RotateCcw, ArrowDownLeft, ArrowUpRight, Link2,
+} from 'lucide-react';
+import { divergenceService } from '../services/divergenceService';
+import { useToast } from '../hooks/useToast';
+import { useConfirm } from './ui/confirm';
+import type {
+    ReconciliationDivergences, BankWithoutInternal, InternalWithoutBank, ValueMismatch,
+} from '../types/financial';
+
+function formatBRL(v: number): string {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+}
+function formatDate(d?: string | null): string {
+    if (!d) return '—';
+    const [y, m, day] = d.split('T')[0].split('-');
+    return `${day}/${m}/${y}`;
+}
+function DirIcon({ dir }: { dir: 'CREDIT' | 'DEBIT' }) {
+    return dir === 'CREDIT'
+        ? <ArrowDownLeft className="w-4 h-4 text-emerald-500" />
+        : <ArrowUpRight className="w-4 h-4 text-red-500" />;
+}
+
+interface SectionProps {
+    title: string;
+    subtitle: string;
+    count: number;
+    icon: React.ElementType;
+    accent: string;
+    children: React.ReactNode;
+}
+function Section({ title, subtitle, count, icon: Icon, accent, children }: SectionProps) {
+    const [open, setOpen] = useState(true);
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-3 px-5 py-4 hover:bg-gray-50/50">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${accent}`}>
+                    <Icon className="w-4 h-4" />
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                    <p className="text-sm font-black text-gray-800">{title}</p>
+                    <p className="text-[11px] text-gray-400 font-medium">{subtitle}</p>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-black ${count > 0 ? accent : 'bg-gray-50 text-gray-300'}`}>
+                    {count}
+                </span>
+            </button>
+            {open && count > 0 && <div className="border-t border-gray-50 divide-y divide-gray-50">{children}</div>}
+            {open && count === 0 && (
+                <div className="border-t border-gray-50 px-5 py-6 text-center text-xs text-gray-300 font-semibold">
+                    Nenhuma divergência deste tipo. 🎉
+                </div>
+            )}
+        </div>
+    );
+}
+
+interface DivergencesPanelProps {
+    organizationId: string;
+    onChanged?: () => void;
+}
+
+const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onChanged }) => {
+    const { showToast } = useToast();
+    const confirm = useConfirm();
+    const [data, setData] = useState<ReconciliationDivergences | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [busyId, setBusyId] = useState<string | null>(null);
+
+    const load = useCallback(async () => {
+        if (!organizationId) return;
+        setLoading(true);
+        try {
+            setData(await divergenceService.getDivergences(organizationId));
+        } catch (e) {
+            console.error('[DivergencesPanel]', e);
+            showToast('Erro ao carregar divergências', 'error');
+        } finally {
+            setLoading(false);
+        }
+    }, [organizationId, showToast]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const run = async (key: string, fn: () => Promise<void>, okMsg: string) => {
+        setBusyId(key);
+        try {
+            await fn();
+            showToast(okMsg, 'success');
+            await load();
+            onChanged?.();
+        } catch (e) {
+            console.error('[DivergencesPanel] action', e);
+            showToast('Erro ao executar ação', 'error');
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const onCreateInternal = (b: BankWithoutInternal) =>
+        run(b.id, () => divergenceService.createInternalAndMatch(organizationId, b), 'Lançamento criado e conciliado');
+
+    const onConfirmNoTitle = async (b: BankWithoutInternal) => {
+        if (!await confirm({
+            title: 'Confirmar sem título?',
+            message: 'O movimento será marcado como conciliado sem gerar lançamento (use para tarifas/impostos já contabilizados).',
+            confirmLabel: 'Confirmar',
+        })) return;
+        run(b.id, () => divergenceService.confirmWithoutTitle(organizationId, b.id), 'Movimento confirmado');
+    };
+
+    const onReverse = async (i: InternalWithoutBank) => {
+        if (!await confirm({
+            title: 'Estornar título?',
+            message: 'O lançamento será cancelado. Esta ação fica registrada na auditoria.',
+            variant: 'warning', confirmLabel: 'Estornar',
+        })) return;
+        run(i.id, () => divergenceService.reverseInternal(organizationId, i.id), 'Título estornado');
+    };
+
+    const onReopen = (i: InternalWithoutBank) =>
+        run(i.id, () => divergenceService.reopenInternal(organizationId, i.id), 'Título reaberto');
+
+    const onReconcileDiff = async (m: ValueMismatch) => {
+        if (!await confirm({
+            title: 'Conciliar com diferença?',
+            message: `Será criado o vínculo e um lançamento de ajuste de ${formatBRL(Math.abs(m.difference))} (tarifa/juros/desconto).`,
+            confirmLabel: 'Conciliar',
+        })) return;
+        run(m.bank_id, () => divergenceService.reconcileWithDifference(organizationId, m), 'Conciliado com ajuste');
+    };
+
+    const c = data?.counts ?? { bank_without_internal: 0, internal_without_bank: 0, value_mismatch: 0 };
+    const total = c.bank_without_internal + c.internal_without_bank + c.value_mismatch;
+
+    return (
+        <div className="space-y-4 min-h-[500px]">
+            <div className="flex items-center justify-between px-1">
+                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Gestão de Divergências
+                    {total > 0 && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">{total}</span>}
+                </h4>
+                <button
+                    onClick={load}
+                    disabled={loading}
+                    className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-colors disabled:opacity-50"
+                    title="Atualizar"
+                >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+            </div>
+
+            {/* Tipo 1 — Movimento bancário sem lançamento */}
+            <Section
+                title="Movimento bancário sem lançamento"
+                subtitle="Aparece no extrato mas não existe no sistema"
+                count={c.bank_without_internal}
+                icon={Landmark}
+                accent="bg-blue-50 text-blue-600"
+            >
+                {(data?.bank_without_internal ?? []).map(b => (
+                    <div key={b.id} className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-gray-50/50">
+                        <DirIcon dir={b.direction} />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-gray-800 truncate">{b.description}</p>
+                            <p className="text-[11px] text-gray-400 font-medium">{b.account_name} · {formatDate(b.transaction_date)}</p>
+                        </div>
+                        <span className={`tabular-nums font-black text-sm ${b.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {formatBRL(b.amount)}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                onClick={() => onCreateInternal(b)}
+                                disabled={busyId === b.id}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 disabled:opacity-50"
+                            >
+                                <Plus className="w-3.5 h-3.5" /> Criar lançamento
+                            </button>
+                            <button
+                                onClick={() => onConfirmNoTitle(b)}
+                                disabled={busyId === b.id}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-600 text-xs font-bold hover:bg-gray-100 disabled:opacity-50"
+                            >
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Sem título
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </Section>
+
+            {/* Tipo 2 — Lançamento sem movimento bancário */}
+            <Section
+                title="Título sem movimento bancário"
+                subtitle="Lançamento pendente/vencido que nunca apareceu no extrato"
+                count={c.internal_without_bank}
+                icon={FileWarning}
+                accent="bg-amber-50 text-amber-600"
+            >
+                {(data?.internal_without_bank ?? []).map(i => (
+                    <div key={i.id} className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-gray-50/50">
+                        <DirIcon dir={i.direction} />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-gray-800 truncate">{i.description || i.party_name || 'Lançamento'}</p>
+                            <p className="text-[11px] text-gray-400 font-medium">
+                                {i.party_name ? `${i.party_name} · ` : ''}venc. {formatDate(i.ref_date)}
+                                {i.days_overdue > 0 && <span className="text-red-400 font-bold"> · {i.days_overdue}d em atraso</span>}
+                            </p>
+                        </div>
+                        <span className={`tabular-nums font-black text-sm ${i.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {formatBRL(i.amount)}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                onClick={() => onReverse(i)}
+                                disabled={busyId === i.id}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-bold hover:bg-red-100 disabled:opacity-50"
+                            >
+                                <Undo2 className="w-3.5 h-3.5" /> Estornar
+                            </button>
+                            <button
+                                onClick={() => onReopen(i)}
+                                disabled={busyId === i.id}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-600 text-xs font-bold hover:bg-gray-100 disabled:opacity-50"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5" /> Reabrir
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </Section>
+
+            {/* Tipo 3 — Diferença de valor */}
+            <Section
+                title="Diferença de valor"
+                subtitle="Mesmo título com valor divergente (tarifa, juros ou desconto)"
+                count={c.value_mismatch}
+                icon={Scale}
+                accent="bg-purple-50 text-purple-600"
+            >
+                {(data?.value_mismatch ?? []).map(m => (
+                    <div key={m.bank_id} className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-gray-50/50">
+                        <DirIcon dir={m.direction} />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-gray-800 truncate">{m.bank_description}</p>
+                            <p className="text-[11px] text-gray-400 font-medium">
+                                Sistema {formatBRL(m.internal_amount)} · Banco {formatBRL(m.bank_amount)} · {m.account_name}
+                            </p>
+                        </div>
+                        <span className="tabular-nums font-black text-sm text-purple-600">
+                            Δ {formatBRL(Math.abs(m.difference))}
+                        </span>
+                        <button
+                            onClick={() => onReconcileDiff(m)}
+                            disabled={busyId === m.bank_id}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-50 text-purple-700 text-xs font-bold hover:bg-purple-100 disabled:opacity-50"
+                        >
+                            <Link2 className="w-3.5 h-3.5" /> Conciliar com diferença
+                        </button>
+                    </div>
+                ))}
+            </Section>
+        </div>
+    );
+};
+
+export default DivergencesPanel;

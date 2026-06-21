@@ -17,6 +17,8 @@ import { supabase } from '../lib/supabase';
 import { financialSyncService } from '../services/financialSyncService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { useConfirm } from './ui/confirm';
+import ReconciliationDashboardView from './ReconciliationDashboard';
+import DivergencesPanel from './DivergencesPanel';
 
 interface BankReconciliationProps {
     organizationId: string;
@@ -92,8 +94,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [matches, setMatches] = useState<ReconciliationMatch[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [accountsLoading, setAccountsLoading] = useState(false);
-    const [activeView, setActiveView] = useState<'pending' | 'conciliated' | 'rules' | 'categories'>(
-        (localStorage.getItem('reconciliation_active_tab') as 'pending' | 'conciliated' | 'rules' | 'categories') || 'rules'
+    const [activeView, setActiveView] = useState<'dashboard' | 'divergences' | 'pending' | 'conciliated' | 'rules' | 'categories'>(
+        (localStorage.getItem('reconciliation_active_tab') as 'dashboard' | 'divergences' | 'pending' | 'conciliated' | 'rules' | 'categories') || 'dashboard'
     );
     const [rulesViewMode, setRulesViewMode] = useState<'grid' | 'list'>(
         (localStorage.getItem('reconciliation_rules_view_mode') as 'grid' | 'list') || 'list'
@@ -2400,7 +2402,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 </div>
 
                 <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100">
-                    <button 
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${activeView === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Dashboard
+                    </button>
+                    <button
+                        onClick={() => setActiveView('divergences')}
+                        className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${activeView === 'divergences' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Divergências
+                    </button>
+                    <button
                         onClick={() => setActiveView('pending')}
                         className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${activeView === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
@@ -2601,7 +2615,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             })()}
 
             {/* Main Content Area */}
-            {activeView === 'rules' ? (
+            {activeView === 'dashboard' ? (
+                <ReconciliationDashboardView organizationId={organizationId} />
+            ) : activeView === 'divergences' ? (
+                <DivergencesPanel organizationId={organizationId} onChanged={() => { loadTransactions(); loadStats(); }} />
+            ) : activeView === 'rules' ? (
                 renderRules()
             ) : activeView === 'categories' ? (
                 renderCategories()

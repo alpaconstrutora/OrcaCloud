@@ -57,6 +57,11 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
+          // SW novo assume o controle imediatamente após deploy (evita tela branca
+          // de stale-hash no primeiro acesso, pois o SW antigo deixa de servir HTML velho).
+          skipWaiting: true,
+          clientsClaim: true,
+          cleanupOutdatedCaches: true,
           // Cache static assets + index.html (necessário para navigateFallback funcionar offline).
           // JS bundles excluídos do precache para evitar stale-hash white screen
           // (novo deploy muda hashes do JS; HTML precacheado é atualizado a cada build,

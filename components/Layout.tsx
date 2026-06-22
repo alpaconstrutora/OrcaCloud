@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, Landmark, ArrowRightLeft, Banknote, LineChart } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, Landmark, ArrowRightLeft, Banknote, LineChart } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -247,62 +247,111 @@ const Layout: React.FC<LayoutProps> = ({
   const mod = allowedMods;
   const isDevEmail = profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br';
   const isDev = profile.group === 'DESENVOLVEDOR' || isDevEmail;
-  const [isDarkMode, setIsDarkMode] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
+  // Tema do sidebar: 'light' | 'dark' (sidebar escuro, janelas claras) |
+  // 'midnight' (Escuro Total: sidebar + janelas escuros).
+  type ThemeMode = 'light' | 'dark' | 'midnight';
+  const THEME_ORDER: ThemeMode[] = ['light', 'dark', 'midnight'];
+  const [themeMode, setThemeMode] = React.useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') return 'dark';
     const stored = localStorage.getItem('sidebar_theme');
-    return stored ? stored === 'dark' : true;
+    if (stored === 'light' || stored === 'dark' || stored === 'midnight') return stored;
+    return 'dark';
   });
   React.useEffect(() => {
-    localStorage.setItem('sidebar_theme', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
+    localStorage.setItem('sidebar_theme', themeMode);
+  }, [themeMode]);
+  const cycleTheme = React.useCallback(() => {
+    setThemeMode(prev => THEME_ORDER[(THEME_ORDER.indexOf(prev) + 1) % THEME_ORDER.length]);
+  }, []);
+  const isDarkMode = themeMode !== 'light'; // sidebar escuro nos dois modos escuros
+  const isMidnight = themeMode === 'midnight';
+  const themeLabel = themeMode === 'light' ? 'Tema claro' : themeMode === 'dark' ? 'Tema escuro' : 'Escuro total';
 
-  const t = isDarkMode
+  // Tema das "janelas" (área de conteúdo + topo). Só escurece no modo Escuro Total.
+  const w = isMidnight
     ? {
-        shell: 'bg-[#1a1a1a] text-white border-white/5',
-        searchWrap: 'bg-[#262626] border-transparent focus-within:border-white/10',
-        searchText: 'text-gray-200 placeholder:text-gray-500',
-        searchIcon: 'text-gray-500',
-        itemText: 'text-gray-300',
-        itemHover: 'hover:text-white hover:bg-white/5',
-        itemActive: 'bg-white/10 text-white',
-        itemIcon: 'text-gray-400 group-hover:text-gray-200',
-        itemIconActive: 'text-white',
-        groupLabel: 'text-gray-500',
-        divider: 'bg-white/5',
-        dropdownBorder: 'border-white/5',
-        dropdownGroupLabel: 'text-gray-600',
-        footerBorder: 'border-white/5',
-        userName: 'text-white',
-        userEmail: 'text-gray-500',
-        signOut: 'text-gray-400 hover:text-white hover:bg-white/5',
-        toggleTrack: 'bg-orange-500',
-        badgeBgRing: 'border-[#1a1a1a]',
-        sunIcon: 'text-gray-500',
-        moonIcon: 'text-orange-400',
+        shell: 'bg-[#0f1117]',
+        header: 'bg-[#15171e] border-white/5',
+        headerIcon: 'text-gray-300',
+        main: 'text-gray-200',
       }
     : {
-        shell: 'bg-white text-gray-800 border-gray-200',
-        searchWrap: 'bg-gray-100 border-transparent focus-within:border-gray-300',
-        searchText: 'text-gray-800 placeholder:text-gray-400',
-        searchIcon: 'text-gray-400',
-        itemText: 'text-gray-700',
-        itemHover: 'hover:text-gray-900 hover:bg-gray-100',
-        itemActive: 'bg-gray-200/70 text-gray-900',
-        itemIcon: 'text-gray-500 group-hover:text-gray-700',
-        itemIconActive: 'text-gray-900',
-        groupLabel: 'text-gray-400',
-        divider: 'bg-gray-200',
-        dropdownBorder: 'border-gray-200',
-        dropdownGroupLabel: 'text-gray-400',
-        footerBorder: 'border-gray-200',
-        userName: 'text-gray-900',
-        userEmail: 'text-gray-500',
-        signOut: 'text-gray-500 hover:text-gray-900 hover:bg-gray-100',
-        toggleTrack: 'bg-orange-500',
-        badgeBgRing: 'border-white',
-        sunIcon: 'text-orange-400',
-        moonIcon: 'text-gray-400',
+        shell: 'bg-gray-50',
+        header: 'bg-white border-gray-200',
+        headerIcon: 'text-gray-600',
+        main: '',
       };
+
+  const sidebarDark = {
+    shell: 'bg-[#1a1a1a] text-white border-white/5',
+    searchWrap: 'bg-[#262626] border-transparent focus-within:border-white/10',
+    searchText: 'text-gray-200 placeholder:text-gray-500',
+    searchIcon: 'text-gray-500',
+    itemText: 'text-gray-300',
+    itemHover: 'hover:text-white hover:bg-white/5',
+    itemActive: 'bg-white/10 text-white',
+    itemIcon: 'text-gray-400 group-hover:text-gray-200',
+    itemIconActive: 'text-white',
+    groupLabel: 'text-gray-500',
+    divider: 'bg-white/5',
+    dropdownBorder: 'border-white/5',
+    dropdownGroupLabel: 'text-gray-600',
+    footerBorder: 'border-white/5',
+    userName: 'text-white',
+    userEmail: 'text-gray-500',
+    signOut: 'text-gray-400 hover:text-white hover:bg-white/5',
+    toggleTrack: 'bg-orange-500',
+    badgeBgRing: 'border-[#1a1a1a]',
+    sunIcon: 'text-gray-500',
+    moonIcon: 'text-orange-400',
+  };
+  const sidebarMidnight = {
+    shell: 'bg-[#0b0d12] text-white border-indigo-500/10',
+    searchWrap: 'bg-[#161922] border-transparent focus-within:border-indigo-400/20',
+    searchText: 'text-gray-200 placeholder:text-gray-500',
+    searchIcon: 'text-gray-500',
+    itemText: 'text-gray-300',
+    itemHover: 'hover:text-white hover:bg-indigo-500/10',
+    itemActive: 'bg-indigo-500/20 text-white',
+    itemIcon: 'text-gray-400 group-hover:text-indigo-200',
+    itemIconActive: 'text-indigo-200',
+    groupLabel: 'text-gray-500',
+    divider: 'bg-indigo-500/10',
+    dropdownBorder: 'border-indigo-500/10',
+    dropdownGroupLabel: 'text-gray-600',
+    footerBorder: 'border-indigo-500/10',
+    userName: 'text-white',
+    userEmail: 'text-gray-500',
+    signOut: 'text-gray-400 hover:text-white hover:bg-indigo-500/10',
+    toggleTrack: 'bg-indigo-500',
+    badgeBgRing: 'border-[#0b0d12]',
+    sunIcon: 'text-gray-500',
+    moonIcon: 'text-indigo-300',
+  };
+  const sidebarLight = {
+    shell: 'bg-white text-gray-800 border-gray-200',
+    searchWrap: 'bg-gray-100 border-transparent focus-within:border-gray-300',
+    searchText: 'text-gray-800 placeholder:text-gray-400',
+    searchIcon: 'text-gray-400',
+    itemText: 'text-gray-700',
+    itemHover: 'hover:text-gray-900 hover:bg-gray-100',
+    itemActive: 'bg-gray-200/70 text-gray-900',
+    itemIcon: 'text-gray-500 group-hover:text-gray-700',
+    itemIconActive: 'text-gray-900',
+    groupLabel: 'text-gray-400',
+    divider: 'bg-gray-200',
+    dropdownBorder: 'border-gray-200',
+    dropdownGroupLabel: 'text-gray-400',
+    footerBorder: 'border-gray-200',
+    userName: 'text-gray-900',
+    userEmail: 'text-gray-500',
+    signOut: 'text-gray-500 hover:text-gray-900 hover:bg-gray-100',
+    toggleTrack: 'bg-orange-500',
+    badgeBgRing: 'border-white',
+    sunIcon: 'text-orange-400',
+    moonIcon: 'text-gray-400',
+  };
+  const t = themeMode === 'light' ? sidebarLight : themeMode === 'midnight' ? sidebarMidnight : sidebarDark;
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
@@ -463,7 +512,7 @@ const Layout: React.FC<LayoutProps> = ({
 
   return (
     <NavContext.Provider value={{ activeView, isCollapsed, t, onChangeView, setIsMobileMenuOpen }}>
-    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans relative">
+    <div className={`flex h-screen overflow-hidden font-sans relative ${w.shell}`}>
       {/* Sidebar - Desktop */}
       <aside className={`hidden md:flex flex-col border-r shadow-2xl relative z-20 transition-all duration-300 ease-in-out ${t.shell} ${isCollapsed ? 'w-20' : 'w-72'}`}>
         {/* Collapse Toggle */}
@@ -518,6 +567,7 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavGroup label="Inteligência de Negócios" />
               <NavItem id="bi-executivo" icon={BarChart3} label="BI Executivo" />
+              <NavItem id="opura-reports" icon={BarChart3} label="ÒPURA Relatórios" />
               <NavItem id="opura-market" icon={Search} label="ÒPURA Market" />
 
               <NavGroup label="Corporativo" />
@@ -864,11 +914,11 @@ const Layout: React.FC<LayoutProps> = ({
             <div className="flex flex-col items-center gap-2">
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-200 to-amber-500" />
               <button
-                onClick={() => setIsDarkMode(!isDarkMode)}
+                onClick={cycleTheme}
                 className={`p-2 rounded-lg transition-colors ${t.signOut}`}
-                title={isDarkMode ? 'Tema claro' : 'Tema escuro'}
+                title={`${themeLabel} — clique para alternar`}
               >
-                {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                {themeMode === 'light' ? <Sun className="w-4 h-4" /> : themeMode === 'dark' ? <Moon className="w-4 h-4" /> : <MoonStar className="w-4 h-4" />}
               </button>
               <button
                 onClick={() => supabase.auth.signOut().finally(() => logout())}
@@ -900,16 +950,22 @@ const Layout: React.FC<LayoutProps> = ({
                 </button>
               </div>
               <button
-                onClick={() => setIsDarkMode(!isDarkMode)}
+                onClick={cycleTheme}
                 className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition-colors ${t.signOut}`}
-                title="Alternar tema"
+                title="Alternar tema (claro → escuro → escuro total)"
               >
                 <span className="flex items-center gap-2 text-xs font-medium">
-                  {isDarkMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                  {isDarkMode ? 'Tema escuro' : 'Tema claro'}
+                  {themeMode === 'light' ? <Sun className="w-4 h-4" /> : themeMode === 'dark' ? <Moon className="w-4 h-4" /> : <MoonStar className="w-4 h-4" />}
+                  {themeLabel}
                 </span>
-                <span className={`w-8 h-4 rounded-full relative transition-colors ${t.toggleTrack}`}>
-                  <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isDarkMode ? 'left-4' : 'left-0.5'}`} />
+                {/* indicador de 3 posições */}
+                <span className="flex items-center gap-1">
+                  {THEME_ORDER.map(m => (
+                    <span
+                      key={m}
+                      className={`w-1.5 h-1.5 rounded-full transition-colors ${m === themeMode ? t.toggleTrack : 'bg-current opacity-30'}`}
+                    />
+                  ))}
                 </span>
               </button>
             </>
@@ -989,10 +1045,10 @@ const Layout: React.FC<LayoutProps> = ({
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header with Project Actions */}
-        <header className="flex h-16 bg-white border-b border-gray-200 items-center justify-between px-4 md:px-8 shrink-0 relative z-30">
+        <header className={`flex h-16 border-b items-center justify-between px-4 md:px-8 shrink-0 relative z-30 ${w.header}`}>
           <div className="flex items-center gap-4 flex-1">
             <button className="md:hidden" onClick={() => setIsMobileMenuOpen(true)}>
-              <Menu className="w-6 h-6 text-gray-600" />
+              <Menu className={`w-6 h-6 ${w.headerIcon}`} />
             </button>
 
             {(activeView === 'analytic' || activeView === 'abc-curve' || activeView === 'parametric' || activeView === 'project-settings' || activeView === 'reports') && (
@@ -1067,7 +1123,7 @@ const Layout: React.FC<LayoutProps> = ({
         </header>
 
         {/* Content Body */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 scrollbar-hide relative">
+        <main className={`flex-1 overflow-y-auto p-4 md:p-8 scrollbar-hide relative ${w.main}`}>
           {children}
         </main>
       </div>

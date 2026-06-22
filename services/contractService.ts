@@ -23,9 +23,12 @@ async function resolveSupplierName(supplierId: string | undefined, fallback: str
 }
 
 /**
- * Resolve a contraparte cadastrada de um contrato para popular party_id/party_type/party_name
- * nos lançamentos internos (permite a Central exibir e reconhecer o fornecedor/cliente).
+ * Resolve a contraparte cadastrada de um contrato para popular party_type/party_name
+ * (e party_id) nos lançamentos internos.
  * INCOMING = recebível (cliente); OUTGOING/indefinido = pagável (fornecedor).
+ * IMPORTANTE: internal_transactions.party_id tem FK só para clients
+ * (internal_txs_party_id_fkey). Por isso party_id só é setado para CLIENTE;
+ * para fornecedor, gravamos party_type/party_name mas party_id fica null.
  */
 async function resolveContractParty(
     contract: Contract,
@@ -40,7 +43,7 @@ async function resolveContractParty(
         }
         if (cAny.supplier_id) {
             const name = await resolveSupplierName(cAny.supplier_id, fallbackName);
-            return { party_id: cAny.supplier_id, party_type: 'SUPPLIER', party_name: name };
+            return { party_id: null, party_type: 'SUPPLIER', party_name: name }; // FK só aceita cliente
         }
         if (cAny.client_id) {
             const { data } = await supabase.from('clients').select('name').eq('id', cAny.client_id).maybeSingle();

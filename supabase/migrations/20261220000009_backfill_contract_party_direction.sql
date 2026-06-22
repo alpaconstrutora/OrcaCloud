@@ -6,7 +6,9 @@
 -- Corrige internal_transactions geradas por contrato (parcelado/recorrente/
 -- à vista) que foram criadas com direction='DEBIT' fixo e sem party_id:
 --   • direction      ← INCOMING=CREDIT, senão DEBIT
---   • party_id/type/name ← cliente (INCOMING) ou fornecedor do contrato
+--   • party_type/name ← cliente (INCOMING) ou fornecedor do contrato
+--   • party_id        ← SÓ p/ cliente (FK internal_txs_party_id_fkey → clients);
+--                       fornecedor fica com party_id NULL (registra type/name).
 -- Casa pelo reference_id, que começa com o contract.id.
 -- ============================================================
 
@@ -21,10 +23,12 @@ WITH party AS (
       WHEN c.client_id   IS NOT NULL                             THEN 'CLIENT'
       ELSE NULL
     END AS party_type,
+    -- party_id só p/ cliente (FK só aceita clients); fornecedor → NULL
     CASE
       WHEN c.direction = 'INCOMING' AND c.client_id IS NOT NULL THEN c.client_id
-      WHEN c.supplier_id IS NOT NULL                             THEN c.supplier_id
-      ELSE c.client_id
+      WHEN c.supplier_id IS NOT NULL                             THEN NULL
+      WHEN c.client_id   IS NOT NULL                             THEN c.client_id
+      ELSE NULL
     END AS party_id
   FROM public.contracts c
 ),
@@ -52,7 +56,9 @@ WHERE it.source_system IN ('CONTRACT_PARCELADO', 'CONTRACT_RECURRING', 'CONTRACT
   AND it.reference_id LIKE pn.contract_id::text || '%'
   AND (
         it.direction IS DISTINCT FROM pn.dir
-     OR (pn.party_id IS NOT NULL AND it.party_id IS DISTINCT FROM pn.party_id)
+     OR (pn.party_id   IS NOT NULL AND it.party_id   IS DISTINCT FROM pn.party_id)
+     OR (pn.party_type IS NOT NULL AND it.party_type IS DISTINCT FROM pn.party_type)
+     OR (pn.party_name IS NOT NULL AND it.party_name IS DISTINCT FROM pn.party_name)
   );
 
 -- FIM: 20261220000009_backfill_contract_party_direction.sql

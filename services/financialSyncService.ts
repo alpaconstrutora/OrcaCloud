@@ -54,6 +54,8 @@ export const financialSyncService = {
                     direction: tx.type === 'INCOME' ? 'CREDIT' : 'DEBIT',
                     description: tx.description || `Despesa - ${project.name}`,
                     entity_name: tx.supplier,
+                    // Ponte ÒPURA: custo de obra carrega o fornecedor (FK) capturado no form.
+                    supplier_id: tx.type === 'EXPENSE' ? (tx.supplierId || null) : null,
                     category: tx.category || 'Despesa de Obra',
                     status: tx.status === 'PAID' ? 'CONCILIATED' : 'PENDING'
                 });

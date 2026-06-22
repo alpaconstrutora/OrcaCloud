@@ -26,7 +26,8 @@ export interface FinancialTransaction {
     description: string;
     value: number;
     status: 'PENDING' | 'PAID' | 'CANCELLED';
-    supplier?: string;
+    supplier?: string;       // nome (label, legado)
+    supplierId?: string;     // FK suppliers — alimenta supplier_id no razão (ÒPURA)
     orderId?: string;
     measurementId?: string;
     paymentDate?: string;

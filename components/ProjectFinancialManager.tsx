@@ -496,6 +496,17 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         type: 'EXPENSE', category: 'Material', description: '', value: 0, status: 'PENDING'
     });
 
+    // Fornecedores p/ vincular ao custo (ponte ÒPURA: alimenta supplier_id no razão).
+    const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
+    useEffect(() => {
+        const orgId = organizationId || settings.organizationId;
+        if (!orgId) return;
+        supabase.from('suppliers').select('id, name')
+            .or(`organization_id.eq.${orgId},organization_id.is.null`)
+            .order('name')
+            .then(({ data }) => setSuppliersList((data || []) as { id: string; name: string }[]));
+    }, [organizationId, settings.organizationId]);
+
     const [incomeGroupBy, setIncomeGroupBy] = useState<'none' | 'client' | 'property' | 'deal' | 'type'>('none');
 
     const handleSaveMultiple = async (updates: Partial<FinancialInfo>) => {
@@ -1314,10 +1325,14 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 </div>
             </div>
             {isAddingTransaction && (
-                <div className="p-4 bg-red-50/30 grid grid-cols-1 md:grid-cols-5 gap-3 border border-red-100 rounded-2xl items-end">
+                <div className="p-4 bg-red-50/30 grid grid-cols-1 md:grid-cols-6 gap-3 border border-red-100 rounded-2xl items-end">
                     <input type="text" value={txForm.description} onChange={e => setTxForm({ ...txForm, description: e.target.value })} placeholder="Descrição" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
                     <input type="number" value={txForm.value} onChange={e => setTxForm({ ...txForm, value: parseFloat(e.target.value) || 0 })} placeholder="Valor" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
                     <select value={txForm.category} onChange={e => setTxForm({ ...txForm, category: e.target.value })} className="p-2 rounded-lg border border-gray-200 text-sm bg-white">{EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select>
+                    <select value={txForm.supplierId || ''} onChange={e => { const s = suppliersList.find(x => x.id === e.target.value); setTxForm({ ...txForm, supplierId: e.target.value || undefined, supplier: s?.name || '' }); }} className="p-2 rounded-lg border border-gray-200 text-sm bg-white">
+                        <option value="">Fornecedor (opcional)</option>
+                        {suppliersList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
                     <input type="date" value={txForm.date} onChange={e => setTxForm({ ...txForm, date: e.target.value })} className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
                     <div className="flex gap-1"><button onClick={handleSaveTransaction} className="p-2 bg-red-600 text-white rounded-lg"><Save className="w-4 h-4" /></button><button onClick={() => setIsAddingTransaction(false)} className="p-2 bg-white border border-gray-200 text-gray-400 rounded-lg"><X className="w-4 h-4" /></button></div>
                 </div>

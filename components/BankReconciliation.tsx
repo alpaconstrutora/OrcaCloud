@@ -313,11 +313,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     // Listas separadas de parceiros para sugestão nas regras
     const uniqueClients = useMemo(() => {
         const ents = new Set<string>();
+        masterClients.forEach(c => ents.add(c));
         internalTransactions.filter(tx => tx.direction === 'CREDIT').forEach(tx => {
             if (tx.entity_name) ents.add(tx.entity_name);
         });
         return Array.from(ents).sort();
-    }, [internalTransactions]);
+    }, [internalTransactions, masterClients]);
 
     const uniqueSuppliers = useMemo(() => {
         const ents = new Set<string>();
@@ -543,7 +544,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 .from('clients')
                 .select('name')
                 .or(`organization_id.eq.${orgId},organization_id.is.null`)
-                .order('name', { ascending: true });
+                .order('name', { ascending: true })
+                .limit(10000);
             if (data) setMasterClients(data.map(c => c.name));
         } catch (error) {
             console.error('Error loading clients:', error);
@@ -556,7 +558,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 .from('suppliers')
                 .select('name')
                 .or(`organization_id.eq.${orgId},organization_id.is.null`)
-                .order('name', { ascending: true });
+                .order('name', { ascending: true })
+                .limit(10000);
 
             if (error) throw error;
             if (data) {

@@ -55,6 +55,17 @@ export interface OpuraObraKpis {
   qtd_lancamentos: number;
 }
 
+/** KPIs financeiros de um cliente (Central de Clientes — Categoria 8). */
+export interface OpuraClienteKpis {
+  contratado: number;
+  recebido: number;
+  a_receber: number;
+  vencido: number;
+  devolvido: number;
+  qtd_contratos: number;
+  qtd_lancamentos: number;
+}
+
 /** Filtros do extrato: universais + extras p/ drill-down. */
 export interface OpuraEntryFilters extends OpuraFilters {
   dreGroup?: string;
@@ -214,5 +225,22 @@ export const opuraAnalyticsService = {
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     return (row ?? null) as OpuraObraKpis | null;
+  },
+
+  async clienteKpis(
+    organizationId: string,
+    clientId: string,
+    dateFrom?: string,
+    dateTo?: string,
+  ): Promise<OpuraClienteKpis | null> {
+    const { data, error } = await supabase.rpc('fn_opura_cliente_kpis', {
+      p_organization_id: organizationId,
+      p_client_id:       clientId,
+      p_date_from:       dateFrom ?? null,
+      p_date_to:         dateTo ?? null,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    return (row ?? null) as OpuraClienteKpis | null;
   },
 };

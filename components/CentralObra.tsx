@@ -1,11 +1,15 @@
 import React from 'react';
 import {
+    ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts';
+import {
     RefreshCw, AlertTriangle, Building2, TrendingUp, TrendingDown,
-    Wallet, FileSignature, Target, Percent,
+    Wallet, FileSignature, Target, Percent, Gauge,
 } from 'lucide-react';
 import {
     opuraAnalyticsService,
     type OpuraObraKpis,
+    type OpuraObraMes,
     type OpuraEntry,
     type OpuraEntryFilters,
     type OpuraPivotRow,
@@ -43,6 +47,22 @@ function calcOrcado(p: ProjectLite): number {
     }, 0);
 }
 
+// ── Tooltip do gráfico ─────────────────────────────────────────────────────────
+const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) => {
+    if (!active || !payload?.length) return null;
+    return (
+        <div className="bg-white border border-gray-200 rounded-xl shadow-xl p-3 text-xs space-y-1 min-w-[150px]">
+            <p className="font-black text-gray-700 mb-2">{label}</p>
+            {payload.map(p => (
+                <div key={p.name} className="flex justify-between gap-3">
+                    <span style={{ color: p.color }} className="font-semibold">{p.name}</span>
+                    <span className="font-bold text-gray-900 tabular-nums">{fBRL(p.value)}</span>
+                </div>
+            ))}
+        </div>
+    );
+};
+
 // ── KPI card ───────────────────────────────────────────────────────────────────
 function KPICard({ label, value, sub, icon: Icon, color }: {
     label: string; value: string; sub?: string; icon: React.ElementType; color: string;
@@ -76,6 +96,7 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
 
     const [kpis, setKpis]       = React.useState<OpuraObraKpis | null>(null);
     const [byCategory, setByCategory] = React.useState<OpuraPivotRow[]>([]);
+    const [mensal, setMensal]   = React.useState<OpuraObraMes[]>([]);
     const [loading, setLoading] = React.useState(false);
     const [error, setError]     = React.useState<string | null>(null);
 
@@ -111,15 +132,17 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
         setLoading(true);
         setError(null);
         try {
-            const [k, cat] = await Promise.all([
+            const [k, cat, mes] = await Promise.all([
                 opuraAnalyticsService.obraKpis(organizationId, projectId, dateFrom, dateTo),
                 opuraAnalyticsService.pivot(organizationId, 'category', { projectId, dateFrom, dateTo }),
+                opuraAnalyticsService.obraMensal(organizationId, projectId, dateFrom, dateTo),
             ]);
             setKpis(k);
             setByCategory(cat);
+            setMensal(mes);
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
-            setKpis(null); setByCategory([]); setError(msg);
+            setKpis(null); setByCategory([]); setMensal([]); setError(msg);
             showToast(`Erro ao carregar Central de Obras: ${msg}`, 'error');
             console.error('[CentralObra]', e);
         } finally {
@@ -159,6 +182,20 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
         { label: 'Pago',       value: pago,            color: 'bg-emerald-500' },
     ];
     const maxCatAbs = Math.max(1, ...byCategory.map(c => Math.abs(c.net_realizado)));
+
+    // Desvio orçamentário: Orçado vs comprometido (pago + a pagar)
+    const comprometido = pago + (kpis?.a_pagar ?? 0);
+    const saldoOrcamentario = orcado - comprometido;
+    const pctConsumido = orcado > 0 ? (comprometido / orcado) * 100 : null;
+    const estouro = saldoOrcamentario < 0;
+
+    // Série mensal p/ o gráfico (Resultado Mensal / Fluxo de Caixa)
+    const chartData = mensal.map(m => ({
+        mes: m.mes,
+        Entradas: m.entradas,
+        Saídas: m.saidas,
+        Resultado: m.resultado,
+    }));
 
     return (
         <div className="space-y-6">
@@ -244,6 +281,54 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
                             </p>
                         )}
                     </div>
+
+                    {/* Desvio Orçamentário */}
+                    <div className={`rounded-2xl border shadow-sm p-5 ${estouro ? 'bg-red-50/40 border-red-100' : 'bg-white border-gray-100'}`}>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <Gauge className="w-3.5 h-3.5" /> Desvio Orçamentário
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {[
+                                { label: 'Orçado', value: fBRL(orcado), cls: 'text-gray-900' },
+                                { label: 'Comprometido (pago + a pagar)', value: fBRL(comprometido), cls: 'text-gray-900' },
+                                { label: 'Saldo orçamentário', value: fBRL(saldoOrcamentario), cls: estouro ? 'text-red-600' : 'text-emerald-600' },
+                                { label: '% consumido', value: fPct(pctConsumido), cls: estouro ? 'text-red-600' : 'text-gray-900' },
+                            ].map(c => (
+                                <div key={c.label}>
+                                    <p className="text-xs text-gray-400 font-medium">{c.label}</p>
+                                    <p className={`text-lg font-black mt-0.5 ${c.cls}`}>{c.value}</p>
+                                </div>
+                            ))}
+                        </div>
+                        {estouro && (
+                            <p className="text-xs text-red-600 font-medium mt-3 flex items-center gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5" /> Comprometido acima do orçado em {fBRL(Math.abs(saldoOrcamentario))}.
+                            </p>
+                        )}
+                        {orcado === 0 && (
+                            <p className="text-xs text-gray-400 mt-3">Esta obra não tem orçamento cadastrado — o desvio fica indisponível.</p>
+                        )}
+                    </div>
+
+                    {/* Resultado Mensal / Fluxo de Caixa */}
+                    {chartData.length > 0 && (
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-4">Resultado Mensal — Entradas × Saídas × Resultado</p>
+                            <ResponsiveContainer width="100%" height={280}>
+                                <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                    <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                                    <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={70}
+                                        tickFormatter={(v: number) => Math.abs(v) >= 1000 ? `R$ ${(v / 1000).toFixed(0)}k` : `R$ ${v}`} />
+                                    <Tooltip content={<ChartTooltip />} />
+                                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                                    <Bar dataKey="Entradas" fill="#16a34a" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                                    <Bar dataKey="Saídas"   fill="#dc2626" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                                    <Line type="monotone" dataKey="Resultado" stroke="#2563eb" strokeWidth={2} dot={false} />
+                                </ComposedChart>
+                            </ResponsiveContainer>
+                        </div>
+                    )}
 
                     {/* Breakdown por categoria (clicável → extrato) */}
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

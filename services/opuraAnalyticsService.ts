@@ -77,6 +77,16 @@ export interface OpuraFornecedorKpis {
   qtd_lancamentos: number;
 }
 
+/** Ponto da série mensal de uma obra (Resultado Mensal / Fluxo de Caixa). */
+export interface OpuraObraMes {
+  mes: string;
+  entradas: number;
+  saidas: number;
+  entradas_prev: number;
+  saidas_prev: number;
+  resultado: number;
+}
+
 /** Filtros do extrato: universais + extras p/ drill-down. */
 export interface OpuraEntryFilters extends OpuraFilters {
   dreGroup?: string;
@@ -236,6 +246,22 @@ export const opuraAnalyticsService = {
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     return (row ?? null) as OpuraObraKpis | null;
+  },
+
+  async obraMensal(
+    organizationId: string,
+    projectId: string,
+    dateFrom?: string,
+    dateTo?: string,
+  ): Promise<OpuraObraMes[]> {
+    const { data, error } = await supabase.rpc('fn_opura_obra_mensal', {
+      p_organization_id: organizationId,
+      p_project_id:      projectId,
+      p_date_from:       dateFrom ?? null,
+      p_date_to:         dateTo ?? null,
+    });
+    if (error) throw error;
+    return (data || []) as OpuraObraMes[];
   },
 
   async clienteKpis(

@@ -59,6 +59,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   const [showForm, setShowForm]       = useState(false)
   const [showStatusMgr, setShowStatusMgr]       = useState(false)
   const [showMobilePreview, setShowMobilePreview] = useState(false)
+  const [isMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
   const [groupBy, setGroupBy]             = useState<GroupByField>('none')
   const [viewMode, setViewMode]           = useState<ViewMode>('list')
   const [taskDefaults, setTaskDefaults]   = useState<TaskDefaults>({})
@@ -384,6 +385,9 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     }
     return null
   }, [selectedSpaceId, selectedFolderId, spaces, showFolderView])
+
+  // Mobile real: renderiza o app mobile diretamente (sem iframe de preview)
+  if (isMobile) return <TasksMobileApp orgId={filterOrg || activeOrganizationId || ''} />
 
   return (
     <div className="space-y-5">

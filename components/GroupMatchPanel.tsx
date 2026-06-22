@@ -105,11 +105,17 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
                         </div>
                         <div>
                             <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1"><FileText className="w-3.5 h-3.5" /> {g.titles.length} títulos · soma {formatBRL(g.total)}{Math.abs(g.diff) > 0.01 && <span className="text-amber-500"> (dif {formatBRL(Math.abs(g.diff))})</span>}</div>
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                                 {g.titles.map(t => (
-                                    <div key={t.id} className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-700 truncate mr-2">{t.description || t.entity_name || t.party_name || 'Título'} · {formatDate(t.due_date || t.transaction_date)}</span>
-                                        <span className="tabular-nums font-bold text-gray-900">{formatBRL(t.amount)}</span>
+                                    <div key={t.id} className="flex items-start justify-between text-sm gap-2">
+                                        <div className="min-w-0">
+                                            <p className="text-gray-700 truncate">{t.description || t.entity_name || t.party_name || 'Título'}</p>
+                                            <p className="text-[10px] text-gray-400 truncate">
+                                                {partyOf(t) ? <span className="text-indigo-500 font-bold">{partyOf(t)!.label}: {partyOf(t)!.name} · </span> : ''}
+                                                {formatDate(t.due_date || t.transaction_date)}
+                                            </p>
+                                        </div>
+                                        <span className="tabular-nums font-bold text-gray-900 flex-shrink-0">{formatBRL(t.amount)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -148,11 +154,17 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
                         </div>
                         <div>
                             <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1"><Landmark className="w-3.5 h-3.5" /> {g.banks.length} pagamentos · soma {formatBRL(g.total)}{Math.abs(g.diff) > 0.01 && <span className="text-amber-500"> (dif {formatBRL(Math.abs(g.diff))})</span>}</div>
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                                 {g.banks.map(b => (
-                                    <div key={b.id} className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-700 truncate mr-2">{b.description_normalized || b.description_raw} · {formatDate(b.transaction_date)}</span>
-                                        <span className="tabular-nums font-bold text-gray-900">{formatBRL(b.amount)}</span>
+                                    <div key={b.id} className="flex items-start justify-between text-sm gap-2">
+                                        <div className="min-w-0">
+                                            <p className="text-gray-700 truncate">{b.description_normalized || b.description_raw}</p>
+                                            <p className="text-[10px] text-gray-400 truncate">
+                                                {b.counterparty_name ? <span className="text-gray-600 font-bold">{b.direction === 'CREDIT' ? 'Pagador' : 'Favorecido'}: {b.counterparty_name} · </span> : ''}
+                                                {formatDate(b.transaction_date)}
+                                            </p>
+                                        </div>
+                                        <span className="tabular-nums font-bold text-gray-900 flex-shrink-0">{formatBRL(b.amount)}</span>
                                     </div>
                                 ))}
                             </div>

@@ -70,10 +70,12 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
     React.useEffect(() => {
         if (!organizationId) return;
         (async () => {
+            // Clientes legados têm organization_id = NULL (globais) — incluí-los,
+            // como faz o clientService padrão.
             const { data, error } = await supabase
                 .from('clients')
                 .select('id, name, document')
-                .eq('organization_id', organizationId)
+                .or(`organization_id.eq.${organizationId},organization_id.is.null`)
                 .order('name');
             if (error) { showToast(`Erro ao carregar clientes: ${error.message}`, 'error'); return; }
             const list = (data || []) as ClientLite[];

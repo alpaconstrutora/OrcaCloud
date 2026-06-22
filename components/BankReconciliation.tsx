@@ -4,15 +4,18 @@ import {
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
     Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X, Tag,
-    LayoutGrid, List, Users
+    LayoutGrid, List, Users, UserPlus
 } from 'lucide-react';
-import { 
-    BankTransaction, 
-    InternalTransaction, 
-    PaymentAccount, 
-    BankTransactionStatus
+import {
+    BankTransaction,
+    InternalTransaction,
+    PaymentAccount,
+    BankTransactionStatus,
+    Supplier
 } from '../types';
 import { bankReconciliationService } from '../services/bankReconciliationService';
+import { clientService } from '../services/clientService';
+import { supplierService } from '../services/supplierService';
 import { supabase } from '../lib/supabase';
 import { financialSyncService } from '../services/financialSyncService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
@@ -361,6 +364,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     }, [internalTransactions]);
 
     const [showInternalTxModal, setShowInternalTxModal] = useState(false);
+    // Modal de cadastro rápido de Cliente/Fornecedor a partir do extrato
+    const [registerEntityModal, setRegisterEntityModal] = useState<{
+        txId: string;
+        kind: 'client' | 'supplier';
+        name: string;
+        document: string;
+        type: 'PF' | 'PJ';
+    } | null>(null);
+    const [savingEntity, setSavingEntity] = useState(false);
     const [actionFeedback, setActionFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null);
     const [editingInternalTxId, setEditingInternalTxId] = useState<string | null>(null);
     const [newInternalTx, setNewInternalTx] = useState({
@@ -1479,6 +1491,91 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         }
     };
 
+    // Formata um documento (CPF/CNPJ) apenas com dígitos para exibição
+    const formatDocument = (digits: string): string => {
+        const d = (digits || '').replace(/\D/g, '');
+        if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+        if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+        return digits;
+    };
+
+    // Extrai nome + documento (CPF/CNPJ) a partir do extrato bancário
+    const extractEntityFromTx = (tx: BankTransaction): { name: string; document: string; type: 'PF' | 'PJ' } => {
+        const raw = (tx.description_raw || tx.description_normalized || '').toString();
+        const digitsOnly = raw.replace(/\D/g, '');
+        let doc = '';
+        // Procura por CNPJ (14) e depois CPF (11) como sequência isolada de dígitos
+        const m14 = raw.match(/(?<!\d)\d{14}(?!\d)/);
+        const m11 = raw.match(/(?<!\d)\d{11}(?!\d)/);
+        if (m14) doc = m14[0];
+        else if (m11) doc = m11[0];
+        else if (digitsOnly.length === 14 || digitsOnly.length === 11) doc = digitsOnly;
+
+        let name = (tx.counterparty_name || '').trim();
+        if (!name) {
+            let s = raw.toUpperCase();
+            // Corta a partir de marcadores de memo/referência
+            s = s.split(/\bMEMO\b|\bREF\b|\bDOC\b\s|\bID\b/)[0];
+            // Remove jargão bancário comum
+            s = s.replace(/\b(PAGAMENTO|RECEBIMENTO|PIX|DEB|CRED|CREDITO|DEBITO|TED|TEF|TRANSFERENCIA|TRANSF|ENVIADO|RECEBIDO|PAG|COMPRA|CARTAO|TARIFA|BOLETO|LIQUIDACAO)\b/g, ' ');
+            // Remove sequências longas de dígitos (documentos, ids)
+            s = s.replace(/\d{5,}/g, ' ');
+            s = s.replace(/\s+/g, ' ').trim();
+            name = s;
+        }
+        const type: 'PF' | 'PJ' = doc.replace(/\D/g, '').length === 14 ? 'PJ' : 'PF';
+        return { name, document: doc ? formatDocument(doc) : '', type };
+    };
+
+    const openRegisterEntity = (tx: BankTransaction) => {
+        const { name, document, type } = extractEntityFromTx(tx);
+        setRegisterEntityModal({
+            txId: tx.id,
+            kind: tx.direction === 'DEBIT' ? 'supplier' : 'client',
+            name,
+            document,
+            type,
+        });
+    };
+
+    const handleSaveNewEntity = async () => {
+        if (!registerEntityModal) return;
+        const { txId, kind, name, document, type } = registerEntityModal;
+        if (!name.trim()) { alert('Informe o nome do ' + (kind === 'supplier' ? 'fornecedor' : 'cliente') + '.'); return; }
+        const orgId = effectiveOrgId || organizationId;
+        if (!orgId) { alert('Organização não identificada.'); return; }
+        setSavingEntity(true);
+        try {
+            if (kind === 'supplier') {
+                await supplierService.addSupplier({
+                    name: name.trim(),
+                    document: document || undefined,
+                    type,
+                    organization_id: orgId,
+                } as Omit<Supplier, 'id' | 'created_at'>);
+                setMasterSuppliers(prev => [...new Set([...prev, name.trim()])].sort());
+            } else {
+                await clientService.saveClient({
+                    name: name.trim(),
+                    document: document || undefined,
+                    type,
+                    organization_id: orgId,
+                });
+                setMasterClients(prev => [...new Set([...prev, name.trim()])].sort());
+            }
+            // Vincula a contraparte recém-cadastrada ao extrato
+            await handleUpdateBankCounterparty(txId, name.trim());
+            setRegisterEntityModal(null);
+            setActionFeedback({ message: `${kind === 'supplier' ? 'Fornecedor' : 'Cliente'} cadastrado e vinculado!`, type: 'success' });
+            setTimeout(() => setActionFeedback(null), 3000);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
+            alert('Erro ao cadastrar: ' + msg);
+        } finally {
+            setSavingEntity(false);
+        }
+    };
+
     const handleUpdateBankProject = async (txId: string, projectId: string) => {
         try {
             const { error } = await supabase
@@ -2128,6 +2225,86 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                 className="flex-1 px-6 py-4 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
                             >
                                 {editingRuleId ? 'Salvar Alterações' : 'Criar Regra'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {registerEntityModal && (
+                <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => !savingEntity && setRegisterEntityModal(null)}>
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-8 border-b border-gray-50 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-lg font-black text-gray-900 uppercase">
+                                    Cadastrar {registerEntityModal.kind === 'supplier' ? 'Fornecedor' : 'Cliente'}
+                                </h3>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                    Em Organização · {registerEntityModal.kind === 'supplier' ? 'Fornecedores' : 'Clientes'} — a partir do extrato
+                                </p>
+                            </div>
+                            <button onClick={() => setRegisterEntityModal(null)} className="text-gray-300 hover:text-gray-900 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nome / Razão Social</label>
+                                <input
+                                    type="text"
+                                    value={registerEntityModal.name}
+                                    onChange={(e) => setRegisterEntityModal(m => m && { ...m, name: e.target.value })}
+                                    placeholder="Nome do cliente/fornecedor"
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CPF / CNPJ</label>
+                                    <input
+                                        type="text"
+                                        value={registerEntityModal.document}
+                                        onChange={(e) => {
+                                            const formatted = formatDocument(e.target.value);
+                                            setRegisterEntityModal(m => m && {
+                                                ...m,
+                                                document: formatted,
+                                                type: e.target.value.replace(/\D/g, '').length === 14 ? 'PJ' : (e.target.value.replace(/\D/g, '').length === 11 ? 'PF' : m.type),
+                                            });
+                                        }}
+                                        placeholder="Documento do extrato"
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Tipo</label>
+                                    <select
+                                        value={registerEntityModal.type}
+                                        onChange={(e) => setRegisterEntityModal(m => m && { ...m, type: e.target.value as 'PF' | 'PJ' })}
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                                    >
+                                        <option value="PF">Pessoa Física</option>
+                                        <option value="PJ">Pessoa Jurídica</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-8 pt-0 flex gap-3">
+                            <button
+                                onClick={() => setRegisterEntityModal(null)}
+                                disabled={savingEntity}
+                                className="flex-1 px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-500 bg-gray-50 hover:bg-gray-100 transition-all disabled:opacity-50"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleSaveNewEntity}
+                                disabled={savingEntity}
+                                className="flex-1 px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest text-white bg-blue-600 hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {savingEntity ? <RefreshCw className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                                {savingEntity ? 'Salvando...' : 'Cadastrar e vincular'}
                             </button>
                         </div>
                     </div>
@@ -3316,6 +3493,25 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                 ))}
                                                             </select>
                                                         </div>
+
+                                                        {/* Cadastro rápido quando o cliente/fornecedor do extrato ainda não existe */}
+                                                        {(() => {
+                                                            const cp = (tx.counterparty_name || '').trim().toLowerCase();
+                                                            const registered = tx.direction === 'DEBIT'
+                                                                ? masterSuppliers.some(s => s.toLowerCase() === cp)
+                                                                : masterClients.some(c => c.toLowerCase() === cp);
+                                                            if (registered) return null;
+                                                            return (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); openRegisterEntity(tx); }}
+                                                                    className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-lg border border-dashed border-blue-200 text-blue-500 hover:bg-blue-50 hover:border-blue-400 transition-all self-end"
+                                                                    title={`Cadastrar ${tx.direction === 'DEBIT' ? 'fornecedor' : 'cliente'} a partir do extrato`}
+                                                                >
+                                                                    <UserPlus className="w-3 h-3" />
+                                                                    Cadastrar {tx.direction === 'DEBIT' ? 'fornecedor' : 'cliente'}
+                                                                </button>
+                                                            );
+                                                        })()}
 
                                                         <div onClick={(e) => e.stopPropagation()}>
                                                             <select

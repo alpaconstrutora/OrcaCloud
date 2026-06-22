@@ -70,6 +70,8 @@ export const divergenceService = {
     ): Promise<void> {
         await assertPeriodOpen(organizationId, bank.transaction_date);
         const entityName = overrides?.party_name?.trim() || overrides?.entity_name?.trim() || null;
+        // party_id tem FK só para clients (internal_txs_party_id_fkey); fornecedor fica null
+        const partyId = overrides?.party_type === 'CLIENT' ? (overrides?.party_id || null) : null;
         const { data: inserted, error } = await supabase
             .from('internal_transactions')
             .insert({
@@ -82,7 +84,7 @@ export const divergenceService = {
                 category: overrides?.category?.trim() || bank.category || 'Geral',
                 project_id: overrides?.project_id || null,
                 cost_center_id: overrides?.cost_center_id || null,
-                party_id: overrides?.party_id || null,
+                party_id: partyId,
                 party_name: entityName,
                 party_type: overrides?.party_type || null,
                 entity_name: entityName,
@@ -98,7 +100,7 @@ export const divergenceService = {
             category: overrides?.category || bank.category,
             project_id: overrides?.project_id ?? null,
             cost_center_id: overrides?.cost_center_id ?? null,
-            party_id: overrides?.party_id ?? null,
+            party_id: partyId,
         });
     },
 

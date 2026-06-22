@@ -68,6 +68,7 @@ const BIDashboard           = React.lazy(() => import('./BIDashboard'));
 const OpuraReports          = React.lazy(() => import('./OpuraReports'));
 const CentralObra           = React.lazy(() => import('./CentralObra'));
 const CentralCliente        = React.lazy(() => import('./CentralCliente'));
+const CentralFornecedor     = React.lazy(() => import('./CentralFornecedor'));
 const ControladoriaModule   = React.lazy(() => import('./ControladoriaModule'));
 const FinancialDashboard       = React.lazy(() => import('./FinancialDashboard'));
 const FinancialIntelligence    = React.lazy(() => import('./FinancialIntelligence'));
@@ -1099,6 +1100,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <CentralCliente
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          />
+        </React.Suspense>
+      );
+
+    // ── ÒPURA · Central de Fornecedores ────────────────────────────────────────
+    case 'opura-central-fornecedor':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <CentralFornecedor
             organizationId={activeOrganizationId || organizations[0]?.id || ''}
           />
         </React.Suspense>

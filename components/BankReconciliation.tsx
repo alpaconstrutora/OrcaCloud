@@ -144,8 +144,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [internalCategoryFilter, setInternalCategoryFilter] = useState<string[]>(() => {
         try { return JSON.parse(localStorage.getItem('reconciliation_internal_cat_filter') || '[]'); } catch { return []; }
     });
+    const [bankCounterpartyFilter, setBankCounterpartyFilter] = useState<string[]>(() => {
+        try { return JSON.parse(localStorage.getItem('reconciliation_bank_cp_filter') || '[]'); } catch { return []; }
+    });
     const [bankCatDropdownOpen, setBankCatDropdownOpen] = useState(false);
     const [internalCatDropdownOpen, setInternalCatDropdownOpen] = useState(false);
+    const [bankCpDropdownOpen, setBankCpDropdownOpen] = useState(false);
+    const [internalEntityFilter, setInternalEntityFilter] = useState<string[]>(() => {
+        try { return JSON.parse(localStorage.getItem('reconciliation_internal_entity_filter') || '[]'); } catch { return []; }
+    });
+    const [internalEntityDropdownOpen, setInternalEntityDropdownOpen] = useState(false);
     const [bankSortOrder, setBankSortOrder] = useState<'desc' | 'asc'>('desc');
     const [bankSortField, setBankSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'counterparty'>('date');
     const [internalSortOrder, setInternalSortOrder] = useState<'desc' | 'asc'>('desc');
@@ -170,6 +178,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             filtered = filtered.filter(tx => !tx.category || bankCategoryFilter.includes(tx.category));
         } else if (bankCategoryFilter.length > 0) {
             filtered = filtered.filter(tx => bankCategoryFilter.includes(tx.category ?? ''));
+        }
+        if (bankCounterpartyFilter.includes('__none__') && bankCounterpartyFilter.length === 1) {
+            filtered = filtered.filter(tx => !tx.counterparty_name);
+        } else if (bankCounterpartyFilter.includes('__none__')) {
+            filtered = filtered.filter(tx => !tx.counterparty_name || bankCounterpartyFilter.includes(tx.counterparty_name));
+        } else if (bankCounterpartyFilter.length > 0) {
+            filtered = filtered.filter(tx => bankCounterpartyFilter.includes(tx.counterparty_name ?? ''));
         }
         if (flowFilter !== 'ALL') {
             filtered = filtered.filter(tx => 
@@ -199,7 +214,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             if (valA > valB) return bankSortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, flowFilter]);
+    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter]);
 
     const sortedInternalTransactions = useMemo(() => {
         let filtered = [...internalTransactions];
@@ -218,8 +233,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         } else if (internalCategoryFilter.length > 0) {
             filtered = filtered.filter(tx => internalCategoryFilter.includes(tx.category ?? ''));
         }
+        if (internalEntityFilter.includes('__none__') && internalEntityFilter.length === 1) {
+            filtered = filtered.filter(tx => !tx.entity_name);
+        } else if (internalEntityFilter.includes('__none__')) {
+            filtered = filtered.filter(tx => !tx.entity_name || internalEntityFilter.includes(tx.entity_name));
+        } else if (internalEntityFilter.length > 0) {
+            filtered = filtered.filter(tx => internalEntityFilter.includes(tx.entity_name ?? ''));
+        }
         if (flowFilter !== 'ALL') {
-            filtered = filtered.filter(tx => 
+            filtered = filtered.filter(tx =>
                 flowFilter === 'INCOME' ? tx.direction === 'CREDIT' : tx.direction === 'DEBIT'
             );
         }
@@ -246,7 +268,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             if (valA > valB) return internalSortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [internalTransactions, internalSortOrder, internalSortField, internalSearch, internalCategoryFilter, flowFilter]);
+    }, [internalTransactions, internalSortOrder, internalSortField, internalSearch, internalCategoryFilter, internalEntityFilter, flowFilter]);
 
     const sortedMatches = useMemo(() => {
         let filtered = [...matches];
@@ -324,6 +346,20 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         return Array.from(ents).sort();
     }, [bankTransactions, masterClients]);
 
+    // Cliente/Fornecedor presentes no extrato bancário (para o filtro de contraparte)
+    const uniqueBankCounterparties = useMemo(() => {
+        const ents = new Set<string>();
+        bankTransactions.forEach(tx => { if (tx.counterparty_name) ents.add(tx.counterparty_name); });
+        return Array.from(ents).sort();
+    }, [bankTransactions]);
+
+    // Cliente/Fornecedor presentes nos lançamentos (para o filtro de contraparte)
+    const uniqueInternalEntities = useMemo(() => {
+        const ents = new Set<string>();
+        internalTransactions.forEach(tx => { if (tx.entity_name) ents.add(tx.entity_name); });
+        return Array.from(ents).sort();
+    }, [internalTransactions]);
+
     const [showInternalTxModal, setShowInternalTxModal] = useState(false);
     const [actionFeedback, setActionFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null);
     const [editingInternalTxId, setEditingInternalTxId] = useState<string | null>(null);
@@ -378,8 +414,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     }, [bankCategoryFilter]);
 
     useEffect(() => {
+        localStorage.setItem('reconciliation_bank_cp_filter', JSON.stringify(bankCounterpartyFilter));
+    }, [bankCounterpartyFilter]);
+
+    useEffect(() => {
         localStorage.setItem('reconciliation_internal_cat_filter', JSON.stringify(internalCategoryFilter));
     }, [internalCategoryFilter]);
+
+    useEffect(() => {
+        localStorage.setItem('reconciliation_internal_entity_filter', JSON.stringify(internalEntityFilter));
+    }, [internalEntityFilter]);
 
     useEffect(() => { localStorage.setItem('reconciliation_start_date', startDate); }, [startDate]);
     useEffect(() => { localStorage.setItem('reconciliation_end_date', endDate); }, [endDate]);
@@ -426,7 +470,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     }, [selectedAccountId, activeView, startDate, endDate]);
 
     useEffect(() => {
-        const close = () => { setBankCatDropdownOpen(false); setInternalCatDropdownOpen(false); };
+        const close = () => { setBankCatDropdownOpen(false); setInternalCatDropdownOpen(false); setBankCpDropdownOpen(false); setInternalEntityDropdownOpen(false); };
         document.addEventListener('mousedown', close);
         return () => document.removeEventListener('mousedown', close);
     }, []);
@@ -2964,7 +3008,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                             <div className="flex items-center gap-2">
                                 <div className="relative">
                                     <button
-                                        onClick={() => { setBankCatDropdownOpen(o => !o); setInternalCatDropdownOpen(false); }}
+                                        onClick={() => { setBankCatDropdownOpen(o => !o); setInternalCatDropdownOpen(false); setBankCpDropdownOpen(false); }}
                                         className={`px-3 py-1.5 border rounded-full text-[10px] font-bold focus:outline-none cursor-pointer flex items-center gap-1.5 ${bankCategoryFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
                                     >
                                         {bankCategoryFilter.length > 0 ? `${bankCategoryFilter.length} categoria${bankCategoryFilter.length > 1 ? 's' : ''}` : 'Todas Categorias'}
@@ -2982,6 +3026,37 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         type="checkbox"
                                                         checked={bankCategoryFilter.includes(value)}
                                                         onChange={() => setBankCategoryFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])}
+                                                        className="w-3.5 h-3.5 rounded text-blue-500 focus:ring-0"
+                                                    />
+                                                    <span className="text-[10px] font-bold text-gray-700 uppercase truncate">{label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => { setBankCpDropdownOpen(o => !o); setBankCatDropdownOpen(false); setInternalCatDropdownOpen(false); }}
+                                        className={`px-3 py-1.5 border rounded-full text-[10px] font-bold focus:outline-none cursor-pointer flex items-center gap-1.5 ${bankCounterpartyFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
+                                    >
+                                        {bankCounterpartyFilter.length > 0 ? `${bankCounterpartyFilter.length} contraparte${bankCounterpartyFilter.length > 1 ? 's' : ''}` : 'Cliente/Fornecedor'}
+                                        <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    </button>
+                                    {bankCpDropdownOpen && (
+                                        <div onMouseDown={(e) => e.stopPropagation()} className="absolute top-full mt-1 left-0 z-50 bg-white border border-gray-100 rounded-2xl shadow-xl min-w-[200px] py-1 max-h-64 overflow-y-auto">
+                                            <div className="flex border-b border-gray-100 mb-1">
+                                                <button onClick={() => setBankCounterpartyFilter(['__none__', ...uniqueBankCounterparties])} className="flex-1 px-3 py-1.5 text-[10px] font-black text-blue-500 hover:bg-blue-50 uppercase tracking-wider text-left">Selecionar todos</button>
+                                                <button onClick={() => setBankCounterpartyFilter([])} className="flex-1 px-3 py-1.5 text-[10px] font-black text-red-500 hover:bg-red-50 uppercase tracking-wider text-right">Limpar</button>
+                                            </div>
+                                            {uniqueBankCounterparties.length === 0 && (
+                                                <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase">Nenhuma contraparte no extrato</div>
+                                            )}
+                                            {[{ value: '__none__', label: '— Sem cliente/fornecedor' }, ...uniqueBankCounterparties.map(c => ({ value: c, label: c }))].map(({ value, label }) => (
+                                                <label key={value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={bankCounterpartyFilter.includes(value)}
+                                                        onChange={() => setBankCounterpartyFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])}
                                                         className="w-3.5 h-3.5 rounded text-blue-500 focus:ring-0"
                                                     />
                                                     <span className="text-[10px] font-bold text-gray-700 uppercase truncate">{label}</span>
@@ -3399,7 +3474,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                     )}
                                     <div className="relative">
                                         <button
-                                            onClick={() => { setInternalCatDropdownOpen(o => !o); setBankCatDropdownOpen(false); }}
+                                            onClick={() => { setInternalCatDropdownOpen(o => !o); setBankCatDropdownOpen(false); setBankCpDropdownOpen(false); setInternalEntityDropdownOpen(false); }}
                                             className={`px-3 py-1.5 border rounded-full text-[10px] font-bold focus:outline-none cursor-pointer flex items-center gap-1.5 ${internalCategoryFilter.length > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
                                         >
                                             {internalCategoryFilter.length > 0 ? `${internalCategoryFilter.length} categoria${internalCategoryFilter.length > 1 ? 's' : ''}` : 'Todas Categorias'}
@@ -3417,6 +3492,37 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                             type="checkbox"
                                                             checked={internalCategoryFilter.includes(value)}
                                                             onChange={() => setInternalCategoryFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])}
+                                                            className="w-3.5 h-3.5 rounded text-emerald-500 focus:ring-0"
+                                                        />
+                                                        <span className="text-[10px] font-bold text-gray-700 uppercase truncate">{label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => { setInternalEntityDropdownOpen(o => !o); setInternalCatDropdownOpen(false); setBankCatDropdownOpen(false); setBankCpDropdownOpen(false); }}
+                                            className={`px-3 py-1.5 border rounded-full text-[10px] font-bold focus:outline-none cursor-pointer flex items-center gap-1.5 ${internalEntityFilter.length > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
+                                        >
+                                            {internalEntityFilter.length > 0 ? `${internalEntityFilter.length} contraparte${internalEntityFilter.length > 1 ? 's' : ''}` : 'Cliente/Fornecedor'}
+                                            <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                        </button>
+                                        {internalEntityDropdownOpen && (
+                                            <div onMouseDown={(e) => e.stopPropagation()} className="absolute top-full mt-1 left-0 z-50 bg-white border border-gray-100 rounded-2xl shadow-xl min-w-[200px] py-1 max-h-64 overflow-y-auto">
+                                                <div className="flex border-b border-gray-100 mb-1">
+                                                    <button onClick={() => setInternalEntityFilter(['__none__', ...uniqueInternalEntities])} className="flex-1 px-3 py-1.5 text-[10px] font-black text-emerald-500 hover:bg-emerald-50 uppercase tracking-wider text-left">Selecionar todos</button>
+                                                    <button onClick={() => setInternalEntityFilter([])} className="flex-1 px-3 py-1.5 text-[10px] font-black text-red-500 hover:bg-red-50 uppercase tracking-wider text-right">Limpar</button>
+                                                </div>
+                                                {uniqueInternalEntities.length === 0 && (
+                                                    <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase">Nenhuma contraparte nos lançamentos</div>
+                                                )}
+                                                {[{ value: '__none__', label: '— Sem cliente/fornecedor' }, ...uniqueInternalEntities.map(c => ({ value: c, label: c }))].map(({ value, label }) => (
+                                                    <label key={value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={internalEntityFilter.includes(value)}
+                                                            onChange={() => setInternalEntityFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])}
                                                             className="w-3.5 h-3.5 rounded text-emerald-500 focus:ring-0"
                                                         />
                                                         <span className="text-[10px] font-bold text-gray-700 uppercase truncate">{label}</span>

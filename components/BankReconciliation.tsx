@@ -323,14 +323,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const uniqueSuppliers = useMemo(() => {
         const ents = new Set<string>();
         masterSuppliers.forEach(s => ents.add(s));
+        // entity_name de lançamentos internos são nomes limpos digitados pelo usuário
         internalTransactions.filter(tx => tx.direction === 'DEBIT').forEach(tx => {
             if (tx.entity_name) ents.add(tx.entity_name);
         });
-        bankTransactions.filter(tx => tx.direction === 'DEBIT').forEach(tx => {
-            if (tx.counterparty_name) ents.add(tx.counterparty_name);
-        });
+        // counterparty_name do extrato bancário NÃO é incluído: nomes vêm sujos do banco
+        // (ex: "-PIX_DEB EDSON...") e poluem a lista; o cadastro rápido resolve isso
         return Array.from(ents).sort();
-    }, [internalTransactions, bankTransactions, masterSuppliers]);
+    }, [internalTransactions, masterSuppliers]);
 
     // Credores = fornecedores + colaboradores ativos (para extratos de débito)
     const uniqueCredores = useMemo(() => {
@@ -343,12 +343,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const uniqueBankClients = useMemo(() => {
         const ents = new Set<string>();
         masterClients.forEach(c => ents.add(c));
-        // Incluir counterparty_names históricos de extratos CREDIT
-        bankTransactions.filter(tx => tx.direction === 'CREDIT').forEach(tx => {
-            if (tx.counterparty_name) ents.add(tx.counterparty_name);
-        });
+        // counterparty_name do extrato bancário NÃO é incluído: pode vir sujo do banco
         return Array.from(ents).sort();
-    }, [bankTransactions, masterClients]);
+    }, [masterClients]);
 
     // Cliente/Fornecedor presentes no extrato bancário (para o filtro de contraparte)
     const uniqueBankCounterparties = useMemo(() => {
@@ -1503,6 +1500,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     };
 
     // Extrai nome + documento (CPF/CNPJ) a partir do extrato bancário
+    // Limpa jargão bancário de qualquer string (counterparty_name ou description_raw)
+    const cleanBankName = (s: string): string => {
+        let r = s.toUpperCase();
+        // Remove prefixos compostos comuns de PIX/TED antes do nome
+        r = r.replace(/^[-\s]*(PIX[_\s-]*DEB|PIX[_\s-]*CRED|PIX[_\s-]*REC|TED[_\s-]*OUT|TEV[_\s-]*OUT|DOC[_\s-]*OUT)\s*/i, '');
+        // Corta a partir de marcadores de memo/referência
+        r = r.split(/\bMEMO\b|\bREF\b|\bDOC\b\s|\bID\b/)[0];
+        // Remove palavras-jargão isoladas
+        r = r.replace(/\b(PAGAMENTO|RECEBIMENTO|PIX|DEB|CRED|CREDITO|DEBITO|TED|TEF|TRANSFERENCIA|TRANSF|ENVIADO|RECEBIDO|PAG|COMPRA|CARTAO|TARIFA|BOLETO|LIQUIDACAO)\b/g, ' ');
+        // Remove sequências longas de dígitos (documentos, ids)
+        r = r.replace(/\d{5,}/g, ' ');
+        r = r.replace(/\s+/g, ' ').trim();
+        return r;
+    };
+
     const extractEntityFromTx = (tx: BankTransaction): { name: string; document: string; type: 'PF' | 'PJ' } => {
         const raw = (tx.description_raw || tx.description_normalized || '').toString();
         const digitsOnly = raw.replace(/\D/g, '');
@@ -1514,18 +1526,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         else if (m11) doc = m11[0];
         else if (digitsOnly.length === 14 || digitsOnly.length === 11) doc = digitsOnly;
 
-        let name = (tx.counterparty_name || '').trim();
-        if (!name) {
-            let s = raw.toUpperCase();
-            // Corta a partir de marcadores de memo/referência
-            s = s.split(/\bMEMO\b|\bREF\b|\bDOC\b\s|\bID\b/)[0];
-            // Remove jargão bancário comum
-            s = s.replace(/\b(PAGAMENTO|RECEBIMENTO|PIX|DEB|CRED|CREDITO|DEBITO|TED|TEF|TRANSFERENCIA|TRANSF|ENVIADO|RECEBIDO|PAG|COMPRA|CARTAO|TARIFA|BOLETO|LIQUIDACAO)\b/g, ' ');
-            // Remove sequências longas de dígitos (documentos, ids)
-            s = s.replace(/\d{5,}/g, ' ');
-            s = s.replace(/\s+/g, ' ').trim();
-            name = s;
-        }
+        // Sempre limpar jargão bancário — counterparty_name também pode vir sujo do extrato
+        const rawName = tx.counterparty_name || raw;
+        const name = cleanBankName(rawName);
+
         const type: 'PF' | 'PJ' = doc.replace(/\D/g, '').length === 14 ? 'PJ' : 'PF';
         return { name, document: doc ? formatDocument(doc) : '', type };
     };

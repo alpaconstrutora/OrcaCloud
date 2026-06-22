@@ -35,22 +35,25 @@ async function resolveContractParty(
     fallbackName: string,
 ): Promise<{ party_id: string | null; party_type: 'SUPPLIER' | 'CLIENT' | null; party_name: string | null }> {
     const cAny = contract as unknown as { direction?: string; client_id?: string; supplier_id?: string };
-    const preferClient = cAny.direction === 'INCOMING' && !!cAny.client_id;
+    if (!cAny.client_id && !cAny.supplier_id) return { party_id: null, party_type: null, party_name: null };
+
+    // Rótulo segue a direção (INCOMING = cliente/recebível; senão fornecedor/pagável),
+    // mas o NOME é resolvido de qualquer id que exista (a contraparte às vezes está em supplier_id).
+    const isIncoming = cAny.direction === 'INCOMING';
+    const partyType: 'SUPPLIER' | 'CLIENT' = isIncoming ? 'CLIENT' : 'SUPPLIER';
+    let name = fallbackName;
     try {
-        if (preferClient && cAny.client_id) {
-            const { data } = await supabase.from('clients').select('name').eq('id', cAny.client_id).maybeSingle();
-            return { party_id: cAny.client_id, party_type: 'CLIENT', party_name: data?.name || fallbackName };
-        }
-        if (cAny.supplier_id) {
-            const name = await resolveSupplierName(cAny.supplier_id, fallbackName);
-            return { party_id: null, party_type: 'SUPPLIER', party_name: name }; // FK só aceita cliente
-        }
         if (cAny.client_id) {
             const { data } = await supabase.from('clients').select('name').eq('id', cAny.client_id).maybeSingle();
-            return { party_id: cAny.client_id, party_type: 'CLIENT', party_name: data?.name || fallbackName };
+            name = data?.name || fallbackName;
+        } else if (cAny.supplier_id) {
+            name = await resolveSupplierName(cAny.supplier_id, fallbackName);
         }
-    } catch { /* ignora; cai no default */ }
-    return { party_id: null, party_type: null, party_name: null };
+    } catch { /* mantém fallback */ }
+
+    // party_id tem FK só p/ clients → só preenche quando há cliente real
+    const partyId = isIncoming && cAny.client_id ? cAny.client_id : null;
+    return { party_id: partyId, party_type: partyType, party_name: name };
 }
 
 // Find the "Gestão Comercial" vault for an org

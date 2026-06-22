@@ -65,6 +65,7 @@ const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
+const OpuraReports          = React.lazy(() => import('./OpuraReports'));
 const ControladoriaModule   = React.lazy(() => import('./ControladoriaModule'));
 const FinancialDashboard       = React.lazy(() => import('./FinancialDashboard'));
 const FinancialIntelligence    = React.lazy(() => import('./FinancialIntelligence'));
@@ -1069,6 +1070,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           organizationId={activeOrganizationId || organizations[0]?.id || ''}
           onNavigate={setActiveView}
         />
+      );
+
+    // ── ÒPURA · Relatórios (analytics multidimensional) ────────────────────────
+    case 'opura-reports':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <OpuraReports
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          />
+        </React.Suspense>
       );
 
     // ── Dashboard Executivo Financeiro ─────────────────────────────────────────

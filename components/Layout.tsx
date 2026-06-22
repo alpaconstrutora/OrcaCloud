@@ -568,6 +568,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavGroup label="Inteligência de Negócios" />
               <NavItem id="bi-executivo" icon={BarChart3} label="BI Executivo" />
               <NavItem id="opura-reports" icon={BarChart3} label="ÒPURA Relatórios" />
+              <NavItem id="opura-central-obra" icon={Building2} label="Central de Obras" />
               <NavItem id="opura-market" icon={Search} label="ÒPURA Market" />
 
               <NavGroup label="Corporativo" />

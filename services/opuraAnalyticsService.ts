@@ -41,6 +41,20 @@ export interface OpuraFilters {
   dateTo?: string;   // YYYY-MM-DD
 }
 
+/** KPIs financeiros de uma obra (Central de Obras — Categoria 6). */
+export interface OpuraObraKpis {
+  contratado_receita: number;
+  contratado_custo: number;
+  recebido: number;
+  pago: number;
+  a_receber: number;
+  a_pagar: number;
+  vencido_receber: number;
+  vencido_pagar: number;
+  qtd_contratos: number;
+  qtd_lancamentos: number;
+}
+
 /** Filtros do extrato: universais + extras p/ drill-down. */
 export interface OpuraEntryFilters extends OpuraFilters {
   dreGroup?: string;
@@ -183,5 +197,22 @@ export const opuraAnalyticsService = {
     });
     if (error) throw error;
     return (data || []) as OpuraEntry[];
+  },
+
+  async obraKpis(
+    organizationId: string,
+    projectId: string,
+    dateFrom?: string,
+    dateTo?: string,
+  ): Promise<OpuraObraKpis | null> {
+    const { data, error } = await supabase.rpc('fn_opura_obra_kpis', {
+      p_organization_id: organizationId,
+      p_project_id:      projectId,
+      p_date_from:       dateFrom ?? null,
+      p_date_to:         dateTo ?? null,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    return (row ?? null) as OpuraObraKpis | null;
   },
 };

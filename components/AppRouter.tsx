@@ -66,6 +66,7 @@ const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplate
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
 const OpuraReports          = React.lazy(() => import('./OpuraReports'));
+const CentralObra           = React.lazy(() => import('./CentralObra'));
 const ControladoriaModule   = React.lazy(() => import('./ControladoriaModule'));
 const FinancialDashboard       = React.lazy(() => import('./FinancialDashboard'));
 const FinancialIntelligence    = React.lazy(() => import('./FinancialIntelligence'));
@@ -1077,6 +1078,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <OpuraReports
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          />
+        </React.Suspense>
+      );
+
+    // ── ÒPURA · Central de Obras ───────────────────────────────────────────────
+    case 'opura-central-obra':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" /></div>}>
+          <CentralObra
             organizationId={activeOrganizationId || organizations[0]?.id || ''}
           />
         </React.Suspense>

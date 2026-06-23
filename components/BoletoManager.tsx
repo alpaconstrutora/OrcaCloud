@@ -787,7 +787,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 />
             )}
 
-            {isLoteEditOpen && selectedIds.size > 0 && (
+            {isLoteEditOpen && (
                 <BoletoEdicaoEmLoteModal
                     boletos={filtered.filter(b => selectedIds.has(b.id))}
                     organizationId={effectiveOrgId ?? organizationId}
@@ -795,8 +795,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     projects={projectList}
                     costCenters={ccList}
                     userEmail={userEmail}
-                    onClose={() => setIsLoteEditOpen(false)}
-                    onSaved={() => { clearSelection(); carregar(effectiveOrgId); }}
+                    onClose={() => { setIsLoteEditOpen(false); clearSelection(); }}
+                    onSaved={() => carregar(effectiveOrgId)}
                 />
             )}
         </div>

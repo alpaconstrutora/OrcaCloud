@@ -3,7 +3,7 @@ import {
     Plus, Search, FileText, Loader2, RefreshCw,
     Building2, Calendar, AlertTriangle, ChevronDown,
     Wallet, Clock, CheckCircle2, SlidersHorizontal, X,
-    ArrowUpDown, Download, LayoutGrid, List, Upload,
+    ArrowUpDown, Download, LayoutGrid, List, Upload, Pencil,
 } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -12,6 +12,7 @@ import { supplierService } from '../services/supplierService';
 import type { Boleto, BoletoStatus, BoletoFilters, Organization, CostCenter } from '../types';
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
+import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
 
 interface BoletoManagerProps {
     organizationId: string;
@@ -52,6 +53,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [isLoteOpen, setIsLoteOpen] = useState(false);
     const [editing, setEditing] = useState<Boleto | undefined>(undefined);
     const [exporting, setExporting] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
+
+    // Raw arrays kept alongside maps for the bulk-edit modal dropdowns
+    const [supplierList, setSupplierList] = useState<{ id: string; name: string }[]>([]);
+    const [projectList, setProjectList] = useState<{ id: string; name: string }[]>([]);
+    const [ccList, setCcList] = useState<{ id: string; name: string }[]>([]);
 
     const [filtroStatus, setFiltroStatus] = useState<BoletoStatus | 'todos'>('todos');
     const [busca, setBusca] = useState('');
@@ -87,6 +95,23 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         onOrgChange?.(id === 'ALL' ? null : id);
     }
 
+    function toggleSelect(id: string, e?: React.MouseEvent) {
+        e?.stopPropagation();
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    }
+
+    function selectAllFiltered() {
+        setSelectedIds(new Set(filtered.map(b => b.id)));
+    }
+
+    function clearSelection() {
+        setSelectedIds(new Set());
+    }
+
     async function carregar(orgId: string | undefined) {
         setLoading(true);
         setError(null);
@@ -106,6 +131,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             setCcMap(Object.fromEntries((ccs || []).map((c) => [c.id, c.name])));
             setProjectMap(Object.fromEntries((projs || []).map((p) => [p.id, p.name])));
             setSupplierMap(Object.fromEntries((sups || []).map((s) => [s.id, s.name])));
+            setCcList((ccs || []).map(c => ({ id: c.id, name: c.name })));
+            setProjectList((projs || []).map(p => ({ id: p.id, name: p.name })));
+            setSupplierList((sups || []).map(s => ({ id: s.id, name: s.name })));
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             setError(error.message || 'Falha ao carregar boletos');
@@ -519,6 +547,32 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             )}
 
+            {/* Barra de ações em lote */}
+            {selectedIds.size > 0 && (
+                <div className="flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold">
+                        {selectedIds.size} boleto{selectedIds.size !== 1 ? 's' : ''} selecionado{selectedIds.size !== 1 ? 's' : ''}
+                        <span className="ml-2 font-normal opacity-75">
+                            · {formatBRL(filtered.filter(b => selectedIds.has(b.id)).reduce((s, b) => s + (b.valor ?? 0), 0))}
+                        </span>
+                    </span>
+                    <button
+                        onClick={() => setIsLoteEditOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-white text-blue-700 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-50 transition-colors"
+                    >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Editar em Lote
+                    </button>
+                    <button
+                        onClick={clearSelection}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-400 transition-colors"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                        Desmarcar
+                    </button>
+                </div>
+            )}
+
             {loading ? (
                 <div className="flex items-center justify-center py-16 text-gray-400">
                     <Loader2 className="w-6 h-6 animate-spin mr-2" /> Carregando...
@@ -536,59 +590,76 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     {filtered.map(b => {
                         const atrasado = b.vencimento && !['pago','cancelado'].includes(b.status)
                             && new Date(b.vencimento + 'T00:00:00') < new Date();
+                        const selected = selectedIds.has(b.id);
                         return (
-                            <button
-                                key={b.id}
-                                onClick={() => abrirEdicao(b)}
-                                className={`text-left bg-white rounded-2xl border p-5 hover:shadow-lg transition-all ${atrasado ? 'border-red-200 bg-red-50/30' : 'border-gray-100 hover:border-gray-200'}`}
-                            >
-                                <div className="flex items-start justify-between mb-3">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                        <span className="text-sm font-bold text-gray-900 truncate">
-                                            {b.supplier_id
-                                                ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
-                                                : (b.beneficiario_nome ?? b.documento_nome ?? 'Beneficiário desconhecido')}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                                        {b.numero != null && (
-                                            <span className="text-[10px] font-black text-gray-400 tracking-widest">
-                                                #{String(b.numero).padStart(4, '0')}
+                            <div key={b.id} className="relative group">
+                                {/* Checkbox overlay */}
+                                <label
+                                    className="absolute top-3 left-3 z-10 cursor-pointer"
+                                    onClick={e => e.stopPropagation()}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selected}
+                                        onChange={() => toggleSelect(b.id)}
+                                        className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                                    />
+                                </label>
+                                <button
+                                    onClick={() => abrirEdicao(b)}
+                                    className={`w-full text-left bg-white rounded-2xl border p-5 pl-9 hover:shadow-lg transition-all ${
+                                        selected ? 'border-blue-400 ring-2 ring-blue-200' :
+                                        atrasado ? 'border-red-200 bg-red-50/30' : 'border-gray-100 hover:border-gray-200'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                            <span className="text-sm font-bold text-gray-900 truncate">
+                                                {b.supplier_id
+                                                    ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
+                                                    : (b.beneficiario_nome ?? b.documento_nome ?? 'Beneficiário desconhecido')}
                                             </span>
-                                        )}
-                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
-                                            {STATUS_LABELS[b.status]}
-                                        </span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                            {b.numero != null && (
+                                                <span className="text-[10px] font-black text-gray-400 tracking-widest">
+                                                    #{String(b.numero).padStart(4, '0')}
+                                                </span>
+                                            )}
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
+                                                {STATUS_LABELS[b.status]}
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <p className="text-xs text-gray-500 mb-3 truncate">
-                                    {b.banco_nome ?? 'Banco desconhecido'}
-                                </p>
+                                    <p className="text-xs text-gray-500 mb-3 truncate">
+                                        {b.banco_nome ?? 'Banco desconhecido'}
+                                    </p>
 
-                                <div className="flex items-end justify-between">
-                                    <div>
-                                        <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-0.5">Valor</p>
-                                        <p className="text-lg font-black text-gray-900">{formatBRL(b.valor)}</p>
+                                    <div className="flex items-end justify-between">
+                                        <div>
+                                            <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-0.5">Valor</p>
+                                            <p className="text-lg font-black text-gray-900">{formatBRL(b.valor)}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-0.5 flex items-center gap-1 justify-end">
+                                                <Calendar className="w-3 h-3" /> Vencimento
+                                            </p>
+                                            <p className={`text-sm font-bold ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
+                                                {b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-0.5 flex items-center gap-1 justify-end">
-                                            <Calendar className="w-3 h-3" /> Vencimento
-                                        </p>
-                                        <p className={`text-sm font-bold ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
-                                            {b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
-                                        </p>
-                                    </div>
-                                </div>
 
-                                {b.confidence_score !== undefined && b.confidence_score < 80 && (
-                                    <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
-                                        <AlertTriangle className="w-3 h-3" />
-                                        Baixa confiança ({b.confidence_score}%)
-                                    </div>
-                                )}
-                            </button>
+                                    {b.confidence_score !== undefined && b.confidence_score < 80 && (
+                                        <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
+                                            <AlertTriangle className="w-3 h-3" />
+                                            Baixa confiança ({b.confidence_score}%)
+                                        </div>
+                                    )}
+                                </button>
+                            </div>
                         );
                     })}
                 </div>
@@ -598,6 +669,15 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                                <th className="px-4 py-3 w-10">
+                                    <input
+                                        type="checkbox"
+                                        checked={filtered.length > 0 && filtered.every(b => selectedIds.has(b.id))}
+                                        onChange={() => filtered.every(b => selectedIds.has(b.id)) ? clearSelection() : selectAllFiltered()}
+                                        className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                                        title="Selecionar todos"
+                                    />
+                                </th>
                                 <th className="text-left px-4 py-3 w-20">Código</th>
                                 <th className="text-left px-4 py-3">Beneficiário</th>
                                 <th className="text-left px-4 py-3">Obra</th>
@@ -611,12 +691,23 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             {filtered.map(b => {
                                 const atrasado = b.vencimento && !['pago','cancelado'].includes(b.status)
                                     && new Date(b.vencimento + 'T00:00:00') < new Date();
+                                const selected = selectedIds.has(b.id);
                                 return (
                                     <tr
                                         key={b.id}
                                         onClick={() => abrirEdicao(b)}
-                                        className={`cursor-pointer hover:bg-gray-50 transition-colors ${atrasado ? 'bg-red-50/40' : ''}`}
+                                        className={`cursor-pointer hover:bg-gray-50 transition-colors ${
+                                            selected ? 'bg-blue-50/60' : atrasado ? 'bg-red-50/40' : ''
+                                        }`}
                                     >
+                                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selected}
+                                                onChange={() => toggleSelect(b.id)}
+                                                className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                                            />
+                                        </td>
                                         <td className="px-4 py-3 whitespace-nowrap">
                                             <span className="text-xs font-black text-gray-500 tracking-widest">
                                                 {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
@@ -661,7 +752,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </tbody>
                         <tfoot>
                             <tr className="bg-gray-50 border-t border-gray-100">
-                                <td colSpan={4} className="px-4 py-2 text-xs text-gray-400">{filtered.length} boleto{filtered.length !== 1 ? 's' : ''}</td>
+                                <td colSpan={5} className="px-4 py-2 text-xs text-gray-400">{filtered.length} boleto{filtered.length !== 1 ? 's' : ''}</td>
                                 <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
                                     {formatBRL(filtered.filter(b => !['pago','cancelado'].includes(b.status)).reduce((s, b) => s + (b.valor ?? 0), 0))}
                                 </td>
@@ -693,6 +784,19 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     projectId={projectId}
                     onClose={() => setIsLoteOpen(false)}
                     onConcluir={() => { setIsLoteOpen(false); carregar(effectiveOrgId); }}
+                />
+            )}
+
+            {isLoteEditOpen && selectedIds.size > 0 && (
+                <BoletoEdicaoEmLoteModal
+                    boletos={filtered.filter(b => selectedIds.has(b.id))}
+                    organizationId={effectiveOrgId ?? organizationId}
+                    suppliers={supplierList}
+                    projects={projectList}
+                    costCenters={ccList}
+                    userEmail={userEmail}
+                    onClose={() => setIsLoteEditOpen(false)}
+                    onSaved={() => { clearSelection(); carregar(effectiveOrgId); }}
                 />
             )}
         </div>

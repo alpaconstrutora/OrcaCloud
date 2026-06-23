@@ -45,6 +45,15 @@ const Auth: React.FC<AuthProps> = ({ group = ProfileGroup.USER, onBack }) => {
                     title: 'Área do Desenvolvedor',
                     subtitle: 'Acesso técnico ao ecossistema'
                 };
+            case ProfileGroup.PARTNER:
+                return {
+                    primary: 'bg-orange-500',
+                    ring: 'focus:ring-orange-400',
+                    text: 'text-orange-500',
+                    icon: User,
+                    title: 'Portal do Parceiro B2B',
+                    subtitle: 'Colaboração segura e gestão de contratos'
+                };
             default:
                 return {
                     primary: 'bg-blue-600',

@@ -8,7 +8,8 @@ import {
     ShieldCheck,
     Cloud,
     Truck,
-    Briefcase
+    Briefcase,
+    Users
 } from 'lucide-react';
 import { ProfileGroup } from '../types';
 
@@ -65,6 +66,14 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onSelectGroup }) => {
             icon: Briefcase,
             color: 'indigo',
             theme: 'bg-indigo-600'
+        },
+        {
+            id: ProfileGroup.PARTNER,
+            title: 'Portal do Parceiro B2B',
+            desc: 'Área oficial de colaboração para prestadores de serviços e contratos.',
+            icon: Users,
+            color: 'orange',
+            theme: 'bg-orange-500'
         }
     ];
 

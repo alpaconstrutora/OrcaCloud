@@ -100,6 +100,23 @@ export const profileService = {
                 return { isValid: false, error: 'Seu e-mail não está cadastrado como corretor autorizado.' };
             }
 
+            if (group === ProfileGroup.PARTNER) {
+                const { data: partnerUser, error } = await supabase
+                    .from('partner_users')
+                    .select('id, is_active')
+                    .eq('email', lowerEmail)
+                    .eq('is_active', true)
+                    .maybeSingle();
+
+                if (error) {
+                    console.error("Partner validation error:", error.message);
+                    return { isValid: false, error: 'Erro de validação do parceiro. Por favor, contate o suporte.' };
+                }
+
+                if (partnerUser) return { isValid: true };
+                return { isValid: false, error: 'Seu e-mail não está cadastrado como parceiro autorizado.' };
+            }
+
             return { isValid: true };
         } catch (err) {
             console.error("Validation error:", err);

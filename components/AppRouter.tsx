@@ -788,7 +788,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     case 'supplies-contracts':
       if (selectedContractId) {
-        return <ContractDetailView contractId={selectedContractId} onBack={() => setSelectedContractId(null)} budget={budget} />;
+        return <ContractDetailView contractId={selectedContractId} onBack={() => setSelectedContractId(null)} budget={budget} onEdit={(contract) => { setSelectedContractId(null); setEditingContract(contract); setIsCreatingContract(true); }} />;
       }
       return (
         <ContractsDashboardShell

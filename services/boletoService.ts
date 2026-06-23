@@ -598,6 +598,64 @@ export const boletoService = {
     },
 
     /**
+     * Atualiza em lote os campos de associação (fornecedor, projeto, CC) para múltiplos boletos.
+     * Aplica apenas os campos presentes em `fields` (undefined = não alterar).
+     */
+    async associarEmLote(
+        ids: string[],
+        organizationId: string,
+        fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'project_id'>>,
+        userEmail?: string,
+    ): Promise<void> {
+        if (!ids.length || !Object.keys(fields).length) return;
+        const { error } = await supabase
+            .from(TABLE)
+            .update(fields)
+            .in('id', ids)
+            .eq('organization_id', organizationId);
+        if (error) throw error;
+        await Promise.all(
+            ids.map(id => registrarAuditoria(id, organizationId, 'associacao_lote', {
+                metodo: 'usuario',
+                usuario_email: userEmail,
+                valor_depois: fields,
+            })),
+        );
+    },
+
+    /**
+     * Atualiza campos de associação e aprova em lote (criando invoice para cada boleto).
+     * Retorna listas de ids que tiveram sucesso e de erros.
+     */
+    async aprovarEmLote(
+        ids: string[],
+        organizationId: string,
+        fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'project_id'>>,
+        userEmail?: string,
+    ): Promise<{ ok: string[]; errors: Array<{ id: string; error: string }> }> {
+        if (!ids.length) return { ok: [], errors: [] };
+        if (Object.keys(fields).length) {
+            const { error } = await supabase
+                .from(TABLE)
+                .update(fields)
+                .in('id', ids)
+                .eq('organization_id', organizationId);
+            if (error) throw error;
+        }
+        const ok: string[] = [];
+        const errors: Array<{ id: string; error: string }> = [];
+        for (const id of ids) {
+            try {
+                await this.aprovarECriarInvoice(id, organizationId, userEmail);
+                ok.push(id);
+            } catch (err: unknown) {
+                errors.push({ id, error: err instanceof Error ? err.message : String(err) });
+            }
+        }
+        return { ok, errors };
+    },
+
+    /**
      * Cancela o boleto (não exclui — preserva histórico).
      */
     async cancelar(boletoId: string, organizationId: string, motivo: string, userEmail?: string): Promise<Boleto> {

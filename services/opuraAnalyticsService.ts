@@ -13,6 +13,7 @@ export type OpuraDimension =
   | 'account'
   | 'empresa'
   | 'user'
+  | 'contraparte'
   | 'dre_group'
   | 'tx_month'
   | 'due_month'
@@ -92,6 +93,7 @@ export interface OpuraEntryFilters extends OpuraFilters {
   dreGroup?: string;
   categoryParentId?: string;
   createdBy?: string;
+  partyLabel?: string;
 }
 
 /** Um lançamento (linha de extrato / alvo de drill-down). */
@@ -190,11 +192,12 @@ export const opuraAnalyticsService = {
       empresa: 'empresaId',
       category_parent: 'categoryParentId',
       user: 'createdBy',
+      contraparte: 'partyLabel',
       dre_group: 'dreGroup',
     };
     const f = map[dimension];
     if (!f) return null;
-    // dre_group usa a própria chave (texto); demais usam o uuid (ou null → '— Sem')
+    // dre_group/contraparte usam a própria chave (texto); demais usam o uuid (ou null → '— Sem')
     return { [f]: key ?? undefined } as Partial<OpuraEntryFilters>;
   },
 
@@ -224,6 +227,7 @@ export const opuraAnalyticsService = {
       p_dre_group:          filters.dreGroup ?? null,
       p_category_parent_id: filters.categoryParentId ?? null,
       p_created_by:         filters.createdBy ?? null,
+      p_party_label:        filters.partyLabel ?? null,
       p_limit:              limit,
       p_offset:             offset,
     });

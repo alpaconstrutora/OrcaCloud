@@ -36,6 +36,7 @@ const DIMENSIONS: { value: OpuraDimension; label: string }[] = [
     { value: 'category',        label: 'Categoria' },
     { value: 'category_parent', label: 'Subcategoria (pai)' },
     { value: 'account',         label: 'Conta Bancária' },
+    { value: 'contraparte',     label: 'Contraparte' },
     { value: 'dre_group',       label: 'Grupo DRE' },
     { value: 'user',            label: 'Usuário' },
     { value: 'tx_month',        label: 'Mês (lançamento)' },

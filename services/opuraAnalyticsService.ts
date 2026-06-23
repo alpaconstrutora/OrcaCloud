@@ -227,6 +227,12 @@ export const opuraAnalyticsService = {
    * Retorna o patch de filtros a mesclar (ou null se não é drilável).
    */
   drillFilter(dimension: OpuraDimension, key: string | null): Partial<OpuraEntryFilters> | null {
+    // Fornecedor: a chave pode ser o FK (uuid) ou o nome-texto (party_label, nas saídas)
+    if (dimension === 'supplier') {
+      if (!key) return { supplierId: undefined };
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
+      return isUuid ? { supplierId: key } : { partyLabel: key, direction: 'DEBIT' };
+    }
     if (dimension.endsWith('_month')) {
       if (!key) return null;
       const field: OpuraDateField =

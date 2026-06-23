@@ -386,8 +386,8 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     return null
   }, [selectedSpaceId, selectedFolderId, spaces, showFolderView])
 
-  // Mobile real: renderiza o app mobile diretamente (sem iframe de preview)
-  if (isMobile) return <TasksMobileApp orgId={filterOrg || activeOrganizationId || ''} />
+  // Mobile real: usa activeOrganizationId (prop reativo), não filterOrg (estado interno do desktop)
+  if (isMobile) return <TasksMobileApp orgId={activeOrganizationId || ''} />
 
   return (
     <div className="space-y-5">

@@ -368,7 +368,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado','partner-workspaces-admin'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','controladoria','fiscal-nfe','automation','compliance-dashboard','opura-cno'];
+  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','controladoria','fiscal-nfe','automation'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
@@ -563,6 +563,8 @@ const Layout: React.FC<LayoutProps> = ({
               {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" />}
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" />
               <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" />
+              {(mod.compliance || isDev) && <NavItem id="compliance-dashboard" icon={Shield} label="ÒPURA Compliance" />}
+              {(mod.compliance || isDev) && <NavItem id="opura-cno" icon={Calculator} label="ÒPURA CNO & Previdência" />}
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
@@ -803,12 +805,6 @@ const Layout: React.FC<LayoutProps> = ({
                         <DropdownItem id="automation" label="Automação" icon={Zap} />
                       </>
                     )}
-                    {(mod.compliance || isDev) && (
-                      <>
-                        <DropdownItem id="compliance-dashboard" label="ÒPURA Compliance" icon={Shield} />
-                        <DropdownItem id="opura-cno" label="CNO & Previdência" icon={Calculator} />
-                      </>
-                    )}
                   </NavDropdown>
                 </>
               )}
@@ -1004,6 +1000,8 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="reformas-dashboard" icon={Hammer} label="ÒPURA Reformas" forceFull />
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" forceFull />
               <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" forceFull />
+              {(mod.compliance || isDev) && <NavItem id="compliance-dashboard" icon={Shield} label="ÒPURA Compliance" forceFull />}
+              {(mod.compliance || isDev) && <NavItem id="opura-cno" icon={Calculator} label="ÒPURA CNO & Previdência" forceFull />}
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
                 <div className="space-y-1 mb-4">
@@ -1024,10 +1022,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" forceFull />
 
               {(mod.compliance || isDev) && (
-                <>
-                  <NavItem id="opura-cno" icon={Calculator} label="CNO & Previdência" forceFull />
-                  <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" forceFull />
-                </>
+                <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" forceFull />
               )}
 
               <NavGroup label="Suprimentos" />

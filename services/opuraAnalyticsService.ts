@@ -96,6 +96,16 @@ export interface OpuraEntryFilters extends OpuraFilters {
   partyLabel?: string;
 }
 
+/** Linha de comparação entre dois períodos (A = atual, B = base/anterior). */
+export interface OpuraCompareRow {
+  dimension_key: string | null;
+  dimension_label: string;
+  valorA: number;
+  valorB: number;
+  delta: number;            // valorA − valorB
+  variacao: number | null;  // % sobre |valorB| (null se B = 0)
+}
+
 /** Um lançamento (linha de extrato / alvo de drill-down). */
 export interface OpuraEntry {
   id: string;
@@ -159,6 +169,55 @@ export const opuraAnalyticsService = {
     });
     if (error) throw error;
     return (data || []) as OpuraPivotRow[];
+  },
+
+  /**
+   * Comparativo temporal: agrega a mesma dimensão em dois períodos
+   * (A = atual, B = base/anterior) e mescla por chave. Métrica = net_realizado.
+   * Reusa fn_opura_pivot (sem RPC nova).
+   */
+  async compare(
+    organizationId: string,
+    dimension: OpuraDimension,
+    filtersA: OpuraFilters,
+    filtersB: OpuraFilters,
+  ): Promise<OpuraCompareRow[]> {
+    const [rowsA, rowsB] = await Promise.all([
+      opuraAnalyticsService.pivot(organizationId, dimension, filtersA),
+      opuraAnalyticsService.pivot(organizationId, dimension, filtersB),
+    ]);
+    const merged = new Map<string, OpuraCompareRow>();
+    const keyOf = (r: OpuraPivotRow) => r.dimension_key ?? `__${r.dimension_label}`;
+    for (const r of rowsA) {
+      merged.set(keyOf(r), {
+        dimension_key: r.dimension_key,
+        dimension_label: r.dimension_label,
+        valorA: r.net_realizado,
+        valorB: 0,
+        delta: 0,
+        variacao: null,
+      });
+    }
+    for (const r of rowsB) {
+      const k = keyOf(r);
+      const ex = merged.get(k);
+      if (ex) ex.valorB = r.net_realizado;
+      else merged.set(k, {
+        dimension_key: r.dimension_key,
+        dimension_label: r.dimension_label,
+        valorA: 0,
+        valorB: r.net_realizado,
+        delta: 0,
+        variacao: null,
+      });
+    }
+    const out = [...merged.values()].map(r => ({
+      ...r,
+      delta: r.valorA - r.valorB,
+      variacao: r.valorB === 0 ? null : ((r.valorA - r.valorB) / Math.abs(r.valorB)) * 100,
+    }));
+    out.sort((a, b) => Math.abs(b.valorA) - Math.abs(a.valorA));
+    return out;
   },
 
   /**

@@ -15,6 +15,9 @@ import {
     type OpuraPivotRow,
 } from '../services/opuraAnalyticsService';
 import type { BudgetEntry } from '../types/budget';
+import type { DiaryEntry } from '../types/diary';
+import type { ProjectSchedule } from '../types/project';
+import { calculateProjectProgress, calculatePlannedFinancialProgress } from '../utils/projectUtils';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../hooks/useToast';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
@@ -34,7 +37,60 @@ interface ProjectLite {
     id: string;
     name: string;
     budget: BudgetEntry[] | null;
-    settings: { bdi?: number; classification?: string } | null;
+    settings: {
+        bdi?: number;
+        classification?: string;
+        schedule?: ProjectSchedule;
+        diaryEntries?: DiaryEntry[];
+    } | null;
+}
+
+// ── Curva Física × Financeira (S-curve mensal) ─────────────────────────────────
+interface CurvaPonto { mes: string; planejadoFisico: number | null; realizadoFisico: number | null; financeiro: number | null; }
+
+function lastDayOfMonth(ym: string): Date {
+    const [y, m] = ym.split('-').map(Number);
+    return new Date(y, m, 0, 23, 59, 59);
+}
+function ymOf(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function computeCurva(p: ProjectLite, mensal: OpuraObraMes[], orcado: number): CurvaPonto[] {
+    const budget = Array.isArray(p.budget) ? p.budget : [];
+    const schedule = p.settings?.schedule;
+    const diary = Array.isArray(p.settings?.diaryEntries) ? p.settings!.diaryEntries! : [];
+    const hasSchedule = !!(schedule?.periods?.length && schedule?.distributions?.length);
+    const hasDiary = diary.length > 0;
+
+    // Conjunto de meses: cronograma (start→end) ∪ meses com movimento financeiro
+    const monthsSet = new Set<string>();
+    if (hasSchedule && schedule!.startDate) {
+        const start = new Date(schedule!.startDate);
+        const end = schedule!.endDate ? new Date(schedule!.endDate) : start;
+        const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+        let guard = 0;
+        while (cur <= end && guard < 60) { monthsSet.add(ymOf(cur)); cur.setMonth(cur.getMonth() + 1); guard++; }
+    }
+    mensal.forEach(m => monthsSet.add(m.mes));
+    const months = [...monthsSet].sort();
+    if (months.length === 0) return [];
+
+    // Acumulado financeiro (pago) por mês
+    const pagoByMonth: Record<string, number> = {};
+    mensal.forEach(m => { pagoByMonth[m.mes] = m.saidas; });
+    let pagoAcc = 0;
+
+    return months.map(ym => {
+        const monthEnd = lastDayOfMonth(ym);
+        pagoAcc += pagoByMonth[ym] || 0;
+        const planejadoFisico = hasSchedule ? calculatePlannedFinancialProgress(schedule!, budget, monthEnd) : null;
+        const realizadoFisico = hasDiary
+            ? calculateProjectProgress(budget, diary.filter(d => new Date(d.date) <= monthEnd))
+            : null;
+        const financeiro = orcado > 0 ? Math.round(pagoAcc / orcado * 1000) / 10 : null;
+        return { mes: ym, planejadoFisico, realizadoFisico, financeiro };
+    });
 }
 function calcOrcado(p: ProjectLite): number {
     const budget = Array.isArray(p.budget) ? p.budget : [];
@@ -57,6 +113,22 @@ const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: 
                 <div key={p.name} className="flex justify-between gap-3">
                     <span style={{ color: p.color }} className="font-semibold">{p.name}</span>
                     <span className="font-bold text-gray-900 tabular-nums">{fBRL(p.value)}</span>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+// ── Tooltip de percentual ──────────────────────────────────────────────────────
+const PctTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) => {
+    if (!active || !payload?.length) return null;
+    return (
+        <div className="bg-white border border-gray-200 rounded-xl shadow-xl p-3 text-xs space-y-1 min-w-[170px]">
+            <p className="font-black text-gray-700 mb-2">{label}</p>
+            {payload.filter(p => p.value !== null).map(p => (
+                <div key={p.name} className="flex justify-between gap-3">
+                    <span style={{ color: p.color }} className="font-semibold">{p.name}</span>
+                    <span className="font-bold text-gray-900 tabular-nums">{p.value.toFixed(1)}%</span>
                 </div>
             ))}
         </div>
@@ -197,6 +269,16 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
         Resultado: m.resultado,
     }));
 
+    // Curva Física × Financeira (S-curve mensal) — reusa projectUtils
+    const curvaFF = React.useMemo(
+        () => selected ? computeCurva(selected, mensal, orcado) : [],
+        [selected, mensal, orcado],
+    );
+    const hasFisico = curvaFF.some(p => p.planejadoFisico !== null || p.realizadoFisico !== null);
+    const ffLast = curvaFF[curvaFF.length - 1];
+    const gapFF = ffLast && ffLast.realizadoFisico !== null && ffLast.financeiro !== null
+        ? Math.round((ffLast.financeiro - ffLast.realizadoFisico) * 10) / 10 : null;
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -327,6 +409,44 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
                                     <Line type="monotone" dataKey="Resultado" stroke="#2563eb" strokeWidth={2} dot={false} />
                                 </ComposedChart>
                             </ResponsiveContainer>
+                        </div>
+                    )}
+
+                    {/* Curva Física × Financeira (S-curve) */}
+                    {curvaFF.length > 0 && (
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-wider">Curva Física × Financeira</p>
+                                {gapFF !== null && (
+                                    <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                                        gapFF > 5 ? 'bg-red-50 text-red-600' : gapFF < -5 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+                                    }`}>
+                                        {gapFF > 0 ? `Financeiro ${gapFF}pp à frente do físico` : gapFF < 0 ? `Físico ${Math.abs(gapFF)}pp à frente do financeiro` : 'Físico e financeiro alinhados'}
+                                    </span>
+                                )}
+                            </div>
+                            {!hasFisico ? (
+                                <p className="text-xs text-gray-400 py-8 text-center">
+                                    Esta obra não tem cronograma nem diário de obra (RDO) cadastrados — sem avanço físico,
+                                    exibimos apenas o avanço financeiro.
+                                </p>
+                            ) : null}
+                            <ResponsiveContainer width="100%" height={280}>
+                                <ComposedChart data={curvaFF} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                    <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                                    <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={42}
+                                        tickFormatter={(v: number) => `${v}%`} domain={[0, 100]} />
+                                    <Tooltip content={<PctTooltip />} />
+                                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                                    <Line type="monotone" dataKey="planejadoFisico" name="Físico Planejado" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls />
+                                    <Line type="monotone" dataKey="realizadoFisico" name="Físico Realizado" stroke="#f59e0b" strokeWidth={2} dot={false} connectNulls />
+                                    <Line type="monotone" dataKey="financeiro"      name="Financeiro"       stroke="#2563eb" strokeWidth={2} dot={false} connectNulls />
+                                </ComposedChart>
+                            </ResponsiveContainer>
+                            <p className="text-[11px] text-gray-400 mt-2">
+                                Físico = avanço ponderado pelo orçamento (cronograma planejado · RDO realizado) · Financeiro = pago acumulado ÷ orçado.
+                            </p>
                         </div>
                     )}
 

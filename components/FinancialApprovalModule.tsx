@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp,
-    Loader2, Plus, Settings, Shield, Trash2, X,
+    Loader2, Plus, Send, Settings, Shield, Trash2, X,
 } from 'lucide-react';
 import { financialApprovalService } from '../services/financialApprovalService';
 import { approvalService, type ApprovalPendingSummary } from '../services/approvalService';
@@ -152,11 +152,13 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
     const [expanded, setExpanded] = useState<string | null>(null);
     const [modal, setModal] = useState<{ item: ApprovalQueueItem; mode: 'approve' | 'reject' } | null>(null);
 
+    const [submittingId, setSubmittingId] = useState<string | null>(null);
+
     const load = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            setItems(await financialApprovalService.listPendingQueue(organizationId));
+            setItems(await financialApprovalService.listActionQueue(organizationId));
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao carregar fila');
         } finally {
@@ -166,13 +168,25 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
 
     useEffect(() => { load(); }, [load]);
 
+    async function handleSubmit(id: string) {
+        setSubmittingId(id);
+        try {
+            await financialApprovalService.submitForApproval(id, organizationId);
+            await load();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Erro ao enviar para aprovação');
+        } finally {
+            setSubmittingId(null);
+        }
+    }
+
     if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
     if (error) return <div className="m-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold">{error}</div>;
 
     if (!items.length) return (
         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
             <CheckCircle2 className="w-10 h-10 mb-3 opacity-30" />
-            <p className="text-sm font-semibold">Fila vazia — nenhuma aprovação pendente</p>
+            <p className="text-sm font-semibold">Nenhum item acima da alçada pendente de ação</p>
         </div>
     );
 
@@ -182,15 +196,22 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                 {items.map(item => {
                     const approvedLevels = item.approval_chain.filter(s => s.action === 'APROVADO').map(s => s.level);
                     const isExpanded = expanded === item.id;
+                    const isDraft = item.approval_status === 'RASCUNHO';
                     return (
                         <div key={item.id} className="bg-white">
                             <div className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors">
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-0.5">
                                         <p className="text-sm font-bold text-gray-900 truncate">{item.description ?? '(sem descrição)'}</p>
-                                        <span className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
-                                            Nível {approvedLevels.length + 1}/{item.approval_required_levels}
-                                        </span>
+                                        {isDraft ? (
+                                            <span className="text-[10px] font-black text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
+                                                Rascunho
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
+                                                Nível {approvedLevels.length + 1}/{item.approval_required_levels}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="flex items-center gap-3 text-xs text-gray-400">
                                         {item.party_name && <span>{item.party_name}</span>}
@@ -200,18 +221,30 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                                 </div>
                                 <p className="text-base font-black text-gray-900 whitespace-nowrap">{fmt(item.amount)}</p>
                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                    <button
-                                        onClick={() => setModal({ item, mode: 'approve' })}
-                                        className="px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
-                                    >
-                                        <Check className="w-3 h-3" /> Aprovar
-                                    </button>
-                                    <button
-                                        onClick={() => setModal({ item, mode: 'reject' })}
-                                        className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
-                                    >
-                                        <X className="w-3 h-3" /> Rejeitar
-                                    </button>
+                                    {isDraft ? (
+                                        <button
+                                            onClick={() => handleSubmit(item.id)}
+                                            disabled={submittingId === item.id}
+                                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
+                                        >
+                                            {submittingId === item.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} Enviar p/ aprovação
+                                        </button>
+                                    ) : (
+                                        <>
+                                            <button
+                                                onClick={() => setModal({ item, mode: 'approve' })}
+                                                className="px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                            >
+                                                <Check className="w-3 h-3" /> Aprovar
+                                            </button>
+                                            <button
+                                                onClick={() => setModal({ item, mode: 'reject' })}
+                                                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                            >
+                                                <X className="w-3 h-3" /> Rejeitar
+                                            </button>
+                                        </>
+                                    )}
                                     <button
                                         onClick={() => setExpanded(isExpanded ? null : item.id)}
                                         className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"

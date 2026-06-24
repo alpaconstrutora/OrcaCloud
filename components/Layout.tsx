@@ -714,6 +714,14 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownItem id="labor-ats" label="Recrutamento" icon={Briefcase} />
                   <DropdownItem id="labor-termination" label="Desligamentos" icon={TrendingDown} />
 
+                  <DropdownGroupLabel label="Financeiro" />
+                  <DropdownItem id="labor-costs" label="Custos" icon={DollarSign} />
+                  <DropdownItem id="labor-payroll" label="Folha" icon={Calculator} />
+                  <DropdownItem id="labor-allocations" label="Alocações" icon={Target} />
+                  <DropdownItem id="labor-encargos" label="Encargos Sociais" icon={Percent} />
+                  <DropdownItem id="labor-vale-refeicao" label="Vale Refeição" icon={UtensilsCrossed} />
+                  <DropdownItem id="labor-esocial" label="eSocial" icon={FileText} />
+
                   <DropdownGroupLabel label="Operacional" />
                   <DropdownItem id="labor-timetracking" label="Ponto" icon={Clock} />
                   <DropdownItem id="labor-timebank" label="Banco de Horas" icon={Clock} />
@@ -726,15 +734,6 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownItem id="labor-diary" label="Diário de Obra" icon={BookOpen} />
                   <DropdownItem id="labor-contractors" label="Empreiteiros" icon={Truck} />
 
-                  <DropdownGroupLabel label="Financeiro" />
-                  <DropdownItem id="labor-costs" label="Custos" icon={DollarSign} />
-                  <DropdownItem id="labor-payroll" label="Folha" icon={Calculator} />
-                  <DropdownItem id="labor-allocations" label="Alocações" icon={Target} />
-                  <DropdownItem id="labor-rubrics" label="Rubricas" icon={Shield} />
-                  <DropdownItem id="labor-encargos" label="Encargos Sociais" icon={Percent} />
-                  <DropdownItem id="labor-vale-refeicao" label="Vale Refeição" icon={UtensilsCrossed} />
-                  <DropdownItem id="labor-esocial" label="eSocial" icon={FileText} />
-
                   <DropdownGroupLabel label="Estratégico" />
                   <DropdownItem id="labor-incentivos" label="Incentivos & Produtividade" icon={Gift} />
                   <DropdownItem id="labor-evaluation" label="Avaliação 360°" icon={Trophy} />
@@ -744,6 +743,7 @@ const Layout: React.FC<LayoutProps> = ({
 
                   <DropdownGroupLabel label="Configurações" />
                   <DropdownItem id="labor-fiscal" label="Config. Fiscais" icon={Settings} />
+                  <DropdownItem id="labor-rubrics" label="Rubricas" icon={Shield} />
                 </NavDropdown>
               )}
 

@@ -128,15 +128,40 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
     const [employeeId, setEmployeeId] = useState('');
     const [teamId, setTeamId] = useState('');
     const [projectId, setProjectId] = useState('');
+    const [valorTipo, setValorTipo] = useState<'fixo' | 'pct'>('fixo');
     const [amount, setAmount] = useState(0);
+    const [pct, setPct] = useState(0);
+    const [empSalary, setEmpSalary] = useState<number | null>(null);
     const [distMode, setDistMode] = useState<'equal' | 'per_member'>('per_member');
     const [justification, setJustification] = useState('');
     const [file, setFile] = useState<File | null>(null);
     const [saving, setSaving] = useState(false);
     const [recent, setRecent] = useState<IncentiveEvent[]>([]);
     const [msg, setMsg] = useState<string | null>(null);
+    const [allProjects, setAllProjects] = useState<ProjectLite[]>(projects);
 
     const activeEmployees = useMemo(() => employees.filter(e => e.status !== 'DESLIGADO' && e.status !== 'INATIVO'), [employees]);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const { data } = await supabase.from('projects').select('id, name').order('name');
+                if (data) setAllProjects(data.filter((p: any) => p.id));
+            } catch { /* ignore */ }
+        })();
+    }, []);
+
+    useEffect(() => {
+        if (!employeeId || valorTipo !== 'pct') { setEmpSalary(null); return; }
+        (async () => {
+            try {
+                const { data } = await supabase.from('employees').select('base_salary').eq('id', employeeId).single();
+                setEmpSalary(data?.base_salary ?? null);
+            } catch { setEmpSalary(null); }
+        })();
+    }, [employeeId, valorTipo]);
+
+    const calculatedAmount = valorTipo === 'pct' && empSalary !== null ? (pct / 100) * empSalary : amount;
 
     const loadRecent = useCallback(() => {
         incentiveService.listEvents(orgId).then(r => setRecent(r.slice(0, 25))).catch(console.error);
@@ -155,9 +180,11 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
         setMsg(null);
         if (!rubricCode) return setMsg('Selecione o tipo de incentivo.');
         if (!justification.trim()) return setMsg('A justificativa é obrigatória.');
-        if (amount <= 0) return setMsg('Informe um valor maior que zero.');
         if (mode === 'individual' && !employeeId) return setMsg('Selecione o colaborador.');
         if (mode === 'collective' && !teamId) return setMsg('Selecione a equipe.');
+        if (valorTipo === 'pct' && pct <= 0) return setMsg('Informe uma porcentagem maior que zero.');
+        if (valorTipo === 'pct' && empSalary === null) return setMsg('Salário base não cadastrado para este colaborador.');
+        if (valorTipo === 'fixo' && amount <= 0) return setMsg('Informe um valor maior que zero.');
 
         setSaving(true);
         try {
@@ -166,7 +193,7 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
             const desc = rubric?.name || rubricCode;
             if (mode === 'individual') {
                 await incentiveService.launchIndividual({
-                    org_id: orgId, employee_id: employeeId, rubric_code: rubricCode, amount,
+                    org_id: orgId, employee_id: employeeId, rubric_code: rubricCode, amount: calculatedAmount,
                     description: desc, justification, project_id: projectId || null, attachment_url,
                 });
                 setMsg('✓ Incentivo lançado e enviado para aprovação.');
@@ -221,12 +248,37 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
                             <Label>Obra (opcional)</Label>
                             <select className={inputCls} value={projectId} onChange={e => setProjectId(e.target.value)}>
                                 <option value="">— Sem obra —</option>
-                                {projects.map(p => <option key={p.id} value={p.id}>{projName(p)}</option>)}
+                                {allProjects.map(p => <option key={p.id} value={p.id}>{projName(p)}</option>)}
                             </select>
                         </div>
                         <div>
-                            <Label>Valor (R$)</Label>
-                            <input type="number" step="0.01" className={inputCls} value={amount || ''} onChange={e => setAmount(parseFloat(e.target.value) || 0)} />
+                            <Label>Valor</Label>
+                            <div className="flex gap-2 mb-2">
+                                {([['fixo', 'Fixo R$'], ['pct', '% do Salário']] as const).map(([v, l]) => (
+                                    <button key={v} type="button" onClick={() => setValorTipo(v)}
+                                        className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${valorTipo === v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-100'}`}>
+                                        {l}
+                                    </button>
+                                ))}
+                            </div>
+                            {valorTipo === 'fixo' ? (
+                                <input type="number" step="0.01" className={inputCls} value={amount || ''} onChange={e => setAmount(parseFloat(e.target.value) || 0)} placeholder="0,00" />
+                            ) : (
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <input type="number" step="0.1" min="0" max="100" className={inputCls} value={pct || ''} onChange={e => setPct(parseFloat(e.target.value) || 0)} placeholder="0,0" />
+                                        <span className="text-sm font-bold text-slate-500 shrink-0">%</span>
+                                    </div>
+                                    {empSalary !== null && pct > 0 && (
+                                        <p className="text-[10px] text-slate-400 ml-1">
+                                            Salário: R$ {empSalary.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} → <strong className="text-emerald-600">R$ {((pct / 100) * empSalary).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                                        </p>
+                                    )}
+                                    {empSalary === null && employeeId && (
+                                        <p className="text-[10px] text-rose-400 ml-1">Salário base não cadastrado para este colaborador.</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </>
                 ) : (

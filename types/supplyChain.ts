@@ -1,3 +1,5 @@
+import type { ApprovalStep } from './financial';
+
 export interface PurchaseOrderItem {
     code: string;
     description: string;
@@ -46,6 +48,10 @@ export interface PurchaseOrder {
     notes?: string;
     items: PurchaseOrderItem[];
     version?: number;
+    // Aprovação multinível unificada (approvalService). Independente de isFinancialApproved.
+    approval_status?: 'RASCUNHO' | 'PENDENTE' | 'APROVADO' | 'REJEITADO';
+    approval_chain?: ApprovalStep[];
+    approval_required_levels?: 1 | 2;
     created_at?: string;
     updated_at?: string;
     status_updated_at?: string;

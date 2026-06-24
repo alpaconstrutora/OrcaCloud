@@ -789,6 +789,15 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
     const pdiPendentes = pdiItems.filter(p => p.status === 'PENDENTE' || p.status === 'EM_ANDAMENTO').length;
     const pdiConcluidos = pdiItems.filter(p => p.status === 'CONCLUIDO').length;
 
+    if (!orgId) {
+        return (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
+                <Award className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir avaliações de desempenho.</p>
+            </div>
+        );
+    }
+
     if (selectedCycle) {
         return (
             <CycleDetail

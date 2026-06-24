@@ -9,6 +9,7 @@ import {
     ReceiptText, CreditCard, Landmark, BarChart3, ArrowRight,
 } from 'lucide-react';
 import { financialOverviewService } from '../services/financialOverviewService';
+import { approvalService } from '../services/approvalService';
 import type { FinancialKPIs, FinancialTopSupplier, DREProjectSummary } from '../types/financial';
 
 // ─── helpers ────────────────────────────────────────────────
@@ -123,6 +124,20 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
     const [loading, setLoading]          = useState(true);
     const [error, setError]              = useState<string | null>(null);
 
+    // Pendências de aprovação (enforcement soft) — independente do período
+    const [pendingQtd, setPendingQtd]   = useState(0);
+    const [pendingSoma, setPendingSoma] = useState(0);
+
+    useEffect(() => {
+        if (!organizationId) return;
+        approvalService.getPendingSummary(organizationId)
+            .then(s => {
+                setPendingQtd(s.reduce((a, x) => a + Number(x.qtd), 0));
+                setPendingSoma(s.reduce((a, x) => a + Number(x.soma), 0));
+            })
+            .catch(() => {});
+    }, [organizationId]);
+
     const period = getPeriodBounds(preset, offset);
 
     const load = useCallback(async () => {
@@ -213,6 +228,23 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 font-semibold">
                     {error}
                 </div>
+            )}
+
+            {/* ── Pendências de aprovação (soft) ── */}
+            {pendingQtd > 0 && (
+                <button
+                    onClick={() => onNavigate?.('financial-approval')}
+                    className="w-full flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl text-left hover:bg-amber-100 transition-colors"
+                >
+                    <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                    <div className="flex-1">
+                        <p className="text-sm font-black text-amber-800">
+                            {pendingQtd} {pendingQtd === 1 ? 'item acima da alçada sem aprovação' : 'itens acima da alçada sem aprovação'} ({formatBRL(pendingSoma)})
+                        </p>
+                        <p className="text-xs text-amber-600/80 mt-0.5">Clique para revisar a fila de aprovação.</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                </button>
             )}
 
             {loading ? <Spinner /> : (

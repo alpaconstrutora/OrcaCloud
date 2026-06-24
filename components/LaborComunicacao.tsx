@@ -597,6 +597,15 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
         return Math.round(withData.reduce((s, c) => s + (c.taxa_leitura_pct || 0), 0) / withData.length);
     }, [comms]);
 
+    if (!orgId) {
+        return (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
+                <Megaphone className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir comunicação interna.</p>
+            </div>
+        );
+    }
+
     if (selectedComm) {
         return (
             <CommDetail

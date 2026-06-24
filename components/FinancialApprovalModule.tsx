@@ -4,6 +4,7 @@ import {
     Loader2, Plus, Settings, Shield, Trash2, X,
 } from 'lucide-react';
 import { financialApprovalService } from '../services/financialApprovalService';
+import { approvalService, type ApprovalPendingSummary } from '../services/approvalService';
 import type {
     FinancialApprovalConfig, ApprovalQueueItem, ApprovalStep,
 } from '../types/financial';
@@ -460,6 +461,51 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
     );
 }
 
+// ─── SoftPendingBanner ───────────────────────────────────────
+// Enforcement SOFT: avisa (não bloqueia) sobre itens que caem em uma
+// faixa de alçada mas ainda não foram aprovados. Read-only.
+
+const ENTITY_LABEL: Record<string, string> = {
+    transaction: 'saídas financeiras',
+    contract:    'contratos',
+    purchase_order: 'compras',
+};
+
+function SoftPendingBanner({ organizationId }: { organizationId: string }) {
+    const [summary, setSummary] = useState<ApprovalPendingSummary[]>([]);
+
+    useEffect(() => {
+        if (!organizationId) return;
+        approvalService.getPendingSummary(organizationId)
+            .then(s => setSummary(s.filter(x => x.qtd > 0)))
+            .catch(() => {});
+    }, [organizationId]);
+
+    const totalQtd = summary.reduce((a, x) => a + Number(x.qtd), 0);
+    if (totalQtd === 0) return null;
+
+    const totalSoma = summary.reduce((a, x) => a + Number(x.soma), 0);
+    const partes = summary
+        .map(x => `${x.qtd} ${ENTITY_LABEL[x.entity] ?? x.entity}`)
+        .join(' · ');
+
+    return (
+        <div className="mx-6 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+                <p className="font-black text-amber-800">
+                    {totalQtd} {totalQtd === 1 ? 'item acima da alçada sem aprovação' : 'itens acima da alçada sem aprovação'}
+                    {' '}({fmt(totalSoma)})
+                </p>
+                <p className="text-amber-700 mt-0.5">{partes}.</p>
+                <p className="text-amber-600/80 text-xs mt-1">
+                    Aprovação recomendada, mas não obrigatória — os lançamentos seguem normalmente.
+                </p>
+            </div>
+        </div>
+    );
+}
+
 // ─── main ────────────────────────────────────────────────────
 
 type Tab = 'fila' | 'config';
@@ -520,11 +566,14 @@ export default function FinancialApprovalModule({ organizationId = '', userEmail
             {/* Content */}
             <div className="flex-1 overflow-auto">
                 {tab === 'fila' && (
-                    <ApprovalQueue
-                        organizationId={organizationId}
-                        userEmail={userEmail}
-                        config={config}
-                    />
+                    <>
+                        <SoftPendingBanner organizationId={organizationId} />
+                        <ApprovalQueue
+                            organizationId={organizationId}
+                            userEmail={userEmail}
+                            config={config}
+                        />
+                    </>
                 )}
                 {tab === 'config' && (
                     <ApprovalConfigPanel

@@ -439,6 +439,15 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
     const turnoverDelta = latest && prev ? latest.turnover_rate - (prev.turnover_rate ?? 0) : undefined;
     const headcountDelta = latest && prev ? ((latest.headcount_fim - prev.headcount_fim) / Math.max(prev.headcount_fim, 1)) * 100 : undefined;
 
+    if (!orgId) {
+        return (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
+                <BarChart3 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para visualizar os analytics de RH.</p>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-5">
             {/* Header */}

@@ -10,6 +10,7 @@ import { receiptService, CreateReceiptItemInput } from './receiptService';
 import { discrepancyService } from './discrepancyService';
 import { notificationLogService } from './notificationLogService';
 import { whatsappService } from './whatsappService';
+import { approvalService } from './approvalService';
 import { appSettingsService } from './appSettingsService';
 
 type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; chart_of_accounts?: string; notes?: string; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
@@ -551,5 +552,34 @@ export const orderService = {
 
         if (insertError) throw insertError;
         return NewOrder;
+    },
+
+    // ─── Aprovação multinível (modelo unificado — approvalService) ──────
+    // purchase_orders é escopada por empresa_id e seu valor vem de items[].total;
+    // por isso passamos organizationId e o total explicitamente ao submit.
+    // is_financial_approved (pós-recebimento) permanece independente (Regra 12).
+
+    async submitForApproval(orderId: string, organizationId: string): Promise<void> {
+        const { data: po, error } = await supabase
+            .from('purchase_orders')
+            .select('items')
+            .eq('id', orderId)
+            .single();
+        if (error) throw error;
+        const total = ((po?.items as PurchaseOrderItem[]) || [])
+            .reduce((s, i) => s + (i.total || 0), 0);
+        await approvalService.submit('purchase_order', orderId, {}, { organizationId, amount: total });
+    },
+
+    async approveOrder(orderId: string, level: 1 | 2, approvedBy: string, notes?: string): Promise<void> {
+        await approvalService.approve(
+            'purchase_order', orderId, level, approvedBy,
+            { level1_label: 'Gestor', level2_label: 'Financeiro/Diretoria' },
+            notes,
+        );
+    },
+
+    async rejectOrder(orderId: string, rejectedBy: string, reason: string): Promise<void> {
+        await approvalService.reject('purchase_order', orderId, rejectedBy, reason);
     }
 };

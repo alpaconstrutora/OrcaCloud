@@ -372,6 +372,36 @@ export const boletoService = {
             invoiceId = invoice.id;
         }
 
+        // Criar internal_transaction (lançamento no razão) se ainda não existir para este boleto.
+        // É o que conecta o boleto ao módulo de conciliação bancária.
+        const { data: txExistente } = await supabase
+            .from('internal_transactions')
+            .select('id')
+            .eq('organization_id', organizationId)
+            .eq('source_system', 'BOLETO')
+            .eq('reference_id', boletoId)
+            .maybeSingle();
+
+        if (!txExistente) {
+            const hoje = new Date().toISOString().slice(0, 10);
+            await supabase.from('internal_transactions').insert({
+                organization_id:  organizationId,
+                source_system:    'BOLETO',
+                reference_id:     boletoId,
+                direction:        'DEBIT',
+                status:           'PENDING',
+                approval_status:  'APROVADO',
+                amount:           boletoRow.valor,
+                transaction_date: boletoRow.vencimento ?? hoje,
+                due_date:         boletoRow.vencimento ?? null,
+                description:      boletoRow.beneficiario_nome ?? boletoRow.documento_nome ?? 'Boleto',
+                party_name:       boletoRow.beneficiario_nome ?? null,
+                supplier_id:      boletoRow.supplier_id ?? null,
+                project_id:       boletoRow.project_id ?? null,
+                cost_center_id:   boletoRow.cost_center_id ?? null,
+            });
+        }
+
         const { data, error } = await supabase
             .from(TABLE)
             .update({ status: 'aprovado', invoice_id: invoiceId })
@@ -391,13 +421,21 @@ export const boletoService = {
 
     /**
      * Marca como pago (já programado anteriormente ou direto a partir de aprovado).
-     * Atualiza também o invoice associado para status='paid'.
+     * Atualiza o invoice associado e o lançamento no razão para CONCILIATED.
      */
     async marcarPago(boletoId: string, organizationId: string, userEmail?: string): Promise<Boleto> {
         const boleto = await this.transitar(boletoId, organizationId, 'pago', userEmail);
-        if (boleto.invoice_id) {
-            await supabase.from('invoices').update({ status: 'paid' }).eq('id', boleto.invoice_id);
-        }
+        const hoje = new Date().toISOString().slice(0, 10);
+        await Promise.all([
+            boleto.invoice_id
+                ? supabase.from('invoices').update({ status: 'paid' }).eq('id', boleto.invoice_id)
+                : Promise.resolve(),
+            supabase.from('internal_transactions')
+                .update({ status: 'CONCILIATED', payment_date: hoje })
+                .eq('organization_id', organizationId)
+                .eq('source_system', 'BOLETO')
+                .eq('reference_id', boletoId),
+        ]);
         return boleto;
     },
 

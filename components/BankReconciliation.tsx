@@ -477,7 +477,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             }
         };
         fetchData();
-    }, [selectedAccountId, activeView, startDate, endDate]);
+    }, [selectedAccountId, activeView, startDate, endDate, competencia]);
 
     useEffect(() => {
         const close = () => { setBankCatDropdownOpen(false); setInternalCatDropdownOpen(false); setBankCpDropdownOpen(false); setInternalEntityDropdownOpen(false); };
@@ -717,6 +717,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         if (!selectedAccountId) return;
         setIsLoading(true);
         try {
+            // Datas efetivas: competência tem precedência sobre início/fim manual
+            const effStart = competencia ? `${competencia}-01` : startDate;
+            const effEnd = competencia
+                ? `${competencia}-${String(new Date(+competencia.split('-')[0], +competencia.split('-')[1], 0).getDate()).padStart(2, '0')}`
+                : endDate;
+
             // Load Bank Transactions
             let bankQuery = supabase
                 .from('bank_transactions')
@@ -729,14 +735,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 bankQuery = bankQuery.in('status', ['MATCHED']);
             }
 
-            if (startDate) bankQuery = bankQuery.gte('transaction_date', startDate);
-            if (endDate) bankQuery = bankQuery.lte('transaction_date', endDate);
+            if (effStart) bankQuery = bankQuery.gte('transaction_date', effStart);
+            if (effEnd)   bankQuery = bankQuery.lte('transaction_date', effEnd);
 
             const { data: bTxs, error: bError } = await bankQuery
                 .order('transaction_date', { ascending: false })
-                .limit(2000); 
+                .limit(2000);
             if (bError) throw bError;
-            
+
             setBankTransactions(bTxs || []);
 
             // Load Internal Transactions based on view
@@ -755,8 +761,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 iTxQuery = iTxQuery.eq('status', 'CONCILIATED');
             }
 
-            if (startDate) iTxQuery = iTxQuery.gte('transaction_date', startDate);
-            if (endDate) iTxQuery = iTxQuery.lte('transaction_date', endDate);
+            if (effStart) iTxQuery = iTxQuery.gte('transaction_date', effStart);
+            if (effEnd)   iTxQuery = iTxQuery.lte('transaction_date', effEnd);
 
             const { data: iTxs, error: iError } = await iTxQuery.limit(2000);
             

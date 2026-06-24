@@ -145,8 +145,13 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
     useEffect(() => {
         (async () => {
             try {
-                const { data } = await supabase.from('projects').select('id, name').order('name');
-                if (data) setAllProjects(data.filter((p: any) => p.id));
+                const { data } = await supabase
+                    .from('projects')
+                    .select('id, name, settings')
+                    .order('name');
+                if (data) setAllProjects(
+                    data.filter((p: any) => p.id && p.settings?.classification === 'OBRA')
+                );
             } catch { /* ignore */ }
         })();
     }, []);

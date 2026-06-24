@@ -123,7 +123,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             const [list, ccs, projs, sups] = await Promise.all([
                 boletoService.list(orgId, filters),
                 financialRegistryService.listCostCenters(orgId).catch(() => [] as CostCenter[]),
-                projectService.listProjects().catch(() => [] as { id: string; name: string }[]),
+                projectService.listProjects(undefined, orgId ?? organizationId).catch(() => [] as { id: string; name: string }[]),
                 supplierService.listSuppliers(orgId).catch(() => [] as { id: string; name: string }[]),
             ]);
 
@@ -132,7 +132,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             setProjectMap(Object.fromEntries((projs || []).map((p) => [p.id, p.name])));
             setSupplierMap(Object.fromEntries((sups || []).map((s) => [s.id, s.name])));
             setCcList((ccs || []).map(c => ({ id: c.id, name: c.name })));
-            setProjectList((projs || []).map(p => ({ id: p.id, name: p.name })));
+            setProjectList((projs || []).filter(p => p.name !== 'Gestão Comercial').map(p => ({ id: p.id, name: p.name })));
             setSupplierList((sups || []).map(s => ({ id: s.id, name: s.name })));
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));

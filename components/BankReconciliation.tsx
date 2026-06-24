@@ -1101,9 +1101,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             await loadStats();
             alert('Vínculo desfeito com sucesso!');
         } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.error('Error undoing match:', error);
-            alert('Erro ao desfazer vínculo: ' + error.message);
+            const errMsg = err instanceof Error
+                ? err.message
+                : (err as Record<string, unknown>)?.message as string
+                  || (err as Record<string, unknown>)?.details as string
+                  || JSON.stringify(err);
+            console.error('Error undoing match:', err);
+            alert('Erro ao desfazer vínculo: ' + errMsg);
         } finally {
             setIsLoading(false);
         }
@@ -1140,9 +1144,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             await loadTransactions();
             alert('Nomes de Clientes e Fornecedores atualizados com sucesso através da sincronização de projetos!');
         } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.error('Error in global sync:', error);
-            alert('Erro ao sincronizar dados: ' + error.message);
+            const errMsg = err instanceof Error
+                ? err.message
+                : (err as Record<string, unknown>)?.message as string
+                  || (err as Record<string, unknown>)?.details as string
+                  || JSON.stringify(err);
+            console.error('Error in global sync:', err);
+            alert('Erro ao sincronizar dados: ' + errMsg);
         } finally {
             setIsLoading(false);
         }

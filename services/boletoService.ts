@@ -291,6 +291,28 @@ export const boletoService = {
 
         if (error) throw error;
 
+        // Sincroniza fornecedor/obra/cc na internal_transaction correspondente (se existir)
+        const itSync: Record<string, unknown> = {};
+        if ('supplier_id'    in fields) itSync.supplier_id    = fields.supplier_id    ?? null;
+        if ('project_id'     in fields) itSync.project_id     = fields.project_id     ?? null;
+        if ('cost_center_id' in fields) itSync.cost_center_id = fields.cost_center_id ?? null;
+        if ('beneficiario_nome' in fields && fields.beneficiario_nome) {
+            itSync.entity_name = fields.beneficiario_nome;
+            itSync.party_name  = fields.beneficiario_nome;
+        }
+        if ('valor'     in fields && fields.valor)     itSync.amount           = fields.valor;
+        if ('vencimento' in fields && fields.vencimento) {
+            itSync.transaction_date = fields.vencimento;
+            itSync.due_date         = fields.vencimento;
+        }
+        if (Object.keys(itSync).length) {
+            await supabase
+                .from('internal_transactions')
+                .update(itSync)
+                .eq('source_system', 'BOLETO')
+                .eq('reference_id', boletoId);
+        }
+
         await registrarAuditoria(boletoId, organizationId, 'associacao', {
             metodo: 'usuario',
             usuario_email: userEmail,
@@ -653,6 +675,21 @@ export const boletoService = {
             .in('id', ids)
             .eq('organization_id', organizationId);
         if (error) throw error;
+
+        // Sincroniza os mesmos campos na internal_transaction correspondente (se existir)
+        const itFields: Record<string, unknown> = {};
+        if ('supplier_id'    in fields) itFields.supplier_id    = fields.supplier_id    ?? null;
+        if ('project_id'     in fields) itFields.project_id     = fields.project_id     ?? null;
+        if ('cost_center_id' in fields) itFields.cost_center_id = fields.cost_center_id ?? null;
+        if (Object.keys(itFields).length) {
+            await supabase
+                .from('internal_transactions')
+                .update(itFields)
+                .eq('source_system', 'BOLETO')
+                .eq('organization_id', organizationId)
+                .in('reference_id', ids);
+        }
+
         await Promise.all(
             ids.map(id => registrarAuditoria(id, organizationId, 'associacao_lote', {
                 metodo: 'usuario',

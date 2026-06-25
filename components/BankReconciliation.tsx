@@ -373,6 +373,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         return tx.description ?? '';
     };
 
+    // Data a exibir = vencimento real (due_date) quando houver; senão a data do lançamento.
+    // transaction_date é a data de entrada no pipeline (usada no filtro), não o vencimento.
+    const displayDate = (tx: InternalTransaction): string => {
+        const due = (tx as { due_date?: string | null }).due_date;
+        return due || tx.transaction_date;
+    };
+
     const projectName = (id?: string | null) =>
         id ? (masterProjects.find(p => p.id === id)?.name ?? null) : null;
 
@@ -4126,7 +4133,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                 <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-50">
                                                     <div className="flex items-center gap-2">
                                                         <Calendar className="w-3 h-3 text-gray-300" />
-                                                        <span className="text-[8px] font-black text-gray-400 uppercase">{formatDateBR(tx.transaction_date)}</span>
+                                                        <span className="text-[8px] font-black text-gray-400 uppercase">{formatDateBR(displayDate(tx))}</span>
                                                     </div>
                                                     
                                                     <select 
@@ -4247,7 +4254,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     <div className="flex items-center gap-1 ml-auto">
                                                         <Calendar className="w-3 h-3 text-gray-300 shrink-0" />
                                                         <span className="text-[10px] font-black text-gray-400 uppercase">
-                                                            {formatDateBR(tx.transaction_date)}
+                                                            {formatDateBR(displayDate(tx))}
                                                         </span>
                                                     </div>
 

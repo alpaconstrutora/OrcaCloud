@@ -121,6 +121,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [masterClients, setMasterClients] = useState<string[]>([]);
     const [masterEmployees, setMasterEmployees] = useState<string[]>([]);
     const [masterProjects, setMasterProjects] = useState<Array<{ id: string; name: string }>>([]);
+    const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string }>>([]);
     const [managedCategories, setManagedCategories] = useState<string[]>([]);
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [stats, setStats] = useState({
@@ -315,6 +316,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const getSourceMeta = (ss?: string) =>
         ss ? (sourceSystemMeta[ss] ?? { label: ss, color: 'bg-gray-100 text-gray-500' }) : null;
 
+    const projectName = (id?: string | null) =>
+        id ? (masterProjects.find(p => p.id === id)?.name ?? null) : null;
+
+    const costCenterName = (id?: string | null) =>
+        id ? (masterCostCenters.find(c => c.id === id)?.name ?? null) : null;
+
     const formatDateBR = (dateStr: string) => {
         if (!dateStr) return '';
         // Se a data vier no formato ISO (YYYY-MM-DD)
@@ -421,6 +428,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             loadClients(effectiveOrgId);
             loadEmployees(effectiveOrgId);
             loadProjects(effectiveOrgId);
+            loadCostCenters(effectiveOrgId);
             // Carrega categorias uma única vez por org (não re-carrega ao trocar de conta)
             if (categoriesLoadedForOrg.current !== effectiveOrgId) {
                 categoriesLoadedForOrg.current = effectiveOrgId;
@@ -662,6 +670,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             }
         } catch (error) {
             console.error('Error loading projects:', error);
+        }
+    };
+
+    const loadCostCenters = async (orgId: string) => {
+        try {
+            const { data } = await supabase
+                .from('cost_centers')
+                .select('id, name')
+                .eq('organization_id', orgId)
+                .order('name', { ascending: true });
+            if (data) setMasterCostCenters(data);
+        } catch (error) {
+            console.error('Error loading cost centers:', error);
         }
     };
 
@@ -3925,9 +3946,24 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     </div>
                                                 </div>
 
-                                                <h6 className="text-xs font-bold text-gray-900 mb-3 truncate" title={tx.description}>
+                                                <h6 className="text-xs font-bold text-gray-900 mb-2 truncate" title={tx.description}>
                                                     {tx.description}
                                                 </h6>
+
+                                                {(projectName(tx.project_id) || costCenterName(tx.cost_center_id)) && (
+                                                    <div className="flex flex-wrap gap-1.5 mb-3">
+                                                        {projectName(tx.project_id) && (
+                                                            <span className="text-[8px] font-black bg-sky-50 text-sky-700 px-2 py-0.5 rounded-full uppercase truncate max-w-[45%]">
+                                                                {projectName(tx.project_id)}
+                                                            </span>
+                                                        )}
+                                                        {costCenterName(tx.cost_center_id) && (
+                                                            <span className="text-[8px] font-black bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full uppercase truncate max-w-[45%]">
+                                                                {costCenterName(tx.cost_center_id)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
 
                                                 <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-50">
                                                     <div className="flex items-center gap-2">
@@ -3989,6 +4025,24 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                             {tx.entity_name || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>}
                                                         </p>
                                                     </div>
+
+                                                    {projectName(tx.project_id) && (
+                                                        <div className="flex flex-col min-w-[80px]">
+                                                            <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Obra</span>
+                                                            <p className="text-[10px] font-black text-sky-700 uppercase truncate max-w-[130px]">
+                                                                {projectName(tx.project_id)}
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {costCenterName(tx.cost_center_id) && (
+                                                        <div className="flex flex-col min-w-[80px]">
+                                                            <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Centro de Custo</span>
+                                                            <p className="text-[10px] font-black text-violet-700 uppercase truncate max-w-[130px]">
+                                                                {costCenterName(tx.cost_center_id)}
+                                                            </p>
+                                                        </div>
+                                                    )}
 
                                                     <select
                                                         value={tx.category || ''}

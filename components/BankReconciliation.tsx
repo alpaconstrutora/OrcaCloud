@@ -344,6 +344,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         if (link) navigateToFocus(link.view, link.ref, tx.source_system);
     };
 
+    // Código legível do lançamento (identificador único curto para referência cruzada)
+    const txCode = (tx: InternalTransaction) => `#${tx.id.slice(0, 8).toUpperCase()}`;
+
     const projectName = (id?: string | null) =>
         id ? (masterProjects.find(p => p.id === id)?.name ?? null) : null;
 
@@ -3988,9 +3991,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     </div>
                                                 </div>
 
-                                                <h6 className="text-xs font-bold text-gray-900 mb-1 truncate" title={tx.description}>
-                                                    {tx.description}
-                                                </h6>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <h6 className="text-xs font-bold text-gray-900 truncate flex-1" title={tx.description}>
+                                                        {tx.description}
+                                                    </h6>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(txCode(tx)); }}
+                                                        title="Código do lançamento (clique para copiar)"
+                                                        className="shrink-0 text-[9px] font-mono font-bold text-gray-400 bg-gray-50 hover:bg-gray-100 px-1.5 py-0.5 rounded border border-gray-100 transition-colors"
+                                                    >
+                                                        {txCode(tx)}
+                                                    </button>
+                                                </div>
 
                                                 {tx.entity_name && (
                                                     <p className="text-[10px] font-bold text-gray-500 uppercase truncate mb-2" title={tx.entity_name}>
@@ -4063,6 +4075,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     <p className="text-sm font-bold text-gray-900 uppercase truncate flex-1" title={tx.description}>
                                                         {tx.description}
                                                     </p>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(txCode(tx)); }}
+                                                        title="Código do lançamento (clique para copiar)"
+                                                        className="shrink-0 text-[9px] font-mono font-bold text-gray-400 bg-gray-50 hover:bg-gray-100 px-1.5 py-0.5 rounded border border-gray-100 transition-colors"
+                                                    >
+                                                        {txCode(tx)}
+                                                    </button>
                                                     {(() => {
                                                         const m = getSourceMeta(tx.source_system);
                                                         if (!m) return null;

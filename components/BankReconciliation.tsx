@@ -300,6 +300,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         return `${year}-${month}-${day}`;
     };
 
+    const sourceSystemMeta: Record<string, { label: string; color: string }> = {
+        BOLETO:                { label: 'Boleto a Pagar',      color: 'bg-orange-50 text-orange-600' },
+        CONTRACT_RECURRING:    { label: 'Contrato Recorrente', color: 'bg-violet-50 text-violet-600' },
+        CONTRACT_PARCELADO:    { label: 'Contrato Parcelado',  color: 'bg-violet-50 text-violet-600' },
+        CONTRACT_AVISTA:       { label: 'Contrato À Vista',    color: 'bg-violet-50 text-violet-600' },
+        CONTRACT_MEASUREMENT:  { label: 'Medição de Contrato', color: 'bg-violet-50 text-violet-600' },
+        PROJECT:               { label: 'Obra / Projeto',      color: 'bg-sky-50 text-sky-600'    },
+        COMMERCIAL:            { label: 'Gestão Comercial',    color: 'bg-teal-50 text-teal-600'  },
+        PAYROLL:               { label: 'Folha de Pagamento',  color: 'bg-pink-50 text-pink-600'  },
+        PURCHASE:              { label: 'Suprimentos',         color: 'bg-amber-50 text-amber-600' },
+        MANUAL:                { label: 'Lançamento Manual',   color: 'bg-gray-100 text-gray-500' },
+    };
+    const getSourceMeta = (ss?: string) =>
+        ss ? (sourceSystemMeta[ss] ?? { label: ss, color: 'bg-gray-100 text-gray-500' }) : null;
+
     const formatDateBR = (dateStr: string) => {
         if (!dateStr) return '';
         // Se a data vier no formato ISO (YYYY-MM-DD)
@@ -3906,7 +3921,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         <p className="text-sm font-black text-gray-900 leading-none">
                                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tx.amount)}
                                                         </p>
-                                                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{tx.source_system}</span>
+                                                        {(() => { const m = getSourceMeta(tx.source_system); return m ? <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wide ${m.color}`}>{m.label}</span> : null; })()}
                                                     </div>
                                                 </div>
 
@@ -3961,19 +3976,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     <p className="text-sm font-bold text-gray-900 uppercase truncate flex-1" title={tx.description}>
                                                         {tx.description}
                                                     </p>
-                                                    {tx.source_system !== 'MANUAL' && (
-                                                        <span className="shrink-0 text-[8px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase">
-                                                            {tx.source_system}
-                                                        </span>
-                                                    )}
+                                                    {(() => { const m = getSourceMeta(tx.source_system); return m ? <span className={`shrink-0 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide ${m.color}`}>{m.label}</span> : null; })()}
                                                 </div>
 
                                                 {/* Linha 2: Entidade / Categoria / Data / Valor / Ações */}
                                                 <div className="flex items-center gap-3 pl-10 flex-wrap">
                                                     <div className="flex flex-col min-w-[80px]">
-                                                        <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Cliente</span>
-                                                        <p className="text-[10px] font-black text-gray-700 uppercase truncate max-w-[120px]">
-                                                            {tx.entity_name || <span className="text-gray-300">—</span>}
+                                                        <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">
+                                                            {tx.entity_name ? 'Fornecedor / Cliente' : 'Origem'}
+                                                        </span>
+                                                        <p className="text-[10px] font-black text-gray-700 uppercase truncate max-w-[140px]">
+                                                            {tx.entity_name || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>}
                                                         </p>
                                                     </div>
 

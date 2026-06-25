@@ -414,7 +414,7 @@ export const boletoService = {
                 status:           'PENDING',
                 approval_status:  'APROVADO',
                 amount:           boletoRow.valor,
-                transaction_date: boletoRow.vencimento ?? hoje,
+                transaction_date: hoje,
                 due_date:         boletoRow.vencimento ?? null,
                 description:      boletoRow.beneficiario_nome ?? boletoRow.documento_nome ?? 'Boleto',
                 entity_name:      boletoRow.beneficiario_nome ?? null,

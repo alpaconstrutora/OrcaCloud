@@ -19,6 +19,7 @@ import { supplierService } from '../services/supplierService';
 import { supabase } from '../lib/supabase';
 import { financialSyncService } from '../services/financialSyncService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
+import { financialRegistryService } from '../services/financialRegistryService';
 import { useConfirm } from './ui/confirm';
 import ReconciliationDashboardView from './ReconciliationDashboard';
 import DivergencesPanel from './DivergencesPanel';
@@ -675,12 +676,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     const loadCostCenters = async (orgId: string) => {
         try {
-            const { data } = await supabase
-                .from('cost_centers')
-                .select('id, name')
-                .eq('organization_id', orgId)
-                .order('name', { ascending: true });
-            if (data) setMasterCostCenters(data);
+            const data = await financialRegistryService.listCostCenters(orgId);
+            setMasterCostCenters(data.map(c => ({ id: c.id, name: c.name })));
         } catch (error) {
             console.error('Error loading cost centers:', error);
         }

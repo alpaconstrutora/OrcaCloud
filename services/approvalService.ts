@@ -1,6 +1,20 @@
 import { supabase } from '../lib/supabase';
 import type { ApprovalStep, ApprovalStatus } from '../types/financial';
 
+/** Item acionável da fila unificada (transação, contrato ou compra). */
+export interface ActionQueueItem {
+    entity: ApprovalEntity;
+    id: string;
+    title: string;
+    party_name?: string;
+    project_name?: string;
+    amount: number;
+    due_date?: string;
+    approval_status: ApprovalStatus;
+    approval_chain: ApprovalStep[];
+    approval_required_levels: number;
+}
+
 // ============================================================
 // approvalService — primitiva ÚNICA de aprovação multinível.
 //
@@ -66,6 +80,25 @@ export const approvalService = {
             throw new Error(`Erro ao carregar pendências de aprovação: ${error.message}`);
         }
         return (data as ApprovalPendingSummary[]) ?? [];
+    },
+
+    /**
+     * Fila ACIONÁVEL unificada (transações + contratos + compras): itens acima
+     * da faixa que precisam de ação — RASCUNHO (a submeter) ou PENDENTE (a aprovar).
+     * Cada item traz `entity` para a UI despachar a ação ao serviço de domínio.
+     */
+    async listActionQueue(organizationId: string): Promise<ActionQueueItem[]> {
+        const { data, error } = await supabase.rpc('fn_approval_action_queue', {
+            p_organization_id: organizationId,
+        });
+        if (error) {
+            console.error('[approvalService] listActionQueue:', error);
+            throw new Error(`Erro ao carregar fila de aprovação: ${error.message}`);
+        }
+        return ((data || []) as ActionQueueItem[]).map(r => ({
+            ...r,
+            approval_chain: (r.approval_chain as unknown as ApprovalStep[]) ?? [],
+        }));
     },
 
     /** Resolve quantos níveis a faixa de valor exige. Fonte: financial_approval_config. */

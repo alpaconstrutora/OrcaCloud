@@ -48,25 +48,8 @@ export const financialApprovalService = {
     },
 
     // ── Fila de aprovação ─────────────────────────────────────
-
-    /**
-     * Fila ACIONÁVEL: itens financeiros (saídas) acima da faixa que precisam
-     * de ação — RASCUNHO (a submeter) ou PENDENTE (a aprovar). Fecha o loop
-     * aviso→ação: é o que o banner/card de pendências aponta.
-     */
-    async listActionQueue(organizationId: string): Promise<ApprovalQueueItem[]> {
-        const { data, error } = await supabase.rpc('fn_approval_action_queue', {
-            p_organization_id: organizationId,
-        });
-        if (error) {
-            console.error('[financialApprovalService] listActionQueue:', error);
-            throw new Error(`Erro ao carregar fila de aprovação: ${error.message}`);
-        }
-        return ((data || []) as ApprovalQueueItem[]).map(r => ({
-            ...r,
-            approval_chain: (r.approval_chain as unknown as ApprovalStep[]) ?? [],
-        }));
-    },
+    // Fila acionável unificada (transações+contratos+compras) vive em
+    // approvalService.listActionQueue. Aqui ficam config + ações financeiras.
 
     async listPendingQueue(organizationId: string): Promise<ApprovalQueueItem[]> {
         const { data, error } = await supabase

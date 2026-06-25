@@ -4,10 +4,42 @@ import {
     Loader2, Plus, Send, Settings, Shield, Trash2, X,
 } from 'lucide-react';
 import { financialApprovalService } from '../services/financialApprovalService';
-import { approvalService, type ApprovalPendingSummary } from '../services/approvalService';
+import { contractService } from '../services/contractService';
+import { orderService } from '../services/orderService';
+import { approvalService, type ApprovalPendingSummary, type ActionQueueItem } from '../services/approvalService';
 import type {
-    FinancialApprovalConfig, ApprovalQueueItem, ApprovalStep,
+    FinancialApprovalConfig, ApprovalStep,
 } from '../types/financial';
+
+// ─── dispatch por entidade ───────────────────────────────────
+// A fila é unificada; cada ação vai ao serviço de domínio correto.
+
+const ENTITY_TAG: Record<ActionQueueItem['entity'], string> = {
+    transaction:    'Transação',
+    contract:       'Contrato',
+    purchase_order: 'Compra',
+};
+
+function dispatchSubmit(item: ActionQueueItem, organizationId: string): Promise<unknown> {
+    if (item.entity === 'contract')       return contractService.submitForApproval(item.id);
+    if (item.entity === 'purchase_order') return orderService.submitForApproval(item.id, organizationId);
+    return financialApprovalService.submitForApproval(item.id, organizationId);
+}
+
+function dispatchApprove(
+    item: ActionQueueItem, level: 1 | 2, userEmail: string,
+    labels: { level1_label: string; level2_label?: string }, notes?: string,
+): Promise<unknown> {
+    if (item.entity === 'contract')       return contractService.approveContract(item.id, level, userEmail, notes);
+    if (item.entity === 'purchase_order') return orderService.approveOrder(item.id, level, userEmail, notes);
+    return financialApprovalService.approve(item.id, level, userEmail, labels, notes);
+}
+
+function dispatchReject(item: ActionQueueItem, userEmail: string, reason: string): Promise<unknown> {
+    if (item.entity === 'contract')       return contractService.rejectContract(item.id, userEmail, reason);
+    if (item.entity === 'purchase_order') return orderService.rejectOrder(item.id, userEmail, reason);
+    return financialApprovalService.reject(item.id, userEmail, reason);
+}
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -50,7 +82,7 @@ function ApprovalTrail({ chain, required }: { chain: ApprovalStep[]; required: n
 // ─── ApproveRejectModal ──────────────────────────────────────
 
 interface ApproveRejectModalProps {
-    item: ApprovalQueueItem;
+    item: ActionQueueItem;
     mode: 'approve' | 'reject';
     userEmail: string;
     config: FinancialApprovalConfig[];
@@ -75,12 +107,12 @@ function ApproveRejectModal({ item, mode, userEmail, config, onDone, onClose }: 
         setErr(null);
         try {
             if (mode === 'approve') {
-                await financialApprovalService.approve(item.id, nextLevel, userEmail, {
+                await dispatchApprove(item, nextLevel, userEmail, {
                     level1_label: matchingConfig?.level1_label ?? 'Gestor',
                     level2_label: matchingConfig?.level2_label ?? 'Financeiro / Diretoria',
                 }, notes || undefined);
             } else {
-                await financialApprovalService.reject(item.id, userEmail, notes);
+                await dispatchReject(item, userEmail, notes);
             }
             onDone();
         } catch (e) {
@@ -101,7 +133,7 @@ function ApproveRejectModal({ item, mode, userEmail, config, onDone, onClose }: 
                     <h2 className="text-base font-black text-gray-900 mb-1">
                         {isApprove ? `Aprovar — Nível ${nextLevel}` : 'Rejeitar Aprovação'}
                     </h2>
-                    <p className="text-sm text-gray-500 mb-4 truncate">{item.description ?? '(sem descrição)'}</p>
+                    <p className="text-sm text-gray-500 mb-4 truncate">{ENTITY_TAG[item.entity]} · {item.title}</p>
                     <div className="bg-gray-50 rounded-xl p-3 mb-4 flex justify-between">
                         <span className="text-xs text-gray-500">Valor</span>
                         <span className="font-black text-gray-900">{fmt(item.amount)}</span>
@@ -146,11 +178,11 @@ interface QueueProps {
     config: FinancialApprovalConfig[];
 }
 function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
-    const [items, setItems] = useState<ApprovalQueueItem[]>([]);
+    const [items, setItems] = useState<ActionQueueItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [expanded, setExpanded] = useState<string | null>(null);
-    const [modal, setModal] = useState<{ item: ApprovalQueueItem; mode: 'approve' | 'reject' } | null>(null);
+    const [modal, setModal] = useState<{ item: ActionQueueItem; mode: 'approve' | 'reject' } | null>(null);
 
     const [submittingId, setSubmittingId] = useState<string | null>(null);
 
@@ -158,7 +190,7 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
         setLoading(true);
         setError(null);
         try {
-            setItems(await financialApprovalService.listActionQueue(organizationId));
+            setItems(await approvalService.listActionQueue(organizationId));
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao carregar fila');
         } finally {
@@ -168,10 +200,10 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
 
     useEffect(() => { load(); }, [load]);
 
-    async function handleSubmit(id: string) {
-        setSubmittingId(id);
+    async function handleSubmit(item: ActionQueueItem) {
+        setSubmittingId(item.id);
         try {
-            await financialApprovalService.submitForApproval(id, organizationId);
+            await dispatchSubmit(item, organizationId);
             await load();
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao enviar para aprovação');
@@ -202,7 +234,10 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                             <div className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors">
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-0.5">
-                                        <p className="text-sm font-bold text-gray-900 truncate">{item.description ?? '(sem descrição)'}</p>
+                                        <span className="text-[10px] font-black text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
+                                            {ENTITY_TAG[item.entity]}
+                                        </span>
+                                        <p className="text-sm font-bold text-gray-900 truncate">{item.title}</p>
                                         {isDraft ? (
                                             <span className="text-[10px] font-black text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
                                                 Rascunho
@@ -223,7 +258,7 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                                 <div className="flex items-center gap-2 flex-shrink-0">
                                     {isDraft ? (
                                         <button
-                                            onClick={() => handleSubmit(item.id)}
+                                            onClick={() => handleSubmit(item)}
                                             disabled={submittingId === item.id}
                                             className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
                                         >

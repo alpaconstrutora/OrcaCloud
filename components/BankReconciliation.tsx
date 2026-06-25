@@ -1104,8 +1104,27 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             // 3. Restaurar lançamento interno
             await supabase
                 .from('internal_transactions')
-                .update({ status: 'PENDING' })
+                .update({ status: 'PENDING', payment_date: null })
                 .eq('id', internalTxId);
+
+            // 4. Se era de boleto, reverter boleto e invoice para aprovado
+            const { data: iTx } = await supabase
+                .from('internal_transactions')
+                .select('source_system, reference_id, organization_id')
+                .eq('id', internalTxId)
+                .maybeSingle();
+
+            if (iTx?.source_system === 'BOLETO' && iTx.reference_id) {
+                const { data: boleto } = await supabase
+                    .from('boletos')
+                    .update({ status: 'aprovado' })
+                    .eq('id', iTx.reference_id)
+                    .select('invoice_id')
+                    .maybeSingle();
+                if (boleto?.invoice_id) {
+                    await supabase.from('invoices').update({ status: 'approved' }).eq('id', boleto.invoice_id);
+                }
+            }
 
             await loadTransactions();
             await loadStats();

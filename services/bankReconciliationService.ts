@@ -720,8 +720,37 @@ export const bankReconciliationService = {
             });
 
         if (!matchError) {
-            await supabase.from('bank_transactions').update({ status: 'MATCHED' }).eq('id', bankTxId);
-            await supabase.from('internal_transactions').update({ status: 'CONCILIATED' }).eq('id', internalTxId);
+            const hoje = new Date().toISOString().slice(0, 10);
+            await Promise.all([
+                supabase.from('bank_transactions').update({ status: 'MATCHED' }).eq('id', bankTxId),
+                supabase.from('internal_transactions')
+                    .update({ status: 'CONCILIATED', payment_date: hoje })
+                    .eq('id', internalTxId),
+            ]);
+
+            // Se o lançamento vier de um boleto, marca o boleto (e seu invoice) como pago
+            const { data: iTx } = await supabase
+                .from('internal_transactions')
+                .select('source_system, reference_id, organization_id')
+                .eq('id', internalTxId)
+                .maybeSingle();
+
+            if (iTx?.source_system === 'BOLETO' && iTx.reference_id) {
+                const { data: boleto } = await supabase
+                    .from('boletos')
+                    .update({ status: 'pago' })
+                    .eq('id', iTx.reference_id)
+                    .eq('organization_id', iTx.organization_id)
+                    .select('invoice_id')
+                    .maybeSingle();
+
+                if (boleto?.invoice_id) {
+                    await supabase
+                        .from('invoices')
+                        .update({ status: 'paid' })
+                        .eq('id', boleto.invoice_id);
+                }
+            }
         }
     },
 

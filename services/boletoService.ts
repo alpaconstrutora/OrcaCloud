@@ -395,6 +395,7 @@ export const boletoService = {
                 transaction_date: boletoRow.vencimento ?? hoje,
                 due_date:         boletoRow.vencimento ?? null,
                 description:      boletoRow.beneficiario_nome ?? boletoRow.documento_nome ?? 'Boleto',
+                entity_name:      boletoRow.beneficiario_nome ?? null,
                 party_name:       boletoRow.beneficiario_nome ?? null,
                 supplier_id:      boletoRow.supplier_id ?? null,
                 project_id:       boletoRow.project_id ?? null,

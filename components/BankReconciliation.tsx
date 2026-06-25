@@ -770,11 +770,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             
             // --- BUSCA CIRÚRGICA LADO DIREITO (400k / WALDIR) ---
             // Como pode haver milhares de lançamentos, buscamos especificamente pelo Waldir ou Valor
-            const { data: rescueITxs } = await supabase
+            let rescueQuery = supabase
                 .from('internal_transactions')
                 .select('*')
                 .or(`description.ilike.%WALDIR%,amount.eq.400000`)
                 .eq('status', 'PENDING');
+            if (effStart) rescueQuery = rescueQuery.gte('transaction_date', effStart);
+            if (effEnd)   rescueQuery = rescueQuery.lte('transaction_date', effEnd);
+            const { data: rescueITxs } = await rescueQuery;
 
             let finalITxs = iTxs || [];
             if (rescueITxs && rescueITxs.length > 0) {
@@ -800,6 +803,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                         const txs: Array<Record<string, unknown>> = proj.settings?.financialInfo?.transactions || [];
                         const mappedCommercial = txs
                             .filter((t) => (t['status'] === 'PENDING' || t['status'] === 'PENDENTE' || t['status'] === 'OPEN'))
+                            .filter((t) => {
+                                const txDate = String(t['date'] || t['transaction_date'] || '');
+                                if (!txDate) return true;
+                                if (effStart && txDate < effStart) return false;
+                                if (effEnd && txDate > effEnd) return false;
+                                return true;
+                            })
                             .map((t): CommercialMatch => ({
                                 id: String(t['id'] || ''),
                                 description: String(t['description'] || `Venda: ${String(t['category'] || '')} (${proj.name})`),

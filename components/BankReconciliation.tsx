@@ -363,6 +363,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         return tx.entity_name ?? null;
     };
 
+    // Título principal do lançamento. Para boletos, usa o nome do fornecedor no lugar
+    // da descrição (texto bruto do OCR). Fallback para a descrição original.
+    const displayTitle = (tx: InternalTransaction): string => {
+        if (tx.source_system === 'BOLETO') {
+            const nome = displayPartyName(tx);
+            if (nome) return nome;
+        }
+        return tx.description ?? '';
+    };
+
     const projectName = (id?: string | null) =>
         id ? (masterProjects.find(p => p.id === id)?.name ?? null) : null;
 
@@ -738,8 +748,24 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             const codes: Record<string, string> = {};
             const partyNames: Record<string, string> = {};
 
-            // BOLETO: reference_id = boleto.id → busca numero + fornecedor cadastrado
-            const boletoRefs = txs.filter(t => t.source_system === 'BOLETO' && (t as { reference_id?: string }).reference_id);
+            // BOLETO — nome do fornecedor: resolve direto pelo supplier_id do PRÓPRIO lançamento
+            // (que já vem populado), evitando depender de RLS na tabela boletos.
+            const boletoTxs = txs.filter(t => t.source_system === 'BOLETO');
+            const txSupIds = [...new Set(boletoTxs.map(t => (t as { supplier_id?: string | null }).supplier_id).filter(Boolean) as string[])];
+            if (txSupIds.length) {
+                const { data: sups } = await supabase
+                    .from('suppliers')
+                    .select('id, name')
+                    .in('id', txSupIds);
+                const supNameById = Object.fromEntries((sups || []).map(s => [s.id, s.name]));
+                boletoTxs.forEach(t => {
+                    const sid = (t as { supplier_id?: string | null }).supplier_id;
+                    if (sid && supNameById[sid]) partyNames[t.id] = supNameById[sid];
+                });
+            }
+
+            // BOLETO — código (nº): busca na tabela boletos via reference_id (best-effort)
+            const boletoRefs = boletoTxs.filter(t => (t as { reference_id?: string }).reference_id);
             const boletoIds = [...new Set(boletoRefs.map(t => (t as { reference_id?: string }).reference_id!))];
             if (boletoIds.length) {
                 const { data } = await supabase
@@ -747,24 +773,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                     .select('id, numero, supplier_id, beneficiario_nome')
                     .in('id', boletoIds);
                 const byId = new Map((data || []).map(b => [b.id, b]));
-
-                // Resolve nomes de fornecedores referenciados pelos boletos
-                const supIds = [...new Set((data || []).map(b => b.supplier_id).filter(Boolean) as string[])];
-                let supNameById: Record<string, string> = {};
-                if (supIds.length) {
-                    const { data: sups } = await supabase
-                        .from('suppliers')
-                        .select('id, name')
-                        .in('id', supIds);
-                    supNameById = Object.fromEntries((sups || []).map(s => [s.id, s.name]));
-                }
-
                 boletoRefs.forEach(t => {
                     const b = byId.get((t as { reference_id?: string }).reference_id!);
                     if (!b) return;
                     if (b.numero != null) codes[t.id] = String(b.numero).padStart(4, '0');
-                    const nome = (b.supplier_id && supNameById[b.supplier_id]) || b.beneficiario_nome;
-                    if (nome) partyNames[t.id] = nome;
+                    // fallback de nome caso o supplier_id do lançamento estivesse nulo
+                    if (!partyNames[t.id] && b.beneficiario_nome) partyNames[t.id] = b.beneficiario_nome;
                 });
             }
 
@@ -4072,8 +4086,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                 </div>
 
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <h6 className="text-xs font-bold text-gray-900 truncate flex-1" title={tx.description}>
-                                                        {tx.description}
+                                                    <h6 className="text-xs font-bold text-gray-900 truncate flex-1" title={displayTitle(tx)}>
+                                                        {displayTitle(tx)}
                                                     </h6>
                                                     {txCode(tx) && (
                                                         <span
@@ -4153,8 +4167,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
                                                         <Briefcase className="w-4 h-4" />
                                                     </div>
-                                                    <p className="text-sm font-bold text-gray-900 uppercase truncate flex-1" title={tx.description}>
-                                                        {tx.description}
+                                                    <p className="text-sm font-bold text-gray-900 uppercase truncate flex-1" title={displayTitle(tx)}>
+                                                        {displayTitle(tx)}
                                                     </p>
                                                     {txCode(tx) && (
                                                         <span

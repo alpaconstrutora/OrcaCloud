@@ -121,6 +121,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [isImporting, setIsImporting] = useState(false);
     const [rules, setRules] = useState<ReconciliationRule[]>([]);
     const [masterSuppliers, setMasterSuppliers] = useState<string[]>([]);
+    const [supplierNameById, setSupplierNameById] = useState<Record<string, string>>({});
     const [masterClients, setMasterClients] = useState<string[]>([]);
     const [masterEmployees, setMasterEmployees] = useState<string[]>([]);
     const [masterProjects, setMasterProjects] = useState<Array<{ id: string; name: string }>>([]);
@@ -348,6 +349,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     // Código de origem do lançamento (nº do boleto, nº do contrato, etc.). null se não houver.
     const txCode = (tx: InternalTransaction): string | null => originCodes[tx.id] ?? null;
+
+    // Nome da contraparte a exibir: para boletos, prioriza o nome do fornecedor cadastrado
+    // (via supplier_id) em vez do beneficiário do OCR. Fallback para entity_name.
+    const displayPartyName = (tx: InternalTransaction): string | null => {
+        const supId = (tx as { supplier_id?: string | null }).supplier_id;
+        if (tx.source_system === 'BOLETO' && supId && supplierNameById[supId]) {
+            return supplierNameById[supId];
+        }
+        return tx.entity_name ?? null;
+    };
 
     const projectName = (id?: string | null) =>
         id ? (masterProjects.find(p => p.id === id)?.name ?? null) : null;
@@ -609,7 +620,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         try {
             const { data, error } = await supabase
                 .from('suppliers')
-                .select('name')
+                .select('id, name')
                 .or(`organization_id.eq.${orgId},organization_id.is.null`)
                 .order('name', { ascending: true })
                 .limit(10000);
@@ -617,6 +628,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             if (error) throw error;
             if (data) {
                 setMasterSuppliers(data.map(s => s.name));
+                setSupplierNameById(Object.fromEntries(data.map(s => [s.id, s.name])));
             }
         } catch (error) {
             console.error('Error loading master suppliers:', error);
@@ -4053,12 +4065,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     )}
                                                 </div>
 
-                                                {tx.entity_name && (
-                                                    <p className="text-[10px] font-bold text-gray-500 uppercase truncate mb-2" title={tx.entity_name}>
+                                                {displayPartyName(tx) && (
+                                                    <p className="text-[10px] font-bold text-gray-500 uppercase truncate mb-2" title={displayPartyName(tx) ?? ''}>
                                                         <span className="text-gray-300 mr-1">
                                                             {tx.party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente:' : 'Fornecedor:'}
                                                         </span>
-                                                        {tx.entity_name}
+                                                        {displayPartyName(tx)}
                                                     </p>
                                                 )}
 
@@ -4155,12 +4167,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                 <div className="flex items-center gap-3 pl-10 flex-wrap">
                                                     <div className="flex flex-col min-w-[80px]">
                                                         <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">
-                                                            {tx.entity_name
+                                                            {displayPartyName(tx)
                                                                 ? (tx.party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente' : 'Fornecedor')
                                                                 : 'Origem'}
                                                         </span>
                                                         <p className="text-[10px] font-black text-gray-700 uppercase truncate max-w-[140px]">
-                                                            {tx.entity_name || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>}
+                                                            {displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>}
                                                         </p>
                                                     </div>
 

@@ -150,6 +150,13 @@ export interface InternalTransaction {
     description?: string;
     category?: string;
     entity_name?: string;
+    party_type?: 'SUPPLIER' | 'CLIENT' | null;
+    party_name?: string | null;
+    party_id?: string | null;
+    supplier_id?: string | null;
+    due_date?: string | null;
+    payment_date?: string | null;
+    approval_status?: string | null;
     status: InternalTransactionStatus;
     project_id?: string;
     cost_center_id?: string;

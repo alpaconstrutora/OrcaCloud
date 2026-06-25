@@ -3950,7 +3950,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                 {tx.entity_name && (
                                                     <p className="text-[10px] font-bold text-gray-500 uppercase truncate mb-2" title={tx.entity_name}>
                                                         <span className="text-gray-300 mr-1">
-                                                            {(tx as Record<string,unknown>).party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente:' : 'Fornecedor:'}
+                                                            {tx.party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente:' : 'Fornecedor:'}
                                                         </span>
                                                         {tx.entity_name}
                                                     </p>
@@ -4026,7 +4026,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     <div className="flex flex-col min-w-[80px]">
                                                         <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">
                                                             {tx.entity_name
-                                                                ? ((tx as Record<string,unknown>).party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente' : 'Fornecedor')
+                                                                ? (tx.party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente' : 'Fornecedor')
                                                                 : 'Origem'}
                                                         </span>
                                                         <p className="text-[10px] font-black text-gray-700 uppercase truncate max-w-[140px]">

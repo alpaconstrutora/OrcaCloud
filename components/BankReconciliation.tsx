@@ -125,6 +125,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [masterEmployees, setMasterEmployees] = useState<string[]>([]);
     const [masterProjects, setMasterProjects] = useState<Array<{ id: string; name: string }>>([]);
     const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string }>>([]);
+    // Código de origem por lançamento (ex: nº do boleto 0188) — keyed por internal_transaction.id
+    const [originCodes, setOriginCodes] = useState<Record<string, string>>({});
     const [managedCategories, setManagedCategories] = useState<string[]>([]);
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [stats, setStats] = useState({
@@ -344,8 +346,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         if (link) navigateToFocus(link.view, link.ref, tx.source_system);
     };
 
-    // Código legível do lançamento (identificador único curto para referência cruzada)
-    const txCode = (tx: InternalTransaction) => `#${tx.id.slice(0, 8).toUpperCase()}`;
+    // Código de origem do lançamento (nº do boleto, nº do contrato, etc.). null se não houver.
+    const txCode = (tx: InternalTransaction): string | null => originCodes[tx.id] ?? null;
 
     const projectName = (id?: string | null) =>
         id ? (masterProjects.find(p => p.id === id)?.name ?? null) : null;
@@ -715,6 +717,51 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         }
     };
 
+    // Busca o código de origem de cada lançamento (nº do boleto, nº do contrato, etc.)
+    const loadOriginCodes = async (txs: InternalTransaction[]) => {
+        try {
+            const codes: Record<string, string> = {};
+
+            // BOLETO: reference_id = boleto.id → busca numero
+            const boletoRefs = txs.filter(t => t.source_system === 'BOLETO' && (t as { reference_id?: string }).reference_id);
+            const boletoIds = [...new Set(boletoRefs.map(t => (t as { reference_id?: string }).reference_id!))];
+            if (boletoIds.length) {
+                const { data } = await supabase
+                    .from('boletos')
+                    .select('id, numero')
+                    .in('id', boletoIds);
+                const byId = new Map((data || []).map(b => [b.id, b.numero]));
+                boletoRefs.forEach(t => {
+                    const num = byId.get((t as { reference_id?: string }).reference_id!);
+                    if (num != null) codes[t.id] = String(num).padStart(4, '0');
+                });
+            }
+
+            // CONTRATOS: reference_id = "<dealId>:pN" → busca contract_number
+            const contractSources = ['CONTRACT_RECURRING', 'CONTRACT_PARCELADO', 'CONTRACT_AVISTA', 'CONTRACT_MEASUREMENT'];
+            const contractRefs = txs.filter(t => contractSources.includes(t.source_system || '') && (t as { reference_id?: string }).reference_id);
+            const dealIds = [...new Set(contractRefs.map(t => (t as { reference_id?: string }).reference_id!.split(':')[0]))];
+            if (dealIds.length) {
+                const { data } = await supabase
+                    .from('commercial_deals')
+                    .select('id, contract_number')
+                    .in('id', dealIds);
+                const byId = new Map((data || []).map(d => [d.id, d.contract_number]));
+                contractRefs.forEach(t => {
+                    const ref = (t as { reference_id?: string }).reference_id!;
+                    const dealId = ref.split(':')[0];
+                    const parcela = ref.includes(':p') ? ref.split(':p')[1] : null;
+                    const num = byId.get(dealId);
+                    if (num) codes[t.id] = parcela ? `${num} (${parcela})` : String(num);
+                });
+            }
+
+            setOriginCodes(codes);
+        } catch (err) {
+            console.error('Erro ao carregar códigos de origem:', err);
+        }
+    };
+
     const loadAuditLogs = async () => {
         if (!effectiveOrgId) return;
         try {
@@ -904,6 +951,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             }
 
             setInternalTransactions(finalITxs);
+            void loadOriginCodes(finalITxs);
 
             // Load Suggestions for pending transactions in batches to avoid URL length limits
             if ((activeView === 'pending' || activeView === 'center') && bTxs && bTxs.length > 0) {
@@ -3995,13 +4043,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     <h6 className="text-xs font-bold text-gray-900 truncate flex-1" title={tx.description}>
                                                         {tx.description}
                                                     </h6>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(txCode(tx)); }}
-                                                        title="Código do lançamento (clique para copiar)"
-                                                        className="shrink-0 text-[9px] font-mono font-bold text-gray-400 bg-gray-50 hover:bg-gray-100 px-1.5 py-0.5 rounded border border-gray-100 transition-colors"
-                                                    >
-                                                        {txCode(tx)}
-                                                    </button>
+                                                    {txCode(tx) && (
+                                                        <span
+                                                            title="Código de origem"
+                                                            className="shrink-0 text-[9px] font-mono font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200"
+                                                        >
+                                                            Nº {txCode(tx)}
+                                                        </span>
+                                                    )}
                                                 </div>
 
                                                 {tx.entity_name && (
@@ -4075,13 +4124,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     <p className="text-sm font-bold text-gray-900 uppercase truncate flex-1" title={tx.description}>
                                                         {tx.description}
                                                     </p>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(txCode(tx)); }}
-                                                        title="Código do lançamento (clique para copiar)"
-                                                        className="shrink-0 text-[9px] font-mono font-bold text-gray-400 bg-gray-50 hover:bg-gray-100 px-1.5 py-0.5 rounded border border-gray-100 transition-colors"
-                                                    >
-                                                        {txCode(tx)}
-                                                    </button>
+                                                    {txCode(tx) && (
+                                                        <span
+                                                            title="Código de origem"
+                                                            className="shrink-0 text-[9px] font-mono font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200"
+                                                        >
+                                                            Nº {txCode(tx)}
+                                                        </span>
+                                                    )}
                                                     {(() => {
                                                         const m = getSourceMeta(tx.source_system);
                                                         if (!m) return null;

@@ -142,7 +142,9 @@ export type MatchType = 'RULE' | 'HEURISTIC' | 'AI' | 'MANUAL';
 export interface InternalTransaction {
     id: string;
     organization_id: string;
-    source_system: 'COMMERCIAL' | 'PROJECT' | 'MANUAL';
+    source_system: 'COMMERCIAL' | 'PROJECT' | 'MANUAL' | 'BOLETO'
+        | 'CONTRACT_RECURRING' | 'CONTRACT_PARCELADO' | 'CONTRACT_AVISTA' | 'CONTRACT_MEASUREMENT'
+        | 'PAYROLL' | 'PURCHASE' | (string & {});
     reference_id?: string;
     transaction_date: string;
     amount: number;

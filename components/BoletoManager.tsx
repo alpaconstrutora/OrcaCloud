@@ -13,6 +13,7 @@ import type { Boleto, BoletoStatus, BoletoFilters, Organization, CostCenter } fr
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
 import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
+import { useStore } from '../store/useStore';
 
 interface BoletoManagerProps {
     organizationId: string;
@@ -82,6 +83,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [orgPrompt, setOrgPrompt] = useState(false);
     const orgSelectRef = useRef<HTMLSelectElement>(null);
 
+    // Deep-link: item destacado vindo de outro módulo (ex: conciliação bancária)
+    const viewFocus = useStore(s => s.viewFocus);
+    const setViewFocus = useStore(s => s.setViewFocus);
+    const [highlightId, setHighlightId] = useState<string | null>(null);
+
     const temFiltroAtivo = vencDe || vencAte || valorMin || valorMax;
 
     function limparFiltros() {
@@ -146,6 +152,22 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         carregar(selectedOrgId === 'ALL' ? undefined : selectedOrgId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedOrgId, filtroStatus, projectId]);
+
+    // Consome o deep-link: ao chegar de outro módulo com viewFocus apontando um boleto,
+    // abre a edição do item e o destaca; depois limpa o foco para não reabrir.
+    useEffect(() => {
+        if (!viewFocus?.ref || loading) return;
+        if (viewFocus.source && viewFocus.source !== 'BOLETO') return;
+        const alvo = boletos.find(b => b.id === viewFocus.ref);
+        if (alvo) {
+            setEditing(alvo);
+            setIsModalOpen(true);
+            setHighlightId(alvo.id);
+            setTimeout(() => setHighlightId(null), 4000);
+            setViewFocus(null);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewFocus, loading, boletos]);
 
     const filtered = useMemo(() => {
         let list = boletos;
@@ -592,7 +614,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             && new Date(b.vencimento + 'T00:00:00') < new Date();
                         const selected = selectedIds.has(b.id);
                         return (
-                            <div key={b.id} className="relative group">
+                            <div key={b.id} className={`relative group transition-all ${highlightId === b.id ? 'ring-4 ring-blue-400 ring-offset-2 rounded-3xl animate-pulse' : ''}`}>
                                 {/* Checkbox overlay */}
                                 <label
                                     className="absolute top-3 left-3 z-10 cursor-pointer"
@@ -697,7 +719,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         key={b.id}
                                         onClick={() => abrirEdicao(b)}
                                         className={`cursor-pointer hover:bg-gray-50 transition-colors ${
-                                            selected ? 'bg-blue-50/60' : atrasado ? 'bg-red-50/40' : ''
+                                            highlightId === b.id ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : selected ? 'bg-blue-50/60' : atrasado ? 'bg-red-50/40' : ''
                                         }`}
                                     >
                                         <td className="px-4 py-3" onClick={e => e.stopPropagation()}>

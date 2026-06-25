@@ -66,7 +66,12 @@ interface UIState {
     isAIChatOpen: boolean;
     isNotificationOpen: boolean;
     suppliesOrderMode: 'details' | 'logistics';
+    /** Deep-link transitório: módulo de destino deve focar/abrir este item ao montar e então limpar. */
+    viewFocus: { ref: string; source?: string } | null;
     setActiveView: (view: string) => void;
+    setViewFocus: (focus: { ref: string; source?: string } | null) => void;
+    /** Navega para uma view já apontando o item a focar (deep-link). */
+    navigateToFocus: (view: string, ref: string, source?: string) => void;
     setManagementTab: (tab: string) => void;
     setIsProjectModalOpen: (open: boolean, mode?: 'create' | 'edit') => void;
     setIsAIChatOpen: (open: boolean) => void;
@@ -147,12 +152,21 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
     isAIChatOpen: false,
     isNotificationOpen: false,
     suppliesOrderMode: 'details',
+    viewFocus: null,
     setActiveView: (activeView) => {
         if (typeof window !== 'undefined') {
             localStorage.setItem('orca_activeView', activeView);
             syncViewToUrl(activeView);
         }
         set({ activeView });
+    },
+    setViewFocus: (viewFocus) => set({ viewFocus }),
+    navigateToFocus: (view, ref, source) => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('orca_activeView', view);
+            syncViewToUrl(view);
+        }
+        set({ activeView: view, viewFocus: { ref, source } });
     },
     setManagementTab: (managementTab) => set({ managementTab }),
     setIsProjectModalOpen: (isProjectModalOpen, projectModalMode = 'create') =>

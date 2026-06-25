@@ -4,7 +4,7 @@ import {
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
     Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X, Tag,
-    LayoutGrid, List, Users, UserPlus
+    LayoutGrid, List, Users, UserPlus, ExternalLink
 } from 'lucide-react';
 import {
     BankTransaction,
@@ -20,6 +20,7 @@ import { supabase } from '../lib/supabase';
 import { financialSyncService } from '../services/financialSyncService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { financialRegistryService } from '../services/financialRegistryService';
+import { useStore } from '../store/useStore';
 import { useConfirm } from './ui/confirm';
 import ReconciliationDashboardView from './ReconciliationDashboard';
 import DivergencesPanel from './DivergencesPanel';
@@ -33,6 +34,7 @@ interface BankReconciliationProps {
 
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId }) => {
     const confirm = useConfirm();
+    const navigateToFocus = useStore(s => s.navigateToFocus);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const categoriesLoadedForOrg = useRef<string | null>(null);
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
@@ -316,6 +318,31 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     };
     const getSourceMeta = (ss?: string) =>
         ss ? (sourceSystemMeta[ss] ?? { label: ss, color: 'bg-gray-100 text-gray-500' }) : null;
+
+    // Mapeia o lançamento ao módulo de origem para deep-link (clicar → abrir item lá).
+    // Retorna { view, ref } ou null quando não há destino navegável (ex: MANUAL).
+    const getOriginLink = (tx: InternalTransaction): { view: string; ref: string } | null => {
+        const ss = tx.source_system;
+        const refId = (tx as { reference_id?: string }).reference_id;
+        if (!ss || !refId) return null;
+        // contratos gravam reference_id como "<contractId>:pN" — extrai o id do contrato
+        const contractId = refId.split(':')[0];
+        switch (ss) {
+            case 'BOLETO':               return { view: 'boletos-pagar', ref: refId };
+            case 'CONTRACT_RECURRING':
+            case 'CONTRACT_PARCELADO':
+            case 'CONTRACT_AVISTA':
+            case 'CONTRACT_MEASUREMENT': return { view: 'supplies-contracts', ref: contractId };
+            case 'COMMERCIAL':           return { view: 'gestao-vendas', ref: refId };
+            case 'PAYROLL':              return { view: 'labor-payroll', ref: refId };
+            default:                     return null;
+        }
+    };
+
+    const goToOrigin = (tx: InternalTransaction) => {
+        const link = getOriginLink(tx);
+        if (link) navigateToFocus(link.view, link.ref, tx.source_system);
+    };
 
     const projectName = (id?: string | null) =>
         id ? (masterProjects.find(p => p.id === id)?.name ?? null) : null;
@@ -3941,7 +3968,23 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         <p className="text-sm font-black text-gray-900 leading-none">
                                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tx.amount)}
                                                         </p>
-                                                        {(() => { const m = getSourceMeta(tx.source_system); return m ? <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wide ${m.color}`}>{m.label}</span> : null; })()}
+                                                        {(() => {
+                                                            const m = getSourceMeta(tx.source_system);
+                                                            if (!m) return null;
+                                                            const link = getOriginLink(tx);
+                                                            return link ? (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); goToOrigin(tx); }}
+                                                                    title={`Abrir em ${m.label}`}
+                                                                    className={`inline-flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wide transition-all hover:brightness-95 hover:ring-1 hover:ring-current cursor-pointer ${m.color}`}
+                                                                >
+                                                                    {m.label}
+                                                                    <ExternalLink className="w-2.5 h-2.5" />
+                                                                </button>
+                                                            ) : (
+                                                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wide ${m.color}`}>{m.label}</span>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </div>
 
@@ -4020,7 +4063,23 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     <p className="text-sm font-bold text-gray-900 uppercase truncate flex-1" title={tx.description}>
                                                         {tx.description}
                                                     </p>
-                                                    {(() => { const m = getSourceMeta(tx.source_system); return m ? <span className={`shrink-0 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide ${m.color}`}>{m.label}</span> : null; })()}
+                                                    {(() => {
+                                                        const m = getSourceMeta(tx.source_system);
+                                                        if (!m) return null;
+                                                        const link = getOriginLink(tx);
+                                                        return link ? (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); goToOrigin(tx); }}
+                                                                title={`Abrir em ${m.label}`}
+                                                                className={`shrink-0 flex items-center gap-1 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide transition-all hover:brightness-95 hover:ring-1 hover:ring-current cursor-pointer ${m.color}`}
+                                                            >
+                                                                {m.label}
+                                                                <ExternalLink className="w-2.5 h-2.5" />
+                                                            </button>
+                                                        ) : (
+                                                            <span className={`shrink-0 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide ${m.color}`}>{m.label}</span>
+                                                        );
+                                                    })()}
                                                 </div>
 
                                                 {/* Linha 2: Entidade / Categoria / Data / Valor / Ações */}

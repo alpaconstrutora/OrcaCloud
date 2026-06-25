@@ -676,7 +676,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     const loadCostCenters = async (orgId: string) => {
         try {
-            const data = await financialRegistryService.listCostCenters(orgId);
+            // Tenta com org; se vier vazio, tenta sem filtro (RLS garante escopo)
+            let data = await financialRegistryService.listCostCenters(orgId);
+            if (!data.length) data = await financialRegistryService.listCostCenters();
             setMasterCostCenters(data.map(c => ({ id: c.id, name: c.name })));
         } catch (error) {
             console.error('Error loading cost centers:', error);

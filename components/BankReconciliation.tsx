@@ -128,6 +128,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string }>>([]);
     // Código de origem por lançamento (ex: nº do boleto 0188) — keyed por internal_transaction.id
     const [originCodes, setOriginCodes] = useState<Record<string, string>>({});
+    // Nome da contraparte resolvido da origem (ex: fornecedor do boleto) — keyed por internal_transaction.id
+    const [originPartyNames, setOriginPartyNames] = useState<Record<string, string>>({});
     const [managedCategories, setManagedCategories] = useState<string[]>([]);
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [stats, setStats] = useState({
@@ -350,9 +352,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     // Código de origem do lançamento (nº do boleto, nº do contrato, etc.). null se não houver.
     const txCode = (tx: InternalTransaction): string | null => originCodes[tx.id] ?? null;
 
-    // Nome da contraparte a exibir: para boletos, prioriza o nome do fornecedor cadastrado
-    // (via supplier_id) em vez do beneficiário do OCR. Fallback para entity_name.
+    // Nome da contraparte a exibir: para boletos, prioriza o fornecedor cadastrado resolvido
+    // da origem (originPartyNames), depois via supplier_id do lançamento; fallback entity_name.
     const displayPartyName = (tx: InternalTransaction): string | null => {
+        if (originPartyNames[tx.id]) return originPartyNames[tx.id];
         const supId = (tx as { supplier_id?: string | null }).supplier_id;
         if (tx.source_system === 'BOLETO' && supId && supplierNameById[supId]) {
             return supplierNameById[supId];
@@ -733,19 +736,35 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const loadOriginCodes = async (txs: InternalTransaction[]) => {
         try {
             const codes: Record<string, string> = {};
+            const partyNames: Record<string, string> = {};
 
-            // BOLETO: reference_id = boleto.id → busca numero
+            // BOLETO: reference_id = boleto.id → busca numero + fornecedor cadastrado
             const boletoRefs = txs.filter(t => t.source_system === 'BOLETO' && (t as { reference_id?: string }).reference_id);
             const boletoIds = [...new Set(boletoRefs.map(t => (t as { reference_id?: string }).reference_id!))];
             if (boletoIds.length) {
                 const { data } = await supabase
                     .from('boletos')
-                    .select('id, numero')
+                    .select('id, numero, supplier_id, beneficiario_nome')
                     .in('id', boletoIds);
-                const byId = new Map((data || []).map(b => [b.id, b.numero]));
+                const byId = new Map((data || []).map(b => [b.id, b]));
+
+                // Resolve nomes de fornecedores referenciados pelos boletos
+                const supIds = [...new Set((data || []).map(b => b.supplier_id).filter(Boolean) as string[])];
+                let supNameById: Record<string, string> = {};
+                if (supIds.length) {
+                    const { data: sups } = await supabase
+                        .from('suppliers')
+                        .select('id, name')
+                        .in('id', supIds);
+                    supNameById = Object.fromEntries((sups || []).map(s => [s.id, s.name]));
+                }
+
                 boletoRefs.forEach(t => {
-                    const num = byId.get((t as { reference_id?: string }).reference_id!);
-                    if (num != null) codes[t.id] = String(num).padStart(4, '0');
+                    const b = byId.get((t as { reference_id?: string }).reference_id!);
+                    if (!b) return;
+                    if (b.numero != null) codes[t.id] = String(b.numero).padStart(4, '0');
+                    const nome = (b.supplier_id && supNameById[b.supplier_id]) || b.beneficiario_nome;
+                    if (nome) partyNames[t.id] = nome;
                 });
             }
 
@@ -769,6 +788,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             }
 
             setOriginCodes(codes);
+            setOriginPartyNames(partyNames);
         } catch (err) {
             console.error('Erro ao carregar códigos de origem:', err);
         }

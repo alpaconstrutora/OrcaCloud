@@ -359,7 +359,7 @@ const Layout: React.FC<LayoutProps> = ({
   const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
-  const especialidadesViews = ['pro-dashboard','offices-dashboard','reformas-dashboard','opura-cno'];
+  const especialidadesViews = ['pro-dashboard','offices-dashboard','reformas-dashboard','opura-cno','compliance-dashboard'];
   const [isEspecialidadesOpen, setIsEspecialidadesOpen] = React.useState(() => especialidadesViews.includes(activeView));
   React.useEffect(() => { if (especialidadesViews.includes(activeView)) setIsEspecialidadesOpen(true); }, [activeView]);
   const operacionalViews = ['operacional','project-diary'];
@@ -575,11 +575,11 @@ const Layout: React.FC<LayoutProps> = ({
                 {(mod.offices   || isDev) && <DropdownItem id="offices-dashboard"  label="ÒPURA Offices"  icon={Palette} />}
                 {(mod.reformas  || isDev) && <DropdownItem id="reformas-dashboard" label="ÒPURA Reformas" icon={Hammer} />}
                 {(mod.compliance || isDev) && <DropdownItem id="opura-cno" label="ÒPURA CNO e Previdência" icon={Calculator} />}
+                {(mod.compliance || isDev) && <DropdownItem id="compliance-dashboard" label="ÒPURA Compliance" icon={Shield} />}
               </NavDropdown>
 
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" />
               <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" />
-              {(mod.compliance || isDev) && <NavItem id="compliance-dashboard" icon={Shield} label="ÒPURA Compliance" />}
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
@@ -1017,11 +1017,11 @@ const Layout: React.FC<LayoutProps> = ({
                 {(mod.offices   || isDev) && <NavItem id="offices-dashboard"  icon={Palette}   label="ÒPURA Offices"  forceFull />}
                 {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" forceFull />}
                 {(mod.compliance || isDev) && <NavItem id="opura-cno" icon={Calculator} label="ÒPURA CNO e Previdência" forceFull />}
+                {(mod.compliance || isDev) && <NavItem id="compliance-dashboard" icon={Shield} label="ÒPURA Compliance" forceFull />}
               </div>
 
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" forceFull />
               <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" forceFull />
-              {(mod.compliance || isDev) && <NavItem id="compliance-dashboard" icon={Shield} label="ÒPURA Compliance" forceFull />}
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
                 <div className="space-y-1 mb-4">

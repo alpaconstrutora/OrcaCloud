@@ -11,7 +11,7 @@ import {
     Filter,
     Check
 } from 'lucide-react';
-import { HierarchyNode, ProjectSchedule, ItemScheduleDetails } from '../../types';
+import { HierarchyNode, ProjectSchedule, ItemScheduleDetails, BudgetEntry, SinapiType } from '../../types';
 import ModernDateInput from '../ModernDateInput';
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
 import { Plus } from 'lucide-react';
@@ -326,8 +326,17 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                 return <React.Fragment key={node.id}>{node.children?.map(child => renderNode(child))}</React.Fragment>;
                             }
 
-                            if (isItem && node.data) {
-                                const item = node.data;
+                            if (isItem) {
+                                // Atividades sem custo (node.data ausente) renderizam no mesmo item-row.
+                                // Stand-in mínimo de BudgetEntry: a linha só lê item.id e
+                                // item.sinapiItem.description (demais campos de custo ficam zerados).
+                                const item: BudgetEntry = node.data ?? {
+                                    id: node.id,
+                                    quantity: 0,
+                                    group: '',
+                                    phase: '',
+                                    sinapiItem: { code: '', description: node.name, unit: '', price: 0, type: SinapiType.INPUT, category: '' },
+                                };
                                 const totalDistributed = schedule.periods.reduce((sum, period) => sum + getDistribution(item.id, period.id), 0);
                                 const isFullyDistributed = Math.abs(totalDistributed - 100) < 0.1;
                                 const itemSchedule = schedule.itemSchedules?.find(s => s.id === item.id) || { id: item.id } as ItemScheduleDetails;

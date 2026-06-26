@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff, ArrowRightToLine, Plus } from 'lucide-react';
 
-import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation } from '../../types';
+import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation, SinapiType } from '../../types';
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
 import { TaskDetailModal } from './TaskDetailModal';
 
@@ -216,9 +216,17 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             );
         }
 
-        if (isItem && node.data) {
+        if (isItem) {
 
-            const item = node.data;
+            // Atividades sem custo (node.data ausente) usam o mesmo item-row do Gantt.
+            // Stand-in mínimo de BudgetEntry (a linha só lê item.id e sinapiItem.description).
+            const item: BudgetEntry = node.data ?? {
+                id: node.id,
+                quantity: 0,
+                group: '',
+                phase: '',
+                sinapiItem: { code: '', description: node.name, unit: '', price: 0, type: SinapiType.INPUT, category: '' },
+            };
             const itemSchedule = schedule.itemSchedules?.find(s => s.id === item.id);
 
             return (

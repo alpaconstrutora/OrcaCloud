@@ -1,4 +1,4 @@
-import { DependencyType, ItemScheduleDetails, ConstraintType, Baseline, ReplanMode, ResourceRole, ResourceWorker, ResourceTeam, LevelingResult, LevelingIssue, CompositionComponent } from '../types';
+import { DependencyType, ItemScheduleDetails, ConstraintType, Baseline, ReplanMode, ResourceRole, ResourceWorker, ResourceTeam, ResourceAllocation, LevelingResult, LevelingIssue, CompositionComponent } from '../types';
 
 /**
  * ═══════════════════════════════════════════════════════════════════
@@ -424,7 +424,50 @@ class BaselineEngine {
 // CREW ENGINE (Auto-duration from team composition)
 // ─────────────────────────────────────────────────
 
+/**
+ * Configurable keyword lists used to classify composition components into labor /
+ * equipment / main worker / helper. All entries are lowercase substrings matched
+ * case-insensitively against the component description (or role name).
+ *
+ * Defaults target Brazilian SINAPI nomenclature. Override per-org via
+ * `SchedulingEngine.configureCrewClassification(...)` when cargos fall outside the
+ * default lists (e.g. CALCETEIRO, MARMORISTA).
+ */
+export interface CrewClassificationConfig {
+    /** Substrings that mark a component as labor (used as a fallback when SINAPI nature is absent). */
+    laborRoles: string[];
+    /** Substrings that mark a unit-"H" component as equipment, excluding it from labor. */
+    equipmentKeywords: string[];
+    /** Substrings that mark a labor role as a helper (servente/ajudante/auxiliar). */
+    helperRoles: string[];
+    /** Substrings that mark a labor role as a main worker (oficial/pedreiro/...). */
+    mainWorkerRoles: string[];
+}
+
+export const DEFAULT_CREW_CLASSIFICATION: CrewClassificationConfig = {
+    laborRoles: [
+        'pedreiro', 'servente', 'oficial', 'ajudante', 'auxiliar',
+        'carpinteiro', 'armador', 'pintor', 'eletricista', 'encanador',
+        'mestre de obras', 'encarregado', 'operador', 'motorista', 'montador',
+        'gesseiro', 'telhadista', 'serralheiro', 'bombeiro', 'mão de obra', 'mao de obra'
+    ],
+    equipmentKeywords: ['caminhão', 'betoneira', 'escavadeira', 'rolo', 'compactador', 'guindaste', 'locação', 'maquina', 'máquina'],
+    helperRoles: ['servente', 'ajudante', 'auxiliar'],
+    mainWorkerRoles: ['oficial', 'pedreiro', 'carpinteiro', 'pintor', 'eletricista']
+};
+
 class CrewEngine {
+    /** Active classification config. Mutated via SchedulingEngine.configureCrewClassification. */
+    private static classification: CrewClassificationConfig = { ...DEFAULT_CREW_CLASSIFICATION };
+
+    static configureClassification(partial: Partial<CrewClassificationConfig>): void {
+        this.classification = { ...this.classification, ...partial };
+    }
+
+    static getClassification(): CrewClassificationConfig {
+        return this.classification;
+    }
+
     /**
      * Identifies if a composition component is a labor item based on a hierarchical check.
      */
@@ -440,19 +483,11 @@ class CrewEngine {
         if (nature.includes('equipamento') || nature.includes('material')) return false;
 
         // 2. Fallback: Check for labor-related keywords in description
-        const laborRoles = [
-            'pedreiro', 'servente', 'oficial', 'ajudante', 'auxiliar',
-            'carpinteiro', 'armador', 'pintor', 'eletricista', 'encanador',
-            'mestre de obras', 'encarregado', 'operador', 'motorista', 'montador',
-            'gesseiro', 'telhadista', 'serralheiro', 'bombeiro', 'mão de obra', 'mao de obra'
-        ];
-
-        const hasRole = laborRoles.some(role => desc.includes(role));
+        const hasRole = this.classification.laborRoles.some(role => desc.includes(role));
 
         // 3. Fallback: Unit 'H' usually implies labor if not clearly equipment
         if (unit === 'H' || unit === 'HORA') {
-            const equipKeywords = ['caminhão', 'betoneira', 'escavadeira', 'rolo', 'compactador', 'guindaste', 'locação', 'maquina', 'máquina'];
-            const isEquip = equipKeywords.some(equip => desc.includes(equip));
+            const isEquip = this.classification.equipmentKeywords.some(equip => desc.includes(equip));
 
             if (hasRole || !isEquip) return true;
         }
@@ -473,22 +508,15 @@ class CrewEngine {
         for (const comp of composition) {
             if (this.isLaborComp(comp)) {
                 const desc = String(comp.description || '').toLowerCase();
-                const laborRoles = [
-                    'pedreiro', 'servente', 'oficial', 'ajudante', 'auxiliar',
-                    'carpinteiro', 'armador', 'pintor', 'eletricista', 'encanador',
-                    'mestre de obras', 'encarregado', 'operador', 'motorista', 'montador',
-                    'gesseiro', 'telhadista', 'serralheiro', 'bombeiro', 'mão de obra', 'mao de obra'
-                ];
 
                 const isStrictlyCharges = desc.includes('encargos complementares') &&
-                    !laborRoles.some(role => desc.includes(role));
+                    !this.classification.laborRoles.some(role => desc.includes(role));
 
                 if (!isStrictlyCharges) {
                     const quantity = Number(comp.quantity) || 0;
                     totalEffort += quantity;
 
-                    const helperRoles = ['servente', 'ajudante', 'auxiliar'];
-                    const isHelper = helperRoles.some(role => desc.includes(role));
+                    const isHelper = this.classification.helperRoles.some(role => desc.includes(role));
 
                     if (!isHelper) {
                         mainWorkerHH += quantity;
@@ -521,6 +549,95 @@ class CrewEngine {
         }
 
         return { effort, cost };
+    }
+
+    private static isHelperRole(name: string): boolean {
+        const n = name.toLowerCase();
+        return this.classification.helperRoles.some(role => n.includes(role));
+    }
+
+    private static isMainWorkerRole(name: string): boolean {
+        const n = name.toLowerCase();
+        return this.classification.mainWorkerRoles.some(role => n.includes(role));
+    }
+
+    /** Normalize a composition description into a role name (strip "COM ..." suffix, cap at 50 chars). */
+    private static roleNameFromComp(comp: CompositionComponent): string {
+        let roleName = String(comp.description || '').split(' COM ')[0].trim().toUpperCase();
+        if (roleName.length > 50) roleName = roleName.substring(0, 50);
+        return roleName;
+    }
+
+    /**
+     * Auto-allocate crew (ROLE allocations) from a SINAPI composition.
+     *
+     * Single source of truth shared by the per-item and bulk "Auto Equipe" flows.
+     * - Creates roles for labor comps that don't yet exist (matched by uppercase name).
+     * - Reuses existing roles and preserves non-ROLE allocations (WORKER/TEAM) untouched.
+     * - Distinguishes helpers (servente/ajudante/auxiliar) from main workers and ensures
+     *   at least one helper when the composition requires it.
+     *
+     * Returns the (possibly extended) role list, the rebuilt allocation list and the
+     * resolved helper count. Pure: it does not mutate the inputs.
+     */
+    static autoAllocateFromComposition(
+        composition: CompositionComponent[] | undefined,
+        existingRoles: ResourceRole[],
+        existingAllocations: ResourceAllocation[] = [],
+        opts: { defaultMainWorkers?: number; defaultHelpers?: number; hoursPerDay?: number } = {}
+    ): { roles: ResourceRole[]; allocations: ResourceAllocation[]; crewHelpers: number } {
+        const roles = [...existingRoles];
+        const allocations = [...existingAllocations];
+
+        const defaultMainWorkers = Math.max(1, Number(opts.defaultMainWorkers ?? 1));
+        let defaultHelpers = Number(opts.defaultHelpers ?? 0);
+        const hoursPerDay = Number(opts.hoursPerDay ?? 8);
+
+        const compLabor = (composition || []).filter(c => this.isLaborComp(c));
+        if (compLabor.length === 0) {
+            return { roles, allocations, crewHelpers: defaultHelpers };
+        }
+
+        const rolesByName = new Map<string, ResourceRole>(roles.map(r => [r.name.toUpperCase(), r]));
+
+        // Keep manual (non-ROLE) allocations; rebuild ROLE allocations from the composition.
+        const allocMap = new Map<string, ResourceAllocation>();
+        allocations.forEach(a => {
+            if (a.resourceType !== 'ROLE') allocMap.set(a.resourceId, a);
+        });
+
+        compLabor.forEach(comp => {
+            const roleName = this.roleNameFromComp(comp);
+
+            let role = rolesByName.get(roleName);
+            if (!role) {
+                role = {
+                    id: crypto.randomUUID(),
+                    name: roleName,
+                    costPerHour: Number(comp.price) || 0,
+                    costPerDay: (Number(comp.price) || 0) * 8,
+                    source: 'SINAPI'
+                };
+                roles.push(role);
+                rolesByName.set(roleName, role);
+            }
+
+            if (!allocMap.has(role.id)) {
+                const helper = this.isHelperRole(roleName);
+                if (helper && defaultHelpers === 0) defaultHelpers = 1;
+                const qty = Math.max(1, helper ? defaultHelpers : defaultMainWorkers);
+
+                allocMap.set(role.id, {
+                    id: crypto.randomUUID(),
+                    resourceId: role.id,
+                    resourceType: 'ROLE',
+                    quantity: qty,
+                    hoursPerDay
+                });
+            }
+        });
+
+        return { roles, allocations: Array.from(allocMap.values()), crewHelpers: defaultHelpers };
     }
 
 
@@ -564,14 +681,12 @@ class CrewEngine {
                     if (worker) {
                         const role = roles.find(r => r.id === worker.roleId);
                         if (role) {
-                            const roleName = role.name.toUpperCase();
-                            if (roleName.includes('OFICIAL') || roleName.includes('PEDREIRO') || roleName.includes('CARPINTEIRO') || roleName.includes('PINTOR') || roleName.includes('ELETRICISTA')) {
+                            if (CrewEngine.isMainWorkerRole(role.name)) {
                                 derivedMain += multiplier;
-                            } else if (roleName.includes('SERVENTE') || roleName.includes('AJUDANTE') || roleName.includes('AUXILIAR')) {
+                            } else if (CrewEngine.isHelperRole(role.name)) {
                                 derivedHelpers += multiplier;
                             } else {
-                                // Default to main if unknown? Or ignore?
-                                // Let's count them as main for now if they are "labor" but not explicit helpers
+                                // Unknown labor role: default to main worker.
                                 derivedMain += multiplier;
                             }
                         }
@@ -1014,6 +1129,22 @@ export class SchedulingEngine {
     }
     static calculateDurationFromCrew(task: ItemScheduleDetails, qty?: number): number | null {
         return CrewEngine.calculateDuration(task, qty);
+    }
+    static autoAllocateFromComposition(
+        composition: CompositionComponent[] | undefined,
+        existingRoles: ResourceRole[],
+        existingAllocations: ResourceAllocation[] = [],
+        opts: { defaultMainWorkers?: number; defaultHelpers?: number; hoursPerDay?: number } = {}
+    ) {
+        return CrewEngine.autoAllocateFromComposition(composition, existingRoles, existingAllocations, opts);
+    }
+
+    /** Override the crew classification keyword lists (e.g. per org). Partial merge over defaults. */
+    static configureCrewClassification(partial: Partial<CrewClassificationConfig>): void {
+        CrewEngine.configureClassification(partial);
+    }
+    static getCrewClassification(): CrewClassificationConfig {
+        return CrewEngine.getClassification();
     }
 
     // ── Legacy compatibility methods (used externally) ──

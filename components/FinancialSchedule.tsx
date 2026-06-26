@@ -14,7 +14,6 @@ import {
     Baseline,
     ReplanMode,
     PurchaseOrder,
-    ResourceRole,
     ResourceAllocation,
     LevelingIssue,
     ResourceWorker,
@@ -34,7 +33,7 @@ import { LevelingDecisionModal } from './schedule/LevelingDecisionModal';
 import { PredecessorModal } from './schedule/PredecessorModal';
 import { ResourceAllocationModal } from './schedule/ResourceAllocationModal';
 import { ScheduleGantt } from './schedule/ScheduleGantt';
-import { SchedulingEngine } from '../utils/schedulingEngine';
+import { SchedulingEngine, DEFAULT_CREW_CLASSIFICATION } from '../utils/schedulingEngine';
 import { ResourceManagement } from './ResourceManagement';
 import { ScheduleRiskDashboard } from './schedule/ScheduleRiskDashboard';
 import { ConstraintsPanel } from './schedule/ConstraintsPanel';
@@ -46,6 +45,8 @@ import { EapPanel } from './schedule/EapPanel';
 import { orderService } from '../services/orderService';
 import { projectService } from '../services/projectService';
 import ScheduleHeader from './schedule/ScheduleHeader';
+import { CrewClassificationModal } from './schedule/CrewClassificationModal';
+import { crewClassificationService } from '../services/crewClassificationService';
 import SimulationBanner from './schedule/SimulationBanner';
 import ScheduleGridView from './schedule/ScheduleGridView';
 import ModernDateInput from './ModernDateInput';
@@ -597,11 +598,24 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const [predecessorModalTask, setPredecessorModalTask] = useState<string | null>(null);
     const [isBaselineModalOpen, setIsBaselineModalOpen] = useState(false);
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+    const [isCrewClassifModalOpen, setIsCrewClassifModalOpen] = useState(false);
     const [crewPopoverItem, setCrewPopoverItem] = useState<string | null>(null);
     const [crewPopoverPos, setCrewPopoverPos] = useState<{ top: number; left: number } | null>(null);
     const [resourceAllocationTask, setResourceAllocationTask] = useState<string | null>(null);
     const [allocationType, setAllocationType] = useState<'ROLE' | 'WORKER' | 'TEAM'>('ROLE');
     const [levelingIssues, setLevelingIssues] = useState<LevelingIssue[] | null>(null);
+
+    // Apply the org's saved crew classification to the (global) scheduling engine so
+    // Auto Equipe recognizes custom cargos. Resets to defaults when org has no override.
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const stored = organizationId ? await crewClassificationService.get(organizationId) : null;
+            if (cancelled) return;
+            SchedulingEngine.configureCrewClassification(stored ?? DEFAULT_CREW_CLASSIFICATION);
+        })();
+        return () => { cancelled = true; };
+    }, [organizationId]);
 
     // ── Export State & Ref ──
     const exportRef = useRef<HTMLDivElement>(null);
@@ -2123,57 +2137,19 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     const laborSum = SchedulingEngine.deriveEffortFromComposition(budgetItem.sinapiItem.composition);
                     if (laborSum > 0) newTask.effortCoefficient = laborSum;
 
-                    // NEW: Auto-allocate for single item
-                    const compLabor = budgetItem.sinapiItem.composition.filter(c => SchedulingEngine.isLaborComp(c));
-                    if (compLabor.length > 0) {
-                        const newRolesMap = new Map<string, ResourceRole>(updatedRoles.map(r => [r.id, r]));
-                        const allocMap = new Map<string, ResourceAllocation>();
-
-                        (newTask.allocations || []).forEach(a => {
-                            if (a.resourceType !== 'ROLE') allocMap.set(a.resourceId, a);
-                        });
-
-                        const isHelper = (name: string) => name.includes('SERVENTE') || name.includes('AJUDANTE') || name.includes('AUXILIAR');
-                        const defaultMainWorkers = Number(newTask.crewMainWorkers ?? 1);
-                        let defaultHelpers = Number(newTask.crewHelpers ?? 0);
-
-                        compLabor.forEach(comp => {
-                            let roleName = comp.description.split(' COM ')[0].trim().toUpperCase();
-                            if (roleName.length > 50) roleName = roleName.substring(0, 50);
-
-                            let matchingRole = Array.from(newRolesMap.values()).find(r => r.name.toUpperCase() === roleName);
-                            if (!matchingRole) {
-                                const newRoleId = crypto.randomUUID();
-                                matchingRole = {
-                                    id: newRoleId,
-                                    name: roleName,
-                                    costPerHour: Number(comp.price) || 0,
-                                    costPerDay: (Number(comp.price) || 0) * 8,
-                                    source: 'SINAPI'
-                                };
-                                newRolesMap.set(newRoleId, matchingRole);
-                            }
-
-                            if (!allocMap.has(matchingRole.id)) {
-                                const helper = isHelper(roleName);
-                                if (helper && defaultHelpers === 0) defaultHelpers = 1;
-                                let allocQty = helper ? defaultHelpers : defaultMainWorkers;
-                                allocQty = Math.max(1, allocQty);
-
-                                allocMap.set(matchingRole.id, {
-                                    id: crypto.randomUUID(),
-                                    resourceId: matchingRole.id,
-                                    resourceType: 'ROLE',
-                                    quantity: allocQty,
-                                    hoursPerDay: Number(newTask.hoursPerDay ?? 8)
-                                });
-                            }
-                        });
-
-                        newTask.allocations = Array.from(allocMap.values());
-                        newTask.crewHelpers = defaultHelpers;
-                        updatedRoles = Array.from(newRolesMap.values());
-                    }
+                    const auto = SchedulingEngine.autoAllocateFromComposition(
+                        budgetItem.sinapiItem.composition,
+                        updatedRoles,
+                        newTask.allocations || [],
+                        {
+                            defaultMainWorkers: Number(newTask.crewMainWorkers ?? 1),
+                            defaultHelpers: Number(newTask.crewHelpers ?? 0),
+                            hoursPerDay: Number(newTask.hoursPerDay ?? 8)
+                        }
+                    );
+                    newTask.allocations = auto.allocations;
+                    newTask.crewHelpers = auto.crewHelpers;
+                    updatedRoles = auto.roles;
                 }
 
                 // Fallback to avoid zero-blocking
@@ -2235,34 +2211,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             const currentItems = prev.itemSchedules || [];
             const itemMap = new Map(currentItems.map(s => [s.id, s]));
 
-            // NEW: Extract roles from budget compositions
-            const existingRoles = prev.resources?.roles || [];
-            const newRolesMap = new Map<string, ResourceRole>(existingRoles.map(r => [r.id, r]));
-
-            budget.forEach(item => {
-                if (item.sinapiItem?.composition) {
-                    item.sinapiItem.composition.forEach(comp => {
-                        if (SchedulingEngine.isLaborComp(comp)) {
-                            // Extract base name, e.g., "PEDREIRO COM ENCARGOS COMPLEMENTARES" -> "PEDREIRO"
-                            let roleName = comp.description.split(' COM ')[0].trim().toUpperCase();
-                            if (roleName.length > 50) roleName = roleName.substring(0, 50);
-
-                            let roleExists = Array.from(newRolesMap.values()).some(r => r.name.toUpperCase() === roleName);
-                            if (!roleExists) {
-                                const newRoleId = crypto.randomUUID();
-                                newRolesMap.set(newRoleId, {
-                                    id: newRoleId,
-                                    name: roleName,
-                                    costPerHour: Number(comp.price) || 0,
-                                    costPerDay: (Number(comp.price) || 0) * 8,
-                                    source: 'SINAPI'
-                                });
-                            }
-                        }
-                    });
-                }
-            });
-            const updatedRoles = Array.from(newRolesMap.values());
+            // Roles accumulate across items as the shared auto-allocation helper discovers them.
+            let updatedRoles = prev.resources?.roles || [];
 
             const updatedBudgetItems = budget.map(item => {
                 const existing = itemMap.get(item.id);
@@ -2276,59 +2226,29 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
                 if (effortCoef === 0) effortCoef = 1.0;
 
-                const isHelper = (name: string) => name.includes('SERVENTE') || name.includes('AJUDANTE') || name.includes('AUXILIAR');
                 const defaultMainWorkers = Number(existing?.crewMainWorkers ?? 1);
-                let defaultHelpers = Number(existing?.crewHelpers ?? 0);
+                const hoursPerDay = Number(existing?.hoursPerDay ?? 8);
 
-                // NEW: Auto-allocate
-                let newAllocations = existing?.allocations || [];
-                if (item.sinapiItem?.composition) {
-                    const compLabor = item.sinapiItem.composition.filter(c => SchedulingEngine.isLaborComp(c));
-                    if (compLabor.length > 0) {
-                        const allocMap = new Map<string, ResourceAllocation>();
-                        newAllocations.forEach(a => {
-                            if (a.resourceType !== 'ROLE') allocMap.set(a.resourceId, a);
-                        });
-
-                        compLabor.forEach(comp => {
-                            let roleName = comp.description.split(' COM ')[0].trim().toUpperCase();
-                            if (roleName.length > 50) roleName = roleName.substring(0, 50);
-                            const matchingRole = updatedRoles.find(r => r.name.toUpperCase() === roleName);
-
-                            if (matchingRole && !allocMap.has(matchingRole.id)) {
-                                const helper = isHelper(roleName);
-                                // Set at least 1 helper if the composition requires it and it was 0
-                                if (helper && defaultHelpers === 0) {
-                                    defaultHelpers = 1;
-                                }
-                                let qty = helper ? defaultHelpers : defaultMainWorkers;
-                                qty = Math.max(1, qty); // Ensure it appears in Capacity Plan
-
-                                allocMap.set(matchingRole.id, {
-                                    id: crypto.randomUUID(),
-                                    resourceId: matchingRole.id,
-                                    resourceType: 'ROLE',
-                                    quantity: qty,
-                                    hoursPerDay: Number(existing?.hoursPerDay ?? 8)
-                                });
-                            }
-                        });
-                        newAllocations = Array.from(allocMap.values());
-                    }
-                }
+                const auto = SchedulingEngine.autoAllocateFromComposition(
+                    item.sinapiItem?.composition,
+                    updatedRoles,
+                    existing?.allocations || [],
+                    { defaultMainWorkers, defaultHelpers: Number(existing?.crewHelpers ?? 0), hoursPerDay }
+                );
+                updatedRoles = auto.roles;
 
                 return {
                     ...(existing || { id: item.id }),
                     autoDuration: true,
                     crewMainWorkers: defaultMainWorkers,
-                    crewHelpers: defaultHelpers,
+                    crewHelpers: auto.crewHelpers,
                     helperFactor: Number(existing?.helperFactor ?? 0.5),
                     effortCoefficient: effortCoef,
-                    hoursPerDay: Number(existing?.hoursPerDay ?? 8),
+                    hoursPerDay,
                     efficiencyFactor: Number(existing?.efficiencyFactor ?? 1.0),
                     mainWorkerProd: Number(existing?.mainWorkerProd ?? 0),
                     helperProd: Number(existing?.helperProd ?? 0),
-                    allocations: newAllocations
+                    allocations: auto.allocations
                 };
             });
 
@@ -3380,6 +3300,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 })()}
                 handleApplyAutoAllItems={handleApplyAutoAllItems}
                 handleDisableAutoAllItems={handleDisableAutoAllItems}
+                onOpenCrewClassification={() => setIsCrewClassifModalOpen(true)}
                 budgetLength={budget.length}
                 autoCount={budget.filter(b => (schedule.itemSchedules || []).some(s => s.id === b.id && s.autoDuration)).length}
                 allAuto={budget.length > 0 && budget.filter(b => (schedule.itemSchedules || []).some(s => s.id === b.id && s.autoDuration)).length >= budget.length}
@@ -4129,6 +4050,13 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     // Trigger recalculation if replan mode or working days changed
                     handleRecalculate(newSchedule.itemSchedules || []);
                 }}
+            />
+
+            <CrewClassificationModal
+                isOpen={isCrewClassifModalOpen}
+                onClose={() => setIsCrewClassifModalOpen(false)}
+                organizationId={organizationId}
+                onSaved={() => handleRecalculate(schedule.itemSchedules || [])}
             />
         </div>
     );

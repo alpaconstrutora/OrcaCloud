@@ -3456,8 +3456,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
     const CATEGORY_TAB_PRESETS: Record<string, string[]> = {
         'Vendas':   ['dashboard', 'jornada', 'obra', 'visual', 'personalizacao', 'diario', 'documentos', 'contratos', 'financeiro', 'suporte'],
-        'Locação':  ['dashboard', 'financeiro', 'contratos', 'documentos', 'manutencao'],
-        'Serviços': ['dashboard', 'financeiro', 'contratos', 'documentos'],
+        'Locação':  ['dashboard', 'obra', 'financeiro', 'contratos', 'documentos', 'manutencao'],
+        'Serviços': ['dashboard', 'obra', 'financeiro', 'contratos', 'documentos'],
     };
 
     const clientCategory = clientProfile?.category ?? '';

@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
     seedOutlineFromBudget, insertNode, removeNode, renameNode, reorderSibling,
     moveNode, canMove, duplicateSubtree, collectLeafIds, findNode, getAncestors, parentWbsLabels, genId,
-    reconcileOutlineWithBudget, outlineBudgetItemIds,
+    reconcileOutlineWithBudget, outlineBudgetItemIds, updateNode,
 } from '../utils/scheduleOutline';
+import { TaskNature } from '../types/schedule';
 import { OutlineNode } from '../types/schedule';
 import { BudgetEntry, SinapiType } from '../types/budget';
 
@@ -112,6 +113,19 @@ describe('duplicateSubtree', () => {
         const { clone } = duplicateSubtree(it);
         expect(clone.budgetItemId).toBe(clone.id);
         expect(clone.id).not.toBe('x');
+    });
+});
+
+describe('updateNode', () => {
+    it('faz merge imutável de campos (nome + natureza)', () => {
+        const act = struct('activity', 'Tarefa');
+        const roots = [struct('group', 'G', [act])];
+        const next = updateNode(roots, act.id, { name: 'DDS', nature: TaskNature.SEGURANCA });
+        const updated = findNode(next, act.id)!;
+        expect(updated.name).toBe('DDS');
+        expect(updated.nature).toBe(TaskNature.SEGURANCA);
+        // original intacto
+        expect(findNode(roots, act.id)!.nature).toBeUndefined();
     });
 });
 

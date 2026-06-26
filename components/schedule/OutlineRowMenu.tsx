@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreVertical, FolderPlus, Pencil, Copy, Trash2, ChevronUp, ChevronDown, Package } from 'lucide-react';
+import { MoreVertical, FolderPlus, Pencil, Copy, Trash2, ChevronUp, ChevronDown, Package, Diamond } from 'lucide-react';
 import { HierarchyNode } from '../../types';
 import { OutlineNodeType } from '../../utils/scheduleOutline';
 
 export interface OutlineActions {
     onAddChild: (parentId: string, type: OutlineNodeType) => void;
     onAddItem: (parentId: string) => void;
+    onAddMilestone: (parentId: string) => void;
     onRename: (id: string, currentName: string) => void;
     onDuplicate: (id: string) => void;
     onDelete: (id: string) => void;
@@ -63,6 +64,12 @@ export const OutlineRowMenu: React.FC<{ node: HierarchyNode; actions: OutlineAct
                         <button onClick={() => run(() => actions.onAddItem(node.id))}
                             className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50">
                             <Package className="w-3.5 h-3.5 text-gray-400" /> Adicionar Item (com custo)
+                        </button>
+                    )}
+                    {canHaveItem && (
+                        <button onClick={() => run(() => actions.onAddMilestone(node.id))}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50">
+                            <Diamond className="w-3.5 h-3.5 text-gray-400" /> Adicionar Marco
                         </button>
                     )}
                     {(children.length > 0 || canHaveItem) && <div className="h-px bg-gray-100 my-1" />}

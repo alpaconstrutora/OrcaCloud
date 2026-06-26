@@ -21,6 +21,7 @@ import {
     LevelingResult,
     HierarchyNode,
     OutlineNode,
+    TaskNature,
     FinancialTransaction,
     Organization,
     DiaryEntry,
@@ -458,15 +459,18 @@ function buildHierarchyFromOutline(
 
         if (node.type === 'item') {
             const budgetItem = node.budgetItemId ? budgetById.get(node.budgetItemId) : undefined;
-            if (!budgetItem) {
+            const leaf = budgetItem
                 // Orphan item (budget entry removed/rebased): degrade to a schedule-only activity.
-                return makeActivityHierNode(node.id, node.name || 'Item removido', schedById.get(node.id), level, wbsCode);
-            }
-            return makeItemHierNode(budgetItem, schedById.get(node.id), level, wbsCode, realizedValues, globalBdi);
+                ? makeItemHierNode(budgetItem, schedById.get(node.id), level, wbsCode, realizedValues, globalBdi)
+                : makeActivityHierNode(node.id, node.name || 'Item removido', schedById.get(node.id), level, wbsCode);
+            leaf.nature = node.nature;
+            return leaf;
         }
 
         if (node.type === 'activity') {
-            return makeActivityHierNode(node.id, node.name, schedById.get(node.id), level, wbsCode);
+            const leaf = makeActivityHierNode(node.id, node.name, schedById.get(node.id), level, wbsCode);
+            leaf.nature = node.nature;
+            return leaf;
         }
 
         // Structural node (group/phase/subphase)
@@ -831,7 +835,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const [isCrewClassifModalOpen, setIsCrewClassifModalOpen] = useState(false);
     const confirm = useConfirm();
     // Outline (estrutura) — modal de criar/renomear e contexto do seletor de item de orçamento
-    const [outlineEditor, setOutlineEditor] = useState<{ mode: 'create' | 'rename'; parentId: string | null; nodeId?: string; nodeType: outlineOps.OutlineNodeType; name: string } | null>(null);
+    const [outlineEditor, setOutlineEditor] = useState<{ mode: 'create' | 'rename'; parentId: string | null; nodeId?: string; nodeType: outlineOps.OutlineNodeType; name: string; nature?: TaskNature; milestone?: boolean } | null>(null);
     const [budgetPickerParent, setBudgetPickerParent] = useState<string | null | undefined>(undefined);
     const [crewPopoverItem, setCrewPopoverItem] = useState<string | null>(null);
     const [crewPopoverPos, setCrewPopoverPos] = useState<{ top: number; left: number } | null>(null);
@@ -1144,6 +1148,25 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             if (next.has(level)) next.delete(level);
             else next.add(level);
             localStorage.setItem('idx_schedule_table_levels_v7', JSON.stringify([...next]));
+            return next;
+        });
+    };
+
+    // Filtro por Natureza (compartilhado entre tabela e Gantt). Default: todas visíveis + sem natureza.
+    const [visibleNatures, setVisibleNatures] = useState<Set<string>>(() => {
+        const all = new Set<string>([...Object.values(TaskNature), '__none__']);
+        try {
+            const saved = localStorage.getItem('idx_schedule_natures_v1');
+            if (saved) return new Set<string>(JSON.parse(saved));
+        } catch { /* ignore */ }
+        return all;
+    });
+    const handleToggleNature = (nature: string) => {
+        setVisibleNatures(prev => {
+            const next = new Set(prev);
+            if (next.has(nature)) next.delete(nature);
+            else next.add(nature);
+            localStorage.setItem('idx_schedule_natures_v1', JSON.stringify([...next]));
             return next;
         });
     };
@@ -2605,23 +2628,30 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         (prev.outline && prev.outline.length > 0) ? prev.outline : outlineOps.seedOutlineFromBudget(budget);
 
     // Cria grupo/etapa/subetapa/atividade (item com custo vai por handleCreateBudgetItem).
-    const handleOutlineCreate = (parentId: string | null, type: outlineOps.OutlineNodeType, name: string) => {
+    // `opts.nature` aplica a folhas (atividade); `opts.milestone` cria um Marco (duração 0).
+    const handleOutlineCreate = (parentId: string | null, type: outlineOps.OutlineNodeType, name: string, opts?: { nature?: TaskNature; milestone?: boolean }) => {
         setSchedule(prev => {
             const outline = ensureOutline(prev);
             const node: OutlineNode = { id: outlineOps.genId(), type, name: name.trim() || defaultNodeName(type), children: [] };
+            if (type === 'activity' && opts?.nature) node.nature = opts.nature;
             const nextOutline = outlineOps.insertNode(outline, parentId, node);
             let nextSchedules = prev.itemSchedules ?? [];
             if (type === 'activity') {
-                nextSchedules = [...nextSchedules, { id: node.id, autoDuration: false, duration: 1, hoursPerDay: 8, efficiencyFactor: 1.0 }];
+                const isMs = !!opts?.milestone;
+                nextSchedules = [...nextSchedules, { id: node.id, autoDuration: false, duration: isMs ? 0 : 1, isMilestone: isMs, hoursPerDay: 8, efficiencyFactor: 1.0 }];
             }
             return persistOutline(prev, nextOutline, nextSchedules);
         });
     };
 
-    const handleOutlineRename = (id: string, name: string) => {
+    const handleOutlineRename = (id: string, name: string, nature?: TaskNature) => {
         setSchedule(prev => {
             const outline = ensureOutline(prev);
-            const nextOutline = outlineOps.renameNode(outline, id, name.trim());
+            const patch: Partial<OutlineNode> = { name: name.trim() };
+            // Natureza só faz sentido em folhas (item/activity).
+            const target = outlineOps.findNode(outline, id);
+            if (target && outlineOps.isLeaf(target.type)) patch.nature = nature;
+            const nextOutline = outlineOps.updateNode(outline, id, patch);
             // Se for item com custo, sincroniza a descrição do orçamento.
             const node = outlineOps.findNode(nextOutline, id);
             if (node?.type === 'item' && node.budgetItemId && onUpdateBudget) {
@@ -2755,9 +2785,10 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const outlineActions: OutlineActions = {
         onAddChild: (parentId, type) => setOutlineEditor({ mode: 'create', parentId, nodeType: type, name: '' }),
         onAddItem: (parentId) => setBudgetPickerParent(parentId),
+        onAddMilestone: (parentId) => setOutlineEditor({ mode: 'create', parentId, nodeType: 'activity', name: '', milestone: true }),
         onRename: (id, currentName) => {
             const node = outlineOps.findNode(ensureOutline(schedule), id);
-            setOutlineEditor({ mode: 'rename', parentId: null, nodeId: id, nodeType: (node?.type ?? 'group') as outlineOps.OutlineNodeType, name: currentName });
+            setOutlineEditor({ mode: 'rename', parentId: null, nodeId: id, nodeType: (node?.type ?? 'group') as outlineOps.OutlineNodeType, name: currentName, nature: node?.nature });
         },
         onDuplicate: handleOutlineDuplicate,
         onDelete: handleOutlineDelete,
@@ -4280,6 +4311,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                 onToggleColumn={handleToggleColumn}
                                 visibleSummaryLevels={tableVisibleLevels}
                                 onToggleSummaryLevel={handleToggleTableLevel}
+                                visibleNatures={visibleNatures}
+                                onToggleNature={handleToggleNature}
                             />
 
 
@@ -4321,6 +4354,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 getGanttSidebarTotal={getGanttSidebarTotal}
                                                 visibleSummaryLevels={ganttVisibleLevels}
                                                 onToggleSummaryLevel={handleToggleGanttLevel}
+                                                visibleNatures={visibleNatures}
+                                                onToggleNature={handleToggleNature}
                                                 getGanttColStyle={getGanttColStyle}
                                                 collapsedCols={ganttCollapsedCols}
                                                 onToggleColumn={handleToggleGanttColumn}
@@ -4507,12 +4542,15 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     mode={outlineEditor.mode}
                     nodeType={outlineEditor.nodeType}
                     initialName={outlineEditor.name}
+                    showNature={outlineOps.isLeaf(outlineEditor.nodeType)}
+                    initialNature={outlineEditor.nature}
+                    titleOverride={outlineEditor.milestone ? 'Adicionar Marco' : undefined}
                     onCancel={() => setOutlineEditor(null)}
-                    onSubmit={(name) => {
+                    onSubmit={(name, nature) => {
                         if (outlineEditor.mode === 'create') {
-                            handleOutlineCreate(outlineEditor.parentId, outlineEditor.nodeType, name);
+                            handleOutlineCreate(outlineEditor.parentId, outlineEditor.nodeType, name, { nature, milestone: outlineEditor.milestone });
                         } else if (outlineEditor.nodeId) {
-                            handleOutlineRename(outlineEditor.nodeId, name);
+                            handleOutlineRename(outlineEditor.nodeId, name, nature);
                         }
                         setOutlineEditor(null);
                     }}

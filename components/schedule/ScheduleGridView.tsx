@@ -14,6 +14,7 @@ import {
 import { HierarchyNode, ProjectSchedule, ItemScheduleDetails, BudgetEntry, SinapiType } from '../../types';
 import ModernDateInput from '../ModernDateInput';
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
+import { TASK_NATURE_META } from '../../utils/taskNature';
 import { Plus } from 'lucide-react';
 
 interface ScheduleGridViewProps {
@@ -55,6 +56,8 @@ interface ScheduleGridViewProps {
     onToggleColumn?: (colKey: string) => void;
     visibleSummaryLevels?: Set<string>;
     onToggleSummaryLevel?: (level: string) => void;
+    visibleNatures?: Set<string>;
+    onToggleNature?: (nature: string) => void;
     outlineActions?: OutlineActions;
     onAddRootGroup?: () => void;
 }
@@ -98,6 +101,8 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
     onToggleColumn,
     visibleSummaryLevels,
     onToggleSummaryLevel,
+    visibleNatures,
+    onToggleNature,
     outlineActions,
     onAddRootGroup,
 }) => {
@@ -261,6 +266,33 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                         {visibleSummaryLevels.has(level.id) && <Check className="w-3 h-3 text-blue-600" />}
                                                     </button>
                                                 ))}
+                                                {visibleNatures && onToggleNature && (
+                                                    <>
+                                                        <div className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2 pt-2 pb-2 border-t border-gray-50 mt-1 mb-1">Natureza</div>
+                                                        <div className="max-h-48 overflow-y-auto">
+                                                            {Object.entries(TASK_NATURE_META).map(([key, meta]) => (
+                                                                <button
+                                                                    key={key}
+                                                                    onClick={() => onToggleNature(key)}
+                                                                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors"
+                                                                >
+                                                                    <span className="flex items-center gap-1.5">
+                                                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
+                                                                        <span className={`text-[12px] font-medium ${visibleNatures.has(key) ? 'text-gray-700' : 'text-gray-400'}`}>{meta.label}</span>
+                                                                    </span>
+                                                                    {visibleNatures.has(key) && <Check className="w-3 h-3 text-blue-600" />}
+                                                                </button>
+                                                            ))}
+                                                            <button
+                                                                onClick={() => onToggleNature('__none__')}
+                                                                className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors"
+                                                            >
+                                                                <span className={`text-[12px] font-medium ${visibleNatures.has('__none__') ? 'text-gray-700' : 'text-gray-400'}`}>Sem natureza</span>
+                                                                {visibleNatures.has('__none__') && <Check className="w-3 h-3 text-blue-600" />}
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -326,6 +358,11 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                 return <React.Fragment key={node.id}>{node.children?.map(child => renderNode(child))}</React.Fragment>;
                             }
 
+                            // Nature filter — leaves only (itens/atividades). '__none__' = sem natureza.
+                            if (isItem && visibleNatures && !visibleNatures.has(node.nature ?? '__none__')) {
+                                return null;
+                            }
+
                             if (isItem) {
                                 // Atividades sem custo (node.data ausente) renderizam no mesmo item-row.
                                 // Stand-in mínimo de BudgetEntry: a linha só lê item.id e
@@ -348,6 +385,12 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 <div className="font-medium text-gray-700 truncate max-w-[300px] text-[12px]" title={item.sinapiItem.description}>
                                                     {item.sinapiItem.description}
                                                 </div>
+                                                {node.nature && (
+                                                    <span className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${TASK_NATURE_META[node.nature].badge}`} title={`Natureza: ${TASK_NATURE_META[node.nature].label}`}>
+                                                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: TASK_NATURE_META[node.nature].color }} />
+                                                        {TASK_NATURE_META[node.nature].label}
+                                                    </span>
+                                                )}
                                                 {getPhotosForItem(item.id).length > 0 && (
                                                     <button
                                                         onClick={(e) => {

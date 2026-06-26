@@ -231,6 +231,15 @@ export function renameNode(roots: OutlineNode[], id: string, name: string): Outl
     return next;
 }
 
+/** Immutably merge fields (e.g. name, nature) into a node. */
+export function updateNode(roots: OutlineNode[], id: string, patch: Partial<OutlineNode>): OutlineNode[] {
+    const next = cloneRoots(roots);
+    const node = findNode(next, id);
+    if (!node) return roots;
+    Object.assign(node, patch);
+    return next;
+}
+
 /** Reorder a node within its siblings. dir: -1 up, +1 down. */
 export function reorderSibling(roots: OutlineNode[], id: string, dir: -1 | 1): OutlineNode[] {
     const next = cloneRoots(roots);

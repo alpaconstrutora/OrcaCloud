@@ -26,6 +26,26 @@ export enum ReplanMode {
 }
 
 /**
+ * Natureza da tarefa — dimensão semântica (domínio/módulo), ortogonal ao tipo estrutural.
+ * Metadado: dirige cor/badge/filtro e (em fases futuras) a integração com os módulos
+ * (Compra→Procurement, Aprovação→Governance, etc.). Ver PLANO_MODULO_TIPOS_NATUREZA_TAREFAS.md.
+ */
+export enum TaskNature {
+    PRODUCAO = 'PRODUCAO',
+    COMPRA = 'COMPRA',
+    CONTRATACAO = 'CONTRATACAO',
+    APROVACAO = 'APROVACAO',
+    INSPECAO = 'INSPECAO',
+    SEGURANCA = 'SEGURANCA',
+    QUALIDADE = 'QUALIDADE',
+    FINANCEIRO = 'FINANCEIRO',
+    BIM = 'BIM',
+    DOCUMENTACAO = 'DOCUMENTACAO',
+    RH = 'RH',
+    MANUTENCAO = 'MANUTENCAO',
+}
+
+/**
  * Explicit schedule outline (WBS) node. When `ProjectSchedule.outline` is present it
  * becomes the source of truth for structure/order, decoupling the hierarchy from the
  * budget-derived string grouping. See buildHierarchy in FinancialSchedule.
@@ -35,6 +55,7 @@ export interface OutlineNode {
     type: 'group' | 'phase' | 'subphase' | 'item' | 'activity';
     name: string;                // display name; for 'item' falls back to the budget description
     budgetItemId?: string;       // set on type 'item' (cost-backed) → references BudgetEntry.id
+    nature?: TaskNature;         // semantic domain (leaves only); drives color/badge/filter/integrations
     children?: OutlineNode[];
 }
 
@@ -58,6 +79,7 @@ export interface HierarchyNode {
     lateStart?: string;
     lateFinish?: string;
     totalFloat?: number;
+    nature?: TaskNature;
     level: number;
     color?: string;
     wbsCode?: string;

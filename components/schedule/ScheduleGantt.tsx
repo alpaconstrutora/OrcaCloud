@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff, Arr
 
 import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation, SinapiType } from '../../types';
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
+import { TASK_NATURE_META } from '../../utils/taskNature';
 import { TaskDetailModal } from './TaskDetailModal';
 
 /**
@@ -53,6 +54,8 @@ interface ScheduleGanttProps {
     taskInsights?: Record<string, { missingItems: number; missingCost: number; hasAlert: boolean; message: string }>;
     visibleSummaryLevels: Set<string>;
     onToggleSummaryLevel: (level: string) => void;
+    visibleNatures?: Set<string>;
+    onToggleNature?: (nature: string) => void;
     collapsedCols: Set<string>;
     onToggleColumn: (key: string) => void;
     onCollapseAll: () => void;
@@ -98,6 +101,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     taskInsights,
     visibleSummaryLevels,
     onToggleSummaryLevel,
+    visibleNatures,
+    onToggleNature,
     collapsedCols,
     onToggleColumn,
     onCollapseAll,
@@ -216,6 +221,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             );
         }
 
+        // Nature filter — leaves only (itens/atividades). '__none__' = sem natureza.
+        if (isItem && visibleNatures && !visibleNatures.has(node.nature ?? '__none__')) {
+            return null;
+        }
+
         if (isItem) {
 
             // Atividades sem custo (node.data ausente) usam o mesmo item-row do Gantt.
@@ -246,6 +256,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             style={{ paddingLeft: `${(node.level * 20) + 16}px`, width: `${sidebarWidth}px` }}
                         >
                             <span className="truncate flex-1">{item.sinapiItem.description}</span>
+                            {node.nature && (
+                                <span className="shrink-0 inline-flex items-center" title={`Natureza: ${TASK_NATURE_META[node.nature].label}`}>
+                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: TASK_NATURE_META[node.nature].color }} />
+                                </span>
+                            )}
                             {taskInsights?.[item.id]?.hasAlert && (
                                 <div className="shrink-0 flex items-center justify-center text-red-500 cursor-help relative group/insight">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
@@ -1032,6 +1047,33 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                         {visibleSummaryLevels.has(level.id) && <Check className="w-3 h-3 text-indigo-600" />}
                                                     </button>
                                                 ))}
+                                                {visibleNatures && onToggleNature && (
+                                                    <>
+                                                        <div className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2 pt-2 pb-2 border-t border-gray-50 mt-1 mb-1">Natureza</div>
+                                                        <div className="max-h-48 overflow-y-auto">
+                                                            {Object.entries(TASK_NATURE_META).map(([key, meta]) => (
+                                                                <button
+                                                                    key={key}
+                                                                    onClick={() => onToggleNature(key)}
+                                                                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors"
+                                                                >
+                                                                    <span className="flex items-center gap-1.5">
+                                                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
+                                                                        <span className={`text-[12px] font-medium ${visibleNatures.has(key) ? 'text-gray-700' : 'text-gray-400'}`}>{meta.label}</span>
+                                                                    </span>
+                                                                    {visibleNatures.has(key) && <Check className="w-3 h-3 text-indigo-600" />}
+                                                                </button>
+                                                            ))}
+                                                            <button
+                                                                onClick={() => onToggleNature('__none__')}
+                                                                className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors"
+                                                            >
+                                                                <span className={`text-[12px] font-medium ${visibleNatures.has('__none__') ? 'text-gray-700' : 'text-gray-400'}`}>Sem natureza</span>
+                                                                {visibleNatures.has('__none__') && <Check className="w-3 h-3 text-indigo-600" />}
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         </>
                                     )}

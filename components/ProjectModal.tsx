@@ -17,6 +17,7 @@ interface NewProjectData {
   name: string;
   client: string;
   clientId?: string;
+  obraPropria?: boolean;
   location: string;
   standard: string;
   area: number;
@@ -1644,6 +1645,29 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                             <p className="text-xs text-gray-500 mt-1 ml-1">
                               Marque para salvar como um modelo reutilizável.
                             </p>
+                            {formData.classification === 'OBRA' && (
+                              <>
+                                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 mt-2">
+                                  <input
+                                    type="checkbox"
+                                    id="is-obra-propria"
+                                    checked={!!formData.obraPropria}
+                                    onChange={(e) => {
+                                      const v = e.target.checked;
+                                      // Obra própria não tem cliente: limpa o vínculo ao marcar.
+                                      setFormData({ ...formData, obraPropria: v, ...(v ? { client: '', clientId: undefined } : {}) });
+                                    }}
+                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                  />
+                                  <label htmlFor="is-obra-propria" className="text-sm text-gray-700 font-medium select-none cursor-pointer">
+                                    Obra própria (sem cliente)
+                                  </label>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1 ml-1">
+                                  Obra construída pela própria empresa — não aparece em portal de cliente.
+                                </p>
+                              </>
+                            )}
                           </>
                         )}
                         {(formData.classification === 'DIARIO' || formData.classification === 'PLANEJAMENTO') && (
@@ -1718,6 +1742,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           <p className="text-[10px] text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
                         </div>
                       )}
+                      {formData.obraPropria ? (
+                        <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100/60">
+                          <p className="text-sm font-bold text-indigo-800">Obra Própria</p>
+                          <p className="text-xs text-indigo-600">Sem cliente vinculado. Desmarque "Obra própria" acima para definir um cliente.</p>
+                        </div>
+                      ) : (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Cliente / Proprietário
@@ -1797,6 +1827,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           )}
                         </div>
                       </div>
+                      )}
                     </div>
 
                     {formData.classification === 'ORCAMENTO' && (

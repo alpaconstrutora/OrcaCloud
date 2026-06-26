@@ -661,7 +661,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         )}
                                         {!isObraContext && !isPlanejamentoContext && (
                                             <td className="px-6 py-4">
-                                                {(activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)) ? (
+                                                {project.settings?.obraPropria ? (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                                        Obra Própria
+                                                    </span>
+                                                ) : (activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)) ? (
                                                     <span className="text-sm text-gray-600 font-medium">
                                                         {activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings.client)}
                                                     </span>
@@ -897,7 +901,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     </div>
                                     {!isObraContext && (
                                         <p className="text-sm text-gray-500 mt-1 mb-4 flex items-center gap-1.5 font-medium">
-                                            {project.settings?.client || 'Cliente não definido'}
+                                            {project.settings?.obraPropria ? (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight bg-indigo-100 text-indigo-700 border border-indigo-200">Obra Própria</span>
+                                            ) : (project.settings?.client || 'Cliente não definido')}
                                         </p>
                                     )}
 

@@ -88,6 +88,8 @@ export interface ProjectSettings {
     name: string;
     client?: string;
     clientId?: string;
+    /** Obra própria (sem cliente): construída pela própria empresa. Não aparece em portal de cliente. */
+    obraPropria?: boolean;
     location: string;
     street?: string;
     number?: string;

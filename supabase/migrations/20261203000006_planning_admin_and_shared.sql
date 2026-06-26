@@ -95,14 +95,17 @@ GRANT EXECUTE ON FUNCTION public.fn_portal_get_planning(TEXT) TO anon, authentic
 CREATE OR REPLACE FUNCTION public.fn_planning_for_client(p_client_id UUID)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
-    v_org UUID;
+    v_org    UUID;
+    v_found  BOOLEAN := FALSE;
 BEGIN
-    SELECT organization_id INTO v_org FROM public.clients WHERE id = p_client_id;
-    IF v_org IS NULL THEN RETURN json_build_object('valid', FALSE); END IF;
+    SELECT organization_id, TRUE INTO v_org, v_found
+    FROM public.clients WHERE id = p_client_id;
+    IF NOT v_found THEN RETURN json_build_object('valid', FALSE); END IF;
 
-    -- caller precisa ser membro da org do cliente (dual-check: email OU user_id,
-    -- pois em organization_members o user_id pode ser nulo)
-    IF NOT EXISTS (
+    -- Mesmo padrão da RLS de clients (20260320000001): cliente com org NULL é
+    -- visível a qualquer autenticado; com org, exige membership (email OU user_id,
+    -- pois em organization_members o user_id pode ser nulo).
+    IF v_org IS NOT NULL AND NOT EXISTS (
         SELECT 1 FROM public.organization_members om
         WHERE om.organization_id = v_org
           AND (om.email = auth.jwt()->>'email' OR om.user_id = auth.uid())

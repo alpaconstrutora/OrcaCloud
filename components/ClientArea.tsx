@@ -118,7 +118,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [clientContracts, setClientContracts] = React.useState<Contract[]>([]);
     const [viewingContract, setViewingContract] = React.useState<Contract | null>(null);
     const [planningView, setPlanningView] = React.useState<PlanningView | null>(null);
-    const [planningLoaded, setPlanningLoaded] = React.useState(false);
+    const [planningLoadedKey, setPlanningLoadedKey] = React.useState<string | null>(null);
     const [clientRequests, setClientRequests] = React.useState<ClientRequest[]>([]);
     const [requestsLoading, setRequestsLoading] = React.useState(false);
     const [showNewRequestForm, setShowNewRequestForm] = React.useState(false);
@@ -173,15 +173,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 .then(({ messages, unread }) => { setPortalMessages(messages); setUnreadCount(unread); })
                 .catch(console.error);
         }
-        // Planejamento/Obra: carrega via RPC anon quando a aba é aberta (1x)
-        if (activeTab === 'obra' && !planningLoaded) {
-            setPlanningLoaded(true);
-            if (portalToken) {
-                clientPortalService.getPlanningByToken(portalToken)
-                    .then(p => setPlanningView(p ? buildPlanningView(p) : null))
-                    .catch(console.error);
-            }
-            // Sem token (prévia do admin) → mostra estado vazio em vez de spinner
+        // Planejamento/Obra: carrega quando a aba é aberta (1x por cliente/token).
+        // Portal (anon) → via token; prévia do admin (autenticado) → via client_id.
+        const planningKey = portalToken || clientProfile?.id || '';
+        if (activeTab === 'obra' && planningKey && planningLoadedKey !== planningKey) {
+            setPlanningLoadedKey(planningKey);
+            setPlanningView(null);
+            const loadPlanning = portalToken
+                ? clientPortalService.getPlanningByToken(portalToken)
+                : clientPortalService.getPlanningForClient(clientProfile!.id);
+            loadPlanning
+                .then(p => setPlanningView(p ? buildPlanningView(p) : null))
+                .catch(console.error);
         }
     }, [clientProfile, activeTab, settings, organizationId]);
 
@@ -2098,7 +2101,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             futura: { label: 'A iniciar', cls: 'bg-gray-100 text-gray-500', dot: 'bg-gray-300' },
         };
 
-        if (planningLoaded && !pv) {
+        if (planningLoadedKey && !pv) {
             return (
                 <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
                     <HardHat className="w-16 h-16 text-gray-200 mb-6" />

@@ -173,7 +173,24 @@ export const buildPlanningView = (planning: PortalPlanning): PlanningView => {
         }
     }
 
-    const progress = Math.max(0, Math.min(100, Math.round(planning.progress ?? 0)));
+    // Avanço geral REAL: média de manualRealPct ponderada por duração sobre os itens
+    // de orçamento (não usa settings.obraProgress, que é um default fixo nunca recalculado).
+    const progressIds = (planning.budget && planning.budget.length > 0)
+        ? planning.budget.map(b => b.id)
+        : items.map(i => i.id);
+    let pSum = 0, pWeight = 0;
+    for (const id of progressIds) {
+        const it = map.get(id);
+        if (!it) continue;
+        const s = parseDate(it.startDate);
+        const e = parseDate(it.endDate);
+        const w = s && e ? Math.max((e.getTime() - s.getTime()) / dayMs, 1) : 1;
+        pSum += Math.max(0, Math.min(100, it.manualRealPct ?? 0)) * w;
+        pWeight += w;
+    }
+    const progress = pWeight > 0
+        ? Math.round(pSum / pWeight)
+        : Math.max(0, Math.min(100, Math.round(planning.progress ?? 0)));
     const now = new Date();
 
     // Curva S planejada: ~14 amostras entre start e end.

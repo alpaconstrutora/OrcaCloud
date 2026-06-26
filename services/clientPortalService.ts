@@ -90,6 +90,15 @@ export const clientPortalService = {
         return res;
     },
 
+    // Caminho autenticado (prévia do admin, sem token público)
+    async getPlanningForClient(clientId: string): Promise<PortalPlanning | null> {
+        const { data, error } = await supabase.rpc('fn_planning_for_client', { p_client_id: clientId });
+        if (error) throw error;
+        const res = data as (PortalPlanning & { valid: boolean; found?: boolean });
+        if (!res?.valid || res.found === false) return null;
+        return res;
+    },
+
     async getTokenForClient(clientId: string): Promise<ClientPortalToken | null> {
         const { data, error } = await supabase
             .from('client_portal_tokens')

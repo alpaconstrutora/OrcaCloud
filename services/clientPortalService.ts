@@ -42,6 +42,13 @@ export const clientPortalService = {
         return data as { valid: boolean; client?: any; project?: any; portal_tabs?: string[] | null; error?: string };
     },
 
+    async getContractsByToken(token: string): Promise<any[]> {
+        const { data, error } = await supabase.rpc('fn_portal_get_contracts', { p_token: token });
+        if (error) throw error;
+        const res = data as { valid: boolean; data: any[] | null };
+        return res.valid ? (res.data ?? []) : [];
+    },
+
     async getTokenForClient(clientId: string): Promise<ClientPortalToken | null> {
         const { data, error } = await supabase
             .from('client_portal_tokens')

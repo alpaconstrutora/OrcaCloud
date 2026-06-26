@@ -59,6 +59,7 @@ import { clientMessagesService, ClientPortalMessage } from '../services/clientMe
 import { exportService } from '../services/exportService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { contractService } from '../services/contractService';
+import { clientPortalService } from '../services/clientPortalService';
 import { projectService } from '../services/projectService';
 import { orderService } from '../services/orderService';
 import { storageService } from '../services/storageService';
@@ -137,8 +138,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     setGlobalClientInstallments(installments);
                 }).catch(console.error);
             }
-            contractService.listContractsByClientId(clientProfile.id, orgId || undefined).then(contracts => {
-                setClientContracts(contracts);
+            const loadContracts = portalToken
+                ? clientPortalService.getContractsByToken(portalToken)
+                : contractService.listContractsByClientId(clientProfile.id, orgId || undefined);
+            loadContracts.then(contracts => {
+                setClientContracts(contracts as any);
             }).catch(console.error);
         }
         if (activeTab === 'manutencao' || (activeTab === 'dashboard' && clientCategory === 'Locação')) {
@@ -150,8 +154,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         }
         // Dashboard de Locação/Serviços precisa dos contratos
         if (activeTab === 'dashboard' && (clientCategory === 'Locação' || clientCategory === 'Serviços') && clientProfile) {
-            contractService.listContractsByClientId(clientProfile.id, orgId || undefined)
-                .then(setClientContracts).catch(console.error);
+            (portalToken
+                ? clientPortalService.getContractsByToken(portalToken)
+                : contractService.listContractsByClientId(clientProfile.id, orgId || undefined))
+                .then(c => setClientContracts(c as any)).catch(console.error);
             if (orgId) {
                 commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId)
                     .then(setGlobalClientInstallments).catch(console.error);

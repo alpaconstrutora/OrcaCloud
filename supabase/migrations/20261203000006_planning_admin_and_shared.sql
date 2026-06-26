@@ -100,11 +100,12 @@ BEGIN
     SELECT organization_id INTO v_org FROM public.clients WHERE id = p_client_id;
     IF v_org IS NULL THEN RETURN json_build_object('valid', FALSE); END IF;
 
-    -- caller precisa ser membro da org do cliente
+    -- caller precisa ser membro da org do cliente (dual-check: email OU user_id,
+    -- pois em organization_members o user_id pode ser nulo)
     IF NOT EXISTS (
         SELECT 1 FROM public.organization_members om
         WHERE om.organization_id = v_org
-          AND om.email = auth.jwt()->>'email'
+          AND (om.email = auth.jwt()->>'email' OR om.user_id = auth.uid())
     ) THEN
         RETURN json_build_object('valid', FALSE);
     END IF;

@@ -8,6 +8,7 @@ import {
     Cloud,
     CloudRain,
     TrendingUp,
+    HardHat,
     DollarSign,
     MapPin,
     Clock,
@@ -45,7 +46,8 @@ import {
     ClipboardList,
     MoreHorizontal
 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, Line, ComposedChart } from 'recharts';
+import { buildPlanningView, type PlanningView } from '../utils/portalPlanningUtils';
 import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
 import { calculateProjectProgress, calculateUpcomingPhases, getPhaseSchedule, calculateRealizedFinancialProgress, calculatePlannedFinancialProgress } from '../utils/projectUtils';
 import ProjectGallery from './ProjectGallery';
@@ -74,7 +76,7 @@ interface ClientAreaProps {
     clientProfile?: Client | null;
     clients?: Client[]; // For admin selection
     organizationId?: string | null; // Fallback quando settings não traz organizationId (ex.: portal sem projeto aberto)
-    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao';
+    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'obra' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao';
     portalToken?: string;
     onUpdateSettings?: (settings: ProjectSettings) => void;
     onClientSelect?: (client: Client) => void;
@@ -86,7 +88,7 @@ const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'
 
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false }) => {
     const confirm = useConfirm();
-    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao'>(initialTab || 'dashboard');
+    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'obra' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao'>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
@@ -115,6 +117,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [globalClientInstallments, setGlobalClientInstallments] = React.useState<PaymentInstallment[]>([]);
     const [clientContracts, setClientContracts] = React.useState<Contract[]>([]);
     const [viewingContract, setViewingContract] = React.useState<Contract | null>(null);
+    const [planningView, setPlanningView] = React.useState<PlanningView | null>(null);
+    const [planningLoaded, setPlanningLoaded] = React.useState(false);
     const [clientRequests, setClientRequests] = React.useState<ClientRequest[]>([]);
     const [requestsLoading, setRequestsLoading] = React.useState(false);
     const [showNewRequestForm, setShowNewRequestForm] = React.useState(false);
@@ -168,6 +172,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             clientMessagesService.getMessagesByToken(portalToken)
                 .then(({ messages, unread }) => { setPortalMessages(messages); setUnreadCount(unread); })
                 .catch(console.error);
+        }
+        // Planejamento/Obra: carrega via RPC anon quando a aba é aberta (1x)
+        if (activeTab === 'obra' && !planningLoaded) {
+            setPlanningLoaded(true);
+            if (portalToken) {
+                clientPortalService.getPlanningByToken(portalToken)
+                    .then(p => setPlanningView(p ? buildPlanningView(p) : null))
+                    .catch(console.error);
+            }
+            // Sem token (prévia do admin) → mostra estado vazio em vez de spinner
         }
     }, [clientProfile, activeTab, settings, organizationId]);
 
@@ -2075,6 +2089,140 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         );
     };
 
+    const renderObra = () => {
+        const pv = planningView;
+        const fmt = (d: Date | null) => d ? d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+        const statusMap: Record<string, { label: string; cls: string; dot: string }> = {
+            concluida: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
+            andamento: { label: 'Em andamento', cls: 'bg-indigo-100 text-indigo-700', dot: 'bg-indigo-500' },
+            futura: { label: 'A iniciar', cls: 'bg-gray-100 text-gray-500', dot: 'bg-gray-300' },
+        };
+
+        if (planningLoaded && !pv) {
+            return (
+                <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
+                    <HardHat className="w-16 h-16 text-gray-200 mb-6" />
+                    <p className="text-lg font-black text-gray-400 uppercase tracking-widest text-center">Cronograma ainda não disponível</p>
+                    <p className="text-sm font-bold text-gray-300 uppercase tracking-wider mt-2 text-center">O acompanhamento da obra aparecerá aqui assim que o planejamento for publicado.</p>
+                </div>
+            );
+        }
+        if (!pv) {
+            return (
+                <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-center py-20">
+                    <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+            );
+        }
+
+        const atraso = pv.daysRemaining !== null && pv.daysRemaining < 0;
+        const onTrack = pv.onSchedule !== false;
+
+        return (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* Cabeçalho + progresso geral */}
+                <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-indigo-600 rounded-3xl p-8 text-white">
+                    <div className="flex items-start justify-between flex-wrap gap-4">
+                        <div>
+                            <h3 className="text-2xl font-black tracking-tight uppercase">Acompanhe sua Obra</h3>
+                            <p className="text-blue-200 text-sm font-medium mt-1">Avanço físico e cronograma em tempo real.</p>
+                        </div>
+                        <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${onTrack ? 'bg-emerald-400/20 text-emerald-200' : 'bg-amber-400/20 text-amber-100'}`}>
+                            <div className={`w-2 h-2 rounded-full ${onTrack ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
+                            {onTrack ? 'No prazo' : 'Atenção ao ritmo'}
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+                        <div className="bg-white/10 rounded-2xl p-4">
+                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Avanço Geral</p>
+                            <p className="text-2xl font-black">{pv.progress}%</p>
+                        </div>
+                        <div className="bg-white/10 rounded-2xl p-4">
+                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Previsto p/ hoje</p>
+                            <p className="text-2xl font-black">{pv.plannedToday}%</p>
+                        </div>
+                        <div className="bg-white/10 rounded-2xl p-4">
+                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Início</p>
+                            <p className="text-sm font-black mt-1.5">{fmt(pv.start)}</p>
+                        </div>
+                        <div className="bg-white/10 rounded-2xl p-4">
+                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">{atraso ? 'Atraso' : 'Entrega prevista'}</p>
+                            <p className="text-sm font-black mt-1.5">{atraso ? `${Math.abs(pv.daysRemaining!)} dias` : fmt(pv.end)}</p>
+                        </div>
+                    </div>
+                    {/* Barra de progresso geral */}
+                    <div className="mt-6">
+                        <div className="h-3 bg-white/15 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-400 rounded-full transition-all duration-700" style={{ width: `${pv.progress}%` }} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Curva S */}
+                {pv.sCurve.length > 0 && (
+                    <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
+                            <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Curva de Avanço</h3>
+                        </div>
+                        <ResponsiveContainer width="100%" height={260}>
+                            <ComposedChart data={pv.sCurve} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                                <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} unit="%" />
+                                <RechartsTooltip formatter={(v, n) => [`${v ?? 0}%`, n as string]} />
+                                <Area type="monotone" dataKey="planned" name="Planejado" stroke="#6366f1" strokeWidth={2} fill="#eef2ff" />
+                                <Line type="monotone" dataKey="realized" name="Realizado" stroke="#10b981" strokeWidth={3} dot={{ r: 5, fill: '#10b981' }} connectNulls={false} />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                        <div className="flex items-center justify-center gap-6 mt-2">
+                            <span className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-sm bg-indigo-200 border border-indigo-400" /> Planejado</span>
+                            <span className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-full bg-emerald-500" /> Realizado (hoje)</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Timeline de fases */}
+                <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
+                        <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Etapas da Obra</h3>
+                    </div>
+                    {pv.phases.length === 0 ? (
+                        <p className="text-sm text-gray-400 font-medium text-center py-8">As etapas aparecerão aqui quando o cronograma for detalhado.</p>
+                    ) : (
+                        <div className="space-y-3">
+                            {pv.phases.map(ph => {
+                                const st = statusMap[ph.status];
+                                return (
+                                    <div key={ph.id} className="p-4 rounded-2xl border border-gray-100 hover:border-indigo-200 transition-all">
+                                        <div className="flex items-center justify-between gap-3 mb-2">
+                                            <div className="min-w-0">
+                                                <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em]">{ph.groupName}</span>
+                                                <p className="text-sm font-black text-gray-900 truncate">{ph.name}</p>
+                                            </div>
+                                            <span className={`shrink-0 px-2.5 py-1 rounded-full text-[9px] font-black uppercase ${st.cls}`}>{st.label}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                <div className={`h-full rounded-full ${st.dot}`} style={{ width: `${ph.progress}%` }} />
+                                            </div>
+                                            <span className="text-[10px] font-black text-gray-400 tabular-nums w-9 text-right">{ph.progress}%</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 mt-2">
+                                            <Calendar className="w-3 h-3" />
+                                            {fmt(ph.start)} <span className="text-gray-300">→</span> {fmt(ph.end)}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     const renderJornada = () => {
         const schedule = getPhaseSchedule(settings, budget);
 
@@ -3292,6 +3440,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const ALL_TABS = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
         { id: 'jornada', label: 'Minha Jornada', icon: <Calendar className="w-4 h-4" /> },
+        { id: 'obra', label: 'Obra', icon: <HardHat className="w-4 h-4" /> },
         { id: 'visual', label: 'Visual', icon: <Camera className="w-4 h-4" /> },
         { id: 'personalizacao', label: 'Personalização', icon: <Palette className="w-4 h-4" /> },
         { id: 'diario', label: 'Diário de Obra', icon: <BookOpen className="w-4 h-4" /> },
@@ -3303,7 +3452,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     ];
 
     const CATEGORY_TAB_PRESETS: Record<string, string[]> = {
-        'Vendas':   ['dashboard', 'jornada', 'visual', 'personalizacao', 'diario', 'documentos', 'contratos', 'financeiro', 'suporte'],
+        'Vendas':   ['dashboard', 'jornada', 'obra', 'visual', 'personalizacao', 'diario', 'documentos', 'contratos', 'financeiro', 'suporte'],
         'Locação':  ['dashboard', 'financeiro', 'contratos', 'documentos', 'manutencao'],
         'Serviços': ['dashboard', 'financeiro', 'contratos', 'documentos'],
     };
@@ -3888,6 +4037,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </>
                 )}
                 {activeTab === 'jornada' && renderJornada()}
+                {activeTab === 'obra' && renderObra()}
                 {activeTab === 'personalizacao' && <FinishSelection />}
                 {activeTab === 'visual' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">

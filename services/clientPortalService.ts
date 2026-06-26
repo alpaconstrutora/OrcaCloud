@@ -20,6 +20,32 @@ export interface ClientPortalValidation {
     error?: string;
 }
 
+export interface PortalPlanningItem {
+    id: string;
+    startDate?: string;
+    endDate?: string;
+    duration?: number;
+    manualRealPct?: number;
+}
+
+export interface PortalPlanningOutlineNode {
+    id: string;
+    type: 'group' | 'phase' | 'subphase' | 'item' | 'activity';
+    name: string;
+    budgetItemId?: string;
+    children?: PortalPlanningOutlineNode[];
+}
+
+export interface PortalPlanning {
+    name?: string;
+    progress?: number;
+    phase?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    outline?: PortalPlanningOutlineNode[] | null;
+    itemSchedules?: PortalPlanningItem[];
+}
+
 export const clientPortalService = {
     async generateToken(clientId: string, orgId: string): Promise<string> {
         const { data, error } = await supabase.rpc('client_portal_generate_token', {
@@ -47,6 +73,14 @@ export const clientPortalService = {
         if (error) throw error;
         const res = data as { valid: boolean; data: any[] | null };
         return res.valid ? (res.data ?? []) : [];
+    },
+
+    async getPlanningByToken(token: string): Promise<PortalPlanning | null> {
+        const { data, error } = await supabase.rpc('fn_portal_get_planning', { p_token: token });
+        if (error) throw error;
+        const res = data as (PortalPlanning & { valid: boolean; found?: boolean });
+        if (!res?.valid || res.found === false) return null;
+        return res;
     },
 
     async getTokenForClient(clientId: string): Promise<ClientPortalToken | null> {

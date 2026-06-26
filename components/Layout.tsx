@@ -830,7 +830,7 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={TrendingUp}
                     isOpen={isVendasOpen}
                     onToggle={() => setIsVendasOpen(!isVendasOpen)}
-                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-area','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib'].includes(activeView)}
+                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib'].includes(activeView)}
                   >
                     {(mod.crm || isDev) && (
                       <>
@@ -839,9 +839,6 @@ const Layout: React.FC<LayoutProps> = ({
                         <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />
                         <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />
                       </>
-                    )}
-                    {(mod.broker_portal || isDev) && (
-                      <DropdownItem id="broker-area" label="Portal do Corretor" icon={Briefcase} />
                     )}
                     {(mod.incorporacao || isDev) && (
                       <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
@@ -861,6 +858,9 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownItem id="investor-area" label="Área do Investidor" icon={TrendingUp} />
                   <DropdownItem id="supplier-area" label="Portal do Fornecedor" icon={Truck} />
                   <DropdownItem id="partner-workspaces-admin" label="Portal de Parceiros" icon={Users} />
+                  {(mod.broker_portal || isDev) && (
+                    <DropdownItem id="broker-area" label="Portal do Corretor" icon={Briefcase} />
+                  )}
                 </NavDropdown>
               ) : (
                 <>

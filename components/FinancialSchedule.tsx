@@ -20,6 +20,7 @@ import {
     ResourceTeam,
     LevelingResult,
     HierarchyNode,
+    OutlineNode,
     FinancialTransaction,
     Organization,
     DiaryEntry,
@@ -34,6 +35,8 @@ import { PredecessorModal } from './schedule/PredecessorModal';
 import { ResourceAllocationModal } from './schedule/ResourceAllocationModal';
 import { ScheduleGantt } from './schedule/ScheduleGantt';
 import { SchedulingEngine, DEFAULT_CREW_CLASSIFICATION } from '../utils/schedulingEngine';
+import * as outlineOps from '../utils/scheduleOutline';
+import { useConfirm } from './ui/confirm';
 import { ResourceManagement } from './ResourceManagement';
 import { ScheduleRiskDashboard } from './schedule/ScheduleRiskDashboard';
 import { ConstraintsPanel } from './schedule/ConstraintsPanel';
@@ -46,6 +49,9 @@ import { orderService } from '../services/orderService';
 import { projectService } from '../services/projectService';
 import ScheduleHeader from './schedule/ScheduleHeader';
 import { CrewClassificationModal } from './schedule/CrewClassificationModal';
+import { OutlineNodeModal } from './schedule/OutlineNodeModal';
+import type { OutlineActions } from './schedule/OutlineRowMenu';
+import BudgetPickerModal from './BudgetPickerModal';
 import { crewClassificationService } from '../services/crewClassificationService';
 import SimulationBanner from './schedule/SimulationBanner';
 import ScheduleGridView from './schedule/ScheduleGridView';
@@ -277,7 +283,231 @@ function extractWbsPrefix(name: string): string {
     return match ? match[1].replace(/\.$/, '') : name || '';
 }
 
-function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetails[] = [], realizedValues: Record<string, number>, globalBdi: number = 0): HierarchyNode[] {
+// Nome padrão por tipo de nó do outline (usado ao criar sem nome).
+function defaultNodeName(type: OutlineNode['type']): string {
+    switch (type) {
+        case 'group': return 'Novo Grupo';
+        case 'phase': return 'Nova Etapa';
+        case 'subphase': return 'Nova Subetapa';
+        case 'activity': return 'Nova Atividade';
+        default: return 'Novo Item';
+    }
+}
+
+// ── Shared hierarchy palette + post-processing (colors, parent date rollup, UIDs) ──
+const GANTT_PALETTE = ['#3b82f6', '#22c55e', '#a855f7', '#f97316', '#6366f1', '#14b8a6', '#ec4899'];
+
+function finalizeHierarchy(result: HierarchyNode[]): HierarchyNode[] {
+    const assignColors = (nodes: HierarchyNode[], color?: string) => {
+        nodes.forEach((node, idx) => {
+            const nodeColor = color || GANTT_PALETTE[idx % GANTT_PALETTE.length];
+            node.color = nodeColor;
+            if (node.children) assignColors(node.children, nodeColor);
+        });
+    };
+    assignColors(result);
+
+    // Aggregated date calculation for parents
+    const aggregateDates = (nodes: HierarchyNode[]) => {
+        nodes.forEach(node => {
+            if (node.type !== 'item') {
+                aggregateDates(node.children);
+
+                const childDates = node.children.map(c => {
+                    let start = Infinity;
+                    let finish = -Infinity;
+
+                    if (c.type === 'item' && c.schedule) {
+                        // Itens-folha: priorizar as datas reais planejadas (refletem edição/arraste),
+                        // com fallback para as datas calculadas pelo CPM.
+                        if (c.schedule.startDate) start = new Date(c.schedule.startDate).getTime();
+                        else if (c.earlyStart) start = new Date(c.earlyStart).getTime();
+
+                        if (c.schedule.endDate) {
+                            finish = new Date(c.schedule.endDate).getTime();
+                        } else if (c.schedule.startDate && c.schedule.duration !== undefined) {
+                            const d = new Date(c.schedule.startDate);
+                            d.setDate(d.getDate() + Math.max(0, c.schedule.duration - 1));
+                            finish = d.getTime();
+                        } else if (c.earlyFinish) {
+                            finish = new Date(c.earlyFinish).getTime();
+                        }
+                    } else {
+                        // Grupo/etapa/subetapa filho: usar suas datas já agregadas (recursão acima).
+                        if (c.earlyStart) start = new Date(c.earlyStart).getTime();
+                        if (c.earlyFinish) finish = new Date(c.earlyFinish).getTime();
+                    }
+                    return { start, finish };
+                });
+
+                const minStart = Math.min(...childDates.map(d => d.start));
+                const maxFinish = Math.max(...childDates.map(d => d.finish));
+
+                if (minStart !== Infinity) node.earlyStart = new Date(minStart).toISOString().split('T')[0];
+                if (maxFinish !== -Infinity) node.earlyFinish = new Date(maxFinish).toISOString().split('T')[0];
+
+                node.isCritical = node.children.some(c => c.isCritical);
+            }
+        });
+    };
+    aggregateDates(result);
+
+    // Assign sequential UIDs using depth-first traversal
+    let counter = 1;
+    const assignUid = (nodes: HierarchyNode[]) => {
+        nodes.forEach(node => {
+            node.uid = (counter++).toString();
+            if (node.children && node.children.length > 0) {
+                assignUid(node.children);
+            }
+        });
+    };
+    assignUid(result);
+
+    return result;
+}
+
+/** Build a leaf HierarchyNode for a budget-backed item. */
+function makeItemHierNode(
+    item: BudgetEntry,
+    itemSchedule: ItemScheduleDetails | undefined,
+    level: number,
+    wbsCode: string,
+    realizedValues: Record<string, number>,
+    globalBdi: number,
+): HierarchyNode {
+    const itemBdi = item.bdi !== undefined ? item.bdi : globalBdi;
+    const itemTotal = item.quantity * item.sinapiItem.price * (1 + itemBdi / 100);
+    const itemRealized = realizedValues[item.id] || 0;
+    const pValue = itemSchedule?.plannedValue ?? itemSchedule?.totalLaborCost ?? itemTotal;
+    const bValue = itemSchedule?.budgetedValue ?? itemTotal;
+    return {
+        id: item.id,
+        uid: '',
+        type: 'item',
+        name: item.sinapiItem.description,
+        children: [],
+        data: item,
+        schedule: itemSchedule,
+        total: itemTotal,
+        realizedTotal: itemRealized,
+        budgetedTotal: bValue,
+        plannedTotal: pValue,
+        variation: itemSchedule?.costVariation || 0,
+        isCritical: itemSchedule?.isCritical,
+        isMilestone: itemSchedule?.isMilestone,
+        earlyStart: itemSchedule?.earlyStart,
+        earlyFinish: itemSchedule?.earlyFinish,
+        lateStart: itemSchedule?.lateStart,
+        lateFinish: itemSchedule?.lateFinish,
+        totalFloat: itemSchedule?.totalFloat,
+        level,
+        wbsCode,
+    };
+}
+
+/** Build a leaf HierarchyNode for a schedule-only activity (no budget/cost). */
+function makeActivityHierNode(
+    nodeId: string,
+    name: string,
+    itemSchedule: ItemScheduleDetails | undefined,
+    level: number,
+    wbsCode: string,
+): HierarchyNode {
+    return {
+        id: nodeId,
+        uid: '',
+        type: 'item',
+        name,
+        children: [],
+        data: undefined,
+        schedule: itemSchedule,
+        total: 0,
+        realizedTotal: 0,
+        budgetedTotal: 0,
+        plannedTotal: 0,
+        variation: 0,
+        isCritical: itemSchedule?.isCritical,
+        isMilestone: itemSchedule?.isMilestone,
+        earlyStart: itemSchedule?.earlyStart,
+        earlyFinish: itemSchedule?.earlyFinish,
+        lateStart: itemSchedule?.lateStart,
+        lateFinish: itemSchedule?.lateFinish,
+        totalFloat: itemSchedule?.totalFloat,
+        level,
+        wbsCode,
+    };
+}
+
+/**
+ * Render the hierarchy from an explicit outline (source of truth for structure/order).
+ * Resolves cost-backed items via budgetById and attaches ItemScheduleDetails by id.
+ */
+function buildHierarchyFromOutline(
+    outline: OutlineNode[],
+    budget: BudgetEntry[],
+    itemSchedules: ItemScheduleDetails[],
+    realizedValues: Record<string, number>,
+    globalBdi: number,
+): HierarchyNode[] {
+    const budgetById = new Map(budget.map(b => [b.id, b]));
+    const schedById = new Map(itemSchedules.map(s => [s.id, s]));
+
+    const convert = (node: OutlineNode, level: number, parentWbs: string, index: number): HierarchyNode | null => {
+        const wbsCode = parentWbs ? `${parentWbs}.${(index + 1).toString().padStart(2, '0')}` : (index + 1).toString().padStart(2, '0');
+
+        if (node.type === 'item') {
+            const budgetItem = node.budgetItemId ? budgetById.get(node.budgetItemId) : undefined;
+            if (!budgetItem) {
+                // Orphan item (budget entry removed/rebased): degrade to a schedule-only activity.
+                return makeActivityHierNode(node.id, node.name || 'Item removido', schedById.get(node.id), level, wbsCode);
+            }
+            return makeItemHierNode(budgetItem, schedById.get(node.id), level, wbsCode, realizedValues, globalBdi);
+        }
+
+        if (node.type === 'activity') {
+            return makeActivityHierNode(node.id, node.name, schedById.get(node.id), level, wbsCode);
+        }
+
+        // Structural node (group/phase/subphase)
+        const children: HierarchyNode[] = [];
+        (node.children || []).forEach((child, i) => {
+            const hc = convert(child, level + 1, wbsCode, i);
+            if (hc) children.push(hc);
+        });
+        const sum = (sel: (h: HierarchyNode) => number) => children.reduce((acc, c) => acc + sel(c), 0);
+        return {
+            id: node.id,
+            uid: '',
+            type: node.type,
+            name: node.name,
+            children,
+            total: sum(c => c.total),
+            realizedTotal: sum(c => c.realizedTotal),
+            budgetedTotal: sum(c => c.budgetedTotal),
+            plannedTotal: sum(c => c.plannedTotal),
+            variation: sum(c => c.variation || 0),
+            level,
+            wbsCode,
+        };
+    };
+
+    const result: HierarchyNode[] = [];
+    outline.forEach((node, i) => {
+        const hc = convert(node, 0, '', i);
+        if (hc) result.push(hc);
+    });
+    return finalizeHierarchy(result);
+}
+
+function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetails[] = [], realizedValues: Record<string, number>, globalBdi: number = 0, outline?: OutlineNode[]): HierarchyNode[] {
+    if (outline && outline.length > 0) {
+        return buildHierarchyFromOutline(outline, budget, itemSchedules, realizedValues, globalBdi);
+    }
+    return buildHierarchyFromBudget(budget, itemSchedules, realizedValues, globalBdi);
+}
+
+function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemScheduleDetails[] = [], realizedValues: Record<string, number>, globalBdi: number = 0): HierarchyNode[] {
     const groups: Record<string, HierarchyNode> = {};
     // Track item index per subphase for WBS code generation
     const subphaseItemCounters = new Map<string, number>();
@@ -599,6 +829,10 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const [isBaselineModalOpen, setIsBaselineModalOpen] = useState(false);
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
     const [isCrewClassifModalOpen, setIsCrewClassifModalOpen] = useState(false);
+    const confirm = useConfirm();
+    // Outline (estrutura) — modal de criar/renomear e contexto do seletor de item de orçamento
+    const [outlineEditor, setOutlineEditor] = useState<{ mode: 'create' | 'rename'; parentId: string | null; nodeId?: string; nodeType: outlineOps.OutlineNodeType; name: string } | null>(null);
+    const [budgetPickerParent, setBudgetPickerParent] = useState<string | null | undefined>(undefined);
     const [crewPopoverItem, setCrewPopoverItem] = useState<string | null>(null);
     const [crewPopoverPos, setCrewPopoverPos] = useState<{ top: number; left: number } | null>(null);
     const [resourceAllocationTask, setResourceAllocationTask] = useState<string | null>(null);
@@ -1332,7 +1566,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     }, [orders, budget, allDiaryEntries, settings.bdi]);
 
     // Calculate Hierarchy
-    const hierarchy = React.useMemo(() => buildHierarchy(budget, schedule.itemSchedules || [], realizedState.realizedValues, settings.bdi), [budget, schedule.itemSchedules, realizedState.realizedValues, settings.bdi]);
+    const hierarchy = React.useMemo(() => buildHierarchy(budget, schedule.itemSchedules || [], realizedState.realizedValues, settings.bdi, schedule.outline), [budget, schedule.itemSchedules, realizedState.realizedValues, settings.bdi, schedule.outline]);
 
     // Wrapper that expands group/phase predecessors before calling the engine and
     // then restores original predecessor lists so the expanded form is never persisted.
@@ -1518,8 +1752,12 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const syncDiff = React.useMemo(() => {
         const itemSchedules = schedule.itemSchedules || [];
         const scheduleIds = new Set(itemSchedules.map(s => s.id));
+        const hasOutline = !!(schedule.outline && schedule.outline.length > 0);
 
-        const newItems = budget.filter(b => !scheduleIds.has(b.id));
+        // Com outline (fonte de verdade da estrutura): "novo" = item do orçamento ainda não
+        // referenciado no outline (não renderiza até ser reconciliado). Sem outline: legado.
+        const outlineIds = hasOutline ? outlineOps.outlineBudgetItemIds(schedule.outline!) : null;
+        const newItems = budget.filter(b => outlineIds ? !outlineIds.has(b.id) : !scheduleIds.has(b.id));
 
         const changedItems = budget.filter(b => {
             if (!scheduleIds.has(b.id)) return false;
@@ -1530,7 +1768,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         });
 
         return { newItems, changedItems, total: newItems.length + changedItems.length };
-    }, [budget, schedule.itemSchedules]);
+    }, [budget, schedule.itemSchedules, schedule.outline]);
 
     // ── Versionamento orçamento × planejamento (Opção 2) ──
     // Detecta se o orçamento vinculado tem uma versão mais nova que a fixada neste planejamento.
@@ -1611,7 +1849,13 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     React.useEffect(() => {
         if (pendingRebaseRecalcRef.current) {
             pendingRebaseRecalcRef.current = false;
-            handleRecalculate();
+            // Rebase é um reset estrutural à versão do orçamento: re-semeia o outline do novo
+            // orçamento (evita órfãos/ids antigos). Sem outline, mantém o recálculo legado.
+            if (schedule.outline && schedule.outline.length > 0) {
+                setSchedule(prev => persistOutline(prev, outlineOps.seedOutlineFromBudget(budget)));
+            } else {
+                handleRecalculate();
+            }
             // Após o save com o pin, limpa o ref para não contaminar saves futuros
             setTimeout(() => { pendingPinRef.current = {}; }, 3000);
         }
@@ -2323,6 +2567,201 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 return { ...prev, itemSchedules: updatedSchedules };
             }
         });
+    };
+
+    // ──────────────────────────────────────────────────────────────
+    // Outline CRUD — criar/excluir/renomear/duplicar/reordenar/mover
+    // ──────────────────────────────────────────────────────────────
+
+    // Recalcula CPM/datas e persiste, dado um novo outline e (opcionalmente) novos itemSchedules.
+    const persistOutline = (prev: ProjectSchedule, nextOutline: OutlineNode[], nextSchedules?: ItemScheduleDetails[]): ProjectSchedule => {
+        const baseSchedules = nextSchedules ?? prev.itemSchedules ?? [];
+        let calculated = baseSchedules;
+        try {
+            const activeBaseline = prev.baselines?.find(b => b.id === prev.activeBaselineId);
+            const itemQuantities = new Map<string, number>();
+            budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
+            calculated = calcWithGroups(
+                ensureFullScheduleList(baseSchedules, budget),
+                prev.startDate,
+                activeBaseline,
+                prev.useWorkingDays ?? true,
+                prev.replanMode ?? ReplanMode.AFFECTED_TASK,
+                prev.resources?.roles || [],
+                itemQuantities,
+                prev.resources?.workers || [],
+                prev.resources?.teams || []
+            );
+        } catch (err) {
+            console.error('[OUTLINE] recalc error:', err);
+        }
+        const newSchedule = { ...prev, outline: nextOutline, itemSchedules: calculated };
+        onUpdateSettings({ ...settings, schedule: newSchedule });
+        return newSchedule;
+    };
+
+    // Garante um outline editável (materializa do orçamento na primeira edição estrutural).
+    const ensureOutline = (prev: ProjectSchedule): OutlineNode[] =>
+        (prev.outline && prev.outline.length > 0) ? prev.outline : outlineOps.seedOutlineFromBudget(budget);
+
+    // Cria grupo/etapa/subetapa/atividade (item com custo vai por handleCreateBudgetItem).
+    const handleOutlineCreate = (parentId: string | null, type: outlineOps.OutlineNodeType, name: string) => {
+        setSchedule(prev => {
+            const outline = ensureOutline(prev);
+            const node: OutlineNode = { id: outlineOps.genId(), type, name: name.trim() || defaultNodeName(type), children: [] };
+            const nextOutline = outlineOps.insertNode(outline, parentId, node);
+            let nextSchedules = prev.itemSchedules ?? [];
+            if (type === 'activity') {
+                nextSchedules = [...nextSchedules, { id: node.id, autoDuration: false, duration: 1, hoursPerDay: 8, efficiencyFactor: 1.0 }];
+            }
+            return persistOutline(prev, nextOutline, nextSchedules);
+        });
+    };
+
+    const handleOutlineRename = (id: string, name: string) => {
+        setSchedule(prev => {
+            const outline = ensureOutline(prev);
+            const nextOutline = outlineOps.renameNode(outline, id, name.trim());
+            // Se for item com custo, sincroniza a descrição do orçamento.
+            const node = outlineOps.findNode(nextOutline, id);
+            if (node?.type === 'item' && node.budgetItemId && onUpdateBudget) {
+                onUpdateBudget(budget.map(b => b.id === node.budgetItemId
+                    ? { ...b, sinapiItem: { ...b.sinapiItem, description: name.trim() } } : b));
+            }
+            return persistOutline(prev, nextOutline);
+        });
+    };
+
+    const handleOutlineReorder = (id: string, dir: -1 | 1) => {
+        setSchedule(prev => persistOutline(prev, outlineOps.reorderSibling(ensureOutline(prev), id, dir)));
+    };
+
+    const handleOutlineMove = (id: string, newParentId: string | null, index?: number) => {
+        setSchedule(prev => {
+            const outline = ensureOutline(prev);
+            if (!outlineOps.canMove(outline, id, newParentId)) return prev;
+            return persistOutline(prev, outlineOps.moveNode(outline, id, newParentId, index));
+        });
+    };
+
+    const handleOutlineDelete = async (id: string) => {
+        const current = ensureOutline(schedule);
+        const node = outlineOps.findNode(current, id);
+        if (!node) return;
+        const { budgetItemIds, allIds } = outlineOps.collectLeafIds(node);
+        const ok = await confirm({
+            title: `Excluir "${node.name}"?`,
+            message: budgetItemIds.length > 0
+                ? `Isto remove ${budgetItemIds.length} item(ns) de orçamento e suas atividades. Esta ação não pode ser desfeita.`
+                : 'A atividade e seus filhos serão removidos do cronograma.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+
+        setSchedule(prev => {
+            const outline = ensureOutline(prev);
+            const { roots: nextOutline } = outlineOps.removeNode(outline, id);
+            const removedSet = new Set(allIds);
+            const budgetItemSet = new Set(budgetItemIds);
+            // Remove schedules dos nós apagados e saneia predecessoras penduradas.
+            const nextSchedules = (prev.itemSchedules ?? [])
+                .filter(s => !removedSet.has(s.id) && !budgetItemSet.has(s.id))
+                .map(s => s.predecessors?.some(p => removedSet.has(p.id) || budgetItemSet.has(p.id))
+                    ? { ...s, predecessors: s.predecessors.filter(p => !removedSet.has(p.id) && !budgetItemSet.has(p.id)) }
+                    : s);
+            if (budgetItemSet.size > 0 && onUpdateBudget) {
+                onUpdateBudget(budget.filter(b => !budgetItemSet.has(b.id)));
+            }
+            return persistOutline(prev, nextOutline, nextSchedules);
+        });
+    };
+
+    const handleOutlineDuplicate = (id: string) => {
+        setSchedule(prev => {
+            const outline = ensureOutline(prev);
+            const loc = outlineOps.findLocation(outline, id);
+            if (!loc) return prev;
+            const { clone, idMap } = outlineOps.duplicateSubtree(loc.node);
+            const nextOutline = outlineOps.insertNode(outline, loc.parent?.id ?? null, clone, loc.index + 1);
+
+            // Clona BudgetEntries dos itens com custo (id antigo → novo via idMap).
+            const newBudgetEntries: BudgetEntry[] = [];
+            // Clona schedules dos nós duplicados, remapeando predecessoras internas.
+            const schedById = new Map((prev.itemSchedules ?? []).map(s => [s.id, s]));
+            const newSchedules: ItemScheduleDetails[] = [];
+            Object.entries(idMap).forEach(([oldId, newId]) => {
+                const srcBudget = budget.find(b => b.id === oldId);
+                if (srcBudget) newBudgetEntries.push({ ...JSON.parse(JSON.stringify(srcBudget)), id: newId });
+                const srcSched = schedById.get(oldId);
+                if (srcSched) {
+                    const cloned: ItemScheduleDetails = JSON.parse(JSON.stringify(srcSched));
+                    cloned.id = newId;
+                    if (cloned.predecessors) {
+                        cloned.predecessors = cloned.predecessors.map(p => idMap[p.id] ? { ...p, id: idMap[p.id] } : p);
+                    }
+                    newSchedules.push(cloned);
+                }
+            });
+            if (newBudgetEntries.length > 0 && onUpdateBudget) {
+                onUpdateBudget([...budget, ...newBudgetEntries]);
+            }
+            const nextSchedules = [...(prev.itemSchedules ?? []), ...newSchedules];
+            return persistOutline(prev, nextOutline, nextSchedules);
+        });
+    };
+
+    // Cria item(ns) COM custo a partir de seleções do BudgetPickerModal (itens do orçamento existente).
+    // Clona com novos ids e rótulos group/phase/subPhase do pai, evitando colisão com a linha original.
+    const handleCreateBudgetItems = (parentId: string | null, picked: BudgetEntry[]) => {
+        if (picked.length === 0) return;
+        setSchedule(prev => {
+            const outline = ensureOutline(prev);
+            const labels = outlineOps.parentWbsLabels(outline, parentId);
+            const clones: BudgetEntry[] = picked.map(p => ({
+                ...(JSON.parse(JSON.stringify(p)) as BudgetEntry),
+                id: outlineOps.genId(),
+                group: labels.group ?? p.group,
+                phase: labels.phase ?? p.phase,
+                subPhase: labels.subPhase ?? p.subPhase,
+            }));
+            let nextOutline = outline;
+            clones.forEach(c => {
+                nextOutline = outlineOps.insertNode(nextOutline, parentId, {
+                    id: c.id, type: 'item', name: c.sinapiItem.description, budgetItemId: c.id, children: [],
+                });
+            });
+            if (onUpdateBudget) onUpdateBudget([...budget, ...clones]);
+            // ensureFullScheduleList (em persistOutline) cria os schedules dos novos itens.
+            return persistOutline(prev, nextOutline, prev.itemSchedules ?? []);
+        });
+    };
+
+    // Aplica a sincronização orçamento→cronograma. Com outline, reconcilia (insere itens novos do
+    // orçamento na estrutura) antes de recalcular; sem outline, mantém o recálculo legado.
+    const handleApplySync = () => {
+        if (schedule.outline && schedule.outline.length > 0) {
+            setSchedule(prev => {
+                const { outline } = outlineOps.reconcileOutlineWithBudget(prev.outline ?? [], budget);
+                return persistOutline(prev, outline);
+            });
+        } else {
+            handleRecalculate();
+        }
+        setSyncModalOpen(false);
+    };
+
+    // Ações do menu de linha (estrutura). Abrir modais via estado; mutações via handlers acima.
+    const outlineActions: OutlineActions = {
+        onAddChild: (parentId, type) => setOutlineEditor({ mode: 'create', parentId, nodeType: type, name: '' }),
+        onAddItem: (parentId) => setBudgetPickerParent(parentId),
+        onRename: (id, currentName) => {
+            const node = outlineOps.findNode(ensureOutline(schedule), id);
+            setOutlineEditor({ mode: 'rename', parentId: null, nodeId: id, nodeType: (node?.type ?? 'group') as outlineOps.OutlineNodeType, name: currentName });
+        },
+        onDuplicate: handleOutlineDuplicate,
+        onDelete: handleOutlineDelete,
+        onReorder: handleOutlineReorder,
     };
 
     const handleSaveBaseline = (name: string, description: string) => {
@@ -3410,7 +3849,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             </button>
                             {syncDiff.total > 0 && (
                                 <button
-                                    onClick={() => { handleRecalculate(); setSyncModalOpen(false); }}
+                                    onClick={handleApplySync}
                                     className="px-4 py-2 text-sm font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-sm"
                                 >
                                     Aplicar Sincronização
@@ -3803,6 +4242,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             <ScheduleGridView
                                 hierarchy={hierarchy}
                                 schedule={schedule}
+                                outlineActions={outlineActions}
+                                onAddRootGroup={() => setOutlineEditor({ mode: 'create', parentId: null, nodeType: 'group', name: '' })}
                                 timelineColumns={timelineColumns}
                                 timeScale={timeScale}
                                 expandedNodes={tableExpandedNodes}
@@ -3868,6 +4309,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                             <ScheduleGantt
                                                 hierarchy={hierarchy}
                                                 schedule={schedule}
+                                                outlineActions={outlineActions}
+                                                onAddRootGroup={() => setOutlineEditor({ mode: 'create', parentId: null, nodeType: 'group', name: '' })}
                                                 timelineColumns={timelineColumns}
                                                 minDate={minDate}
                                                 totalWidth={totalWidth}
@@ -4058,6 +4501,35 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 organizationId={organizationId}
                 onSaved={() => handleRecalculate(schedule.itemSchedules || [])}
             />
+
+            {outlineEditor && (
+                <OutlineNodeModal
+                    mode={outlineEditor.mode}
+                    nodeType={outlineEditor.nodeType}
+                    initialName={outlineEditor.name}
+                    onCancel={() => setOutlineEditor(null)}
+                    onSubmit={(name) => {
+                        if (outlineEditor.mode === 'create') {
+                            handleOutlineCreate(outlineEditor.parentId, outlineEditor.nodeType, name);
+                        } else if (outlineEditor.nodeId) {
+                            handleOutlineRename(outlineEditor.nodeId, name);
+                        }
+                        setOutlineEditor(null);
+                    }}
+                />
+            )}
+
+            {budgetPickerParent !== undefined && (
+                <BudgetPickerModal
+                    isOpen={true}
+                    onClose={() => setBudgetPickerParent(undefined)}
+                    budget={budget}
+                    onSelect={(picked) => {
+                        handleCreateBudgetItems(budgetPickerParent ?? null, picked);
+                        setBudgetPickerParent(undefined);
+                    }}
+                />
+            )}
         </div>
     );
 };

@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff, ArrowRightToLine } from 'lucide-react';
+import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff, ArrowRightToLine, Plus } from 'lucide-react';
 
 import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation } from '../../types';
+import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
 import { TaskDetailModal } from './TaskDetailModal';
 
 /**
@@ -60,6 +61,8 @@ interface ScheduleGanttProps {
     handleUpdateRealPct: (itemId: string, value: string) => void;
     setPredecessorModalTask: (id: string | null) => void;
     GanttResizeHandle?: React.ComponentType<{ colKey: string }>;
+    outlineActions?: OutlineActions;
+    onAddRootGroup?: () => void;
 }
 
 
@@ -102,7 +105,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     onSidebarResizeStart,
     handleUpdateRealPct,
     setPredecessorModalTask,
-    GanttResizeHandle
+    GanttResizeHandle,
+    outlineActions,
+    onAddRootGroup
 }) => {
 
     const formatDateDisplay = (dateString?: string) => {
@@ -219,7 +224,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             return (
                 <div
                     key={item.id}
-                    className="flex border-b border-gray-50 hover:bg-blue-50/30 transition-colors h-9 relative cursor-pointer"
+                    className="group flex border-b border-gray-50 hover:bg-blue-50/30 transition-colors h-9 relative cursor-pointer"
                     onClick={() => setSelectedTaskId(item.id)}
                 >
                     <div
@@ -239,6 +244,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     <div className="absolute left-1/2 bottom-full mb-1 -translate-x-1/2 hidden group-hover/insight:block w-48 p-2 bg-gray-900 border border-gray-800 text-white text-[12px] font-medium leading-tight rounded shadow-xl z-[100] text-center whitespace-normal">
                                         {taskInsights[item.id].message}
                                     </div>
+                                </div>
+                            )}
+                            {outlineActions && (
+                                <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                                    <OutlineRowMenu node={node} actions={outlineActions} />
                                 </div>
                             )}
                         </div>
@@ -679,6 +689,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     </div>
                                 </div>
                             )}
+                            {outlineActions && (
+                                <div className={`shrink-0 ${taskInsights?.[node.id]?.hasAlert ? '' : 'ml-auto'}`} onClick={(e) => e.stopPropagation()}>
+                                    <OutlineRowMenu node={node} actions={outlineActions} />
+                                </div>
+                            )}
                         </div>
                         <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-medium text-gray-500" style={getGanttColStyle('gWbs')}>{node.wbsCode || ''}</div>
                         <div data-gantt-col="gId" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gId')}>{node.uid}</div>
@@ -1051,6 +1066,22 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
 
                     <div className="relative">
                         {hierarchy.map(node => renderGanttRow(node, true))}
+
+                        {onAddRootGroup && (
+                            <div className="flex border-b border-gray-100 h-9">
+                                <div
+                                    className="shrink-0 flex items-center sticky left-0 z-[35] bg-white border-r border-gray-200"
+                                    style={{ width: `${getGanttSidebarTotal()}px` }}
+                                >
+                                    <button
+                                        onClick={onAddRootGroup}
+                                        className="flex items-center gap-1.5 px-4 py-1.5 text-[12px] font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" /> Novo Grupo
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Global Today Line */}
                         {(() => {

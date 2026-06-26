@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { HierarchyNode, ProjectSchedule, ItemScheduleDetails } from '../../types';
 import ModernDateInput from '../ModernDateInput';
+import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
+import { Plus } from 'lucide-react';
 
 interface ScheduleGridViewProps {
     hierarchy: HierarchyNode[];
@@ -53,6 +55,8 @@ interface ScheduleGridViewProps {
     onToggleColumn?: (colKey: string) => void;
     visibleSummaryLevels?: Set<string>;
     onToggleSummaryLevel?: (level: string) => void;
+    outlineActions?: OutlineActions;
+    onAddRootGroup?: () => void;
 }
 
 const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
@@ -94,6 +98,8 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
     onToggleColumn,
     visibleSummaryLevels,
     onToggleSummaryLevel,
+    outlineActions,
+    onAddRootGroup,
 }) => {
     const [isColMenuOpen, setIsColMenuOpen] = React.useState(false);
     const [showLevelsDropdown, setShowLevelsDropdown] = React.useState(false);
@@ -357,6 +363,11 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                         </div>
                                                     </div>
                                                 )}
+                                                {outlineActions && (
+                                                    <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <OutlineRowMenu node={node} actions={outlineActions} />
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <button onClick={() => handleDistributeEvenly(item.id)} className="text-[12px] text-blue-500 hover:underline cursor-pointer flex items-center gap-1">Distribuir Igual</button>
@@ -573,6 +584,11 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                     </div>
                                                 </div>
                                             )}
+                                            {outlineActions && (
+                                                <div className="ml-auto">
+                                                    <OutlineRowMenu node={node} actions={outlineActions} />
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-1 py-3 text-center text-[11px] font-medium text-gray-500">{node.wbsCode || ''}</td>
                                         <td className={`px-1 py-3 text-center font-medium ${node.isCritical ? 'text-red-500 bg-red-50' : 'text-gray-400'}`}>{node.uid}</td>
@@ -655,6 +671,18 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         };
                         return renderNode(node);
                     })}
+                    {onAddRootGroup && (
+                        <tr>
+                            <td colSpan={99} className="px-4 py-2">
+                                <button
+                                    onClick={onAddRootGroup}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                >
+                                    <Plus className="w-3.5 h-3.5" /> Novo Grupo
+                                </button>
+                            </td>
+                        </tr>
+                    )}
                 </tbody>
                 <tfoot className="bg-gray-50 font-medium text-gray-900 border-t-2 border-gray-200">
                     <tr>

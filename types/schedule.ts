@@ -25,6 +25,19 @@ export enum ReplanMode {
     FIXED_MILESTONES = 'FIXED_MILESTONES'
 }
 
+/**
+ * Explicit schedule outline (WBS) node. When `ProjectSchedule.outline` is present it
+ * becomes the source of truth for structure/order, decoupling the hierarchy from the
+ * budget-derived string grouping. See buildHierarchy in FinancialSchedule.
+ */
+export interface OutlineNode {
+    id: string;                  // node id; for type 'item' this equals the BudgetEntry.id
+    type: 'group' | 'phase' | 'subphase' | 'item' | 'activity';
+    name: string;                // display name; for 'item' falls back to the budget description
+    budgetItemId?: string;       // set on type 'item' (cost-backed) → references BudgetEntry.id
+    children?: OutlineNode[];
+}
+
 export interface HierarchyNode {
     id: string;
     uid: string;

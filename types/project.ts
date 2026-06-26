@@ -1,7 +1,7 @@
 import { WBSGroup, BudgetEntry } from "./budget";
 import { DiaryEntry } from "./diary";
 import { FinancialInfo } from "./financial";
-import { SchedulePeriod, ItemDistribution, ItemScheduleDetails, Baseline, ScheduleHistoryEntry, ReplanMode } from "./schedule";
+import { SchedulePeriod, ItemDistribution, ItemScheduleDetails, OutlineNode, Baseline, ScheduleHistoryEntry, ReplanMode } from "./schedule";
 import { ResourceRole, ResourceWorker, ResourceTeam } from "./resources";
 
 export type TipoObra =
@@ -207,6 +207,7 @@ export interface ProjectSchedule {
     periods: SchedulePeriod[];
     distributions: ItemDistribution[];
     itemSchedules?: ItemScheduleDetails[];
+    outline?: OutlineNode[]; // estrutura/ordem explícita (WBS); quando presente, é a fonte de verdade da hierarquia
     baselines?: Baseline[];
     activeBaselineId?: string;
     history?: ScheduleHistoryEntry[];

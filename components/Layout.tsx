@@ -834,7 +834,7 @@ const Layout: React.FC<LayoutProps> = ({
                   >
                     {(mod.crm || isDev) && (
                       <>
-                        <DropdownItem id="sales" label="Espelho de Vendas" icon={Building2} />
+                        <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />
                         <DropdownItem id="rentals" label="Locações" icon={Building2} />
                         <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />
                         <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />

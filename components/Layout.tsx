@@ -579,7 +579,6 @@ const Layout: React.FC<LayoutProps> = ({
               </NavDropdown>
 
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" />
-              <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
@@ -651,6 +650,7 @@ const Layout: React.FC<LayoutProps> = ({
               {(mod.compliance || isDev) && (
                 <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" />
               )}
+              <NavItem id="opura-assets" icon={Package} label="Gestão de Ativos" />
 
               {(mod.obras || isDev) && (
                 <>
@@ -1021,7 +1021,6 @@ const Layout: React.FC<LayoutProps> = ({
               </div>
 
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" forceFull />
-              <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" forceFull />
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
                 <div className="space-y-1 mb-4">
@@ -1044,6 +1043,7 @@ const Layout: React.FC<LayoutProps> = ({
               {(mod.compliance || isDev) && (
                 <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" forceFull />
               )}
+              <NavItem id="opura-assets" icon={Package} label="Gestão de Ativos" forceFull />
 
               <NavGroup label="Suprimentos" />
               <NavItem id="almoxarifado" icon={Warehouse} label="Almoxarifado" forceFull />

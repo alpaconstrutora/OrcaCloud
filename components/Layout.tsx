@@ -368,7 +368,7 @@ const Layout: React.FC<LayoutProps> = ({
   const qualidadeViews = ['quality','pos-obra'];
   const [isQualidadeOpen, setIsQualidadeOpen] = React.useState(() => qualidadeViews.includes(activeView));
   React.useEffect(() => { if (qualidadeViews.includes(activeView)) setIsQualidadeOpen(true); }, [activeView]);
-  const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado','partner-workspaces-admin'];
+  const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
   const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','controladoria','fiscal-nfe','automation'];
@@ -780,7 +780,6 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="supplies-quotations" label="Cotações" icon={FileText} />
                     <DropdownItem id="supplies-orders" label="Pedidos" icon={Package} />
                     <DropdownItem id="supplies-receipts" label="Recebimento" icon={Truck} />
-                    <DropdownItem id="partner-workspaces-admin" label="Partner Workspaces" icon={Users} />
                   </NavDropdown>
                 </>
               )}
@@ -861,6 +860,7 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownItem id="client-properties" label="Portal do Cliente" icon={Building2} />
                   <DropdownItem id="investor-area" label="Área do Investidor" icon={TrendingUp} />
                   <DropdownItem id="supplier-area" label="Portal do Fornecedor" icon={Truck} />
+                  <DropdownItem id="partner-workspaces-admin" label="Portal de Parceiros" icon={Users} />
                 </NavDropdown>
               ) : (
                 <>
@@ -1028,6 +1028,7 @@ const Layout: React.FC<LayoutProps> = ({
                   <NavItem id="investor-area" icon={TrendingUp} label="Área do Investidor" forceFull />
                   <NavItem id="supplier-area" icon={Truck} label="Portal do Fornecedor" forceFull />
                   <NavItem id="broker-area" icon={Briefcase} label="Portal do Corretor" forceFull />
+                  <NavItem id="partner-workspaces-admin" icon={Users} label="Portal de Parceiros" forceFull />
                 </div>
               ) : (
                 <NavItem id="client-area" icon={User} label="Área do Cliente" forceFull />

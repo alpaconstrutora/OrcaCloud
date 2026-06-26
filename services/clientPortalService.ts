@@ -36,6 +36,12 @@ export interface PortalPlanningOutlineNode {
     children?: PortalPlanningOutlineNode[];
 }
 
+export interface PortalPlanningBudgetItem {
+    id: string;
+    group: string;
+    phase: string;
+}
+
 export interface PortalPlanning {
     name?: string;
     progress?: number;
@@ -44,6 +50,7 @@ export interface PortalPlanning {
     endDate?: string | null;
     outline?: PortalPlanningOutlineNode[] | null;
     itemSchedules?: PortalPlanningItem[];
+    budget?: PortalPlanningBudgetItem[];
 }
 
 export const clientPortalService = {

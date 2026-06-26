@@ -83,48 +83,74 @@ const plannedAt = (items: PortalPlanningItem[], at: Date): number => {
     return wSum > 0 ? (wFrac / wSum) * 100 : 0;
 };
 
+const cleanLabel = (s: string) => s.replace(/^[\d.]+\s+/, '');
+
+// Calcula uma fase a partir de um conjunto de ids de itens.
+const computePhase = (
+    id: string, name: string, groupName: string,
+    ids: string[], map: Map<string, PortalPlanningItem>, now: Date,
+): PlanningPhase | null => {
+    let start: Date | null = null;
+    let end: Date | null = null;
+    let pctSum = 0, pctCount = 0;
+    for (const itId of ids) {
+        const it = map.get(itId);
+        if (!it) continue;
+        const s = parseDate(it.startDate);
+        const e = parseDate(it.endDate);
+        if (s && (!start || s < start)) start = s;
+        if (e && (!end || e > end)) end = e;
+        pctSum += Math.max(0, Math.min(100, it.manualRealPct ?? 0));
+        pctCount++;
+    }
+    if (!start || !end) return null;
+    const progress = pctCount > 0 ? Math.round(pctSum / pctCount) : 0;
+    const status: PhaseStatus =
+        progress >= 100 ? 'concluida'
+        : start <= now ? 'andamento'
+        : 'futura';
+    return { id, name: cleanLabel(name), groupName: cleanLabel(groupName), start, end, progress, status };
+};
+
 const buildPhases = (planning: PortalPlanning, map: Map<string, PortalPlanningItem>): PlanningPhase[] => {
-    const outline = planning.outline || [];
     const now = new Date();
     const phases: PlanningPhase[] = [];
 
+    // Fonte primária: budget (id → group/phase). outline costuma estar ausente.
+    const budget = planning.budget || [];
+    if (budget.length > 0) {
+        // Agrupa ids por "group|phase" preservando a ordem de aparição.
+        const buckets = new Map<string, { group: string; phase: string; ids: string[] }>();
+        for (const b of budget) {
+            if (!b?.id) continue;
+            const group = b.group || 'Geral';
+            const phase = b.phase || group;
+            const key = `${group}|||${phase}`;
+            if (!buckets.has(key)) buckets.set(key, { group, phase, ids: [] });
+            buckets.get(key)!.ids.push(b.id);
+        }
+        let i = 0;
+        for (const [, bk] of buckets) {
+            const ph = computePhase(`bg-${i++}`, bk.phase, bk.group, bk.ids, map, now);
+            if (ph) phases.push(ph);
+        }
+        return phases.sort((a, b) => a.start.getTime() - b.start.getTime());
+    }
+
+    // Fallback: hierarquia explícita (outline) quando presente.
+    const outline = planning.outline || [];
     const addPhase = (node: PortalPlanningOutlineNode, groupName: string) => {
         const ids: string[] = [];
         collectItemIds(node, ids);
-        let start: Date | null = null;
-        let end: Date | null = null;
-        let pctSum = 0, pctCount = 0;
-        for (const id of ids) {
-            const it = map.get(id);
-            if (!it) continue;
-            const s = parseDate(it.startDate);
-            const e = parseDate(it.endDate);
-            if (s && (!start || s < start)) start = s;
-            if (e && (!end || e > end)) end = e;
-            pctSum += Math.max(0, Math.min(100, it.manualRealPct ?? 0));
-            pctCount++;
-        }
-        if (!start || !end) return;
-        const progress = pctCount > 0 ? Math.round(pctSum / pctCount) : 0;
-        const status: PhaseStatus =
-            progress >= 100 || end < now ? (progress >= 100 ? 'concluida' : 'andamento')
-            : start <= now ? 'andamento'
-            : 'futura';
-        phases.push({
-            id: node.id,
-            name: node.name.replace(/^[\d.]+\s+/, ''),
-            groupName,
-            start, end, progress, status,
-        });
+        const ph = computePhase(node.id, node.name, groupName, ids, map, now);
+        if (ph) phases.push(ph);
     };
-
-    // Estrutura esperada: grupos → fases. Fallback: trata grupos como fases.
     for (const top of outline) {
         const childPhases = (top.children || []).filter(c => c.type === 'phase');
         if (childPhases.length > 0) {
-            childPhases.forEach(ph => addPhase(ph, top.name.replace(/^[\d.]+\s+/, '')));
+            childPhases.forEach(ph => addPhase(ph, top.name));
         } else {
-            addPhase(top, top.name.replace(/^[\d.]+\s+/, ''));
+            addPhase(top, top.name);
         }
     }
     return phases.sort((a, b) => a.start.getTime() - b.start.getTime());

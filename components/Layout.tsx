@@ -359,6 +359,9 @@ const Layout: React.FC<LayoutProps> = ({
   const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
+  const especialidadesViews = ['pro-dashboard','offices-dashboard','reformas-dashboard','opura-cno'];
+  const [isEspecialidadesOpen, setIsEspecialidadesOpen] = React.useState(() => especialidadesViews.includes(activeView));
+  React.useEffect(() => { if (especialidadesViews.includes(activeView)) setIsEspecialidadesOpen(true); }, [activeView]);
   const operacionalViews = ['operacional','project-diary'];
   const [isOperacionalOpen, setIsOperacionalOpen] = React.useState(() => operacionalViews.includes(activeView));
   React.useEffect(() => { if (operacionalViews.includes(activeView)) setIsOperacionalOpen(true); }, [activeView]);
@@ -558,13 +561,25 @@ const Layout: React.FC<LayoutProps> = ({
         <nav ref={navRef} onScroll={handleNavScroll} className={`flex-1 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-3'} py-2`}>
           {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br')) && (
             <>
-              {(mod.pro       || isDev) && <NavItem id="pro-dashboard"      icon={Briefcase} label="ÒPURA Pro"      />}
-              {(mod.offices   || isDev) && <NavItem id="offices-dashboard"  icon={Palette}   label="ÒPURA Offices"  />}
-              {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" />}
+              <NavDropdown
+                label="Especialidades"
+                icon={Briefcase}
+                isOpen={isEspecialidadesOpen}
+                onToggle={() => {
+                  if (isCollapsed) { onChangeView('pro-dashboard'); }
+                  else { setIsEspecialidadesOpen(o => !o); }
+                }}
+                hasActiveChild={especialidadesViews.includes(activeView)}
+              >
+                {(mod.pro       || isDev) && <DropdownItem id="pro-dashboard"      label="ÒPURA Pro"      icon={Briefcase} />}
+                {(mod.offices   || isDev) && <DropdownItem id="offices-dashboard"  label="ÒPURA Offices"  icon={Palette} />}
+                {(mod.reformas  || isDev) && <DropdownItem id="reformas-dashboard" label="ÒPURA Reformas" icon={Hammer} />}
+                {(mod.compliance || isDev) && <DropdownItem id="opura-cno" label="ÒPURA CNO e Previdência" icon={Calculator} />}
+              </NavDropdown>
+
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" />
               <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" />
               {(mod.compliance || isDev) && <NavItem id="compliance-dashboard" icon={Shield} label="ÒPURA Compliance" />}
-              {(mod.compliance || isDev) && <NavItem id="opura-cno" icon={Calculator} label="ÒPURA CNO & Previdência" />}
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
@@ -995,13 +1010,18 @@ const Layout: React.FC<LayoutProps> = ({
             </div>
             <nav className="flex-1 py-6 px-4 overflow-y-auto">
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" forceFull />
-              <NavItem id="pro-dashboard" icon={Briefcase} label="ÒPURA Pro" forceFull />
-              <NavItem id="offices-dashboard" icon={Palette} label="ÒPURA Offices" forceFull />
-              <NavItem id="reformas-dashboard" icon={Hammer} label="ÒPURA Reformas" forceFull />
+
+              <div className="space-y-1 mb-4">
+                <div className="px-4 py-2 text-[10px] font-black text-gray-500 uppercase tracking-widest">Especialidades</div>
+                {(mod.pro       || isDev) && <NavItem id="pro-dashboard"      icon={Briefcase} label="ÒPURA Pro"      forceFull />}
+                {(mod.offices   || isDev) && <NavItem id="offices-dashboard"  icon={Palette}   label="ÒPURA Offices"  forceFull />}
+                {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" forceFull />}
+                {(mod.compliance || isDev) && <NavItem id="opura-cno" icon={Calculator} label="ÒPURA CNO e Previdência" forceFull />}
+              </div>
+
               <NavItem id="opura-docs" icon={FolderOpen} label="ÒPURA Docs" forceFull />
               <NavItem id="opura-assets" icon={Package} label="ÒPURA Assets" forceFull />
               {(mod.compliance || isDev) && <NavItem id="compliance-dashboard" icon={Shield} label="ÒPURA Compliance" forceFull />}
-              {(mod.compliance || isDev) && <NavItem id="opura-cno" icon={Calculator} label="ÒPURA CNO & Previdência" forceFull />}
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
                 <div className="space-y-1 mb-4">

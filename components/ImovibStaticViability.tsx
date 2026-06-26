@@ -146,7 +146,7 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
                                         Valor Geral de Vendas (VGV)
                                         {calculations.vgvFromEspelho && (
                                             <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200">
-                                                Espelho de Vendas
+                                                Vendas de Ativos
                                             </span>
                                         )}
                                     </span>

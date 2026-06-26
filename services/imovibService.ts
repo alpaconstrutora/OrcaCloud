@@ -263,7 +263,7 @@ export const imovibService = {
         if (error) throw new Error(`Failed to delete regulatory zone: ${error.message}`);
     },
 
-    // ── Unit Instances (Espelho de Vendas da Viabilidade) ─────────────────────
+    // ── Unit Instances (Vendas de Ativos da Viabilidade) ─────────────────────
 
     async getUnitInstances(studyId: string): Promise<import('../types').ImovibUnitInstance[]> {
         const { data, error } = await supabase

@@ -200,7 +200,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                         <Home className="w-6 h-6" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black text-slate-900 tracking-tight">Espelho de Vendas</h2>
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight">Vendas de Ativos</h2>
                         <p className="text-slate-500 text-sm font-medium mt-0.5">Unidades individualizadas do empreendimento</p>
                     </div>
                 </div>
@@ -269,7 +269,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                         <Home className="w-10 h-10 text-slate-400" />
                     </div>
                     <div>
-                        <p className="font-black text-slate-800 text-lg">Espelho de Vendas não gerado</p>
+                        <p className="font-black text-slate-800 text-lg">Vendas de Ativos não gerado</p>
                         <p className="text-slate-500 text-sm mt-1">
                             Clique no botão abaixo para expandir as tipologias e gerar as unidades individuais.
                         </p>
@@ -292,7 +292,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                             ) : (
                                 <>
                                     <Home className="w-4 h-4" />
-                                    Gerar Espelho de Vendas
+                                    Gerar Vendas de Ativos
                                 </>
                             )}
                         </button>

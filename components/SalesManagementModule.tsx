@@ -36,7 +36,7 @@ interface Props {
 }
 
 const TABS: Array<{ id: SalesTab; label: string; icon: React.ElementType }> = [
-  { id: 'espelho',    label: 'Espelho de Vendas',   icon: Building2 },
+  { id: 'espelho',    label: 'Vendas de Ativos',   icon: Building2 },
   { id: 'alugueis',   label: 'Aluguéis',            icon: Home      },
   { id: 'corretores', label: 'Corretores',           icon: Users     },
   { id: 'crm',        label: 'CRM Serviços',         icon: Briefcase },

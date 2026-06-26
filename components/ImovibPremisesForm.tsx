@@ -521,7 +521,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                                 checked={unit.is_vendavel !== false}
                                                                 onChange={(e) => handleUpdateUnit(unit, 'is_vendavel', e.target.checked)}
                                                                 className="w-4 h-4 rounded accent-emerald-600 cursor-pointer"
-                                                                title="Incluir no Espelho de Vendas"
+                                                                title="Incluir em Vendas de Ativos"
                                                             />
                                                         </td>
                                                         <td className="px-6 py-3">

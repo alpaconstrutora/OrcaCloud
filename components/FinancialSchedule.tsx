@@ -314,7 +314,7 @@ function finalizeHierarchy(result: HierarchyNode[]): HierarchyNode[] {
             if (node.type !== 'item') {
                 aggregateDates(node.children);
 
-                const childDates = node.children.map(c => {
+                const childDates = node.children.filter(c => !c.inactive).map(c => {
                     let start = Infinity;
                     let finish = -Infinity;
 
@@ -402,6 +402,7 @@ function makeItemHierNode(
         lateStart: itemSchedule?.lateStart,
         lateFinish: itemSchedule?.lateFinish,
         totalFloat: itemSchedule?.totalFloat,
+        inactive: itemSchedule?.inactive,
         level,
         wbsCode,
     };
@@ -435,6 +436,7 @@ function makeActivityHierNode(
         lateStart: itemSchedule?.lateStart,
         lateFinish: itemSchedule?.lateFinish,
         totalFloat: itemSchedule?.totalFloat,
+        inactive: itemSchedule?.inactive,
         level,
         wbsCode,
     };
@@ -669,7 +671,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
             if (node.type !== 'item') {
                 aggregateDates(node.children);
 
-                const childDates = node.children.map(c => {
+                const childDates = node.children.filter(c => !c.inactive).map(c => {
                     let start = Infinity;
                     let finish = -Infinity;
 
@@ -1600,7 +1602,11 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         items: ItemScheduleDetails[],
         ...args: Parameters<typeof SchedulingEngine.calculate> extends [ItemScheduleDetails[], ...infer R] ? R : never
     ): ItemScheduleDetails[] => {
-        const expanded = expandGroupPredecessors(items, hierarchyRef.current);
+        // Tarefas inativas são suspensas: ficam fora do CPM (não afetam datas/folga) e são
+        // reanexadas intactas ao resultado para persistirem.
+        const activeItems = items.filter(s => !s.inactive);
+        const inactiveItems = items.filter(s => s.inactive);
+        const expanded = expandGroupPredecessors(activeItems, hierarchyRef.current);
         // Always inject workDays from current schedule so every call site respects the work schedule
         // args[8] = workDays (the 10th param of calculate, minus the leading 'tasks' which is not in args)
         const workDays = scheduleRef.current.workSchedule?.workDays ?? [1, 2, 3, 4, 5];
@@ -1613,11 +1619,12 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             constraintType: s.constraintType,
             constraintDate: s.constraintDate,
         }]));
-        return calculated.map(s => {
+        const restored = calculated.map(s => {
             const orig = origMap.get(s.id);
             if (!orig) return s;
             return { ...s, predecessors: orig.predecessors, constraintType: orig.constraintType, constraintDate: orig.constraintDate };
         });
+        return [...restored, ...inactiveItems];
     }, []);
 
     const taskInsights = React.useMemo(() => {
@@ -2666,6 +2673,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         setSchedule(prev => persistOutline(prev, outlineOps.reorderSibling(ensureOutline(prev), id, dir)));
     };
 
+    // Suspende/reativa uma tarefa: alterna ItemScheduleDetails.inactive e recalcula (motor ignora inativas).
+    const handleToggleInactive = (id: string) => {
+        setSchedule(prev => {
+            const items = prev.itemSchedules ?? [];
+            const nextSchedules = items.some(s => s.id === id)
+                ? items.map(s => s.id === id ? { ...s, inactive: !s.inactive } : s)
+                : [...items, { id, inactive: true, autoDuration: false }];
+            return persistOutline(prev, prev.outline ?? [], nextSchedules);
+        });
+    };
+
     const handleOutlineMove = (id: string, newParentId: string | null, index?: number) => {
         setSchedule(prev => {
             const outline = ensureOutline(prev);
@@ -2793,6 +2811,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         onDuplicate: handleOutlineDuplicate,
         onDelete: handleOutlineDelete,
         onReorder: handleOutlineReorder,
+        onToggleInactive: handleToggleInactive,
     };
 
     const handleSaveBaseline = (name: string, description: string) => {
@@ -3554,6 +3573,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         budget.forEach(item => {
             itemPeriodPlanned[item.id] = {};
             const scheduleItem = schedule.itemSchedules?.find(s => s.id === item.id);
+            // Tarefa inativa (suspensa): fora da curva S planejada.
+            if (scheduleItem?.inactive) return;
             const totalValue = (item.quantity * item.sinapiItem.price);
 
             if (scheduleItem?.startDate && scheduleItem?.endDate) {

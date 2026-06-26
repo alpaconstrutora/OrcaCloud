@@ -379,7 +379,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                 const itemSchedule = schedule.itemSchedules?.find(s => s.id === item.id) || { id: item.id } as ItemScheduleDetails;
 
                                 return (
-                                    <tr key={item.id} className="hover:bg-blue-50/10 transition-colors group">
+                                    <tr key={item.id} className={`hover:bg-blue-50/10 transition-colors group ${node.inactive ? 'opacity-50 line-through decoration-gray-400' : ''}`}>
                                         <td className="px-4 py-2" style={{ paddingLeft: `${(node.level * 20) + 16}px` }}>
                                             <div className="flex items-center gap-2">
                                                 <div className="font-medium text-gray-700 truncate max-w-[300px] text-[12px]" title={item.sinapiItem.description}>

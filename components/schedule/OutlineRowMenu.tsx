@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreVertical, FolderPlus, Pencil, Copy, Trash2, ChevronUp, ChevronDown, Package, Diamond } from 'lucide-react';
+import { MoreVertical, FolderPlus, Pencil, Copy, Trash2, ChevronUp, ChevronDown, Package, Diamond, Ban, RotateCcw } from 'lucide-react';
 import { HierarchyNode } from '../../types';
 import { OutlineNodeType } from '../../utils/scheduleOutline';
 
@@ -11,6 +11,7 @@ export interface OutlineActions {
     onDuplicate: (id: string) => void;
     onDelete: (id: string) => void;
     onReorder: (id: string, dir: -1 | 1) => void;
+    onToggleInactive: (id: string) => void;
 }
 
 /** Children types that may be added under a given node type. */
@@ -89,6 +90,14 @@ export const OutlineRowMenu: React.FC<{ node: HierarchyNode; actions: OutlineAct
                         className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50">
                         <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> Descer
                     </button>
+                    {node.type === 'item' && (
+                        <button onClick={() => run(() => actions.onToggleInactive(node.id))}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50">
+                            {node.inactive
+                                ? <><RotateCcw className="w-3.5 h-3.5 text-gray-400" /> Reativar</>
+                                : <><Ban className="w-3.5 h-3.5 text-gray-400" /> Marcar Inativa</>}
+                        </button>
+                    )}
                     <div className="h-px bg-gray-100 my-1" />
                     <button onClick={() => run(() => actions.onDelete(node.id))}
                         className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-red-500 hover:bg-red-50">

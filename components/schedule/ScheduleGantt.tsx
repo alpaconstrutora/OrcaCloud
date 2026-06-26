@@ -242,7 +242,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             return (
                 <div
                     key={item.id}
-                    className="group flex border-b border-gray-50 hover:bg-blue-50/30 transition-colors h-9 relative cursor-pointer"
+                    className={`group flex border-b border-gray-50 hover:bg-blue-50/30 transition-colors h-9 relative cursor-pointer ${node.inactive ? 'opacity-50' : ''}`}
                     onClick={() => setSelectedTaskId(item.id)}
                 >
                     <div

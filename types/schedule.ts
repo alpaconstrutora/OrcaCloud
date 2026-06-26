@@ -80,6 +80,7 @@ export interface HierarchyNode {
     lateFinish?: string;
     totalFloat?: number;
     nature?: TaskNature;
+    inactive?: boolean;
     level: number;
     color?: string;
     wbsCode?: string;
@@ -178,6 +179,7 @@ export interface ItemScheduleDetails {
     mainWorkerProd?: number;
     helperProd?: number;
     autoDuration?: boolean;
+    inactive?: boolean;        // tarefa suspensa: ignorada pelo motor (CPM/duração/curva S)
     location?: EapLocation;
 }
 

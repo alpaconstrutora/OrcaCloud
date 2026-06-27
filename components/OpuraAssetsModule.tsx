@@ -700,7 +700,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
             <span className="text-gray-600 font-bold">Gestão de Bens</span>
           </div>
           <h1 className="text-2xl font-black text-gray-900 tracking-tight mt-1.5 flex items-center gap-2">
-            ÒPURA Assets
+            Gestão de Ativos
           </h1>
         </div>
 

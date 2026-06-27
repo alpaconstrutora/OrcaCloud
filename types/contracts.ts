@@ -65,6 +65,8 @@ export interface Contract {
     // Domínio de negócio — separa os módulos que compartilham a tabela `contracts`.
     // Nunca misturar nas listagens. Default no banco: 'SUPRIMENTOS'.
     domain?: 'SUPRIMENTOS' | 'SERVICOS' | 'LOCACAO' | 'VENDAS';
+    // Negociação de origem (Vendas de Ativos) quando gerado pela ponte deal→contrato.
+    deal_id?: string;
     execution_address?: string;
     execution_street?: string;
     execution_number?: string;

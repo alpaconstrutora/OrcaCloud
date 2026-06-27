@@ -518,6 +518,91 @@ export const contractService = {
         return data as Contract[];
     },
 
+    // ─── Ponte Negociação (Vendas de Ativos) → Contrato de Venda ──────────────
+    // Retorna o contrato VENDAS já gerado para uma negociação, se existir.
+    getContractByDealId: async (dealId: string): Promise<Contract | null> => {
+        const { data, error } = await supabase
+            .from('contracts')
+            .select('id, organization_id, deal_id, client_id, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
+            .eq('deal_id', dealId)
+            .maybeSingle();
+        if (error) throw error;
+        return (data as Contract) ?? null;
+    },
+
+    // Cria (ou retorna se já existir) um contrato domain='VENDAS' a partir de uma
+    // negociação de Vendas de Ativos. Idempotente via contracts.deal_id (índice único).
+    createFromDeal: async (deal: {
+        id: string;
+        organization_id?: string;
+        client_id: string;
+        property_id?: string;
+        value: number;
+        date?: string;
+        contract_number?: string;
+        notes?: string;
+        payment_method?: string;
+        installments?: number;
+        status?: string;
+        signature_status?: string;
+        signature_url?: string;
+        signed_contract_url?: string;
+    }): Promise<Contract> => {
+        if (!deal.organization_id) throw new Error('Negociação sem organização — impossível gerar contrato.');
+        if (!deal.client_id) throw new Error('Negociação sem cliente — selecione o comprador antes de gerar o contrato.');
+
+        // Idempotência: se já há contrato para esta negociação, retorna o existente.
+        const existing = await contractService.getContractByDealId(deal.id);
+        if (existing) return existing;
+
+        // Título com o nome da unidade, quando disponível.
+        let unitLabel = '';
+        if (deal.property_id) {
+            try {
+                const { data: prop } = await supabase
+                    .from('commercial_properties')
+                    .select('name, unit_number')
+                    .eq('id', deal.property_id)
+                    .maybeSingle();
+                unitLabel = (prop?.name || (prop as any)?.unit_number || '').toString().trim();
+            } catch { /* título sem unidade, não bloqueia */ }
+        }
+
+        const number = (deal.contract_number && deal.contract_number.trim())
+            ? deal.contract_number.trim()
+            : await contractService.getNextContractNumber(deal.organization_id, 'OUTGOING');
+
+        // Mapeia o estágio da negociação para o status do contrato.
+        const status =
+            deal.status === 'COMPLETED' ? 'Concluído'
+            : deal.signature_status === 'SIGNED' ? 'Assinado'
+            : 'Ativo';
+
+        const payload = {
+            deal_id: deal.id,
+            organization_id: deal.organization_id,
+            client_id: deal.client_id,
+            number,
+            title: unitLabel ? `Contrato de Venda — ${unitLabel}` : 'Contrato de Compra e Venda',
+            description: deal.notes || undefined,
+            contract_type: 'Compra e Venda',
+            nature: 'Venda',
+            direction: 'OUTGOING' as const,
+            domain: 'VENDAS' as const,
+            status,
+            original_value: deal.value || 0,
+            start_date: deal.date || new Date().toISOString().split('T')[0],
+            is_recurring: false,
+            payment_method: deal.payment_method || undefined,
+            payment_installments: deal.installments || undefined,
+            signature_status: deal.signature_status as Contract['signature_status'] | undefined,
+            signature_url: deal.signature_url || undefined,
+            signed_contract_url: deal.signed_contract_url || undefined,
+        };
+
+        return await contractService.createContract(payload as Omit<Contract, 'id' | 'created_at' | 'current_value'>);
+    },
+
     addMinutaVersion: async (contractId: string, version: { url: string; notes: string; name?: string }): Promise<void> => {
         // Lê versões atuais, incrementa número e faz append. Versão entra como rascunho (não emitida).
         const { data, error: fetchErr } = await supabase

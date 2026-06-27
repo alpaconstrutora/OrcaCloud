@@ -364,7 +364,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <span className="p-2 bg-blue-50 text-blue-600 rounded-2xl">
               <FolderOpen className="w-6 h-6" />
             </span>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">ÒPURA Docs</h1>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Gestão de Documentos</h1>
           </div>
           <p className="text-slate-400 text-sm font-medium">
             Governança e centralização de documentos integrados ao ecossistema ÒPURA.

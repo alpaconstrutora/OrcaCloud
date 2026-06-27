@@ -193,11 +193,12 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
 
     const buildings = useMemo(() => units.filter(u => u.type === 'BUILDING'), [units]);
     const displayUnits = useMemo(() => {
-        let actualUnits = units.filter(u => u.type !== 'BUILDING');
         if (selectedBuildingId !== 'all') {
-            actualUnits = actualUnits.filter(u => u.parent_id === selectedBuildingId);
+            return units.filter(u => u.parent_id === selectedBuildingId);
         }
-        return actualUnits;
+        const childUnits = units.filter(u => u.type !== 'BUILDING');
+        // Fallback: se não há unidades filhas, exibe os próprios empreendimentos
+        return childUnits.length > 0 ? childUnits : units.filter(u => u.type === 'BUILDING');
     }, [units, selectedBuildingId]);
 
     const handleReserve = (unit: BrokerUnit) => {

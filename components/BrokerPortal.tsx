@@ -32,6 +32,8 @@ interface BrokerPortalProps {
     isPreview?: boolean;
     /** Token de acesso público. Quando presente, dados são buscados via RPCs anon (SECURITY DEFINER). */
     portalToken?: string;
+    /** Corretor pré-selecionado na impersonação (usado quando admin clica em "Acessar Portal" na BrokerList). */
+    initialBroker?: import('../types').BrokerProfile;
 }
 
 interface StatCardProps { title: string; value: string | number; subtext?: string; icon: React.ElementType; color: string }
@@ -69,7 +71,7 @@ const TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
     { id: 'integracoes', label: 'Integrações', icon: Link2 },
 ];
 
-const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoque', organizationId: initialOrgId, isPreview = false, portalToken }) => {
+const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoque', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker }) => {
     const { organizations } = useStore();
 
     // isAdmin controla visibilidade de todo o chrome administrativo
@@ -95,7 +97,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
 
     // Impersonação — apenas para admins
     const [allBrokers, setAllBrokers] = useState<BrokerProfile[]>([]);
-    const [selectedAdminBroker, setSelectedAdminBroker] = useState<BrokerProfile | null>(null);
+    const [selectedAdminBroker, setSelectedAdminBroker] = useState<BrokerProfile | null>(initialBroker ?? null);
 
     const effectiveBrokerEmail = (selectedAdminBroker ? selectedAdminBroker.email : profile?.email)?.toLowerCase();
 

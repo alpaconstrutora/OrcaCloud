@@ -75,7 +75,7 @@ export const WORKFLOW_STEPS: WorkflowStep[] = [
 const ALLOWED_TRANSITIONS: Record<DealWorkflowStatus, DealWorkflowStatus[]> = {
     IN_NEGOTIATION:  ['PENDING', 'CANCELLED'],
     PENDING:         ['RESERVA', 'IN_NEGOTIATION', 'CANCELLED'],
-    WAITING_PAYMENT: ['RESERVA', 'COMPLETED', 'CANCELLED'],    // compat: deals legados podem avançar
+    WAITING_PAYMENT: ['RESERVA', 'CONTRATO', 'ASSINATURA', 'COMPLETED', 'CANCELLED'], // compat: deals legados equivalem a RESERVA
     RESERVA:         ['CONTRATO', 'PENDING', 'CANCELLED'],
     CONTRATO:        ['ASSINATURA', 'RESERVA', 'CANCELLED'],
     ASSINATURA:      ['COMPLETED', 'CONTRATO', 'CANCELLED'],

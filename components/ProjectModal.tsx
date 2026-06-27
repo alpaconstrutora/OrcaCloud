@@ -728,6 +728,28 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     </div>
                   )}
 
+                  <div className="col-span-2">
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <input
+                        type="checkbox"
+                        id="is-obra-propria-edit"
+                        checked={!!formData.obraPropria}
+                        onChange={(e) => {
+                          const v = e.target.checked;
+                          setFormData({ ...formData, obraPropria: v, ...(v ? { client: '', clientId: undefined } : {}) });
+                        }}
+                        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                      />
+                      <label htmlFor="is-obra-propria-edit" className="text-sm text-gray-700 font-medium select-none cursor-pointer">
+                        Obra própria (sem cliente)
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1 ml-1">
+                      Obra construída pela própria empresa — não aparece em portal de cliente.
+                    </p>
+                  </div>
+
+                  {!formData.obraPropria && (
                   <div className="col-span-2 md:col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Cliente / Proprietário</label>
                     <div className="relative">
@@ -830,6 +852,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       )}
                     </div>
                   </div>
+                  )}
 
                   <div className="col-span-2 md:col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Investidor Vinculado</label>

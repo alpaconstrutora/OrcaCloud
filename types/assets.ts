@@ -99,6 +99,7 @@ export interface OpuraAssetReservation {
   requested_by_email: string;
   approved_by_email?: string;
   notes?: string;
+  responsible_employee_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -143,3 +144,15 @@ export interface OpuraAssetDepreciationRateio {
   allocated_cost: number;
   percentage: number;
 }
+
+// Interfaces para gestão de marcas
+export interface OpuraAssetBrand {
+  id: string;
+  organization_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type OpuraAssetBrandInsert = Omit<OpuraAssetBrand, 'id' | 'created_at' | 'updated_at'>;
+export type OpuraAssetBrandUpdate = Partial<OpuraAssetBrandInsert>;

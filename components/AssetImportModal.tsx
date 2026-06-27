@@ -432,6 +432,16 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
         notes: r.notes || undefined
       }));
 
+      // Cadastra novas marcas de forma automática para os ativos importados
+      const uniqueBrands = Array.from(new Set(validRows.map((r) => r.brand?.trim()).filter(Boolean)));
+      for (const brandName of uniqueBrands) {
+        try {
+          await assetService.createBrand(activeOrganizationId, brandName!);
+        } catch (errBrand) {
+          console.error(`[AssetImportModal] Erro ao cadastrar marca autodetectada "${brandName}":`, errBrand);
+        }
+      }
+
       await assetService.createMany(inserts);
 
       alert(`Sucesso! ${validRows.length} ativos foram importados.`);

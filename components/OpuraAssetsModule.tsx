@@ -35,6 +35,7 @@ import {
   List
 } from 'lucide-react';
 import { assetService } from '../services/assetService';
+import { laborService } from '../services/laborService';
 import { useStore } from '../store/useStore';
 import { AssetImportModal } from './AssetImportModal';
 import {
@@ -49,7 +50,8 @@ import {
   AssetDocumentType,
   AssetDocumentStatus,
   OpuraAssetDocument,
-  OpuraAssetDepreciationRateio
+  OpuraAssetDepreciationRateio,
+  OpuraAssetBrand
 } from '../types';
 
 interface OpuraAssetsModuleProps {
@@ -93,6 +95,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   
   const [isNewDocModalOpen, setIsNewDocModalOpen] = React.useState(false);
 
+  // Estados adicionais de marcas e colaboradores (Fase 7)
+  const [brands, setBrands] = React.useState<OpuraAssetBrand[]>([]);
+  const [isBrandManagerOpen, setIsBrandManagerOpen] = React.useState(false);
+  const [newBrandName, setNewBrandName] = React.useState('');
+  const [editingBrandId, setEditingBrandId] = React.useState<string | null>(null);
+  const [editingBrandName, setEditingBrandName] = React.useState('');
+  const [employees, setEmployees] = React.useState<any[]>([]);
+
   // Filtros de Rateio Contábil
   const [rateioStartDate, setRateioStartDate] = React.useState('');
   const [rateioEndDate, setRateioEndDate] = React.useState('');
@@ -123,7 +133,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     project_id: '',
     start_date: new Date().toISOString().split('T')[0],
     end_date: new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0], // + 7 dias
-    notes: ''
+    notes: '',
+    responsible_employee_id: ''
   });
 
   const [maintForm, setMaintForm] = React.useState({
@@ -164,6 +175,17 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const [filterMaintType, setFilterMaintType] = React.useState<string>('todos');
   const [filterMaintStatus, setFilterMaintStatus] = React.useState<string>('todos');
 
+  // Carregar marcas de forma memorizada
+  const loadBrands = React.useCallback(async () => {
+    if (!activeOrganizationId) return;
+    try {
+      const loadedBrands = await assetService.listBrands(activeOrganizationId);
+      setBrands(loadedBrands);
+    } catch (err) {
+      console.error('[OpuraAssetsModule] Erro ao carregar marcas:', err);
+    }
+  }, [activeOrganizationId]);
+
   // Carregar dados
   const loadData = React.useCallback(async () => {
     if (!activeOrganizationId) return;
@@ -177,6 +199,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
       const loadedMaint = await assetService.listMaintenances(activeOrganizationId);
       setMaintenances(loadedMaint);
+
+      // Carregar marcas
+      const loadedBrands = await assetService.listBrands(activeOrganizationId);
+      setBrands(loadedBrands);
+
+      // Carregar colaboradores ativos do RH
+      const loadedEmps = await laborService.listEmployees(activeOrganizationId);
+      setEmployees(loadedEmps.filter((e: any) => e.status === 'ATIVO'));
     } catch (err) {
       console.error('[OpuraAssetsModule] Erro ao carregar dados:', err);
     } finally {
@@ -187,6 +217,54 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Handlers para Gestão de Marcas (Fase 7)
+  const handleCreateBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeOrganizationId || !newBrandName.trim()) return;
+    setActionLoading(true);
+    try {
+      const created = await assetService.createBrand(activeOrganizationId, newBrandName);
+      setNewBrandName('');
+      await loadBrands();
+      setAssetForm(prev => ({ ...prev, brand: created.name }));
+    } catch (err: any) {
+      alert(err.message || 'Erro ao cadastrar marca');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUpdateBrand = async (brandId: string) => {
+    if (!editingBrandName.trim()) return;
+    setActionLoading(true);
+    try {
+      const updated = await assetService.updateBrand(brandId, editingBrandName);
+      setEditingBrandId(null);
+      setEditingBrandName('');
+      await loadBrands();
+      if (assetForm.brand === brands.find(b => b.id === brandId)?.name) {
+        setAssetForm(prev => ({ ...prev, brand: updated.name }));
+      }
+    } catch (err: any) {
+      alert(err.message || 'Erro ao atualizar marca');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteBrand = async (brandId: string) => {
+    if (!confirm('Deseja realmente excluir esta marca? Os ativos associados continuarão com o nome salvo, mas a marca não constará mais na lista.')) return;
+    setActionLoading(true);
+    try {
+      await assetService.deleteBrand(brandId);
+      await loadBrands();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir marca');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   // Carregar histórico de movimentação do ativo selecionado
   const loadAssetMovements = async (assetId: string) => {
@@ -349,7 +427,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         status: 'aprovada', // Aprovado automático para simplificação do fluxo MVP
         requested_by_email: email,
         approved_by_email: email,
-        notes: reserveForm.notes || undefined
+        notes: reserveForm.notes || undefined,
+        responsible_employee_id: reserveForm.responsible_employee_id || undefined
       });
       alert('Reserva efetuada com sucesso!');
       setIsReserveModalOpen(false);
@@ -357,7 +436,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         project_id: '',
         start_date: new Date().toISOString().split('T')[0],
         end_date: new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
-        notes: ''
+        notes: '',
+        responsible_employee_id: ''
       });
       loadData();
     } catch (err: any) {
@@ -1362,6 +1442,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         <th className="py-3 px-4">Obra Solicitante</th>
                         <th className="py-3 px-4">Início</th>
                         <th className="py-3 px-4">Término</th>
+                        <th className="py-3 px-4">Responsável</th>
                         <th className="py-3 px-4">Solicitante</th>
                         <th className="py-3 px-4">Status</th>
                         <th className="py-3 px-4 text-right">Ações</th>
@@ -1386,6 +1467,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             <td className="py-3 px-4 font-medium text-gray-600">{proj?.name || 'Obra'}</td>
                             <td className="py-3 px-4 text-gray-500">{new Date(res.start_date).toLocaleDateString('pt-BR')}</td>
                             <td className="py-3 px-4 text-gray-500">{new Date(res.end_date).toLocaleDateString('pt-BR')}</td>
+                            <td className="py-3 px-4 text-gray-700 font-bold">{employees.find(e => e.id === res.responsible_employee_id)?.name || 'Central'}</td>
                             <td className="py-3 px-4 text-gray-400 font-semibold">{res.requested_by_email}</td>
                             <td className="py-3 px-4">
                               <span className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase ${statusBadgeClass}`}>
@@ -1847,12 +1929,28 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Marca</label>
-                  <input
+                  <div className="flex items-center justify-between">
+                    <label className="text-gray-400 uppercase tracking-widest text-[9px]">Marca</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsBrandManagerOpen(true)}
+                      className="text-[9px] text-blue-500 hover:text-blue-700 font-bold uppercase tracking-wider transition-colors flex items-center gap-0.5"
+                      title="Gerenciar Marcas"
+                    >
+                      <PenTool className="w-3 h-3" />
+                      Gerenciar
+                    </button>
+                  </div>
+                  <select
                     value={assetForm.brand}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, brand: e.target.value }))}
                     className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
-                  />
+                  >
+                    <option value="">Selecione a Marca...</option>
+                    {brands.map(b => (
+                      <option key={b.id} value={b.name}>{b.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-1">
                   <label className="text-gray-400 uppercase tracking-widest text-[9px]">Modelo</label>
@@ -2042,6 +2140,20 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 </select>
               </div>
 
+              <div className="space-y-1">
+                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Colaborador Responsável</label>
+                <select
+                  value={reserveForm.responsible_employee_id}
+                  onChange={(e) => setReserveForm(prev => ({ ...prev, responsible_employee_id: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                >
+                  <option value="">Selecione o Responsável...</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-gray-400 uppercase tracking-widest text-[9px]">Data de Início</label>
@@ -2188,6 +2300,105 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         activeOrganizationId={activeOrganizationId}
         existingAssets={assets}
       />
+
+      {/* MODAL: GERENCIAR MARCAS (Fase 7) */}
+      {isBrandManagerOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-2xl w-full max-w-md relative animate-in zoom-in-95 duration-200 space-y-6">
+            <button
+              onClick={() => {
+                setIsBrandManagerOpen(false);
+                setEditingBrandId(null);
+              }}
+              className="absolute right-4 top-4 p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div>
+              <h3 className="font-bold text-gray-800 text-lg">Gerenciar Marcas</h3>
+              <p className="text-gray-400 text-xs">Crie, edite ou remova marcas de fabricantes de equipamentos.</p>
+            </div>
+
+            <form onSubmit={handleCreateBrand} className="flex gap-2 text-xs">
+              <input
+                required
+                value={newBrandName}
+                onChange={(e) => setNewBrandName(e.target.value)}
+                placeholder="Ex: Makita, Bosch, Caterpillar..."
+                className="flex-1 px-4 py-2 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors font-semibold"
+              />
+              <button
+                type="submit"
+                disabled={actionLoading}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold uppercase tracking-wider flex items-center gap-1 active:scale-95 transition-all"
+              >
+                Adicionar
+              </button>
+            </form>
+
+            <div className="max-h-60 overflow-y-auto space-y-2 pr-1 text-xs">
+              {brands.length === 0 ? (
+                <div className="text-center py-6 text-gray-400 font-medium">
+                  Nenhuma marca cadastrada ainda.
+                </div>
+              ) : (
+                brands.map(b => (
+                  <div key={b.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-gray-100/50 transition-colors">
+                    {editingBrandId === b.id ? (
+                      <div className="flex-1 flex gap-2">
+                        <input
+                          required
+                          value={editingBrandName}
+                          onChange={(e) => setEditingBrandName(e.target.value)}
+                          className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-600 font-semibold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateBrand(b.id)}
+                          className="text-emerald-600 font-bold hover:text-emerald-700 uppercase text-[10px]"
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingBrandId(null)}
+                          className="text-gray-400 font-bold hover:text-gray-600 uppercase text-[10px]"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="font-bold text-gray-700">{b.name}</span>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingBrandId(b.id);
+                              setEditingBrandName(b.name);
+                            }}
+                            className="text-blue-500 hover:text-blue-700 font-semibold transition-colors uppercase text-[10px]"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBrand(b.id)}
+                            className="text-red-500 hover:text-red-700 font-semibold transition-colors uppercase text-[10px]"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 9. MODAL: CADASTRAR NOVA MANUTENÇÃO */}
       {isNewMaintModalOpen && (

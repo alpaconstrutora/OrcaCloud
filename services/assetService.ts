@@ -16,7 +16,8 @@ import {
   OpuraAssetDocument,
   OpuraAssetDocumentInsert,
   OpuraAssetDocumentUpdate,
-  OpuraAssetDepreciationRateio
+  OpuraAssetDepreciationRateio,
+  OpuraAssetBrand
 } from '../types';
 
 export const assetService = {
@@ -601,5 +602,81 @@ export const assetService = {
 
     // Ordenar decrescente pelo custo alocado
     return result.sort((a, b) => b.allocated_cost - a.allocated_cost);
+  },
+
+  // GESTÃO DE MARCAS (Fase 7)
+  async listBrands(orgId: string): Promise<OpuraAssetBrand[]> {
+    const { data, error } = await supabase
+      .from('opura_asset_brands')
+      .select('*')
+      .eq('organization_id', orgId)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('[AssetService] Error listing brands:', error);
+      throw new Error(`Falha ao listar marcas: ${error.message}`);
+    }
+    return data || [];
+  },
+
+  async createBrand(orgId: string, name: string): Promise<OpuraAssetBrand> {
+    const cleanName = name.trim();
+    if (!cleanName) throw new Error('O nome da marca é obrigatório.');
+
+    const { data: existing, error: errExist } = await supabase
+      .from('opura_asset_brands')
+      .select('*')
+      .eq('organization_id', orgId)
+      .ilike('name', cleanName);
+
+    if (errExist) {
+      console.error('[AssetService] Error checking existing brand:', errExist);
+    }
+
+    if (existing && existing.length > 0) {
+      return existing[0];
+    }
+
+    const { data, error } = await supabase
+      .from('opura_asset_brands')
+      .insert({ organization_id: orgId, name: cleanName })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[AssetService] Error creating brand:', error);
+      throw new Error(`Falha ao cadastrar marca: ${error.message}`);
+    }
+    return data;
+  },
+
+  async updateBrand(id: string, name: string): Promise<OpuraAssetBrand> {
+    const cleanName = name.trim();
+    if (!cleanName) throw new Error('O nome da marca é obrigatório.');
+
+    const { data, error } = await supabase
+      .from('opura_asset_brands')
+      .update({ name: cleanName, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`[AssetService] Error updating brand ${id}:`, error);
+      throw new Error(`Falha ao atualizar marca: ${error.message}`);
+    }
+    return data;
+  },
+
+  async deleteBrand(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_asset_brands')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error(`[AssetService] Error deleting brand ${id}:`, error);
+      throw new Error(`Falha ao excluir marca: ${error.message}`);
+    }
   }
 };

@@ -25,7 +25,8 @@ import {
   History,
   CheckCircle,
   X,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Copy
 } from 'lucide-react';
 import { assetService } from '../services/assetService';
 import { useStore } from '../store/useStore';
@@ -66,6 +67,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const [isReserveModalOpen, setIsReserveModalOpen] = React.useState(false);
   const [isQrCodeOpen, setIsQrCodeOpen] = React.useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
+  const [editingAssetId, setEditingAssetId] = React.useState<string | null>(null);
+  const [isDuplicate, setIsDuplicate] = React.useState<boolean>(false);
 
   // Estados dos Formulários
   const [assetForm, setAssetForm] = React.useState({
@@ -81,7 +84,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     useful_life_months: 60,
     residual_value: 0,
     notes: '',
-    responsible_worker_id: undefined
+    responsible_worker_id: undefined as string | undefined
   });
 
   const [moveForm, setMoveForm] = React.useState({
@@ -132,32 +135,56 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     }
   };
 
-  // Cadastrar Novo Ativo
+  // Cadastrar / Editar / Duplicar Ativo
   const handleCreateAsset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeOrganizationId) return;
     setActionLoading(true);
     try {
-      const generatedCode = assetForm.code || `OPR-PAT-${Math.floor(100000 + Math.random() * 900000)}`;
-      await assetService.create({
-        organization_id: activeOrganizationId,
-        code: generatedCode,
-        name: assetForm.name,
-        category: assetForm.category,
-        subcategory: assetForm.subcategory || undefined,
-        brand: assetForm.brand || undefined,
-        model: assetForm.model || undefined,
-        serial_number: assetForm.serial_number || undefined,
-        purchase_date: assetForm.purchase_date || undefined,
-        purchase_value: Number(assetForm.purchase_value) || 0,
-        useful_life_months: Number(assetForm.useful_life_months) || undefined,
-        residual_value: Number(assetForm.residual_value) || 0,
-        status: 'disponivel',
-        tracking_code: generatedCode,
-        notes: assetForm.notes || undefined
-      });
-      alert('Ativo patrimonial cadastrado com sucesso!');
+      if (editingAssetId) {
+        const updated = await assetService.update(editingAssetId, {
+          name: assetForm.name,
+          code: assetForm.code || undefined,
+          category: assetForm.category,
+          subcategory: assetForm.subcategory || undefined,
+          brand: assetForm.brand || undefined,
+          model: assetForm.model || undefined,
+          serial_number: assetForm.serial_number || undefined,
+          purchase_date: assetForm.purchase_date || undefined,
+          purchase_value: Number(assetForm.purchase_value) || 0,
+          useful_life_months: Number(assetForm.useful_life_months) || undefined,
+          residual_value: Number(assetForm.residual_value) || 0,
+          notes: assetForm.notes || undefined
+        });
+        alert('Ativo patrimonial atualizado com sucesso!');
+        if (selectedAsset && selectedAsset.id === editingAssetId) {
+          setSelectedAsset(updated);
+        }
+      } else {
+        const generatedCode = assetForm.code || `OPR-PAT-${Math.floor(100000 + Math.random() * 900000)}`;
+        await assetService.create({
+          organization_id: activeOrganizationId,
+          code: generatedCode,
+          name: assetForm.name,
+          category: assetForm.category,
+          subcategory: assetForm.subcategory || undefined,
+          brand: assetForm.brand || undefined,
+          model: assetForm.model || undefined,
+          serial_number: assetForm.serial_number || undefined,
+          purchase_date: assetForm.purchase_date || undefined,
+          purchase_value: Number(assetForm.purchase_value) || 0,
+          useful_life_months: Number(assetForm.useful_life_months) || undefined,
+          residual_value: Number(assetForm.residual_value) || 0,
+          status: 'disponivel',
+          tracking_code: generatedCode,
+          notes: assetForm.notes || undefined
+        });
+        alert(isDuplicate ? 'Ativo duplicado com sucesso!' : 'Ativo patrimonial cadastrado com sucesso!');
+      }
+      
       setIsNewAssetModalOpen(false);
+      setEditingAssetId(null);
+      setIsDuplicate(false);
       setAssetForm({
         name: '',
         code: '',
@@ -175,7 +202,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       });
       loadData();
     } catch (err: any) {
-      alert(`Erro ao cadastrar ativo: ${err.message}`);
+      alert(`Erro ao salvar ativo: ${err.message}`);
     } finally {
       setActionLoading(false);
     }
@@ -240,6 +267,82 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       loadData();
     } catch (err: any) {
       alert(`Erro ao efetuar reserva: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Excluir Ativo com verificação
+  const handleDeleteAsset = async (asset: OpuraAsset) => {
+    if (asset.status === 'em_uso') {
+      alert('Este ativo está alocado em uma obra e não pode ser excluído no momento. Registre a devolução dele primeiro.');
+      return;
+    }
+    
+    if (!window.confirm(`Tem certeza que deseja excluir o ativo "${asset.name}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      await assetService.delete(asset.id);
+      alert('Ativo excluído com sucesso!');
+      setSelectedAsset(null);
+      loadData();
+    } catch (err: any) {
+      alert(`Erro ao excluir ativo: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Iniciar Reserva (Entregar ativo à obra)
+  const handleStartReservation = async (reservation: OpuraAssetReservation) => {
+    if (!window.confirm('Confirmar o envio deste ativo para a obra solicitante? O status do ativo será alterado para "Em Uso".')) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const email = 'gestor.ativos@alpaconstrutora.com.br';
+      await assetService.startReservation(reservation, email);
+      alert('Locação/Entrega iniciada com sucesso! O ativo foi alocado na obra.');
+      loadData();
+    } catch (err: any) {
+      alert(`Erro ao iniciar reserva: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Finalizar Reserva (Devolução do ativo à sede)
+  const handleFinalizeReservation = async (reservation: OpuraAssetReservation) => {
+    if (!window.confirm('Confirmar o retorno/devolução deste ativo para a sede? O status do ativo voltará a ser "Disponível".')) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await assetService.finalizeReservation(reservation);
+      alert('Devolução registrada com sucesso! O ativo retornou ao estoque da sede.');
+      loadData();
+    } catch (err: any) {
+      alert(`Erro ao finalizar reserva: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Cancelar Reserva
+  const handleCancelReservation = async (reservationId: string) => {
+    if (!window.confirm('Tem certeza que deseja cancelar esta reserva?')) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await assetService.cancelReservation(reservationId);
+      alert('Reserva cancelada com sucesso!');
+      loadData();
+    } catch (err: any) {
+      alert(`Erro ao cancelar reserva: ${err.message}`);
     } finally {
       setActionLoading(false);
     }
@@ -624,21 +727,85 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     </div>
 
                     {/* Botões de Ações de Ativo */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setIsMoveAssetModalOpen(true)}
-                        className="flex-1 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
-                      >
-                        <MapPin className="w-3.5 h-3.5" />
-                        Movimentar
-                      </button>
-                      <button
-                        onClick={() => setIsReserveModalOpen(true)}
-                        className="flex-1 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Calendar className="w-3.5 h-3.5" />
-                        Reservar
-                      </button>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setIsMoveAssetModalOpen(true)}
+                          className="flex-1 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                        >
+                          <MapPin className="w-3.5 h-3.5" />
+                          Movimentar
+                        </button>
+                        <button
+                          onClick={() => setIsReserveModalOpen(true)}
+                          className="flex-1 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          Reservar
+                        </button>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingAssetId(selectedAsset.id);
+                            setIsDuplicate(false);
+                            setAssetForm({
+                              name: selectedAsset.name,
+                              code: selectedAsset.code,
+                              category: selectedAsset.category,
+                              subcategory: selectedAsset.subcategory || '',
+                              brand: selectedAsset.brand || '',
+                              model: selectedAsset.model || '',
+                              serial_number: selectedAsset.serial_number || '',
+                              purchase_date: selectedAsset.purchase_date ? selectedAsset.purchase_date.split('T')[0] : new Date().toISOString().split('T')[0],
+                              purchase_value: selectedAsset.purchase_value || 0,
+                              useful_life_months: selectedAsset.useful_life_months || 60,
+                              residual_value: selectedAsset.residual_value || 0,
+                              notes: selectedAsset.notes || '',
+                              responsible_worker_id: selectedAsset.responsible_worker_id
+                            });
+                            setIsNewAssetModalOpen(true);
+                          }}
+                          className="flex-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 border border-gray-100"
+                        >
+                          <Edit className="w-3 h-3" />
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingAssetId(null);
+                            setIsDuplicate(true);
+                            setAssetForm({
+                              name: `${selectedAsset.name} (Cópia)`,
+                              code: '', // Limpar para gerar novo
+                              category: selectedAsset.category,
+                              subcategory: selectedAsset.subcategory || '',
+                              brand: selectedAsset.brand || '',
+                              model: selectedAsset.model || '',
+                              serial_number: '', // Limpar serial
+                              purchase_date: selectedAsset.purchase_date ? selectedAsset.purchase_date.split('T')[0] : new Date().toISOString().split('T')[0],
+                              purchase_value: selectedAsset.purchase_value || 0,
+                              useful_life_months: selectedAsset.useful_life_months || 60,
+                              residual_value: selectedAsset.residual_value || 0,
+                              notes: selectedAsset.notes || '',
+                              responsible_worker_id: selectedAsset.responsible_worker_id
+                            });
+                            setIsNewAssetModalOpen(true);
+                          }}
+                          className="flex-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 border border-gray-100"
+                        >
+                          <Copy className="w-3 h-3" />
+                          Duplicar
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAsset(selectedAsset)}
+                          className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Excluir
+                        </button>
+                      </div>
                     </div>
 
                     {/* Linha do Tempo (Timeline) de Movimentações */}
@@ -699,15 +866,25 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         <th className="py-3 px-4">Ativo</th>
                         <th className="py-3 px-4">Obra Solicitante</th>
                         <th className="py-3 px-4">Início</th>
-                        <th className="py-3 px-4">Termino</th>
+                        <th className="py-3 px-4">Término</th>
                         <th className="py-3 px-4">Solicitante</th>
                         <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
                       {reservations.map(res => {
                         const asset = assets.find(a => a.id === res.asset_id);
                         const proj = projects.find(p => p.id === res.project_id);
+                        
+                        // Definição de cores sofisticadas por status
+                        const statusBadgeClass = 
+                          res.status === 'ativa' ? 'bg-emerald-500/10 text-emerald-600' :
+                          res.status === 'aprovada' ? 'bg-blue-500/10 text-blue-600' :
+                          res.status === 'pendente' ? 'bg-amber-500/10 text-amber-600' :
+                          res.status === 'finalizada' ? 'bg-gray-150 text-gray-500 bg-gray-100/80' :
+                          'bg-rose-500/10 text-rose-600';
+
                         return (
                           <tr key={res.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                             <td className="py-3 px-4 font-bold text-gray-800">{asset?.name || 'Ativo'}</td>
@@ -716,9 +893,43 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             <td className="py-3 px-4 text-gray-500">{new Date(res.end_date).toLocaleDateString('pt-BR')}</td>
                             <td className="py-3 px-4 text-gray-400 font-semibold">{res.requested_by_email}</td>
                             <td className="py-3 px-4">
-                              <span className="bg-emerald-500/10 text-emerald-600 px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase">
-                                {res.status}
+                              <span className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase ${statusBadgeClass}`}>
+                                {res.status === 'ativa' ? 'Em Uso' : res.status}
                               </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex justify-end gap-1.5">
+                                {(res.status === 'aprovada' || res.status === 'pendente') && (
+                                  <>
+                                    <button
+                                      onClick={() => handleStartReservation(res)}
+                                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md font-bold text-[10px] uppercase tracking-wider transition-colors"
+                                      title="Entregar equipamento à obra"
+                                    >
+                                      Entregar
+                                    </button>
+                                    <button
+                                      onClick={() => handleCancelReservation(res.id)}
+                                      className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-[10px] uppercase tracking-wider transition-colors"
+                                      title="Cancelar reserva"
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </>
+                                )}
+                                {res.status === 'ativa' && (
+                                  <button
+                                    onClick={() => handleFinalizeReservation(res)}
+                                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md font-bold text-[10px] uppercase tracking-wider transition-colors"
+                                    title="Devolver equipamento para a sede"
+                                  >
+                                    Devolver
+                                  </button>
+                                )}
+                                {res.status !== 'ativa' && res.status !== 'aprovada' && res.status !== 'pendente' && (
+                                  <span className="text-gray-300 font-semibold">-</span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -749,8 +960,12 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
             </button>
 
             <div>
-              <h3 className="font-bold text-gray-800 text-lg">Cadastrar Ativo Patrimonial</h3>
-              <p className="text-gray-400 text-xs">Preencha os campos abaixo para dar entrada operacional no bem.</p>
+              <h3 className="font-bold text-gray-800 text-lg">
+                {editingAssetId ? 'Editar Ativo Patrimonial' : isDuplicate ? 'Duplicar Ativo Patrimonial' : 'Cadastrar Ativo Patrimonial'}
+              </h3>
+              <p className="text-gray-400 text-xs">
+                {editingAssetId ? 'Ajuste as informações abaixo para atualizar o bem.' : isDuplicate ? 'Ajuste os dados da duplicata para dar entrada no novo bem.' : 'Preencha os campos abaixo para dar entrada operacional no bem.'}
+              </p>
             </div>
 
             <form onSubmit={handleCreateAsset} className="space-y-4 text-xs font-semibold">
@@ -896,7 +1111,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
                 >
                   {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Finalizar Cadastro
+                  {editingAssetId ? 'Salvar Alterações' : isDuplicate ? 'Salvar Duplicata' : 'Finalizar Cadastro'}
                 </button>
               </div>
             </form>

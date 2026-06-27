@@ -200,5 +200,116 @@ export const assetService = {
       throw new Error(`Falha ao atualizar reserva: ${error.message}`);
     }
     return data;
+  },
+
+  async startReservation(reservation: OpuraAssetReservation, email: string): Promise<void> {
+    // 1. Atualiza a reserva para ativa e define quem aprovou
+    const { error: resError } = await supabase
+      .from('opura_asset_reservations')
+      .update({
+        status: 'ativa',
+        approved_by_email: email,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', reservation.id);
+
+    if (resError) {
+      console.error(`[AssetService] Error starting reservation ${reservation.id}:`, resError);
+      throw new Error(`Falha ao iniciar reserva: ${resError.message}`);
+    }
+
+    // 2. Atualiza o status do ativo para em_uso e define a obra atual
+    const { error: assetError } = await supabase
+      .from('opura_assets')
+      .update({
+        status: 'em_uso',
+        current_project_id: reservation.project_id
+      })
+      .eq('id', reservation.asset_id);
+
+    if (assetError) {
+      console.error(`[AssetService] Error updating asset ${reservation.asset_id} for started reservation:`, assetError);
+      // Rollback manual do status da reserva (ou tentar reverter)
+      await supabase.from('opura_asset_reservations').update({ status: 'aprovada' }).eq('id', reservation.id);
+      throw new Error(`Falha ao atualizar status do ativo: ${assetError.message}`);
+    }
+
+    // 3. Cria log histórico de movimentação
+    const { error: moveError } = await supabase
+      .from('opura_asset_movements')
+      .insert({
+        organization_id: reservation.organization_id,
+        asset_id: reservation.asset_id,
+        origin_project_id: null, // Sede
+        destination_project_id: reservation.project_id,
+        movement_date: new Date().toISOString(),
+        notes: `Início de locação interna via reserva #${reservation.id.slice(0, 8)}`
+      });
+
+    if (moveError) {
+      console.error(`[AssetService] Error creating movement log for started reservation:`, moveError);
+      // Apenas avisa, não bloqueia o fluxo principal já que a reserva e o ativo foram ativados
+    }
+  },
+
+  async finalizeReservation(reservation: OpuraAssetReservation): Promise<void> {
+    // 1. Atualiza a reserva para finalizada
+    const { error: resError } = await supabase
+      .from('opura_asset_reservations')
+      .update({
+        status: 'finalizada',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', reservation.id);
+
+    if (resError) {
+      console.error(`[AssetService] Error finalizing reservation ${reservation.id}:`, resError);
+      throw new Error(`Falha ao finalizar reserva: ${resError.message}`);
+    }
+
+    // 2. Atualiza o status do ativo para disponivel na sede
+    const { error: assetError } = await supabase
+      .from('opura_assets')
+      .update({
+        status: 'disponivel',
+        current_project_id: null
+      })
+      .eq('id', reservation.asset_id);
+
+    if (assetError) {
+      console.error(`[AssetService] Error returning asset ${reservation.asset_id} to headquarters:`, assetError);
+      throw new Error(`Falha ao retornar ativo para a sede: ${assetError.message}`);
+    }
+
+    // 3. Cria log histórico de movimentação
+    const { error: moveError } = await supabase
+      .from('opura_asset_movements')
+      .insert({
+        organization_id: reservation.organization_id,
+        asset_id: reservation.asset_id,
+        origin_project_id: reservation.project_id,
+        destination_project_id: null, // Sede
+        movement_date: new Date().toISOString(),
+        notes: `Devolução/Término de locação interna via reserva #${reservation.id.slice(0, 8)}`
+      });
+
+    if (moveError) {
+      console.error(`[AssetService] Error creating return movement log:`, moveError);
+    }
+  },
+
+  async cancelReservation(reservationId: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_asset_reservations')
+      .update({
+        status: 'cancelada',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', reservationId);
+
+    if (error) {
+      console.error(`[AssetService] Error canceling reservation ${reservationId}:`, error);
+      throw new Error(`Falha ao cancelar reserva: ${error.message}`);
+    }
   }
 };

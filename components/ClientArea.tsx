@@ -86,6 +86,12 @@ interface ClientAreaProps {
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'];
 
+// Selo de status de contrato no dashboard do portal (minuta = "Em elaboração").
+const contractDashBadge = (status?: string): { label: string; cls: string } =>
+    status === 'Assinado' ? { label: 'Assinado', cls: 'bg-emerald-100 text-emerald-700' }
+    : status === 'Minuta' ? { label: 'Em elaboração', cls: 'bg-amber-100 text-amber-700' }
+    : { label: status || 'Ativo', cls: 'bg-blue-100 text-blue-700' };
+
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false }) => {
     const confirm = useConfirm();
     const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'obra' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao'>(initialTab || 'dashboard');
@@ -305,6 +311,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         const paidPct = totalValue > 0 ? Math.round((totalPaid / totalValue) * 100) : 0;
 
         const activeContracts = clientContracts.filter(c => c.status === 'Ativo' || c.status === 'Assinado');
+        // Mostra também minutas no dashboard (selo "Em elaboração"), sem contar como ativo.
+        const shownContracts = clientContracts.filter(c => ['Ativo', 'Assinado', 'Minuta'].includes(c.status));
         const openRequests = clientRequests.filter(r => r.status !== 'Resolvido' && r.status !== 'Cancelado');
         const recentRequests = [...clientRequests].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 3);
 
@@ -440,8 +448,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             {recentRequests.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum chamado</p> : <div className="space-y-3">{recentRequests.map(req => (<div key={req.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{req.title}</p><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{req.category}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span></div>))}</div>}
                         </div>
                         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos Ativos</h3>{enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
-                            {activeContracts.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p> : <div className="space-y-3">{activeContracts.slice(0, 3).map(c => (<div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{c.title}</p><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{c.billing_cycle ?? c.contract_type}{c.end_date ? ` · até ${new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}</p></div><span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span></div>))}</div>}
+                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos</h3>{enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
+                            {shownContracts.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p> : <div className="space-y-3">{shownContracts.slice(0, 3).map(c => { const badge = contractDashBadge(c.status); return (<div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-bold text-gray-900 truncate">{c.title}</p><span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${badge.cls}`}>{badge.label}</span></div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{c.billing_cycle ?? c.contract_type}{c.end_date ? ` · até ${new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}</p></div><span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span></div>); })}</div>}
                         </div>
                     </div>
                 </div>
@@ -452,6 +460,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // ─── Dashboard: Serviços ───────────────────────────────────────────────────
     const renderDashboardServicos = () => {
         const activeContracts = clientContracts.filter(c => c.status === 'Ativo' || c.status === 'Assinado');
+        // Mostra também minutas no dashboard (selo "Em elaboração"), sem contar como ativo.
+        const shownContracts = clientContracts.filter(c => ['Ativo', 'Assinado', 'Minuta'].includes(c.status));
         const totalContratado = activeContracts.reduce((s, c) => s + (c.current_value || c.original_value || 0), 0);
         const quickTabs = tabs.filter(t => t.id !== 'dashboard').slice(0, 4);
 
@@ -494,27 +504,33 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     </div>
                     {/* Contratos recentes */}
-                    {activeContracts.length > 0 ? (
+                    {shownContracts.length > 0 ? (
                         <div className="px-4 mt-4 pb-6 space-y-2">
                             <div className="flex items-center justify-between mb-2">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contratos Ativos</p>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contratos</p>
                                 {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Ver todos</button>}
                             </div>
-                            {activeContracts.slice(0, 3).map(c => (
+                            {shownContracts.slice(0, 3).map(c => {
+                                const badge = contractDashBadge(c.status);
+                                return (
                                 <div key={c.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3">
                                     <div className="min-w-0">
                                         <p className="text-sm font-black text-gray-900 truncate">{c.title}</p>
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mt-0.5">{c.contract_type}</p>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">{c.contract_type}</span>
+                                            <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${badge.cls}`}>{badge.label}</span>
+                                        </div>
                                     </div>
                                     <span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     ) : (
                         <div className="px-4 mt-6 pb-6">
                             <div className="flex flex-col items-center text-center py-4">
                                 <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400 mb-3"><FileText className="w-7 h-7" /></div>
-                                <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhum contrato ativo</p>
+                                <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhum contrato</p>
                                 <p className="text-xs text-gray-400 font-medium mt-1 max-w-[240px]">Seus contratos aparecerão aqui.</p>
                             </div>
                         </div>
@@ -539,22 +555,28 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {/* Contratos */}
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos Ativos</h3>
+                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos</h3>
                             {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Ver todos</button>}
                         </div>
-                        {activeContracts.length === 0 ? (
+                        {shownContracts.length === 0 ? (
                             <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p>
                         ) : (
                             <div className="space-y-3">
-                                {activeContracts.slice(0, 5).map(c => (
+                                {shownContracts.slice(0, 5).map(c => {
+                                    const badge = contractDashBadge(c.status);
+                                    return (
                                     <div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0">
                                         <div className="min-w-0">
-                                            <p className="text-sm font-bold text-gray-900 truncate">{c.title}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-sm font-bold text-gray-900 truncate">{c.title}</p>
+                                                <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${badge.cls}`}>{badge.label}</span>
+                                            </div>
                                             <p className="text-[10px] font-bold text-gray-400 uppercase">{c.contract_type}{c.sla_days != null ? ` · SLA ${c.sla_days}d` : ''}</p>
                                         </div>
                                         <span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

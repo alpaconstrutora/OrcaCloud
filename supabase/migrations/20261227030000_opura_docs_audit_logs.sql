@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.opura_document_audit_logs (
 ALTER TABLE public.opura_document_audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de RLS
+DROP POLICY IF EXISTS "Users can view audit logs of their organization" ON public.opura_document_audit_logs;
 CREATE POLICY "Users can view audit logs of their organization"
     ON public.opura_document_audit_logs
     FOR SELECT
@@ -19,6 +20,7 @@ CREATE POLICY "Users can view audit logs of their organization"
         SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
     ));
 
+DROP POLICY IF EXISTS "Users can insert audit logs of their organization" ON public.opura_document_audit_logs;
 CREATE POLICY "Users can insert audit logs of their organization"
     ON public.opura_document_audit_logs
     FOR INSERT

@@ -2,14 +2,13 @@ import React, { useState } from 'react';
 import {
     Building2, Mail, Plus, Search,
     Trash2, Edit2, LayoutDashboard, Table2,
-    Activity, Users, Briefcase, UserPlus,
+    Activity, Users, UserPlus,
     TrendingUp, HandCoins, Filter, Truck, Settings, Send
 } from 'lucide-react';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Organization, BudgetEntry } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
-import ProjectList from './ProjectList';
 import OrganizationUsers from './OrganizationUsers';
 import OrganizationPage from './OrganizationPage';
 import ClientList from './ClientList';
@@ -169,7 +168,6 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                     {[
                         { id: 'organizations', label: 'Organização', icon: Building2 },
                         { id: 'empresas_grupo', label: 'Grupo', icon: Building2 },
-                        { id: 'projects', label: 'Projetos', icon: Briefcase },
                         { id: 'clients', label: 'Clientes', icon: UserPlus },
                         { id: 'investors', label: 'Investidores', icon: TrendingUp },
                         { id: 'suppliers', label: 'Fornecedores', icon: Truck },
@@ -439,19 +437,6 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
             {/* Other Tabs Rendering with Filtering */}
             <div className="min-h-[60vh] animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {activeTab === 'projects' && (
-                    <ProjectList
-                        projects={projects.filter(p => !activeOrganizationId || p.organizationId === activeOrganizationId || p.organization_id === activeOrganizationId)}
-                        onLoadProject={onLoadProject}
-                        onEditProject={onEditProject}
-                        onNewProject={onNewProject}
-                        onDuplicateProject={onDuplicateProject}
-                        onImportProject={onImportProject}
-                        onExportProject={onExportProject}
-                        organizationId={activeOrganizationId || undefined}
-                        organizations={organizations.map(o => ({ id: o.id, name: o.name }))}
-                    />
-                )}
                 {activeTab === 'clients' && (
                     <ClientList onClientsChange={onClientsChange} organizationId={activeOrganizationId || undefined} />
                 )}

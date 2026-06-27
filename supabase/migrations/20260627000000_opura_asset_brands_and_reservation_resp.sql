@@ -27,13 +27,13 @@ CREATE POLICY "org_access_brands" ON public.opura_asset_brands
     TO authenticated
     USING (
         organization_id IN (
-            SELECT org_id FROM public.organization_members
+            SELECT organization_id FROM public.organization_members
             WHERE user_id = auth.uid()
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT org_id FROM public.organization_members
+            SELECT organization_id FROM public.organization_members
             WHERE user_id = auth.uid()
         )
     );

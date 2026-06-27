@@ -195,6 +195,7 @@ const BrokerPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
           profile={{ group: 'CORRETOR', role: '', email: brokerData.email }}
           organizationId={orgId}
           portalToken={token}
+          initialBroker={brokerData}
           isPreview
         />
       </React.Suspense>

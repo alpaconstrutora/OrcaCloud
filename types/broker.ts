@@ -54,6 +54,10 @@ export interface BrokerProposal {
     updated_at?: string;
 }
 
+export interface BrokerPortalSettings {
+    brokerPortalTabs?: string[];
+}
+
 export interface BrokerProfile {
     id: string;
     email: string;
@@ -65,6 +69,7 @@ export interface BrokerProfile {
     organization_id: string;
     commission_rate?: number;
     is_active: boolean;
+    settings?: BrokerPortalSettings;
     created_at?: string;
     updated_at?: string;
 }

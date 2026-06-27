@@ -7,7 +7,7 @@ export const brokerService = {
         if (!organizationId) return [] as BrokerProfile[];
         const { data, error } = await supabase
             .from('broker_profiles')
-            .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, created_at, updated_at')
+            .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, settings, created_at, updated_at')
             .eq('organization_id', organizationId)
             .order('name');
 
@@ -66,7 +66,7 @@ export const brokerService = {
     async getProfile(id: string) {
         const { data, error } = await supabase
             .from('broker_profiles')
-            .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, created_at, updated_at')
+            .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, settings, created_at, updated_at')
             .eq('id', id)
             .single();
 

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useMemo } from 'react';
-import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone } from 'lucide-react';
+import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X } from 'lucide-react';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import BrokerProposalSimulator from './broker/BrokerProposalSimulator';
 import BrokerLeadManager from './broker/BrokerLeadManager';
@@ -56,7 +56,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, color }: StatCardProps) =
     </div>
 );
 
-const TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
+const ALL_TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
     { id: 'estoque', label: 'Estoque', icon: LayoutGrid },
     { id: 'propostas', label: 'Propostas', icon: FileText },
     { id: 'leads', label: 'Leads', icon: Users },
@@ -94,12 +94,40 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
     const [selectedUnit, setSelectedUnit] = useState<BrokerUnit | null>(null);
     const [showSimulator, setShowSimulator] = useState(false);
     const [showMobilePreview, setShowMobilePreview] = useState(false);
+    const [showTabConfig, setShowTabConfig] = useState(false);
 
     // Impersonação — apenas para admins
     const [allBrokers, setAllBrokers] = useState<BrokerProfile[]>([]);
     const [selectedAdminBroker, setSelectedAdminBroker] = useState<BrokerProfile | null>(initialBroker ?? null);
 
     const effectiveBrokerEmail = (selectedAdminBroker ? selectedAdminBroker.email : profile?.email)?.toLowerCase();
+
+    // Tab visibility: config salva em broker_profiles.settings.brokerPortalTabs
+    const effectiveBroker = selectedAdminBroker ?? initialBroker ?? null;
+    const effectiveBrokerSettings = effectiveBroker?.settings ?? {};
+    const enabledTabIds: string[] = (effectiveBrokerSettings.brokerPortalTabs ?? []).length > 0
+        ? effectiveBrokerSettings.brokerPortalTabs!
+        : ALL_TABS.map(t => t.id);
+    const visibleTabs = ALL_TABS.filter(t => enabledTabIds.includes(t.id));
+    // admin vê todas (para poder configurar); corretor vê só as habilitadas
+    const navTabs = isAdmin ? ALL_TABS : visibleTabs;
+
+    const toggleTabVisibility = async (tabId: string) => {
+        if (!effectiveBroker) return;
+        const next = enabledTabIds.includes(tabId)
+            ? enabledTabIds.filter(id => id !== tabId)
+            : [...enabledTabIds, tabId];
+        try {
+            const updated = await brokerService.saveProfile({
+                id: effectiveBroker.id,
+                settings: { ...effectiveBrokerSettings, brokerPortalTabs: next },
+            });
+            setAllBrokers(prev => prev.map(b => b.id === updated.id ? updated : b));
+            if (selectedAdminBroker?.id === updated.id) setSelectedAdminBroker(updated);
+        } catch (err) {
+            console.error('Erro ao salvar abas do corretor:', err);
+        }
+    };
 
     const myProposals = useMemo(() => {
         if (!proposals || !effectiveBrokerEmail) return [];
@@ -249,6 +277,16 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                             <Smartphone className="w-4 h-4" />
                         </button>
                     )}
+                    {/* Botão Configurar Abas — somente admin, quando um corretor estiver selecionado */}
+                    {isAdmin && effectiveBroker && (
+                        <button
+                            onClick={() => setShowTabConfig(true)}
+                            title="Configurar abas visíveis do corretor"
+                            className="hidden md:flex p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
+                        >
+                            <Settings2 className="w-4 h-4" />
+                        </button>
+                    )}
 
                     {/* Seletor de organização — somente admin com múltiplas orgs */}
                     {isAdmin && organizations.length > 1 && (
@@ -276,21 +314,84 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                 <StatCard title="Comissão Acumulada" value={loading ? '…' : formatCurrency(stats.totalCommission)} subtext="5% sobre aprovadas" icon={DollarSign} color="amber" />
             </div>
 
+            {/* Modal de configuração de abas — somente admin */}
+            {showTabConfig && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowTabConfig(false)}>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <div
+                        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between p-8 border-b border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+                                    <Settings2 className="w-5 h-5 text-indigo-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Portal do Corretor</h2>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para o corretor</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowTabConfig(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-3">
+                            {ALL_TABS.map(tab => {
+                                const isVisible = enabledTabIds.includes(tab.id);
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => toggleTabVisibility(tab.id)}
+                                        className={`w-full flex items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
+                                            isVisible
+                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                : 'bg-gray-50 border-gray-100 text-gray-400'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <tab.icon className={`w-4 h-4 ${isVisible ? 'text-indigo-500' : 'text-gray-300'}`} />
+                                            <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
+                                        </div>
+                                        <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${isVisible ? 'text-indigo-500' : 'text-gray-300'}`}>
+                                            {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="px-8 pb-8">
+                            <p className="text-[10px] font-bold text-gray-400 text-center uppercase tracking-widest">
+                                Clique em cada aba para alternar visibilidade do corretor
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Tab Navigation */}
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                {TABS.map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => { setCurrentTab(tab.id); setShowSimulator(false); }}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${currentTab === tab.id
-                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-                            : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
+                {navTabs.map(tab => {
+                    const hidden = isAdmin && !visibleTabs.some(v => v.id === tab.id);
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => { setCurrentTab(tab.id as PortalTab); setShowSimulator(false); }}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                                currentTab === tab.id
+                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                                    : hidden
+                                        ? 'bg-gray-50 text-gray-300 border border-dashed border-gray-200'
+                                        : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
                             }`}
-                    >
-                        <tab.icon className="w-4 h-4" />
-                        {tab.label}
-                    </button>
-                ))}
+                            title={hidden ? 'Oculta para o corretor' : undefined}
+                        >
+                            <tab.icon className="w-4 h-4" />
+                            {tab.label}
+                            {hidden && <EyeOff className="w-3 h-3 ml-0.5 opacity-60" />}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Tab Content */}

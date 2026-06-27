@@ -158,14 +158,17 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                 } else {
                     const orgId = selectedOrgId;
                     if (!orgId) return;
-                    const [propertiesData, proposalsData, dealsData] = await Promise.all([
+                    const [propertiesRes, proposalsRes, dealsRes] = await Promise.allSettled([
                         commercialService.listProperties(orgId, undefined, selectedPurpose),
                         brokerService.listProposals(orgId),
                         commercialService.listDeals()
                     ]);
-                    setUnits(propertiesData as BrokerUnit[]);
-                    setProposals(proposalsData);
-                    setCommercialDeals(dealsData);
+                    if (propertiesRes.status === 'fulfilled') setUnits(propertiesRes.value as BrokerUnit[]);
+                    else console.error('[BrokerPortal] listProperties error:', propertiesRes.reason);
+                    if (proposalsRes.status === 'fulfilled') setProposals(proposalsRes.value);
+                    else console.error('[BrokerPortal] listProposals error:', proposalsRes.reason);
+                    if (dealsRes.status === 'fulfilled') setCommercialDeals(dealsRes.value);
+                    else console.error('[BrokerPortal] listDeals error:', dealsRes.reason);
                 }
             } catch (error) {
                 console.error("Erro ao carregar dados do portal:", error);

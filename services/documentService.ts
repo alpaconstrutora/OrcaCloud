@@ -174,7 +174,7 @@ export const documentService = {
     // SE A CATEGORIA FOR FINANCEIRO, INTEGRA NOTAS FISCAIS
     if (!filters?.categoria || filters.categoria === 'financeiro') {
       try {
-        const { data: invoicesData, error: invoicesError } = await supabase
+        let invoiceQuery = supabase
           .from('invoices')
           .select(`
             id,
@@ -187,9 +187,19 @@ export const documentService = {
               project_id,
               organization_id
             )
-          `)
-          .eq('purchase_orders.organization_id', organizationId)
-          .in('purchase_orders.project_id', targetProjectIds);
+          `);
+
+        if (organizationId) {
+          invoiceQuery = invoiceQuery.eq('purchase_orders.organization_id', organizationId);
+        }
+
+        if (targetProjectIds.length > 0) {
+          invoiceQuery = invoiceQuery.in('purchase_orders.project_id', targetProjectIds);
+        } else if (filters?.projectId) {
+          invoiceQuery = invoiceQuery.eq('purchase_orders.project_id', filters.projectId);
+        }
+
+        const { data: invoicesData, error: invoicesError } = await invoiceQuery;
 
         if (!invoicesError && invoicesData) {
           const mappedInvoices: OpuraDocument[] = invoicesData.map((inv: any) => ({
@@ -226,57 +236,133 @@ export const documentService = {
       }
     }
 
-    // SE A CATEGORIA FOR COMPLIANCE, INTEGRA EVIDÊNCIAS DE SST
+    // SE A CATEGORIA FOR COMPLIANCE, INTEGRA LAUDOS/PROGRAMAS SST E CATS
     if (!filters?.categoria || filters.categoria === 'compliance') {
       try {
-        const { data: evidencesData, error: evidencesError } = await supabase
-          .from('compliance_evidences')
+        // 1. PGR/APR (Avaliações de Risco)
+        let riskQuery = supabase
+          .from('risk_assessments')
           .select(`
             id,
-            evidence_url,
+            titulo,
+            tipo,
+            status,
+            data_avaliacao,
+            documento_url,
             created_at,
-            document_ref,
-            operator_email,
-            sst_checklists_obra!inner (
-              project_id,
-              org_id
-            )
-          `)
-          .eq('sst_checklists_obra.org_id', organizationId)
-          .in('sst_checklists_obra.project_id', targetProjectIds);
+            org_id,
+            project_id
+          `);
 
-        if (!evidencesError && evidencesData) {
-          const mappedEvidences: OpuraDocument[] = evidencesData.map((ev: any) => ({
-            id: ev.id,
-            organization_id: organizationId || '',
-            nome: ev.document_ref || `Evidência de Compliance ${ev.id}`,
-            descricao: `Evidência de checklist SST integrada via Segurança e Saúde`,
-            categoria: 'compliance',
-            tipo_documento: 'Licença / Alvará',
-            status: 'ativo',
-            data_emissao: ev.created_at || undefined,
-            alerta_dias_antecedencia: 30,
-            tags: ['Compliance', 'SST'].filter(Boolean),
-            criado_por: ev.operator_email || 'sistema',
-            created_at: ev.created_at || new Date().toISOString(),
-            updated_at: ev.created_at || new Date().toISOString(),
-            project_id: ev.sst_checklists_obra?.project_id || undefined,
-            active_version: ev.evidence_url ? {
-              id: `ver-${ev.id}`,
-              document_id: ev.id,
-              version_number: 1,
-              storage_path: `compliance-evidences:${ev.evidence_url}`,
-              tamanho: 0,
-              mime_type: 'application/pdf',
+        if (organizationId) {
+          riskQuery = riskQuery.eq('org_id', organizationId);
+        }
+        if (targetProjectIds.length > 0) {
+          riskQuery = riskQuery.in('project_id', targetProjectIds);
+        } else if (filters?.projectId) {
+          riskQuery = riskQuery.eq('project_id', filters.projectId);
+        }
+
+        const { data: riskData, error: riskError } = await riskQuery;
+
+        if (!riskError && riskData) {
+          const mappedRisks: OpuraDocument[] = riskData
+            .filter((r) => r.documento_url)
+            .map((r) => ({
+              id: r.id,
+              organization_id: organizationId || r.org_id,
+              nome: r.titulo || `${r.tipo} - Avaliação de Risco`,
+              descricao: `Programa/Laudo de SST integrado via Segurança e Saúde (${r.tipo})`,
+              categoria: 'compliance',
+              tipo_documento: 'Licença / Alvará',
+              status: r.status === 'VIGENTE' ? 'ativo' : 'arquivado',
+              data_emissao: r.data_avaliacao || undefined,
+              alerta_dias_antecedencia: 30,
+              tags: ['Compliance', 'SST', r.tipo].filter(Boolean),
               criado_por: 'sistema',
-              created_at: ev.created_at || new Date().toISOString(),
-            } : undefined,
-          }));
+              created_at: r.created_at || new Date().toISOString(),
+              updated_at: r.created_at || new Date().toISOString(),
+              project_id: r.project_id || undefined,
+              active_version: {
+                id: `ver-${r.id}`,
+                document_id: r.id,
+                version_number: 1,
+                storage_path: r.documento_url,
+                tamanho: 0,
+                mime_type: 'application/pdf',
+                criado_por: 'sistema',
+                created_at: r.created_at || new Date().toISOString(),
+              },
+            }));
 
-          result = [...result, ...mappedEvidences];
+          result = [...result, ...mappedRisks];
         }
       } catch (err) {
-        console.error('[DocumentService] Erro ao integrar evidências de SST no Docs:', err);
+        console.error('[DocumentService] Erro ao integrar laudos SST no Docs:', err);
+      }
+
+      try {
+        // 2. CATs (Acidentes de Trabalho com PDF)
+        let accidentQuery = supabase
+          .from('accidents')
+          .select(`
+            id,
+            descricao,
+            cat_numero,
+            cat_emitida,
+            cat_data_emissao,
+            cat_url,
+            created_at,
+            org_id,
+            project_id
+          `)
+          .eq('cat_emitida', true);
+
+        if (organizationId) {
+          accidentQuery = accidentQuery.eq('org_id', organizationId);
+        }
+        if (targetProjectIds.length > 0) {
+          accidentQuery = accidentQuery.in('project_id', targetProjectIds);
+        } else if (filters?.projectId) {
+          accidentQuery = accidentQuery.eq('project_id', filters.projectId);
+        }
+
+        const { data: accidentData, error: accidentError } = await accidentQuery;
+
+        if (!accidentError && accidentData) {
+          const mappedAccidents: OpuraDocument[] = accidentData
+            .filter((a) => a.cat_url)
+            .map((a) => ({
+              id: a.id,
+              organization_id: organizationId || a.org_id,
+              nome: a.cat_numero ? `CAT nº ${a.cat_numero}` : `CAT - Comunicação de Acidente de Trabalho`,
+              descricao: `CAT integrada via Segurança e Saúde (${a.descricao})`,
+              categoria: 'compliance',
+              tipo_documento: 'Licença / Alvará',
+              status: 'ativo',
+              data_emissao: a.cat_data_emissao || undefined,
+              alerta_dias_antecedencia: 30,
+              tags: ['Compliance', 'SST', 'CAT'].filter(Boolean),
+              criado_por: 'sistema',
+              created_at: a.created_at || new Date().toISOString(),
+              updated_at: a.created_at || new Date().toISOString(),
+              project_id: a.project_id || undefined,
+              active_version: {
+                id: `ver-${a.id}`,
+                document_id: a.id,
+                version_number: 1,
+                storage_path: a.cat_url,
+                tamanho: 0,
+                mime_type: 'application/pdf',
+                criado_por: 'sistema',
+                created_at: a.created_at || new Date().toISOString(),
+              },
+            }));
+
+          result = [...result, ...mappedAccidents];
+        }
+      } catch (err) {
+        console.error('[DocumentService] Erro ao integrar CATs no Docs:', err);
       }
     }
 
@@ -357,23 +443,19 @@ export const documentService = {
             mime_type,
             created_at,
             uploaded_by,
-            services_opportunities!inner (
+            investor_opportunities!inner (
               organization_id,
-              converted_project_id,
-              engineering_project_id
+              project_id
             )
           `)
-          .eq('services_opportunities.organization_id', organizationId);
+          .eq('investor_opportunities.organization_id', organizationId);
 
         if (!oppDocsError && oppDocsData) {
           let filteredOppDocs = oppDocsData;
           if (targetProjectIds.length > 0) {
             filteredOppDocs = oppDocsData.filter((od: any) => {
-              const opp = od.services_opportunities;
-              return opp && (
-                targetProjectIds.includes(opp.converted_project_id) || 
-                targetProjectIds.includes(opp.engineering_project_id)
-              );
+              const opp = od.investor_opportunities;
+              return opp && targetProjectIds.includes(opp.project_id);
             });
           }
 
@@ -391,12 +473,12 @@ export const documentService = {
             criado_por: od.uploaded_by || 'sistema',
             created_at: od.created_at || new Date().toISOString(),
             updated_at: od.created_at || new Date().toISOString(),
-            project_id: od.services_opportunities?.converted_project_id || od.services_opportunities?.engineering_project_id || undefined,
+            project_id: od.investor_opportunities?.project_id || undefined,
             active_version: od.file_path ? {
               id: `ver-${od.id}`,
               document_id: od.id,
               version_number: 1,
-              storage_path: `opportunity-documents:${od.file_path}`,
+              storage_path: `opportunity-dataroom:${od.file_path}`,
               tamanho: 0,
               mime_type: od.mime_type || 'application/pdf',
               criado_por: od.uploaded_by || 'sistema',

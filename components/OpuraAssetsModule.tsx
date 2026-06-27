@@ -30,7 +30,9 @@ import {
   Shield,
   PenTool,
   ExternalLink,
-  TrendingDown
+  TrendingDown,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { assetService } from '../services/assetService';
 import { useStore } from '../store/useStore';
@@ -155,6 +157,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const [searchQuery, setSearchQuery] = React.useState('');
   const [filterCategory, setFilterCategory] = React.useState<string>('todos');
   const [filterStatus, setFilterStatus] = React.useState<string>('todos');
+  const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
 
   // Filtros de manutenção
   const [maintSearchQuery, setMaintSearchQuery] = React.useState('');
@@ -886,7 +889,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     />
                   </div>
 
-                  <div className="flex gap-3 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0">
                     <select
                       value={filterCategory}
                       onChange={(e) => setFilterCategory(e.target.value)}
@@ -913,65 +916,152 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       <option value="ocioso">Ocioso</option>
                       <option value="baixado">Baixado</option>
                     </select>
+
+                    {/* Alternância de Visualização */}
+                    <div className="flex items-center border border-gray-200 bg-white rounded-xl overflow-hidden p-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('grid')}
+                        className={`p-2 transition-all rounded-lg ${viewMode === 'grid' ? 'bg-slate-900 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 bg-transparent'}`}
+                        title="Visualização em Blocos"
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('list')}
+                        className={`p-2 transition-all rounded-lg ${viewMode === 'list' ? 'bg-slate-900 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 bg-transparent'}`}
+                        title="Visualização em Linhas"
+                      >
+                        <List className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                {/* Grid de Ativos */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {filteredAssets.map(asset => {
-                    const Icon = categoryIcons[asset.category] || Package;
-                    const depreciation = calculateDepreciation(asset);
-                    return (
-                      <div
-                        key={asset.id}
-                        onClick={async () => {
-                          setSelectedAsset(asset);
-                          loadAssetMovements(asset.id);
-                          loadAssetDocuments(asset.id);
-                        }}
-                        className={`bg-white p-5 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between h-44 hover:shadow-xl group
-                          ${selectedAsset?.id === asset.id ? 'border-blue-500 shadow-md' : 'border-gray-100 shadow-sm'}`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110
-                              ${asset.status === 'disponivel' ? 'bg-emerald-50 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
-                              <Icon className="w-5 h-5" />
+                {/* Grid ou Lista de Ativos */}
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {filteredAssets.map(asset => {
+                      const Icon = categoryIcons[asset.category] || Package;
+                      const depreciation = calculateDepreciation(asset);
+                      return (
+                        <div
+                          key={asset.id}
+                          onClick={async () => {
+                            setSelectedAsset(asset);
+                            loadAssetMovements(asset.id);
+                            loadAssetDocuments(asset.id);
+                          }}
+                          className={`bg-white p-5 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between h-44 hover:shadow-xl group
+                            ${selectedAsset?.id === asset.id ? 'border-blue-500 shadow-md' : 'border-gray-100 shadow-sm'}`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110
+                                ${asset.status === 'disponivel' ? 'bg-emerald-50 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+                                <Icon className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-gray-800 text-sm group-hover:text-blue-600 transition-colors truncate max-w-[180px]">{asset.name}</h4>
+                                <p className="text-gray-400 text-xs font-semibold">{asset.code}</p>
+                              </div>
                             </div>
+
+                            <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md
+                              ${asset.status === 'disponivel' ? 'bg-emerald-500/10 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                              {asset.status === 'em_uso' ? 'Em Obra' : asset.status}
+                            </span>
+                          </div>
+
+                          <div className="flex items-end justify-between mt-4 border-t border-gray-50 pt-3 text-xs">
                             <div>
-                              <h4 className="font-bold text-gray-800 text-sm group-hover:text-blue-600 transition-colors truncate max-w-[180px]">{asset.name}</h4>
-                              <p className="text-gray-400 text-xs font-semibold">{asset.code}</p>
+                              <span className="text-gray-400 block text-[9px] font-bold uppercase tracking-wider">Custo Residual / Atual</span>
+                              <span className="font-bold text-gray-700">R$ {depreciation.current.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
+                              Ver Detalhes
+                              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                             </div>
                           </div>
-
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md
-                            ${asset.status === 'disponivel' ? 'bg-emerald-500/10 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
-                            {asset.status === 'em_uso' ? 'Em Obra' : asset.status}
-                          </span>
                         </div>
-
-                        <div className="flex items-end justify-between mt-4 border-t border-gray-50 pt-3 text-xs">
-                          <div>
-                            <span className="text-gray-400 block text-[9px] font-bold uppercase tracking-wider">Custo Residual / Atual</span>
-                            <span className="font-bold text-gray-700">R$ {depreciation.current.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
-                            Ver Detalhes
-                            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                          </div>
-                        </div>
+                      );
+                    })}
+                    {filteredAssets.length === 0 && (
+                      <div className="col-span-2 bg-white py-16 text-center text-gray-400 rounded-3xl border border-gray-100">
+                        <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="font-semibold text-sm">Nenhum ativo encontrado com os filtros aplicados.</p>
                       </div>
-                    );
-                  })}
-                  {filteredAssets.length === 0 && (
-                    <div className="col-span-2 bg-white py-16 text-center text-gray-400 rounded-3xl border border-gray-100">
-                      <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="font-semibold text-sm">Nenhum ativo encontrado com os filtros aplicados.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider bg-gray-50/50">
+                            <th className="py-4 px-6">Código</th>
+                            <th className="py-4 px-6">Ativo</th>
+                            <th className="py-4 px-6">Categoria</th>
+                            <th className="py-4 px-6">Status</th>
+                            <th className="py-4 px-6">Valor Atual</th>
+                            <th className="py-4 px-6 text-center">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredAssets.map(asset => {
+                            const Icon = categoryIcons[asset.category] || Package;
+                            const depreciation = calculateDepreciation(asset);
+                            return (
+                              <tr
+                                key={asset.id}
+                                onClick={async () => {
+                                  setSelectedAsset(asset);
+                                  loadAssetMovements(asset.id);
+                                  loadAssetDocuments(asset.id);
+                                }}
+                                className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors cursor-pointer
+                                  ${selectedAsset?.id === asset.id ? 'bg-blue-50/20' : ''}`}
+                              >
+                                <td className="py-4 px-6 font-bold text-gray-400">{asset.code}</td>
+                                <td className="py-4 px-6">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center
+                                      ${asset.status === 'disponivel' ? 'bg-emerald-50 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+                                      <Icon className="w-4.5 h-4.5" />
+                                    </div>
+                                    <span className="font-bold text-gray-800 text-xs">{asset.name}</span>
+                                  </div>
+                                </td>
+                                <td className="py-4 px-6 uppercase text-gray-500 font-bold text-[10px] tracking-wider">{asset.category}</td>
+                                <td className="py-4 px-6">
+                                  <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded
+                                    ${asset.status === 'disponivel' ? 'bg-emerald-500/10 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                                    {asset.status === 'em_uso' ? 'Em Obra' : asset.status}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-6 font-bold text-gray-700">
+                                  R$ {depreciation.current.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                                </td>
+                                <td className="py-4 px-6 text-center">
+                                  <div className="flex items-center justify-center text-blue-500 font-bold hover:text-blue-600">
+                                    <ArrowRight className="w-4 h-4 transition-transform hover:translate-x-1" />
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                  )}
-                </div>
+                    {filteredAssets.length === 0 && (
+                      <div className="bg-white py-16 text-center text-gray-400 rounded-b-[2rem]">
+                        <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="font-semibold text-sm">Nenhum ativo encontrado com os filtros aplicados.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-
               {/* Painel da Direita: Detalhe do Ativo Selecionado */}
               <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm h-fit">
                 {selectedAsset ? (

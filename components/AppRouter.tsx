@@ -744,6 +744,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'labor-esocial':
     case 'labor-vale-refeicao':
     case 'labor-incentivos':
+    case 'labor-cargos':
       return <LaborModule activeOrganizationId={activeOrganizationId || undefined} projects={typedProjects} activeSection={activeView} onChangeView={setActiveView} />;
 
     case 'labor-analytics':
@@ -1314,6 +1315,7 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
                 {tab === 'obra' && (
                     <SupplyChainContractList
                         projectId={projectId}
+                        domain="SUPRIMENTOS"
                         onCreateNew={() => setIsCreatingContract(true)}
                         onViewDetails={(id) => setSelectedContractId(id)}
                         onEdit={(contract) => { setEditingContract(contract); setIsCreatingContract(true); }}

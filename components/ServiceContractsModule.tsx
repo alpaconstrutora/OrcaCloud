@@ -26,7 +26,7 @@ const ServiceContractsModule: React.FC<Props> = ({
 
     const handleSubmit = async (data: Partial<Contract>) => {
         const effectiveOrgId = organizationId || editingContract?.organization_id;
-        const payload = { ...data, direction: 'OUTGOING' as const, organization_id: effectiveOrgId };
+        const payload = { ...data, direction: 'OUTGOING' as const, domain: 'SERVICOS' as const, organization_id: effectiveOrgId };
         let saved: Contract;
         if (editingContract?.id) {
             saved = await contractService.updateContract(editingContract.id, payload);
@@ -58,6 +58,7 @@ const ServiceContractsModule: React.FC<Props> = ({
                         projectId=""
                         organizationId={organizationId}
                         direction="OUTGOING"
+                        domain="SERVICOS"
                         title="Contratos de Serviço"
                         subtitle="Contratos emitidos para clientes — aditivos e medições."
                         version={version}
@@ -67,6 +68,7 @@ const ServiceContractsModule: React.FC<Props> = ({
                                 contract_type: 'Prestação de Serviços',
                                 nature: 'Serviço',
                                 direction: 'OUTGOING',
+                                domain: 'SERVICOS',
                             } as any);
                             setIsModalOpen(true);
                         }}

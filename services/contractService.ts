@@ -445,11 +445,12 @@ export const contractService = {
         organizationId?: string,
         empresaId?: string,
         direction?: 'OUTGOING' | 'INCOMING',
+        domain?: 'SUPRIMENTOS' | 'SERVICOS' | 'LOCACAO' | 'VENDAS',
     ): Promise<Contract[]> => {
         // payment_schedule (array JSONB) omitido na listagem — carregado em getContractById
         let query = supabase
             .from('contracts')
-            .select('id, organization_id, project_id, supplier_id, client_id, budget_id, number, title, description, contract_type, nature, direction, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, signature_status, signature_url, approval_status, approval_required_levels, template_id, created_at')
+            .select('id, organization_id, project_id, supplier_id, client_id, budget_id, number, title, description, contract_type, nature, direction, domain, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, signature_status, signature_url, approval_status, approval_required_levels, template_id, created_at')
             .order('created_at', { ascending: false });
 
         if (projectId) {
@@ -460,12 +461,23 @@ export const contractService = {
             query = query.eq('organization_id', organizationId);
         }
 
-        // Separação de módulos por direction:
+        // Separação de módulos por domínio de negócio (preferencial).
+        //   SUPRIMENTOS · SERVICOS · LOCACAO · VENDAS — nunca misturar.
+        if (domain) {
+            // Contratos legados de Suprimentos podem ter domain NULL antes do backfill.
+            if (domain === 'SUPRIMENTOS') {
+                query = query.or('domain.eq.SUPRIMENTOS,domain.is.null');
+            } else {
+                query = query.eq('domain', domain);
+            }
+        }
+
+        // Compat: separação legada por direction (quando domain não é informado).
         //  - OUTGOING  → Comercial / Contratos de Serviço
         //  - INCOMING  → Suprimentos (inclui contratos legados com direction NULL)
-        if (direction === 'OUTGOING') {
+        if (!domain && direction === 'OUTGOING') {
             query = query.eq('direction', 'OUTGOING');
-        } else if (direction === 'INCOMING') {
+        } else if (!domain && direction === 'INCOMING') {
             query = query.or('direction.eq.INCOMING,direction.is.null');
         }
 
@@ -474,15 +486,33 @@ export const contractService = {
         return data as Contract[];
     },
 
-    listContractsByClientId: async (clientId: string, orgId?: string): Promise<Contract[]> => {
+    // Mapeia a categoria do cliente comercial para o domínio de contrato correspondente.
+    categoryToContractDomain: (category?: string): 'VENDAS' | 'LOCACAO' | 'SERVICOS' | undefined => {
+        switch (category) {
+            case 'Vendas':   return 'VENDAS';
+            case 'Locação':  return 'LOCACAO';
+            case 'Serviços': return 'SERVICOS';
+            default:         return undefined;
+        }
+    },
+
+    listContractsByClientId: async (
+        clientId: string,
+        orgId?: string,
+        category?: string,
+    ): Promise<Contract[]> => {
         let query = supabase
             .from('contracts')
-            .select('id, organization_id, number, title, contract_type, nature, status, original_value, current_value, start_date, end_date, is_recurring, billing_cycle, due_day, reajuste_index, reajuste_data_base, reajuste_proximo, sla_days, warranty_months, signature_status, signature_url, signed_contract_url, direction, minuta_versions, created_at')
+            .select('id, organization_id, number, title, contract_type, nature, status, original_value, current_value, start_date, end_date, is_recurring, billing_cycle, due_day, reajuste_index, reajuste_data_base, reajuste_proximo, sla_days, warranty_months, signature_status, signature_url, signed_contract_url, direction, domain, minuta_versions, created_at')
             .eq('client_id', clientId)
             .eq('direction', 'OUTGOING')
             .neq('status', 'Rascunho')
             .order('created_at', { ascending: false });
         if (orgId) query = query.eq('organization_id', orgId);
+        // Blindagem por domínio: cliente só vê contratos do seu próprio tipo
+        // (Vendas / Locação / Serviços). O client_id já isola, mas o domínio é explícito.
+        const domain = contractService.categoryToContractDomain(category);
+        if (domain) query = query.eq('domain', domain);
         const { data, error } = await query;
         if (error) throw error;
         return data as Contract[];

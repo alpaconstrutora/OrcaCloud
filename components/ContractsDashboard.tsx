@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     FileText, AlertTriangle, TrendingUp, Clock, DollarSign,
-    CheckCircle2, XCircle, RotateCcw, ChevronRight, RefreshCw,
+    CheckCircle2, XCircle, RotateCcw, ChevronRight, RefreshCw, Plus,
 } from 'lucide-react';
 import { contractService } from '../services/contractService';
 import { supabase } from '../lib/supabase';
@@ -11,6 +11,8 @@ interface Props {
     organizationId: string;
     onViewContract: (id: string) => void;
     direction?: 'OUTGOING' | 'INCOMING';
+    domain?: 'SUPRIMENTOS' | 'SERVICOS' | 'LOCACAO' | 'VENDAS';
+    onCreateNew?: () => void;
 }
 
 const fmt = (n: number) =>
@@ -34,38 +36,44 @@ const STATUS_DOT: Record<string, string> = {
     Concluído: 'bg-emerald-300', Suspenso: 'bg-amber-500', Encerrado: 'bg-gray-300', Cancelado: 'bg-red-400',
 };
 
-export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewContract, direction }) => {
+export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewContract, direction, domain, onCreateNew }) => {
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<'alerts' | 'active' | 'all'>('alerts');
     const [measuredTotal, setMeasuredTotal] = useState(0);
     const [clientNames, setClientNames] = useState<Record<string, string>>({});
 
+    // Layout "com cliente" (mostra coluna Contratante): qualquer domínio OUTGOING.
+    const showsClient = direction === 'OUTGOING' || domain === 'SERVICOS' || domain === 'LOCACAO' || domain === 'VENDAS';
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await contractService.listContracts(undefined, organizationId, undefined, direction);
+            const data = await contractService.listContracts(undefined, organizationId, undefined, direction, domain);
             setContracts(data);
         } finally {
             setLoading(false);
         }
-    }, [organizationId, direction]);
+    }, [organizationId, direction, domain]);
 
     useEffect(() => { load(); }, [load]);
 
     useEffect(() => {
-        if (direction !== 'OUTGOING') { setClientNames({}); return; }
+        if (!showsClient) { setClientNames({}); return; }
         const ids = [...new Set(contracts.filter(c => (c as any).client_id).map(c => (c as any).client_id as string))];
         if (!ids.length) return;
-        supabase.from('service_clients').select('id, name').in('id', ids).then(({ data }) => {
+        // VENDAS/LOCACAO → clientes comerciais na tabela `clients`.
+        // SERVICOS (e OUTGOING legado) → tabela `service_clients`.
+        const clientTable = (domain === 'VENDAS' || domain === 'LOCACAO') ? 'clients' : 'service_clients';
+        supabase.from(clientTable).select('id, name').in('id', ids).then(({ data }) => {
             const map: Record<string, string> = {};
             (data ?? []).forEach((s: { id: string; name: string }) => { map[s.id] = s.name; });
             setClientNames(map);
         });
-    }, [contracts, direction]);
+    }, [contracts, showsClient, domain]);
 
     useEffect(() => {
-        if (direction !== 'OUTGOING') { setMeasuredTotal(0); return; }
+        if (!showsClient) { setMeasuredTotal(0); return; }
         const ids = contracts.filter(c => ['Ativo', 'Concluído', 'Assinado'].includes(c.status)).map(c => c.id);
         if (!ids.length) { setMeasuredTotal(0); return; }
         supabase
@@ -75,7 +83,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
             .then(({ data }) => {
                 setMeasuredTotal((data ?? []).reduce((s, m) => s + ((m as { net_value: number }).net_value || 0), 0));
             });
-    }, [contracts, direction]);
+    }, [contracts, showsClient]);
 
     // ── KPIs ────────────────────────────────────────────────────────────────
     const active = contracts.filter(c => c.status === 'Ativo');
@@ -114,7 +122,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
 
     const saldoContratual = totalReceita - measuredTotal;
 
-    const kpis = direction === 'OUTGOING' ? [
+    const kpis = showsClient ? [
         {
             label: 'Contratos Ativos', value: active.length.toString(),
             sub: `${rascunho.length} em elaboração`,
@@ -168,9 +176,17 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
             {/* Header */}
             <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Carteira de Contratos</h2>
-                <button onClick={load} disabled={loading} className="text-gray-400 hover:text-gray-700 disabled:opacity-50">
-                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                </button>
+                <div className="flex items-center gap-3">
+                    {onCreateNew && (
+                        <button onClick={onCreateNew}
+                            className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3.5 py-1.5 rounded-lg transition-colors">
+                            <Plus size={15} /> Novo Contrato
+                        </button>
+                    )}
+                    <button onClick={load} disabled={loading} className="text-gray-400 hover:text-gray-700 disabled:opacity-50">
+                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
             </div>
 
             {/* KPIs */}
@@ -228,7 +244,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                                 <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
                                     <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Número</th>
                                     <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Título</th>
-                                    {direction === 'OUTGOING' && <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Contratante</th>}
+                                    {showsClient && <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Contratante</th>}
                                     <th className="text-right px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Valor</th>
                                     <th className="text-center px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                                     <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Vencimento</th>
@@ -246,7 +262,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                                             className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer">
                                             <td className="px-4 py-3 font-mono text-xs font-semibold text-blue-700 dark:text-blue-400">{c.number}</td>
                                             <td className="px-4 py-3 text-gray-900 dark:text-white font-medium max-w-[200px] truncate">{c.title}</td>
-                                            {direction === 'OUTGOING' && (
+                                            {showsClient && (
                                                 <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px] truncate">
                                                     {(c as any).client_id ? (clientNames[(c as any).client_id] ?? '…') : '—'}
                                                 </td>

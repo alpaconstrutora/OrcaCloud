@@ -151,7 +151,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             }
             const loadContracts = portalToken
                 ? clientPortalService.getContractsByToken(portalToken)
-                : contractService.listContractsByClientId(clientProfile.id, orgId || undefined);
+                : contractService.listContractsByClientId(clientProfile.id, orgId || undefined, clientProfile.category);
             loadContracts.then(contracts => {
                 setClientContracts(contracts as any);
             }).catch(console.error);
@@ -167,7 +167,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         if (activeTab === 'dashboard' && (clientCategory === 'Locação' || clientCategory === 'Serviços') && clientProfile) {
             (portalToken
                 ? clientPortalService.getContractsByToken(portalToken)
-                : contractService.listContractsByClientId(clientProfile.id, orgId || undefined))
+                : contractService.listContractsByClientId(clientProfile.id, orgId || undefined, clientProfile.category))
                 .then(c => setClientContracts(c as any)).catch(console.error);
             if (orgId) {
                 commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId)

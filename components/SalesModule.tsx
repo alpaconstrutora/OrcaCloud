@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, MoreVertical, Edit, Trash2, LayoutGrid, List, ChevronRight, ChevronDown, X, BrainCircuit, Activity, Calculator, Percent, Target, ArrowUpDown, Mail, Phone, Briefcase } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, MoreVertical, Edit, Trash2, LayoutGrid, List, ChevronRight, ChevronDown, X, BrainCircuit, Activity, Calculator, Percent, Target, ArrowUpDown, Mail, Phone, Briefcase, FileText } from 'lucide-react';
 import { commercialService } from '../services/commercialService';
 import { Property, PropertyStatus, PropertyDeal, Client, HedonicPricingConfig } from '../types';
 import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
@@ -31,14 +31,18 @@ import { pricingService } from '../services/pricingService';
 import { brokerService } from '../services/brokerService';
 import BrokerModal from './BrokerModal';
 import { BrokerProfile } from '../types';
+import { ContractsDashboard } from './ContractsDashboard';
+import { ContractModal } from './ContractModal';
+import ContractDetailView from './ContractDetailView';
+import { contractService } from '../services/contractService';
 
 interface SalesModuleProps {
     organizationId?: string;
 }
 
 const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
-    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'simulation' | 'brokers'>(
-        (localStorage.getItem('sales_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'brokers') || 'inventory'
+    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'simulation' | 'brokers' | 'contracts'>(
+        (localStorage.getItem('sales_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'brokers' | 'contracts') || 'inventory'
     );
     const [properties, setProperties] = useState<Property[]>([]);
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
@@ -65,6 +69,12 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
     const [isBrokerModalOpen, setIsBrokerModalOpen] = useState(false);
     const [editingBroker, setEditingBroker] = useState<BrokerProfile | undefined>(undefined);
+
+    // Contratos de Venda de Ativos (domain='VENDAS') — isolado dos demais domínios.
+    const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+    const [editingContract, setEditingContract] = useState<any | undefined>(undefined);
+    const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
+    const [contractsVersion, setContractsVersion] = useState(0);
 
 
     // Simulation States
@@ -746,6 +756,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     >
                         <User className={`w-4 h-4 ${activeTab === 'brokers' ? 'fill-blue-600/10' : ''}`} />
                         Corretores
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('contracts')}
+                        className={`flex items-center gap-2 px-8 py-3 rounded-[1.25rem] font-black tracking-tight transition-all duration-300 ${activeTab === 'contracts' ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
+                    >
+                        <FileText className={`w-4 h-4 ${activeTab === 'contracts' ? 'fill-blue-600/10' : ''}`} />
+                        Contratos
                     </button>
                 </div>
 
@@ -1484,6 +1501,61 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {/* Contratos de Venda de Ativos (domain='VENDAS') */}
+            {activeTab === 'contracts' && (
+                selectedContractId ? (
+                    <ContractDetailView
+                        contractId={selectedContractId}
+                        onBack={() => setSelectedContractId(null)}
+                        budget={[]}
+                        organizationId={organizationId}
+                        onEdit={(contract) => { setEditingContract(contract); setIsContractModalOpen(true); }}
+                    />
+                ) : (
+                    <ContractsDashboard
+                        key={contractsVersion}
+                        organizationId={organizationId || ''}
+                        domain="VENDAS"
+                        onViewContract={(id) => setSelectedContractId(id)}
+                        onCreateNew={() => {
+                            setEditingContract({
+                                contract_type: 'Compra e Venda',
+                                nature: 'Venda',
+                                direction: 'OUTGOING',
+                                domain: 'VENDAS',
+                            });
+                            setIsContractModalOpen(true);
+                        }}
+                    />
+                )
+            )}
+
+            {(organizationId || editingContract?.organization_id) && (
+                <ContractModal
+                    isOpen={isContractModalOpen}
+                    onClose={() => { setIsContractModalOpen(false); setEditingContract(undefined); }}
+                    onSubmit={async (data) => {
+                        const effectiveOrgId = organizationId || editingContract?.organization_id;
+                        const payload = { ...data, direction: 'OUTGOING' as const, domain: 'VENDAS' as const, organization_id: effectiveOrgId };
+                        let saved;
+                        if (editingContract?.id) {
+                            saved = await contractService.updateContract(editingContract.id, payload);
+                        } else {
+                            saved = await contractService.createContract(payload);
+                        }
+                        setContractsVersion(v => v + 1);
+                        setIsContractModalOpen(false);
+                        setEditingContract(undefined);
+                        setSelectedContractId(saved.id);
+                    }}
+                    projectId={editingContract?.project_id ?? ''}
+                    organizationId={organizationId || editingContract?.organization_id}
+                    initialData={editingContract ?? undefined}
+                    titleNew="Novo Contrato de Venda"
+                    moduleLabel="Contratos de Venda de Ativos"
+                />
             )}
 
 

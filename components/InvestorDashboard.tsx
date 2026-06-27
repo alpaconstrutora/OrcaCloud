@@ -1,11 +1,13 @@
 import React from 'react';
-import { TrendingUp, PieChart as PieChartIcon, Building2, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw } from 'lucide-react';
+import { TrendingUp, PieChart as PieChartIcon, Building2, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, CheckCircle2, XCircle } from 'lucide-react';
 import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
 import { Investor, investorService } from '../services/investorService';
 import { projectService, ProjectData } from '../services/projectService';
 import { investorPortalService, InvestorReport, InvestorOpportunity, ReportCategory } from '../services/investorPortalService';
 import { announcementsService } from '../services/announcementsService';
 import CommunicationCenter from './investor/CommunicationCenter';
+import MobilePreviewFrame from './MobilePreviewFrame';
+import { investorPortalTokenService } from '../services/investorPortalTokenService';
 import SpeManager from './investor/SpeManager';
 import MonthlyReportTrigger from './investor/MonthlyReportTrigger';
 import { investorContributionsService, InvestorFinancialSummary } from '../services/investorContributionsService';
@@ -23,13 +25,17 @@ import ReportsTab from './investor/ReportsTab';
 import { HoldingItem, HistoricalPoint } from './investor/types';
 
 interface InvestorDashboardProps {
-    activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports';
+    activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'comunicados' | 'spe' | 'relatorios';
     settings: ProjectSettings;
     organizationId?: string;
     budget?: BudgetEntry[];
     profile?: { group: string; role: string };
     investorProfile?: Investor | null;
     onUpdateSettings?: (settings: ProjectSettings) => void;
+    /** Oculta chrome de admin (prévia mobile e rota pública por token). */
+    isPreview?: boolean;
+    /** Token de acesso público. Quando presente, dados são buscados via RPCs anon. */
+    portalToken?: string;
 }
 
 type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'comunicados' | 'spe' | 'relatorios';
@@ -60,6 +66,7 @@ const TAB_TITLES: Record<TabId, string> = {
 
 const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     activeTab: initialTab, settings, organizationId, profile, investorProfile, onUpdateSettings,
+    isPreview = false, portalToken,
 }) => {
     // Org canônica: prop activeOrganizationId tem precedência; settings.organizationId
     // só existe quando um projeto está carregado, então sem ele o portal não salvava.
@@ -84,9 +91,39 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const [inputModal, setInputModal] = React.useState<{ label: string; onConfirm: (val: string) => void } | null>(null);
     const [inputValue, setInputValue] = React.useState('');
 
-    const isAdmin = profile?.role === UserProfile.ADMIN
+    const isAdmin = !isPreview && (
+        profile?.role === UserProfile.ADMIN
         || profile?.role === UserProfile.DEVELOPER
-        || profile?.group === 'DESENVOLVEDOR';
+        || profile?.group === 'DESENVOLVEDOR'
+    );
+
+    const [showMobilePreview, setShowMobilePreview] = React.useState(false);
+    const [showTabConfig, setShowTabConfig] = React.useState(false);
+    const [portalAnnouncements, setPortalAnnouncements] = React.useState<any[]>([]);
+
+    // Tab visibility: lida de investorProfile.settings.investorPortalTabs
+    const investorSettings = investorProfile?.settings ?? {};
+    const enabledTabIds: string[] = (investorSettings.investorPortalTabs ?? []).length > 0
+        ? investorSettings.investorPortalTabs!
+        : TABS.map(t => t.id);
+    // admin vê todas (para configurar); investidor vê só as habilitadas
+    const navTabs = isAdmin ? TABS : TABS.filter(t => enabledTabIds.includes(t.id));
+
+    const toggleTabVisibility = async (tabId: string) => {
+        if (!investorProfile?.id) return;
+        const next = enabledTabIds.includes(tabId)
+            ? enabledTabIds.filter(id => id !== tabId)
+            : [...enabledTabIds, tabId];
+        try {
+            const { investorService } = await import('../services/investorService');
+            await investorService.saveInvestor({
+                id: investorProfile.id,
+                settings: { ...investorSettings, investorPortalTabs: next },
+            });
+        } catch (err) {
+            console.error('Erro ao salvar abas do investidor:', err);
+        }
+    };
 
     const openConfirm = (msg: string, onConfirm: () => void) => setConfirmModal({ msg, onConfirm });
     const openInput = (label: string, defaultValue: string, onConfirm: (val: string) => void) => {
@@ -191,7 +228,29 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
 
     React.useEffect(() => { if (initialTab) setActiveTab(initialTab); }, [initialTab]);
 
+    // Carregamento via portalToken (anon) — substitui os effects autenticados
     React.useEffect(() => {
+        if (!portalToken) return;
+        (async () => {
+            try {
+                const [summary, rpts, opps, anns] = await Promise.all([
+                    investorPortalTokenService.getSummaryByToken(portalToken),
+                    investorPortalTokenService.getReportsByToken(portalToken),
+                    investorPortalTokenService.getOpportunitiesByToken(portalToken),
+                    investorPortalTokenService.getAnnouncementsByToken(portalToken),
+                ]);
+                setRealProjects(summary.projects as unknown as ProjectData[]);
+                setReports(rpts);
+                setOpportunities(opps);
+                setPortalAnnouncements(anns);
+            } catch (err) {
+                console.error('Erro ao carregar portal do investidor:', err);
+            }
+        })();
+    }, [portalToken]);
+
+    React.useEffect(() => {
+        if (portalToken) return; // modo anon: carregado acima
         async function loadData() {
             try {
                 const [cub, projectsList] = await Promise.all([
@@ -214,10 +273,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             }
         }
         loadData();
-    }, [orgId, investorProfile?.id]);
+    }, [orgId, investorProfile?.id, portalToken]);
 
     // Carrega resumos financeiros (aporte/participação/ROI) por projeto do investidor
     React.useEffect(() => {
+        if (portalToken) return; // modo anon: dados já vêm do summary RPC
         const investorId = investorProfile?.id;
         if (!investorId || !activeProjects.length) return;
         let cancelled = false;
@@ -302,6 +362,71 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
 
     return (
         <div className="space-y-8 pb-12">
+            {/* Prévia Mobile — renderiza o portal como o investidor vê */}
+            {showMobilePreview && !isPreview && (
+                <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Portal do Investidor">
+                    <InvestorDashboard
+                        settings={settings}
+                        organizationId={organizationId}
+                        investorProfile={investorProfile}
+                        activeTab={activeTab}
+                        isPreview
+                    />
+                </MobilePreviewFrame>
+            )}
+
+            {/* Modal de configuração de abas */}
+            {showTabConfig && investorProfile && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowTabConfig(false)}>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-8 border-b border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                                    <Settings2 className="w-5 h-5 text-blue-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Portal do Investidor</h2>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para {investorProfile.name.split(' ')[0]}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowTabConfig(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-3">
+                            {TABS.map(tab => {
+                                const isVisible = enabledTabIds.includes(tab.id);
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => toggleTabVisibility(tab.id)}
+                                        className={`w-full flex items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
+                                            isVisible
+                                                ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                                : 'bg-gray-50 border-gray-100 text-gray-400'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <span className={isVisible ? 'text-blue-500' : 'text-gray-300'}>{tab.icon}</span>
+                                            <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
+                                        </div>
+                                        <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${isVisible ? 'text-blue-500' : 'text-gray-300'}`}>
+                                            {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="px-8 pb-8">
+                            <p className="text-[10px] font-bold text-gray-400 text-center uppercase tracking-widest">
+                                Clique em cada aba para alternar a visibilidade do investidor
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-gray-100">
                 <div>
@@ -311,20 +436,50 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     </div>
                     <h1 className="text-4xl font-black text-gray-900 tracking-tight">{title}</h1>
                 </div>
-                <div className="flex p-1.5 bg-gray-100 rounded-2xl w-fit">
-                    {TABS.map(tab => (
+                <div className="flex items-center gap-3 flex-wrap justify-end">
+                    {/* Botão Prévia Mobile — somente admin */}
+                    {isAdmin && (
                         <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id as TabId)}
-                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all duration-300 uppercase tracking-widest ${activeTab === tab.id
-                                ? 'bg-white text-blue-600 shadow-md scale-105'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
+                            onClick={() => setShowMobilePreview(true)}
+                            title="Visualizar como o investidor vê no celular"
+                            className="hidden md:flex p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
                         >
-                            {tab.icon}
-                            {tab.label}
+                            <Smartphone className="w-4 h-4" />
                         </button>
-                    ))}
+                    )}
+                    {/* Botão Configurar Abas — somente admin com investidor selecionado */}
+                    {isAdmin && investorProfile && (
+                        <button
+                            onClick={() => setShowTabConfig(true)}
+                            title="Configurar abas visíveis do investidor"
+                            className="hidden md:flex p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
+                        >
+                            <Settings2 className="w-4 h-4" />
+                        </button>
+                    )}
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                        {navTabs.map(tab => {
+                            const hidden = isAdmin && !enabledTabIds.includes(tab.id);
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id as TabId)}
+                                    title={hidden ? 'Oculta para o investidor' : undefined}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all duration-200 uppercase tracking-widest whitespace-nowrap ${
+                                        activeTab === tab.id
+                                            ? 'bg-blue-600 text-white shadow-md'
+                                            : hidden
+                                                ? 'bg-gray-50 text-gray-300 border border-dashed border-gray-200'
+                                                : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
+                                    }`}
+                                >
+                                    {tab.icon}
+                                    {tab.label}
+                                    {hidden && <EyeOff className="w-3 h-3 ml-0.5 opacity-60" />}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
 
@@ -409,19 +564,63 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     />
                 )}
                 {activeTab === 'comunicados' && (
-                    <CommunicationCenter
-                        organizationId={orgId ?? ''}
-                        investorId={investorProfile?.id}
-                        isAdmin={isAdmin}
-                    />
+                    portalToken ? (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            {portalAnnouncements.length === 0 ? (
+                                <div className="text-center py-20 bg-white rounded-[2.5rem] border border-gray-100">
+                                    <Bell className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                                    <p className="font-bold text-gray-500">Nenhum comunicado publicado.</p>
+                                </div>
+                            ) : portalAnnouncements.map((ann: any) => (
+                                <div key={ann.id} className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-6 space-y-3">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">{ann.type}</span>
+                                            <h3 className="text-lg font-black text-gray-900 mt-0.5">{ann.title}</h3>
+                                            <p className="text-sm text-gray-500 mt-2 leading-relaxed">{ann.body}</p>
+                                        </div>
+                                        {ann.acknowledged
+                                            ? <CheckCircle2 className="w-6 h-6 text-emerald-500 flex-shrink-0 mt-1" />
+                                            : ann.requires_acknowledgment && (
+                                                <button
+                                                    onClick={() => {
+                                                        investorPortalTokenService.acknowledgeByToken(portalToken, ann.id)
+                                                            .then(() => setPortalAnnouncements(prev =>
+                                                                prev.map(a => a.id === ann.id ? { ...a, acknowledged: true } : a)
+                                                            ))
+                                                            .catch(e => console.error(e));
+                                                    }}
+                                                    className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all"
+                                                >
+                                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                                    Confirmar
+                                                </button>
+                                            )
+                                        }
+                                    </div>
+                                    {ann.published_at && (
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                            {new Date(ann.published_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <CommunicationCenter
+                            organizationId={orgId ?? ''}
+                            investorId={investorProfile?.id}
+                            isAdmin={isAdmin}
+                        />
+                    )
                 )}
-                {activeTab === 'spe' && (
+                {activeTab === 'spe' && !portalToken && (
                     <SpeManager
                         organizationId={orgId ?? ''}
                         isAdmin={isAdmin}
                     />
                 )}
-                {activeTab === 'relatorios' && isAdmin && (
+                {activeTab === 'relatorios' && isAdmin && !portalToken && (
                     <MonthlyReportTrigger
                         organizationId={orgId ?? ''}
                     />

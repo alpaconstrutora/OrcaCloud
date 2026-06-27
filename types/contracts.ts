@@ -62,6 +62,9 @@ export interface Contract {
     payment_schedule?: ContractInstallment[];
     client_id?: string;
     direction?: 'OUTGOING' | 'INCOMING';
+    // Domínio de negócio — separa os módulos que compartilham a tabela `contracts`.
+    // Nunca misturar nas listagens. Default no banco: 'SUPRIMENTOS'.
+    domain?: 'SUPRIMENTOS' | 'SERVICOS' | 'LOCACAO' | 'VENDAS';
     execution_address?: string;
     execution_street?: string;
     execution_number?: string;

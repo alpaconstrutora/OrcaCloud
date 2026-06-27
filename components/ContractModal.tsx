@@ -23,6 +23,9 @@ interface ContractModalProps {
     initialData?: Partial<Contract>;
     direction?: 'OUTGOING' | 'INCOMING';
     onToast?: (message: string, type: 'success' | 'error') => void;
+    // Rótulos do cabeçalho — sobrescrevem o texto padrão "Serviço" para outros domínios (ex.: Vendas).
+    titleNew?: string;
+    moduleLabel?: string;
 }
 
 export const ContractModal: React.FC<ContractModalProps> = ({
@@ -34,6 +37,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     initialData,
     direction,
     onToast,
+    titleNew,
+    moduleLabel,
 }) => {
     const [formData, setFormData] = React.useState<Partial<Contract>>({
         number: '',
@@ -407,12 +412,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         <div className="flex-1 min-w-0 flex flex-col gap-1">
                             <div className="flex items-center gap-3 flex-wrap">
                                 <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">
-                                    {initialData?.id ? 'Ajustar Contrato' : isOutgoing ? 'Novo Contrato de Serviço' : 'Novo Contrato'}
+                                    {initialData?.id ? 'Ajustar Contrato' : (titleNew ?? (isOutgoing ? 'Novo Contrato de Serviço' : 'Novo Contrato'))}
                                 </h2>
                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Módulo:</span>
                                     <span className="text-[10px] font-bold text-gray-600 uppercase">
-                                        {isOutgoing ? 'Contratos de Serviço ao Cliente' : 'Gestão Estratégica de Suprimentos'}
+                                        {moduleLabel ?? (isOutgoing ? 'Contratos de Serviço ao Cliente' : 'Gestão Estratégica de Suprimentos')}
                                     </span>
                                 </div>
                             </div>

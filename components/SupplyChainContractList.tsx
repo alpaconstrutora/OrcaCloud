@@ -21,6 +21,7 @@ interface SupplyChainContractListProps {
     organizationId?: string;
     version?: number;
     direction?: 'INCOMING' | 'OUTGOING';
+    domain?: 'SUPRIMENTOS' | 'SERVICOS' | 'LOCACAO' | 'VENDAS';
     title?: string;
     subtitle?: string;
     extraActions?: React.ReactNode;
@@ -35,6 +36,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     organizationId,
     version,
     direction = 'INCOMING',
+    domain,
     title = 'Gestão de Contratos',
     subtitle = 'Controle de empreitadas, aditivos e medições físico-financeiras.',
     extraActions,
@@ -59,14 +61,14 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
 
     React.useEffect(() => {
         loadContracts();
-    }, [projectId, organizationId, localShowAll, version]);
+    }, [projectId, organizationId, localShowAll, version, domain]);
 
     const loadContracts = async () => {
         try {
             setLoading(true);
             const targetProjectId = localShowAll ? undefined : (projectId || undefined);
             const [data, suppliers, clients, projects] = await Promise.all([
-                contractService.listContracts(targetProjectId, organizationId, undefined, direction),
+                contractService.listContracts(targetProjectId, organizationId, undefined, direction, domain),
                 supplierService.listSuppliers(organizationId).catch(() => []),
                 clientService.listClients(organizationId).catch(() => []),
                 projectService.listProjects(undefined, organizationId).catch(() => []),

@@ -64,6 +64,12 @@ const SalesManagementModule: React.FC<Props> = ({
   // Corretor selecionado para visualizar o portal
   const [selectedBroker, setSelectedBroker] = useState<BrokerProfile | null>(null)
 
+  // Sincroniza com mudanças externas de defaultTab (ex: sidebar navega de Portal do Corretor para Comercial)
+  React.useEffect(() => {
+    setActiveTab(defaultTab)
+    setSelectedBroker(null)
+  }, [defaultTab])
+
   const handleTabChange = (tab: SalesTab) => {
     setActiveTab(tab)
     setSelectedBroker(null)

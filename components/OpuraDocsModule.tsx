@@ -21,6 +21,9 @@ import {
   ExternalLink,
   Shield,
   Loader2,
+  FolderPlus,
+  ChevronRight,
+  CornerDownRight,
 } from 'lucide-react';
 import { documentService } from '../services/documentService';
 import {
@@ -28,6 +31,8 @@ import {
   OpuraDocumentVersion,
   OpuraDocumentCategoria,
   OpuraDocumentStatus,
+  OpuraFolder,
+  OpuraFolderInsert,
 } from '../types';
 import { useStore } from '../store/useStore';
 
@@ -63,6 +68,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [searchQuery, setSearchQuery] = React.useState('');
   const [uploadModalOpen, setUploadModalOpen] = React.useState(false);
   const [selectedDocForVersions, setSelectedDocForVersions] = React.useState<OpuraDocument | null>(null);
+
+  // Estados locais da Onda 1 (Pastas Virtuais e Movimentação)
+  const [folders, setFolders] = React.useState<OpuraFolder[]>([]);
+  const [currentFolderId, setCurrentFolderId] = React.useState<string | null>(null);
+  const [createFolderModalOpen, setCreateFolderModalOpen] = React.useState(false);
+  const [newFolderName, setNewFolderName] = React.useState('');
+  const [creatingFolder, setCreatingFolder] = React.useState(false);
+  const [movingDocId, setMovingDocId] = React.useState<string | null>(null);
+  const [moveModalOpen, setMoveModalOpen] = React.useState(false);
+  const [targetFolderId, setTargetFolderId] = React.useState<string | null>(null);
 
   // Form State para Upload
   const [newDocName, setNewDocName] = React.useState('');
@@ -113,6 +128,22 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   }, [rawRole]);
 
+  // Carregar lista de diretórios (pastas virtuais)
+  const fetchFolders = async () => {
+    if (!activeOrganizationId) return;
+    try {
+      const projFilter = selectedProjectId === 'all' ? undefined : selectedProjectId;
+      const data = await documentService.listFolders(
+        activeOrganizationId,
+        activeTab,
+        projFilter
+      );
+      setFolders(data);
+    } catch (err) {
+      console.error('[DocumentService] Erro ao buscar pastas virtuais:', err);
+    }
+  };
+
   // Carregar lista de documentos
   const fetchDocs = async () => {
     if (!activeOrganizationId) {
@@ -125,6 +156,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       const data = await documentService.listDocuments(activeOrganizationId, {
         projectId: projFilter,
         categoria: activeTab,
+        folderId: currentFolderId,
       });
       setDocuments(data);
     } catch (err) {
@@ -135,9 +167,85 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
+  // Resetar a pasta ativa para a raiz ao mudar de projeto ou categoria
+  React.useEffect(() => {
+    setCurrentFolderId(null);
+  }, [selectedProjectId, activeTab]);
+
   React.useEffect(() => {
     fetchDocs();
-  }, [activeOrganizationId, selectedProjectId, activeTab]);
+    fetchFolders();
+  }, [activeOrganizationId, selectedProjectId, activeTab, currentFolderId]);
+
+  // Função para criar uma pasta virtual
+  const handleCreateFolderSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeOrganizationId || !newFolderName.trim()) return;
+    setCreatingFolder(true);
+    try {
+      const projFilter = selectedProjectId === 'all' ? undefined : selectedProjectId;
+      await documentService.createFolder({
+        organization_id: activeOrganizationId,
+        project_id: projFilter,
+        name: newFolderName.trim(),
+        parent_id: currentFolderId || undefined,
+        categoria: activeTab,
+      });
+      setNewFolderName('');
+      setCreateFolderModalOpen(false);
+      fetchFolders();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao criar pasta virtual.');
+    } finally {
+      setCreatingFolder(false);
+    }
+  };
+
+  // Função para excluir uma pasta virtual (cascata no banco)
+  const handleDeleteFolder = async (id: string) => {
+    if (!confirm('Deseja realmente excluir esta pasta? Todas as subpastas serão deletadas e os documentos retornarão para o diretório raiz.')) return;
+    try {
+      await documentService.deleteFolder(id);
+      fetchFolders();
+      if (currentFolderId === id) {
+        setCurrentFolderId(null);
+      } else {
+        fetchDocs(); // caso tenhamos deletado uma pasta filha
+      }
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir pasta virtual.');
+    }
+  };
+
+  // Função para mover um arquivo de pasta
+  const handleMoveDocumentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!movingDocId) return;
+    try {
+      await documentService.moveDocumentToFolder(movingDocId, targetFolderId || null);
+      setMoveModalOpen(false);
+      setMovingDocId(null);
+      fetchDocs();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao mover documento.');
+    }
+  };
+
+  // Obter o caminho atual para desenhar o Breadcrumb
+  const getBreadcrumbs = React.useCallback(() => {
+    const crumbs: OpuraFolder[] = [];
+    let currentId = currentFolderId;
+    while (currentId) {
+      const folder = folders.find((f) => f.id === currentId);
+      if (folder) {
+        crumbs.unshift(folder);
+        currentId = folder.parent_id || null;
+      } else {
+        break;
+      }
+    }
+    return crumbs;
+  }, [folders, currentFolderId]);
 
   // Filtrar projetos/obras (classification === 'OBRA')
   const obras = React.useMemo(() => {
@@ -224,6 +332,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           supplier_id: newDocSupplierId || undefined,
           client_id: newDocClientId || undefined,
           investor_id: newDocInvestorId || undefined,
+          folder_id: currentFolderId || undefined,
         },
         newDocFile
       );
@@ -390,18 +499,27 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <ChevronDown className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
-          {/* Botão de Upload condicional à permissão de escrita do usuário na aba/categoria */}
+          {/* Botões de Ações (Nova Pasta e Novo Documento) */}
           {canAccessTab(activeTab) && (
-            <button
-              onClick={() => {
-                setNewDocCategory(activeTab);
-                setUploadModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-500/10 active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              Novo Documento
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCreateFolderModalOpen(true)}
+                className="flex items-center gap-2 px-5 py-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-[1.25rem] font-black text-xs uppercase tracking-widest transition-all shadow-sm active:scale-95"
+              >
+                <FolderPlus className="w-4 h-4 text-blue-600" />
+                Nova Pasta
+              </button>
+              <button
+                onClick={() => {
+                  setNewDocCategory(activeTab);
+                  setUploadModalOpen(true);
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-500/10 active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                Novo Documento
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -431,8 +549,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
       {/* ─── FILTROS DE BUSCA E LISTAGEM ─── */}
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        {/* Barra de Busca */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50/20">
+        {/* Barra de Busca e Breadcrumb */}
+        <div className="p-4 border-b border-slate-100 bg-slate-50/20 space-y-3">
           <div className="relative">
             <input
               type="text"
@@ -442,6 +560,31 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
             />
             <Search className="w-5 h-5 text-slate-400 absolute left-4.5 top-1/2 -translate-y-1/2" />
+          </div>
+
+          {/* Breadcrumb da Onda 1 */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400 font-bold py-1">
+            <button
+              onClick={() => setCurrentFolderId(null)}
+              className="hover:text-blue-600 transition-colors"
+            >
+              📁 Raiz
+            </button>
+            {getBreadcrumbs().map((crumb, idx) => (
+              <React.Fragment key={crumb.id}>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+                <button
+                  onClick={() => setCurrentFolderId(crumb.id)}
+                  className={
+                    idx === getBreadcrumbs().length - 1
+                      ? 'text-slate-700 pointer-events-none'
+                      : 'hover:text-blue-600 transition-colors'
+                  }
+                >
+                  {crumb.name}
+                </button>
+              </React.Fragment>
+            ))}
           </div>
         </div>
 
@@ -463,118 +606,180 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </p>
             </div>
           </div>
-        ) : filteredDocuments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-            <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
-              <FolderOpen className="w-12 h-12" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-700">Nenhum documento encontrado</h3>
-              <p className="text-slate-400 text-sm mt-1 max-w-sm">
-                Não existem arquivos nesta pasta para o empreendimento selecionado.
-              </p>
-            </div>
-          </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {filteredDocuments.map((doc) => (
-              <div
-                key={doc.id}
-                className="flex flex-col md:flex-row md:items-center justify-between p-6 gap-4 hover:bg-slate-50/40 transition-colors"
-              >
-                {/* Metadados Básicos */}
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 mt-1">
-                    {doc.active_version
-                      ? renderFileIcon(doc.active_version.mime_type, doc.active_version.storage_path)
-                      : <FileText className="w-8 h-8 text-gray-300" />}
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="font-bold text-slate-800 leading-snug">{doc.nome}</h4>
-                      <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 rounded">
-                        {doc.tipo_documento}
-                      </span>
-                      {getValidadeBadge(doc.data_validade)}
-                    </div>
-                    {doc.descricao && (
-                      <p className="text-slate-500 text-sm max-w-2xl">{doc.descricao}</p>
-                    )}
-                    
-                    {/* Tags */}
-                    {doc.tags && doc.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {doc.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 text-slate-500 rounded text-xs font-semibold border border-slate-100"
-                          >
-                            <Tag className="w-3 h-3" />
-                            {tag}
-                          </span>
-                        ))}
+          <div>
+            {/* Grid de Subpastas Virtuais (Onda 1) */}
+            {folders.filter(f => f.parent_id === (currentFolderId || undefined)).length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-6 border-b border-slate-100 bg-slate-50/10">
+                {folders
+                  .filter(f => f.parent_id === (currentFolderId || undefined))
+                  .map((folder) => (
+                    <div
+                      key={folder.id}
+                      onDoubleClick={() => setCurrentFolderId(folder.id)}
+                      className="flex items-center justify-between p-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-blue-400 hover:shadow transition-all group cursor-pointer select-none"
+                    >
+                      <div
+                        onClick={() => setCurrentFolderId(folder.id)}
+                        className="flex items-center gap-2.5 min-w-0 flex-grow"
+                      >
+                        <FolderOpen className="w-5 h-5 text-blue-500 fill-blue-50/20 group-hover:scale-110 transition-transform flex-shrink-0" />
+                        <span className="text-sm font-bold text-slate-700 truncate">{folder.name}</span>
                       </div>
-                    )}
-
-                    {/* Vínculo de Obras / Contrato */}
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400 pt-1 font-semibold">
-                      {doc.project_id && (
-                        <span className="flex items-center gap-1">
-                          <Building2 className="w-3.5 h-3.5" />
-                          Obra: {projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo'}
-                        </span>
-                      )}
-                      {doc.data_emissao && (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5" />
-                          Emissão: {new Date(doc.data_emissao).toLocaleDateString()}
-                        </span>
-                      )}
-                      {doc.active_version && (
-                        <span className="text-slate-400">
-                          {formatSize(doc.active_version.tamanho)} • V{doc.active_version.version_number}
-                        </span>
+                      {isOrgAdmin && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteFolder(folder.id);
+                          }}
+                          className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-50 transition-all opacity-0 group-hover:opacity-100"
+                          title="Excluir Pasta"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
-                  </div>
+                  ))}
+              </div>
+            )}
+
+            {/* Lista de Documentos */}
+            {filteredDocuments.length === 0 && folders.filter(f => f.parent_id === (currentFolderId || undefined)).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
+                  <FolderOpen className="w-12 h-12" />
                 </div>
-
-                {/* Ações (Download, Versões, Exclusão) */}
-                <div className="flex items-center gap-2 self-end md:self-auto">
-                  {doc.active_version && (
-                    <button
-                      onClick={() => handleDownload(doc.active_version!.storage_path, doc.nome)}
-                      title="Download do arquivo atual"
-                      className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={async () => {
-                      const fullDoc = await documentService.getDocumentById(doc.id);
-                      setSelectedDocForVersions(fullDoc);
-                    }}
-                    title="Histórico de versões"
-                    className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm text-xs font-bold active:scale-95"
-                  >
-                    <History className="w-4 h-4" />
-                    Histórico
-                  </button>
-
-                  {/* Apenas Admins ou Donos podem deletar (Feature 3) */}
-                  {isOrgAdmin && (
-                    <button
-                      onClick={() => handleDeleteDoc(doc.id)}
-                      title="Excluir documento"
-                      className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                <div>
+                  <h3 className="font-bold text-slate-700">Nenhum documento ou pasta encontrado</h3>
+                  <p className="text-slate-400 text-sm mt-1 max-w-sm">
+                    Não existem arquivos ou subpastas neste diretório.
+                  </p>
                 </div>
               </div>
-            ))}
+            ) : filteredDocuments.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400 font-bold uppercase tracking-wider bg-slate-50/20 border-b border-slate-100">
+                Nenhum arquivo avulso nesta pasta. Navegue pelas subpastas acima.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {filteredDocuments.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex flex-col md:flex-row md:items-center justify-between p-6 gap-4 hover:bg-slate-50/40 transition-colors"
+                  >
+                    {/* Metadados Básicos */}
+                    <div className="flex items-start gap-4 min-w-0">
+                      <div className="flex-shrink-0 mt-1">
+                        {doc.active_version
+                          ? renderFileIcon(doc.active_version.mime_type, doc.active_version.storage_path)
+                          : <FileText className="w-8 h-8 text-gray-300" />}
+                      </div>
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-bold text-slate-800 leading-snug">{doc.nome}</h4>
+                          <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 rounded">
+                            {doc.tipo_documento}
+                          </span>
+                          {getValidadeBadge(doc.data_validade)}
+                        </div>
+                        {doc.descricao && (
+                          <p className="text-slate-500 text-sm max-w-2xl truncate">{doc.descricao}</p>
+                        )}
+                        
+                        {/* Tags */}
+                        {doc.tags && doc.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {doc.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 text-slate-500 rounded text-xs font-semibold border border-slate-100"
+                              >
+                                <Tag className="w-3 h-3" />
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Vínculo de Obras / Contrato */}
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400 pt-1 font-semibold">
+                          {doc.project_id && (
+                            <span className="flex items-center gap-1">
+                              <Building2 className="w-3.5 h-3.5" />
+                              Obra: {projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo'}
+                            </span>
+                          )}
+                          {doc.data_emissao && (
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5" />
+                              Emissão: {new Date(doc.data_emissao).toLocaleDateString()}
+                            </span>
+                          )}
+                          {doc.active_version && (
+                            <span className="text-slate-400">
+                              {formatSize(doc.active_version.tamanho)} • V{doc.active_version.version_number}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Ações (Download, Versões, Movimentação, Exclusão) */}
+                    <div className="flex items-center gap-2 self-end md:self-auto flex-shrink-0">
+                      {doc.active_version && (
+                        <button
+                          onClick={() => handleDownload(doc.active_version!.storage_path, doc.nome)}
+                          title="Download do arquivo atual"
+                          className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      {/* Ações permitidas apenas para arquivos físicos cadastrados localmente (não integrados) */}
+                      {!doc.is_integrated && (
+                        <>
+                          {isOrgAdmin && (
+                            <button
+                              onClick={() => {
+                                setMovingDocId(doc.id);
+                                setTargetFolderId(doc.folder_id || null);
+                                setMoveModalOpen(true);
+                              }}
+                              title="Mover para outra pasta"
+                              className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
+                            >
+                              <CornerDownRight className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={async () => {
+                              const fullDoc = await documentService.getDocumentById(doc.id);
+                              setSelectedDocForVersions(fullDoc);
+                            }}
+                            title="Histórico de versões"
+                            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm text-xs font-bold active:scale-95"
+                          >
+                            <History className="w-4 h-4" />
+                            Histórico
+                          </button>
+                          {isOrgAdmin && (
+                            <button
+                              onClick={() => handleDeleteDoc(doc.id)}
+                              title="Excluir documento"
+                              className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -878,6 +1083,121 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ─── MODAL DE CRIAÇÃO DE PASTA VIRTUAL (Onda 1) ─── */}
+      {createFolderModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-slate-100 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <FolderPlus className="w-5 h-5 text-blue-600" />
+                <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">Nova Pasta Virtual</h3>
+              </div>
+              <button
+                onClick={() => setCreateFolderModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateFolderSubmit} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Nome da Pasta</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Projetos Executivos, Planilhas de Custos"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCreateFolderModalOpen(false)}
+                  className="px-4 py-2.5 border border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingFolder || !newFolderName.trim()}
+                  className="px-5 py-2.5 bg-blue-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {creatingFolder ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    'Criar Pasta'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL DE MOVIMENTAÇÃO DE ARQUIVO (Onda 1) ─── */}
+      {moveModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-slate-100 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <CornerDownRight className="w-5 h-5 text-blue-600" />
+                <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">Mover Documento</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setMoveModalOpen(false);
+                  setMovingDocId(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleMoveDocumentSubmit} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Selecione a Pasta de Destino</label>
+                <select
+                  value={targetFolderId || ''}
+                  onChange={(e) => setTargetFolderId(e.target.value || null)}
+                  className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                >
+                  <option value="">📁 Diretório Raiz</option>
+                  {folders.map((folder) => (
+                    <option key={folder.id} value={folder.id}>
+                      📁 {folder.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoveModalOpen(false);
+                    setMovingDocId(null);
+                  }}
+                  className="px-4 py-2.5 border border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-blue-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md"
+                >
+                  Confirmar Mudança
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

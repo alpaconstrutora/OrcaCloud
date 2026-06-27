@@ -26,11 +26,29 @@ export interface OpuraDocument {
   client_id?: string;
   investor_id?: string;
   active_version_id?: string;
+  folder_id?: string;
+  is_integrated?: boolean;
 
   // Joins opcionais carregados pelo service
   active_version?: OpuraDocumentVersion;
   versions?: OpuraDocumentVersion[];
 }
+
+export interface OpuraFolder {
+  id: string;
+  organization_id: string;
+  project_id?: string;
+  name: string;
+  parent_id?: string;
+  categoria: OpuraDocumentCategoria;
+  created_at: string;
+  updated_at: string;
+}
+
+export type OpuraFolderInsert = Omit<
+  OpuraFolder,
+  'id' | 'created_at' | 'updated_at'
+>;
 
 export interface OpuraDocumentVersion {
   id: string;

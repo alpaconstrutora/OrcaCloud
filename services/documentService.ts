@@ -4,6 +4,9 @@ import {
   OpuraDocumentInsert,
   OpuraDocumentUpdate,
   OpuraDocumentVersion,
+  OpuraFolder,
+  OpuraFolderInsert,
+  OpuraDocumentCategoria,
 } from '../types';
 
 function normalizeProjectName(name: string): string {
@@ -26,6 +29,7 @@ export const documentService = {
       categoria?: string;
       search?: string;
       status?: string;
+      folderId?: string | null;
     }
   ): Promise<OpuraDocument[]> {
     if (!organizationId) {
@@ -100,6 +104,14 @@ export const documentService = {
       query = query.eq('status', filters.status);
     }
 
+    if (filters && 'folderId' in filters) {
+      if (filters.folderId === null) {
+        query = query.is('folder_id', null);
+      } else {
+        query = query.eq('folder_id', filters.folderId);
+      }
+    }
+
     const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
@@ -151,6 +163,7 @@ export const documentService = {
               created_at: c.created_at || new Date().toISOString(),
               updated_at: c.created_at || new Date().toISOString(),
               project_id: c.project_id || undefined,
+              is_integrated: true,
               active_version: fileUrl ? {
                 id: `ver-${c.id}`,
                 document_id: c.id,
@@ -217,6 +230,7 @@ export const documentService = {
             created_at: inv.created_at || new Date().toISOString(),
             updated_at: inv.created_at || new Date().toISOString(),
             project_id: inv.purchase_orders?.project_id || undefined,
+            is_integrated: true,
             active_version: inv.file_path ? {
               id: `ver-${inv.id}`,
               document_id: inv.id,
@@ -283,6 +297,7 @@ export const documentService = {
               created_at: r.created_at || new Date().toISOString(),
               updated_at: r.created_at || new Date().toISOString(),
               project_id: r.project_id || undefined,
+              is_integrated: true,
               active_version: {
                 id: `ver-${r.id}`,
                 document_id: r.id,
@@ -347,6 +362,7 @@ export const documentService = {
               created_at: a.created_at || new Date().toISOString(),
               updated_at: a.created_at || new Date().toISOString(),
               project_id: a.project_id || undefined,
+              is_integrated: true,
               active_version: {
                 id: `ver-${a.id}`,
                 document_id: a.id,
@@ -413,6 +429,7 @@ export const documentService = {
             created_at: p.created_at || new Date().toISOString(),
             updated_at: p.created_at || new Date().toISOString(),
             project_id: p.services_opportunities?.converted_project_id || p.services_opportunities?.engineering_project_id || undefined,
+            is_integrated: true,
             active_version: p.pdf_storage_path ? {
               id: `ver-${p.id}`,
               document_id: p.id,
@@ -474,6 +491,7 @@ export const documentService = {
             created_at: od.created_at || new Date().toISOString(),
             updated_at: od.created_at || new Date().toISOString(),
             project_id: od.investor_opportunities?.project_id || undefined,
+            is_integrated: true,
             active_version: od.file_path ? {
               id: `ver-${od.id}`,
               document_id: od.id,
@@ -557,6 +575,7 @@ export const documentService = {
         supplier_id: docData.supplier_id || null,
         client_id: docData.client_id || null,
         investor_id: docData.investor_id || null,
+        folder_id: docData.folder_id || null,
       })
       .select()
       .single();
@@ -764,5 +783,75 @@ export const documentService = {
     }
 
     return data.signedUrl;
+  },
+
+  // ─── GERENCIAMENTO DE PASTAS VIRTUAIS ────────────────────────
+  async listFolders(
+    organizationId: string,
+    categoria: OpuraDocumentCategoria,
+    projectId?: string
+  ): Promise<OpuraFolder[]> {
+    let query = supabase
+      .from('opura_folders')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('categoria', categoria);
+
+    if (projectId && projectId !== 'all') {
+      query = query.eq('project_id', projectId);
+    } else {
+      query = query.is('project_id', null);
+    }
+
+    const { data, error } = await query.order('name', { ascending: true });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao listar pastas:', error);
+      throw new Error(`Erro ao listar pastas: ${error.message}`);
+    }
+
+    return (data || []) as OpuraFolder[];
+  },
+
+  async createFolder(folder: OpuraFolderInsert): Promise<OpuraFolder> {
+    const { data, error } = await supabase
+      .from('opura_folders')
+      .insert(folder)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DocumentService] Erro ao criar pasta:', error);
+      throw new Error(`Erro ao criar pasta: ${error.message}`);
+    }
+
+    return data as OpuraFolder;
+  },
+
+  async deleteFolder(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_folders')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[DocumentService] Erro ao excluir pasta:', error);
+      throw new Error(`Erro ao excluir pasta: ${error.message}`);
+    }
+  },
+
+  async moveDocumentToFolder(
+    documentId: string,
+    folderId: string | null
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('opura_documents')
+      .update({ folder_id: folderId })
+      .eq('id', documentId);
+
+    if (error) {
+      console.error('[DocumentService] Erro ao mover documento:', error);
+      throw new Error(`Erro ao mover documento: ${error.message}`);
+    }
   },
 };

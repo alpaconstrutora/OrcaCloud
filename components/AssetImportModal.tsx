@@ -5,6 +5,7 @@ import { X, Upload, FileSpreadsheet, Loader2, AlertCircle, CheckCircle, Download
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { assetService } from '../services/assetService';
+import { useStore } from '../store/useStore';
 import { OpuraAsset, OpuraAssetInsert, AssetCategory } from '../types';
 
 interface AssetImportModalProps {
@@ -70,6 +71,8 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
   activeOrganizationId,
   existingAssets
 }) => {
+  const { organizations } = useStore();
+  const [selectedOrgId, setSelectedOrgId] = React.useState<string>('');
   const [isDragging, setIsDragging] = React.useState(false);
   const [file, setFile] = React.useState<File | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -104,6 +107,12 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
   };
 
   const validateAndSetFile = (selectedFile: File) => {
+    const isConsolidated = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
+    if (isConsolidated && !selectedOrgId) {
+      setError('Por favor, selecione primeiro a Organização Proprietária de destino para a importação.');
+      return;
+    }
+
     if (!selectedFile.name.endsWith('.xlsx')) {
       setError('Por favor, selecione um arquivo Excel válido no formato (.xlsx)');
       return;
@@ -395,10 +404,10 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
     }
   };
 
-  // Gravar linhas válidas no banco
-  const handleImportData = async () => {
-    if (!activeOrganizationId) {
-      setError('Organização ativa não encontrada. Por favor, selecione uma organização na barra lateral.');
+  const handleSubmitImport = async () => {
+    const targetOrgId = activeOrganizationId || selectedOrgId;
+    if (!targetOrgId || targetOrgId === 'all' || targetOrgId === 'TODAS') {
+      setError('Organização de destino não encontrada. Por favor, selecione uma organização proprietária.');
       return;
     }
     
@@ -415,7 +424,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
 
     try {
       const inserts: OpuraAssetInsert[] = validRows.map((r) => ({
-        organization_id: activeOrganizationId,
+        organization_id: targetOrgId,
         code: r.code,
         name: r.name,
         category: r.category as AssetCategory,
@@ -436,7 +445,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
       const uniqueBrands = Array.from(new Set(validRows.map((r) => r.brand?.trim()).filter(Boolean)));
       for (const brandName of uniqueBrands) {
         try {
-          await assetService.createBrand(activeOrganizationId, brandName!);
+          await assetService.createBrand(targetOrgId, brandName!);
         } catch (errBrand) {
           console.error(`[AssetImportModal] Erro ao cadastrar marca autodetectada "${brandName}":`, errBrand);
         }
@@ -475,6 +484,25 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
 
         {/* Conteúdo Principal */}
         <div className="p-8 flex-1 overflow-y-auto space-y-6">
+          {(!activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS') && (
+            <div className="bg-emerald-50/20 p-4 border border-emerald-100/50 rounded-2xl flex items-center justify-between text-xs gap-4 font-semibold">
+              <div className="space-y-0.5">
+                <h4 className="text-gray-800 font-bold">Importação Consolidada</h4>
+                <p className="text-gray-400">Selecione para qual organização os ativos da planilha serão importados:</p>
+              </div>
+              <select
+                required
+                value={selectedOrgId}
+                onChange={(e) => setSelectedOrgId(e.target.value)}
+                className="px-4 py-2 border border-gray-200 rounded-xl bg-white focus:border-blue-600 outline-none transition-colors text-sm font-semibold w-72"
+              >
+                <option value="">Selecione a Organização...</option>
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>{org.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           
           {parsedRows.length === 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -663,7 +691,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
           
           {parsedRows.length > 0 && (
             <button
-              onClick={handleImportData}
+              onClick={handleSubmitImport}
               disabled={isLoading || importSummary.valid === 0}
               className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
             >

@@ -63,7 +63,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   activeOrganizationId,
   onChangeView
 }) => {
-  const { projects } = useStore();
+  const { projects, organizations } = useStore();
   const isWriteDisabled = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
   
   // Tabs e UI States
@@ -110,6 +110,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Estados dos Formulários
   const [assetForm, setAssetForm] = React.useState({
+    organization_id: '',
     name: '',
     code: '',
     category: 'equipamento' as AssetCategory,
@@ -316,7 +317,11 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Cadastrar / Editar / Duplicar Ativo
   const handleCreateAsset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrganizationId) return;
+    const targetOrgId = activeOrganizationId || assetForm.organization_id;
+    if (!targetOrgId) {
+      alert('Por favor, selecione a Organização Proprietária do bem.');
+      return;
+    }
     setActionLoading(true);
     try {
       if (editingAssetId) {
@@ -334,14 +339,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           residual_value: Number(assetForm.residual_value) || 0,
           notes: assetForm.notes || undefined
         });
-        alert('Ativo patrimonial atualizado com sucesso!');
+        alert('Ativo patrimonial updated com sucesso!');
         if (selectedAsset && selectedAsset.id === editingAssetId) {
           setSelectedAsset(updated);
         }
       } else {
         const generatedCode = assetForm.code || `OPR-PAT-${Math.floor(100000 + Math.random() * 900000)}`;
         await assetService.create({
-          organization_id: activeOrganizationId,
+          organization_id: targetOrgId,
           code: generatedCode,
           name: assetForm.name,
           category: assetForm.category,
@@ -364,6 +369,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       setEditingAssetId(null);
       setIsDuplicate(false);
       setAssetForm({
+        organization_id: '',
         name: '',
         code: '',
         category: 'equipamento',
@@ -1249,6 +1255,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             setEditingAssetId(selectedAsset.id);
                             setIsDuplicate(false);
                             setAssetForm({
+                              organization_id: selectedAsset.organization_id,
                               name: selectedAsset.name,
                               code: selectedAsset.code,
                               category: selectedAsset.category,
@@ -1275,6 +1282,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             setEditingAssetId(null);
                             setIsDuplicate(true);
                             setAssetForm({
+                              organization_id: selectedAsset.organization_id,
                               name: `${selectedAsset.name} (Cópia)`,
                               code: '', // Limpar para gerar novo
                               category: selectedAsset.category,
@@ -1896,6 +1904,23 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
             </div>
 
             <form onSubmit={handleCreateAsset} className="space-y-4 text-xs font-semibold">
+              {isWriteDisabled && (
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Organização Proprietária</label>
+                  <select
+                    required
+                    value={assetForm.organization_id}
+                    onChange={(e) => setAssetForm(prev => ({ ...prev, organization_id: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  >
+                    <option value="">Selecione a Organização...</option>
+                    {organizations.map((org: any) => (
+                      <option key={org.id} value={org.id}>{org.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-gray-400 uppercase tracking-widest text-[9px]">Nome do Bem</label>

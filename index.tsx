@@ -21,3 +21,25 @@ root.render(
     </QueryClientProvider>
   </React.StrictMode>
 );
+
+// PWA auto-update: quando um service worker novo (skipWaiting/clientsClaim) assume o
+// controle, a aba aberta segue rodando o JS antigo até recarregar. Aqui forçamos um
+// reload único nesse momento — assim o usuário pega o deploy novo sem unregister manual.
+// O guard `hadController` evita o reload na primeira instalação (claim inicial).
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading || !hadController) return;
+    reloading = true;
+    window.location.reload();
+  });
+  // Tabs abertas por muito tempo: checa atualização do SW periodicamente (e ao voltar o foco).
+  navigator.serviceWorker.ready.then((reg) => {
+    const check = () => { reg.update().catch(() => {}); };
+    setInterval(check, 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') check();
+    });
+  }).catch(() => {});
+}

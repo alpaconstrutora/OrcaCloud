@@ -197,7 +197,7 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
                                             <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={(e) => {
                                                 const file = e.target.files?.[0];
                                                 if (!file) return;
-                                                const MAX_MB = 60;
+                                                const MAX_MB = 100;
                                                 if (file.size > MAX_MB * 1024 * 1024) {
                                                     alert(`O arquivo é muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB). O limite é ${MAX_MB} MB.`);
                                                     e.target.value = '';
@@ -208,7 +208,7 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
                                         </label>
                                     </div>
                                     <p className="text-xs text-gray-400">
-                                        {selectedFile ? <span className="text-blue-600 font-bold">{selectedFile.name}</span> : (formData.file_url ? 'Arquivo já enviado (Envie outro para substituir)' : 'PDF, Imagens, Tabelas ou Zip até 60MB')}
+                                        {selectedFile ? <span className="text-blue-600 font-bold">{selectedFile.name}</span> : (formData.file_url ? 'Arquivo já enviado (Envie outro para substituir)' : 'PDF, Imagens, Tabelas ou Zip até 100MB')}
                                     </p>
                                 </div>
                             </div>

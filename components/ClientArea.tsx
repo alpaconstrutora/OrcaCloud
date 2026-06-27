@@ -1175,7 +1175,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {/* Financial Summary Cards */}
                     {[
-                        { label: 'Valor Total do Contrato', value: displayTotalValue, sub: financialInfo.paymentMethod, color: 'text-gray-900', icon: <DollarSign className="w-5 h-5 text-indigo-500" />, editable: true },
+                        { label: 'Valor Total do Contrato', value: displayTotalValue, sub: String(financialInfo.paymentMethod ?? 'Não Definido'), color: 'text-gray-900', icon: <DollarSign className="w-5 h-5 text-indigo-500" />, editable: true },
                         { label: 'Total Pago até o momento', value: totalPaid, sub: `${paidPercentage.toFixed(1)}% concluído`, color: 'text-emerald-600', icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />, progress: paidPercentage },
                         { label: 'Saldo Remanescente', value: balanceRemaining, sub: 'Incluindo parcelas futuras', color: 'text-amber-600', icon: <Clock className="w-5 h-5 text-amber-500" /> }
                     ].map((card, i) => (
@@ -1516,16 +1516,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                                         <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
                                             <div className="flex flex-col gap-2">
-                                                <h4 className="text-lg font-black text-gray-900 tracking-tight uppercase underline decoration-indigo-200/50 underline-offset-4">{inst.description}</h4>
+                                                <h4 className="text-lg font-black text-gray-900 tracking-tight uppercase underline decoration-indigo-200/50 underline-offset-4">{String(inst.description ?? '')}</h4>
                                                 <div className="flex items-center gap-3 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
                                                     <Calendar className="w-4 h-4 text-indigo-500" />
-                                                    VENCIMENTO: {new Date(inst.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                    VENCIMENTO: {inst.dueDate ? new Date(String(inst.dueDate) + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
                                                 </div>
                                             </div>
 
                                             <div className="flex flex-col md:items-end gap-3">
                                                 <div className="text-3xl font-black text-gray-900 tracking-tighter">
-                                                    R$ {inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    R$ {(Number(inst.value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </div>
                                                 <button
                                                     disabled={!isAdmin}
@@ -1637,17 +1637,17 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             {financialInfo.installments.map((inst, idx) => (
                                                 <tr key={inst.id} className="hover:bg-indigo-50/30 transition-colors group">
                                                     <td className="px-8 py-4">
-                                                        <span className="text-sm font-bold text-gray-900 uppercase tracking-tight">{inst.description}</span>
+                                                        <span className="text-sm font-bold text-gray-900 uppercase tracking-tight">{String(inst.description ?? '')}</span>
                                                     </td>
                                                     <td className="px-8 py-4">
                                                         <div className="flex items-center gap-2 text-xs font-bold text-gray-400 tabular-nums">
                                                             <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                                                            {new Date(inst.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                            {inst.dueDate ? new Date(String(inst.dueDate) + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
                                                         </div>
                                                     </td>
                                                     <td className="px-8 py-4">
                                                         <span className="text-base font-black text-gray-900 tabular-nums">
-                                                            R$ {inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            R$ {(Number(inst.value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </td>
                                                     <td className="px-8 py-4 text-center">

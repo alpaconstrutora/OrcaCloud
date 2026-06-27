@@ -133,6 +133,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [unreadCount, setUnreadCount] = React.useState(0);
     const [showNotifications, setShowNotifications] = React.useState(false);
     const [showMoreSheet, setShowMoreSheet] = React.useState(false);
+    const [mobileFinTab, setMobileFinTab] = React.useState<'detalhe' | 'historico'>('detalhe');
     React.useEffect(() => {
         if (!showNotifications) return;
         const close = () => setShowNotifications(false);
@@ -3276,8 +3277,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             .sort(([a], [b]) => a.localeCompare(b))
             .slice(-6)
             .map(([, v]) => v);
-
-        const [mobileFinTab, setMobileFinTab] = React.useState<'detalhe' | 'historico'>('detalhe');
 
         return (
             <div className="-mx-4 space-y-0">

@@ -648,7 +648,7 @@ export const documentService = {
       await this.logDocumentAction(
         docData.organization_id,
         documentId,
-        docData.criado_por || 'sistema',
+        (newDoc as any).criado_por || 'sistema',
         'criado',
         `Arquivo inicial: ${file.name}`
       );

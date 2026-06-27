@@ -28,6 +28,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   UserCheck,
+  Eye,
 } from 'lucide-react';
 import { documentService } from '../services/documentService';
 import {
@@ -39,6 +40,7 @@ import {
   OpuraFolderInsert,
   OpuraDocumentApproval,
   OpuraDocumentApprovalStatus,
+  OpuraDocumentAuditLog,
 } from '../types';
 import { useStore } from '../store/useStore';
 
@@ -96,6 +98,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [feedbackText, setFeedbackText] = React.useState('');
   const [processingAction, setProcessingAction] = React.useState(false);
   const [documentApprovals, setDocumentApprovals] = React.useState<OpuraDocumentApproval[]>([]);
+  const [documentAuditLogs, setDocumentAuditLogs] = React.useState<OpuraDocumentAuditLog[]>([]);
+
+  // Buscar histórico de auditoria do documento (Onda 4)
+  const loadAuditLogsForDoc = async (docId: string) => {
+    try {
+      const data = await documentService.listAuditLogsForDocument(docId);
+      setDocumentAuditLogs(data);
+    } catch (err) {
+      console.error('[OpuraDocsModule] Erro ao buscar logs de auditoria do documento:', err);
+    }
+  };
 
   // Form State para Upload
   const [newDocName, setNewDocName] = React.useState('');
@@ -357,6 +370,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             if (doc) {
               setSelectedDocForVersions(doc);
               loadApprovalsForDoc(doc.id);
+              loadAuditLogsForDoc(doc.id);
+              // Registrar visualização (Onda 4)
+              if (activeOrganizationId && currentProfile?.email) {
+                documentService.logDocumentAction(
+                  activeOrganizationId,
+                  doc.id,
+                  currentProfile.email,
+                  'visualizado'
+                ).catch(err => console.error('[OpuraDocsModule] Erro ao registrar log de visualização:', err));
+              }
             }
           } catch (err) {
             console.error('[OpuraDocsModule] Erro ao carregar documento por parâmetro de URL:', err);
@@ -410,9 +433,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Função para mover um arquivo de pasta
   const handleMoveDocumentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!movingDocId) return;
+    if (!movingDocId || !activeOrganizationId || !currentProfile?.email) return;
     try {
-      await documentService.moveDocumentToFolder(movingDocId, targetFolderId || null);
+      await documentService.moveDocumentToFolder(
+        movingDocId,
+        targetFolderId || null,
+        activeOrganizationId,
+        currentProfile.email
+      );
       setMoveModalOpen(false);
       setMovingDocId(null);
       fetchDocs();
@@ -577,7 +605,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         selectedDocForVersions.id,
         activeOrganizationId,
         nextVerNum,
-        newVersionFile
+        newVersionFile,
+        currentProfile?.email || 'sistema'
       );
 
       setNewVersionFile(null);
@@ -594,9 +623,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   };
 
   // Tratar download seguro
-  const handleDownload = async (path: string, fileName: string) => {
+  const handleDownload = async (path: string, fileName: string, docId?: string) => {
     try {
-      const url = await documentService.generateDownloadUrl(path);
+      const url = await documentService.generateDownloadUrl(
+        path,
+        activeOrganizationId || undefined,
+        docId,
+        currentProfile?.email || undefined
+      );
       // Abre em nova aba ou força download
       const link = document.createElement('a');
       link.href = url;
@@ -898,7 +932,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         <div className="flex gap-2 w-full justify-end">
                           {app.document?.active_version?.storage_path && (
                             <button
-                              onClick={() => handleDownload(app.document.active_version.storage_path, app.document.nome)}
+                              onClick={() => handleDownload(app.document.active_version.storage_path, app.document.nome, app.document.id)}
                               className="px-3.5 py-2 border border-slate-200 text-slate-600 hover:text-blue-600 rounded-xl text-xs font-bold bg-white active:scale-95 transition-all shadow-sm"
                               title="Visualizar arquivo"
                             >
@@ -1049,7 +1083,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <div className="flex items-center gap-2 self-end md:self-auto flex-shrink-0">
                       {doc.active_version && (
                         <button
-                          onClick={() => handleDownload(doc.active_version!.storage_path, doc.nome)}
+                          onClick={() => handleDownload(doc.active_version!.storage_path, doc.nome, doc.id)}
                           title="Download do arquivo atual"
                           className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
                         >
@@ -1079,6 +1113,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                               setSelectedDocForVersions(fullDoc);
                               if (fullDoc) {
                                 loadApprovalsForDoc(fullDoc.id);
+                                loadAuditLogsForDoc(fullDoc.id);
+                                // Registrar visualização (Onda 4)
+                                if (activeOrganizationId && currentProfile?.email) {
+                                  documentService.logDocumentAction(
+                                    activeOrganizationId,
+                                    fullDoc.id,
+                                    currentProfile.email,
+                                    'visualizado'
+                                  ).catch(err => console.error('[OpuraDocsModule] Erro ao registrar log de visualização:', err));
+                                }
                               }
                             }}
                             title="Histórico de versões"
@@ -1476,6 +1520,71 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   </div>
                 </div>
               )}
+              {/* Trilha de Auditoria (Logs) (Onda 4) */}
+              <div className="space-y-3 pt-3 border-t border-slate-100">
+                <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">Trilha de Auditoria (Logs)</h4>
+                <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-2xl bg-slate-50/20">
+                  {documentAuditLogs.length === 0 ? (
+                    <p className="p-4 text-center text-xs text-slate-400 font-bold uppercase tracking-wider">Nenhum evento registrado para este documento.</p>
+                  ) : (
+                    documentAuditLogs.map((log) => {
+                      let icon = <FileText className="w-3.5 h-3.5 text-slate-400" />;
+                      let badgeColor = 'bg-slate-100 text-slate-600';
+                      
+                      switch (log.action) {
+                        case 'criado':
+                          icon = <Plus className="w-3.5 h-3.5 text-blue-600" />;
+                          badgeColor = 'bg-blue-50 text-blue-700 border border-blue-100';
+                          break;
+                        case 'versao_enviada':
+                          icon = <Upload className="w-3.5 h-3.5 text-violet-600" />;
+                          badgeColor = 'bg-violet-50 text-violet-700 border border-violet-100';
+                          break;
+                        case 'download':
+                          icon = <Download className="w-3.5 h-3.5 text-emerald-600" />;
+                          badgeColor = 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+                          break;
+                        case 'visualizado':
+                          icon = <Eye className="w-3.5 h-3.5 text-indigo-600" />;
+                          badgeColor = 'bg-indigo-50 text-indigo-700 border border-indigo-100';
+                          break;
+                        case 'movido_pasta':
+                          icon = <CornerDownRight className="w-3.5 h-3.5 text-amber-600" />;
+                          badgeColor = 'bg-amber-50 text-amber-700 border border-amber-100';
+                          break;
+                        case 'status_alterado':
+                          icon = <UserCheck className="w-3.5 h-3.5 text-teal-600" />;
+                          badgeColor = 'bg-teal-50 text-teal-700 border border-teal-100';
+                          break;
+                      }
+
+                      return (
+                        <div key={log.id} className="p-3 hover:bg-slate-50 transition-colors text-[11px] space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                              {icon}
+                              <span>{log.user_email}</span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-semibold">
+                              {new Date(log.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded ${badgeColor}`}>
+                              {log.action}
+                            </span>
+                            {log.details && (
+                              <span className="text-slate-500 font-medium italic">
+                                "{log.details}"
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

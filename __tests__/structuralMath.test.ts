@@ -5,6 +5,7 @@ import {
   dimensionarPilar,
   dimensionarLaje,
   dimensionarSapata,
+  dimensionarVigaContinua,
 } from '../utils/structuralMath'
 
 describe('getCobrimentoNominalCm', () => {
@@ -149,3 +150,50 @@ describe('dimensionarSapata', () => {
     expect(result.armaduraSugerida.direcaoA.quantidade).toBeGreaterThan(0)
   })
 })
+
+describe('dimensionarVigaContinua', () => {
+  it('Viga contínua simétrica 15x45 que atende (Vão1=4.0m, Vão2=4.0m, q1=q2=15kN/m, fck=25MPa)', () => {
+    const result = dimensionarVigaContinua({
+      bCm: 15,
+      hCm: 45,
+      L1M: 4.0,
+      L2M: 4.0,
+      fckMpa: 25,
+      caa: 'II',
+      q1Knm: 15.0,
+      q2Knm: 15.0,
+      bitolaLongitudinalMm: 10,
+      bitolaEstriboMm: 5.0,
+      deltaRed: 0.90, // redistribuição de 10%
+    })
+
+    expect(result.status).toBe('OK')
+    expect(result.detalhesTecnicos.volumeConcretoM3).toBeCloseTo(0.54, 2)
+    expect(result.detalhesTecnicos.esforcos.MB).toBeLessThan(0)
+    expect(result.armaduraSugerida.longitudinalVao1.quantidade).toBeGreaterThanOrEqual(2)
+    expect(result.armaduraSugerida.longitudinalVao2.quantidade).toBeGreaterThanOrEqual(2)
+    expect(result.armaduraSugerida.longitudinalApoio.quantidade).toBeGreaterThanOrEqual(2)
+    expect(result.diagnosticos.some(d => d.criterio.includes('flexão') && d.status === 'OK')).toBe(true)
+    expect(result.diagnosticos.some(d => d.criterio.includes('cisalhamento') && d.status === 'OK')).toBe(true)
+  })
+
+  it('Viga contínua assimétrica que falha por excesso de carga no apoio central', () => {
+    const result = dimensionarVigaContinua({
+      bCm: 12,
+      hCm: 25, // Seção muito baixa
+      L1M: 3.5,
+      L2M: 5.5,
+      fckMpa: 20,
+      caa: 'II',
+      q1Knm: 40.0, // Cargas altíssimas
+      q2Knm: 50.0,
+      bitolaLongitudinalMm: 12.5,
+      bitolaEstriboMm: 6.3,
+      deltaRed: 0.90,
+    })
+
+    expect(result.status).toBe('REPROVADO')
+    expect(result.diagnosticos.some(d => d.criterio.includes('flexão') && d.status === 'REPROVADO')).toBe(true)
+  })
+})
+

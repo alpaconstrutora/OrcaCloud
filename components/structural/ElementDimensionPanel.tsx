@@ -11,6 +11,7 @@ import {
   dimensionarPilar,
   dimensionarLaje,
   dimensionarSapata,
+  dimensionarVigaContinua,
   DimensionResult
 } from '../../utils/structuralMath'
 import type {
@@ -29,6 +30,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
   const [geometria, setGeometria] = useState<Record<string, any>>(element.geometria)
   const [cargas, setCargas] = useState<Record<string, any>>(element.cargas)
   const [result, setResult] = useState<DimensionResult | null>(null)
+  const [isContinua, setIsContinua] = useState<boolean>(Number(element.geometria?.isContinua ?? 0) === 1)
   
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -40,17 +42,33 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
       let calcRes: DimensionResult
 
       if (element.tipo === 'VIGA') {
-        calcRes = dimensionarViga({
-          bCm: Number(geometria.bCm ?? 15),
-          hCm: Number(geometria.hCm ?? 40),
-          comprimentoVaoM: Number(geometria.comprimentoVaoM ?? 4.0),
-          fckMpa: Number(geometria.fckMpa ?? 25),
-          caa: project.caa,
-          mkKnm: Number(cargas.mkKnm ?? 10),
-          vkKn: Number(cargas.vkKn ?? 15),
-          bitolaLongitudinalMm: Number(geometria.bitolaLongitudinalMm ?? 10),
-          bitolaEstriboMm: Number(geometria.bitolaEstriboMm ?? 5.0)
-        })
+        if (isContinua) {
+          calcRes = dimensionarVigaContinua({
+            bCm: Number(geometria.bCm ?? 15),
+            hCm: Number(geometria.hCm ?? 40),
+            L1M: Number(geometria.L1M ?? 4.0),
+            L2M: Number(geometria.L2M ?? 4.0),
+            fckMpa: Number(geometria.fckMpa ?? 25),
+            caa: project.caa,
+            q1Knm: Number(cargas.q1Knm ?? 15),
+            q2Knm: Number(cargas.q2Knm ?? 15),
+            deltaRed: Number(geometria.deltaRed ?? 0.90),
+            bitolaLongitudinalMm: Number(geometria.bitolaLongitudinalMm ?? 10),
+            bitolaEstriboMm: Number(geometria.bitolaEstriboMm ?? 5.0)
+          })
+        } else {
+          calcRes = dimensionarViga({
+            bCm: Number(geometria.bCm ?? 15),
+            hCm: Number(geometria.hCm ?? 40),
+            comprimentoVaoM: Number(geometria.comprimentoVaoM ?? 4.0),
+            fckMpa: Number(geometria.fckMpa ?? 25),
+            caa: project.caa,
+            mkKnm: Number(cargas.mkKnm ?? 10),
+            vkKn: Number(cargas.vkKn ?? 15),
+            bitolaLongitudinalMm: Number(geometria.bitolaLongitudinalMm ?? 10),
+            bitolaEstriboMm: Number(geometria.bitolaEstriboMm ?? 5.0)
+          })
+        }
       } else if (element.tipo === 'PILAR') {
         calcRes = dimensionarPilar({
           bCm: Number(geometria.bCm ?? 20),
@@ -92,7 +110,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
   // Recalcula sempre que inputs mudam
   useEffect(() => {
     calcular()
-  }, [geometria, cargas])
+  }, [geometria, cargas, isContinua])
 
   // 2. Handler de Mudança de Geometria/Cargas
   const updateGeometria = (k: string, v: number) => {
@@ -109,7 +127,19 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
       // Varre hCm de 20 a 80 (passo 5) e bCm de 12 a 30 (passo 2)
       for (let h = 20; h <= 80; h += 5) {
         for (let b = 12; b <= 30; b += 2) {
-          const res = dimensionarViga({
+          const res = isContinua ? dimensionarVigaContinua({
+            bCm: b,
+            hCm: h,
+            L1M: Number(geometria.L1M ?? 4.0),
+            L2M: Number(geometria.L2M ?? 4.0),
+            fckMpa: Number(geometria.fckMpa ?? 25),
+            caa: project.caa,
+            q1Knm: Number(cargas.q1Knm ?? 15),
+            q2Knm: Number(cargas.q2Knm ?? 15),
+            deltaRed: Number(geometria.deltaRed ?? 0.90),
+            bitolaLongitudinalMm: Number(geometria.bitolaLongitudinalMm ?? 10),
+            bitolaEstriboMm: Number(geometria.bitolaEstriboMm ?? 5.0)
+          }) : dimensionarViga({
             bCm: b,
             hCm: h,
             comprimentoVaoM: Number(geometria.comprimentoVaoM ?? 4.0),
@@ -373,14 +403,53 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
               </label>
 
               {element.tipo === 'VIGA' && (
-                <label className="block text-xs font-black text-slate-500 space-y-1">
-                  Vão da Viga (m)
-                  <input
-                    type="number" step="0.1" value={geometria.comprimentoVaoM ?? 4.0}
-                    onChange={e => updateGeometria('comprimentoVaoM', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
-                  />
-                </label>
+                <div className="col-span-2 space-y-3">
+                  <label className="block text-xs font-black text-slate-500 space-y-1">
+                    Configuração de Vão
+                    <select
+                      value={isContinua ? 'continua' : 'biapoiada'}
+                      onChange={e => {
+                        const val = e.target.value === 'continua'
+                        setIsContinua(val)
+                        updateGeometria('isContinua', val ? 1 : 0)
+                      }}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    >
+                      <option value="biapoiada">Vão Único (Biapoiada)</option>
+                      <option value="continua">Viga Contínua (2 Vãos)</option>
+                    </select>
+                  </label>
+
+                  {isContinua ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                        Vão L1 (m)
+                        <input
+                          type="number" step="0.1" value={geometria.L1M ?? 4.0}
+                          onChange={e => updateGeometria('L1M', Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                        Vão L2 (m)
+                        <input
+                          type="number" step="0.1" value={geometria.L2M ?? 4.0}
+                          onChange={e => updateGeometria('L2M', Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <label className="block text-xs font-black text-slate-500 space-y-1">
+                      Vão da Viga (m)
+                      <input
+                        type="number" step="0.1" value={geometria.comprimentoVaoM ?? 4.0}
+                        onChange={e => updateGeometria('comprimentoVaoM', Number(e.target.value))}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                      />
+                    </label>
+                  )}
+                </div>
               )}
               {element.tipo === 'PILAR' && (
                 <label className="block text-xs font-black text-slate-500 space-y-1">
@@ -509,24 +578,62 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
             <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400 mt-4 mb-2">Esforços de Cálculo (NBR 6120)</h4>
 
             {element.tipo === 'VIGA' && (
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-black text-slate-500 space-y-1">
-                  Momento Mk (kNm)
-                  <input
-                    type="number" value={cargas.mkKnm ?? 10}
-                    onChange={e => updateCarga('mkKnm', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
-                  />
-                </label>
-                <label className="block text-xs font-black text-slate-500 space-y-1">
-                  Cisalham. Vk (kN)
-                  <input
-                    type="number" value={cargas.vkKn ?? 15}
-                    onChange={e => updateCarga('vkKn', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
-                  />
-                </label>
-              </div>
+              isContinua ? (
+                <div className="space-y-4 col-span-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block text-xs font-black text-slate-500 space-y-1">
+                      Carga Vão L1 (kN/m)
+                      <input
+                        type="number" value={cargas.q1Knm ?? 15}
+                        onChange={e => updateCarga('q1Knm', Number(e.target.value))}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                      />
+                    </label>
+                    <label className="block text-xs font-black text-slate-500 space-y-1">
+                      Carga Vão L2 (kN/m)
+                      <input
+                        type="number" value={cargas.q2Knm ?? 15}
+                        onChange={e => updateCarga('q2Knm', Number(e.target.value))}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                      />
+                    </label>
+                  </div>
+                  <label className="block text-xs font-black text-slate-500 space-y-1">
+                    Redistribuição de Momentos (δ)
+                    <select
+                      value={geometria.deltaRed ?? 0.90}
+                      onChange={e => updateGeometria('deltaRed', Number(e.target.value))}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    >
+                      <option value={1.00}>1.00 (Sem Redistribuição)</option>
+                      <option value={0.95}>0.95 (5% Redução)</option>
+                      <option value={0.90}>0.90 (10% Redução)</option>
+                      <option value={0.85}>0.85 (15% Redução)</option>
+                      <option value={0.80}>0.80 (20% Redução)</option>
+                      <option value={0.75}>0.75 (25% Redução Máxima)</option>
+                    </select>
+                  </label>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 col-span-2">
+                  <label className="block text-xs font-black text-slate-500 space-y-1">
+                    Momento Mk (kNm)
+                    <input
+                      type="number" value={cargas.mkKnm ?? 10}
+                      onChange={e => updateCarga('mkKnm', Number(e.target.value))}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    />
+                  </label>
+                  <label className="block text-xs font-black text-slate-500 space-y-1">
+                    Cisalham. Vk (kN)
+                    <input
+                      type="number" value={cargas.vkKn ?? 15}
+                      onChange={e => updateCarga('vkKn', Number(e.target.value))}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    />
+                  </label>
+                </div>
+              )
             )}
 
             {element.tipo === 'PILAR' && (
@@ -686,7 +793,18 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-center">
                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Armadura Sugerida</div>
                   <div className="text-[11px] font-bold text-blue-600 mt-1.5 truncate">
-                    {element.tipo === 'VIGA' && `${result.armaduraSugerida.longitudinal.quantidade} barras Ø${result.armaduraSugerida.longitudinal.bitolaMm} / estribo c/${result.armaduraSugerida.transversal.espaçamentoCm}`}
+                    {element.tipo === 'VIGA' && (
+                      isContinua ? (
+                        <div className="text-[9px] text-left leading-normal font-semibold">
+                          <div>Vão 1: {result.armaduraSugerida.longitudinalVao1.quantidade}Ø{result.armaduraSugerida.longitudinalVao1.bitolaMm} ({result.armaduraSugerida.longitudinalVao1.areaCalculadaCm2.toFixed(2)} cm²)</div>
+                          <div>Apoio: {result.armaduraSugerida.longitudinalApoio.quantidade}Ø{result.armaduraSugerida.longitudinalApoio.bitolaMm} ({result.armaduraSugerida.longitudinalApoio.areaCalculadaCm2.toFixed(2)} cm²)</div>
+                          <div>Vão 2: {result.armaduraSugerida.longitudinalVao2.quantidade}Ø{result.armaduraSugerida.longitudinalVao2.bitolaMm} ({result.armaduraSugerida.longitudinalVao2.areaCalculadaCm2.toFixed(2)} cm²)</div>
+                          <div>Estribo: c/{result.armaduraSugerida.transversal.espaçamentoCm} cm</div>
+                        </div>
+                      ) : (
+                        `${result.armaduraSugerida.longitudinal.quantidade} barras Ø${result.armaduraSugerida.longitudinal.bitolaMm} / estribo c/${result.armaduraSugerida.transversal.espaçamentoCm}`
+                      )
+                    )}
                     {element.tipo === 'PILAR' && `${result.armaduraSugerida.longitudinal.quantidade} barras Ø${result.armaduraSugerida.longitudinal.bitolaMm}`}
                     {element.tipo === 'LAJE' && `Ø${result.armaduraSugerida.flexao.bitolaMm} c/${result.armaduraSugerida.flexao.espaçamentoCm}`}
                     {element.tipo === 'SAPATA' && `${result.armaduraSugerida.direcaoA.quantidade}Ø${result.armaduraSugerida.direcaoA.bitolaMm} + ${result.armaduraSugerida.direcaoB.quantidade}Ø${result.armaduraSugerida.direcaoB.bitolaMm}`}

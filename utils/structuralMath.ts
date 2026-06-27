@@ -607,6 +607,282 @@ export function dimensionarSapata(params: {
   }
 }
 
+/**
+ * Dimensionamento de Viga Contínua de 2 Vãos (P0 - MVP)
+ */
+export function dimensionarVigaContinua(params: {
+  bCm: number
+  hCm: number
+  L1M: number
+  L2M: number
+  fckMpa: number
+  caa: 'I' | 'II' | 'III' | 'IV'
+  q1Knm: number
+  q2Knm: number
+  deltaRed: number // Coeficiente de redistribuição (ex: 0.90)
+  bitolaLongitudinalMm: number
+  bitolaEstriboMm: number
+}): DimensionResult {
+  const { bCm, hCm, L1M, L2M, fckMpa, caa, q1Knm, q2Knm, deltaRed, bitolaLongitudinalMm, bitolaEstriboMm } = params
+  const diagnosticos: DiagnosticItem[] = []
+
+  // 1. Durabilidade e Coeficientes
+  const cNomCm = getCobrimentoNominalCm(caa, 'viga')
+  const fcd = fckMpa / 1.4
+  const fyd = 500 / 1.15
+  const fydKnc2 = fyd / 10
+  const fcdKnc2 = fcd / 10
+  const dCm = hCm - cNomCm - (bitolaEstriboMm / 10) - (bitolaLongitudinalMm / 20)
+
+  diagnosticos.push({
+    criterio: 'Cobrimento nominal',
+    status: 'OK',
+    valorCalculado: `${cNomCm * 10} mm`,
+    valorLimite: `${cNomCm * 10} mm`,
+    referenciaNormativa: 'Art. 7.2',
+    mensagem: `Cobrimento adequado para CAA ${caa}.`
+  })
+
+  // 2. Equação dos Três Momentos (Apoio Central B)
+  // M_B = - (q1 * L1^3 + q2 * L2^3) / (8 * (L1 + L2))
+  const MB = - (q1Knm * Math.pow(L1M, 3) + q2Knm * Math.pow(L2M, 3)) / (8 * (L1M + L2M))
+  
+  // Coeficiente de redistribuição deltaRed (Cap. 14 da NBR 6118)
+  const MB_red = deltaRed * MB
+
+  // 3. Reações de Apoio e Equilíbrio (Esforços de Serviço)
+  const RA = (q1Knm * L1M) / 2 + MB_red / L1M
+  const RC = (q2Knm * L2M) / 2 + MB_red / L2M
+  const RB = (q1Knm * L1M + q2Knm * L2M) - RA - RC
+
+  // Esforços Cortantes de Cálculo nas Faces (ELU)
+  const VSd_A = 1.4 * RA
+  const VSd_B_esq = 1.4 * (q1Knm * L1M - RA)
+  const VSd_B_dir = 1.4 * (q2Knm * L2M - RC)
+  const VSd_C = 1.4 * RC
+  const VSd_max = Math.max(Math.abs(VSd_A), Math.abs(VSd_B_esq), Math.abs(VSd_B_dir), Math.abs(VSd_C))
+
+  // Momentos de Cálculo nas Seções Críticas (ELU)
+  const MSd_negB = 1.4 * Math.abs(MB_red)
+
+  // Vão 1 (Momento Positivo Máximo)
+  const x_max1 = RA / q1Knm
+  const MSd_pos1 = (x_max1 > 0 && x_max1 < L1M) ? (1.4 * Math.pow(RA, 2)) / (2 * q1Knm) : 0
+
+  // Vão 2 (Momento Positivo Máximo)
+  const x_max2 = RC / q2Knm
+  const MSd_pos2 = (x_max2 > 0 && x_max2 < L2M) ? (1.4 * Math.pow(RC, 2)) / (2 * q2Knm) : 0
+
+  // 4. Flexão Simples (Equação de 2º Grau para Linha Neutra)
+  const dimensionarSecao = (mdKnm: number) => {
+    if (mdKnm <= 0) {
+      return { asNec: 0, status: 'OK' as const, msg: 'Sem momento fletor relevante.' }
+    }
+    const mdKncm = mdKnm * 100
+    const A_coef = 0.272 * bCm * fcdKnc2
+    const B_coef = -0.68 * bCm * fcdKnc2 * dCm
+    const C_coef = mdKncm
+
+    const delta = B_coef * B_coef - 4 * A_coef * C_coef
+    if (delta < 0 || dCm <= 0) {
+      return { asNec: 0, status: 'REPROVADO' as const, msg: 'Seção subdimensionada. Aumente a viga.' }
+    }
+
+    const x = (-B_coef - Math.sqrt(delta)) / (2 * A_coef)
+    const betaX = x / dCm
+
+    if (betaX > 0.45) {
+      return { asNec: 0, status: 'REPROVADO' as const, msg: `Linha neutra (x/d = ${betaX.toFixed(2)}) > 0.45.` }
+    } else if (betaX > 0.35) {
+      return { asNec: mdKncm / (fydKnc2 * (dCm - 0.4 * x)), status: 'ATENCAO' as const, msg: `Linha neutra (x/d = ${betaX.toFixed(2)}) elevada.` }
+    }
+
+    return { asNec: mdKncm / (fydKnc2 * (dCm - 0.4 * x)), status: 'OK' as const, msg: 'Seção adequada.' }
+  }
+
+  // Taxa mínima de armadura longitudinal
+  let rhoMin = 0.0015
+  if (fckMpa > 30) {
+    rhoMin = 0.0015 + (fckMpa - 30) * 0.00008
+  }
+  const asMin = rhoMin * bCm * hCm
+
+  // Seção 1: Vão 1 (Inferior)
+  const resVao1 = dimensionarSecao(MSd_pos1)
+  const asVao1 = MSd_pos1 > 0 ? Math.max(resVao1.asNec, asMin) : asMin
+
+  // Seção 2: Apoio B (Superior)
+  const resApoio = dimensionarSecao(MSd_negB)
+  const asApoio = Math.max(resApoio.asNec, asMin)
+
+  // Seção 3: Vão 2 (Inferior)
+  const resVao2 = dimensionarSecao(MSd_pos2)
+  const asVao2 = MSd_pos2 > 0 ? Math.max(resVao2.asNec, asMin) : asMin
+
+  const areaBarra = (Math.PI * Math.pow(bitolaLongitudinalMm / 10, 2)) / 4
+  const barrasVao1 = Math.ceil(asVao1 / areaBarra)
+  const barrasApoio = Math.ceil(asApoio / areaBarra)
+  const barrasVao2 = Math.ceil(asVao2 / areaBarra)
+
+  let flexaoStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  if (resVao1.status === 'REPROVADO' || resApoio.status === 'REPROVADO' || resVao2.status === 'REPROVADO') {
+    flexaoStatus = 'REPROVADO'
+  } else if (resVao1.status === 'ATENCAO' || resApoio.status === 'ATENCAO' || resVao2.status === 'ATENCAO') {
+    flexaoStatus = 'ATENCAO'
+  }
+
+  diagnosticos.push({
+    criterio: 'Resistência à flexão (ELU)',
+    status: flexaoStatus,
+    valorCalculado: `Vão1: ${asVao1.toFixed(2)} cm² | Apoio: ${asApoio.toFixed(2)} cm² | Vão2: ${asVao2.toFixed(2)} cm²`,
+    valorLimite: `Mín: ${asMin.toFixed(2)} cm²`,
+    referenciaNormativa: 'Art. 17.2',
+    mensagem: flexaoStatus === 'REPROVADO' ? 'Seção com armadura excessiva ou ruptura. Aumente as dimensões da viga.' : 'Dimensionamento à flexão concluído com sucesso.'
+  })
+
+  // 5. Cisalhamento (ELU)
+  const vrd2 = 0.27 * (1 - fckMpa / 250) * fcdKnc2 * bCm * dCm
+  let cisStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  let cisMsg = 'Seção de concreto resistente à compressão diagonal.'
+
+  if (VSd_max > vrd2) {
+    cisStatus = 'REPROVADO'
+    cisMsg = 'Esmagamento da biela de compressão. Aumente a largura da viga.'
+  }
+
+  const fctkInf = 0.21 * Math.pow(fckMpa, 2 / 3)
+  const fctd = fctkInf / 1.4
+  const vc0 = 0.6 * (fctd / 10) * bCm * dCm
+
+  const vsw = Math.max(0, VSd_max - vc0)
+  const aswOverS = vsw / (fydKnc2 * dCm)
+
+  const fctm = 0.3 * Math.pow(fckMpa, 2 / 3)
+  const rhoSwMin = 0.2 * (fctm / 500)
+  const aswOverSMin = rhoSwMin * bCm
+  const aswOverSFinal = Math.max(aswOverS, aswOverSMin)
+
+  const areaEstribo = 2 * (Math.PI * Math.pow(bitolaEstriboMm / 10, 2)) / 4
+  const espaçamentoEstribo = Math.min(30, Math.floor(areaEstribo / aswOverSFinal))
+  const sMax = VSd_max <= 0.67 * vrd2 ? Math.min(30, 0.6 * dCm) : Math.min(20, 0.3 * dCm)
+  const espaçamentoFinal = Math.min(espaçamentoEstribo, sMax)
+
+  diagnosticos.push({
+    criterio: 'Resistência ao cisalhamento (ELU)',
+    status: cisStatus,
+    valorCalculado: cisStatus === 'REPROVADO' ? 'Esmagamento' : `Estribos de c/${espaçamentoFinal} cm`,
+    valorLimite: `Máx: c/${Math.floor(sMax)} cm`,
+    referenciaNormativa: 'Art. 17.4',
+    mensagem: cisMsg
+  })
+
+  // 6. ELS - Flechas por Vão (Método simplificado de Branson adaptado)
+  const Ec = 4760 * Math.sqrt(fckMpa)
+  const EcKnc2 = Ec / 10
+  const Ic = (bCm * Math.pow(hCm, 3)) / 12
+  const yt = hCm / 2
+  const mcr = (1.2 * fctm / 10 * Ic) / yt
+
+  const ma1 = (MSd_pos1 / 1.4) * 100
+  let Ieq1 = Ic
+  if (ma1 > mcr) {
+    const maRatio = Math.pow(mcr / ma1, 3)
+    const Ifiss = 0.3 * Ic
+    Ieq1 = maRatio * Ic + (1 - maRatio) * Ifiss
+  }
+
+  const ma2 = (MSd_pos2 / 1.4) * 100
+  let Ieq2 = Ic
+  if (ma2 > mcr) {
+    const maRatio = Math.pow(mcr / ma2, 3)
+    const Ifiss = 0.3 * Ic
+    Ieq2 = maRatio * Ic + (1 - maRatio) * Ifiss
+  }
+
+  const q1_cm = q1Knm / 100
+  const L1_cm = L1M * 100
+  const MB_red_cm = Math.abs(MB_red) * 100
+  const flechaImediata1 = Math.max(0, (5 * q1_cm * Math.pow(L1_cm, 4)) / (384 * EcKnc2 * Ieq1) - (MB_red_cm * Math.pow(L1_cm, 2)) / (16 * EcKnc2 * Ieq1))
+  const flechaLonga1 = flechaImediata1 * 3
+
+  const q2_cm = q2Knm / 100
+  const L2_cm = L2M * 100
+  const flechaImediata2 = Math.max(0, (5 * q2_cm * Math.pow(L2_cm, 4)) / (384 * EcKnc2 * Ieq2) - (MB_red_cm * Math.pow(L2_cm, 2)) / (16 * EcKnc2 * Ieq2))
+  const flechaLonga2 = flechaImediata2 * 3
+
+  const limite1 = L1_cm / 250
+  const limite2 = L2_cm / 250
+
+  const flechaStatus = (flechaLonga1 <= limite1 && flechaLonga2 <= limite2) ? 'OK' : 'REPROVADO'
+
+  diagnosticos.push({
+    criterio: 'Deformação excessiva (ELS)',
+    status: flechaStatus,
+    valorCalculado: `Vão 1: ${flechaLonga1.toFixed(2)} cm | Vão 2: ${flechaLonga2.toFixed(2)} cm`,
+    valorLimite: `Vão 1: ${limite1.toFixed(2)} cm | Vão 2: ${limite2.toFixed(2)} cm`,
+    referenciaNormativa: 'Tabela 13.3',
+    mensagem: flechaStatus === 'OK' ? 'Flechas dentro dos limites normativos.' : 'Flecha excessiva em pelo menos um dos vãos. Aumente a altura (h).'
+  })
+
+  // Status Geral
+  let overallStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  if (diagnosticos.some(d => d.status === 'REPROVADO')) {
+    overallStatus = 'REPROVADO'
+  } else if (diagnosticos.some(d => d.status === 'ATENCAO')) {
+    overallStatus = 'ATENCAO'
+  }
+
+  const volumeConcretoM3 = (bCm / 100) * (hCm / 100) * (L1M + L2M)
+  const pesoAcoKg = (asVao1 * L1M + asVao2 * L2M + asApoio * ((L1M + L2M) / 4)) * 100 * 0.00785
+
+  return {
+    status: overallStatus,
+    diagnosticos,
+    armaduraSugerida: {
+      longitudinalVao1: {
+        bitolaMm: bitolaLongitudinalMm,
+        quantidade: barrasVao1,
+        areaCalculadaCm2: asVao1
+      },
+      longitudinalApoio: {
+        bitolaMm: bitolaLongitudinalMm,
+        quantidade: barrasApoio,
+        areaCalculadaCm2: asApoio
+      },
+      longitudinalVao2: {
+        bitolaMm: bitolaLongitudinalMm,
+        quantidade: barrasVao2,
+        areaCalculadaCm2: asVao2
+      },
+      transversal: {
+        bitolaMm: bitolaEstriboMm,
+        espaçamentoCm: espaçamentoFinal
+      }
+    },
+    detalhesTecnicos: {
+      cobrimentoNominalCm: cNomCm,
+      alturaUtilCm: dCm,
+      esforcos: {
+        MB: MB_red,
+        RA,
+        RB,
+        RC,
+        MSd_pos1,
+        MSd_pos2,
+        MSd_negB,
+        VSd_max
+      },
+      flechas: {
+        vao1: { imediata: flechaImediata1, diferida: flechaLonga1, limite: limite1 },
+        vao2: { imediata: flechaImediata2, diferida: flechaLonga2, limite: limite2 }
+      },
+      volumeConcretoM3,
+      pesoAcoKg,
+      areaFormaM2: (bCm + 2 * hCm) / 100 * (L1M + L2M)
+    }
+  }
+}
+
 // ── Funções de ajuda internas ───────────────────────────────────
 
 function fcdMpaToKnc2(fckMpa: number): number {

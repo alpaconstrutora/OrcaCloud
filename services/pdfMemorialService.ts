@@ -128,9 +128,16 @@ export function generateMemorialPDF(
 
   // Geometria e cargas Dinâmicas por tipo
   if (element.tipo === 'VIGA') {
-    drawRow('Largura b_viga:', `${geometria.bCm ?? 15} cm`, 'Altura h_viga:', `${geometria.hCm ?? 40} cm`)
-    drawRow('Vão livre L_vao:', `${geometria.comprimentoVaoM ?? 4} m`, 'Classe Concreto fck:', `C${geometria.fckMpa ?? 25}`)
-    drawRow('Momento fletor Mk:', `${cargas.mkKnm ?? 0} kN.m`, 'Esforço cortante Vk:', `${cargas.vkKn ?? 0} kN`)
+    const isContinua = Number(geometria.isContinua ?? 0) === 1
+    if (isContinua) {
+      drawRow('Largura b_viga:', `${geometria.bCm ?? 15} cm`, 'Altura h_viga:', `${geometria.hCm ?? 40} cm`)
+      drawRow('Vão L1 / L2:', `${geometria.L1M ?? 4.0} m / ${geometria.L2M ?? 4.0} m`, 'Classe Concreto fck:', `C${geometria.fckMpa ?? 25}`)
+      drawRow('Carga q1 / q2:', `${cargas.q1Knm ?? 15} / ${cargas.q2Knm ?? 15} kN/m`, 'Redistribuição (δ):', `${geometria.deltaRed ?? 0.90}`)
+    } else {
+      drawRow('Largura b_viga:', `${geometria.bCm ?? 15} cm`, 'Altura h_viga:', `${geometria.hCm ?? 40} cm`)
+      drawRow('Vão livre L_vao:', `${geometria.comprimentoVaoM ?? 4} m`, 'Classe Concreto fck:', `C${geometria.fckMpa ?? 25}`)
+      drawRow('Momento fletor Mk:', `${cargas.mkKnm ?? 0} kN.m`, 'Esforço cortante Vk:', `${cargas.vkKn ?? 0} kN`)
+    }
   } else if (element.tipo === 'PILAR') {
     drawRow('Largura b_pilar:', `${geometria.bCm ?? 20} cm`, 'Largura h_pilar:', `${geometria.hCm ?? 20} cm`)
     drawRow('Comprimento livre L:', `${geometria.comprimentoLivreM ?? 2.8} m`, 'Classe Concreto fck:', `C${geometria.fckMpa ?? 25}`)
@@ -217,10 +224,20 @@ export function generateMemorialPDF(
 
   // Descreve armadura sugerida baseada no tipo
   let armaduraTexto = ''
+  const isContinua = element.tipo === 'VIGA' && Number(geometria.isContinua ?? 0) === 1
+
   if (element.tipo === 'VIGA') {
-    const long = result.armaduraSugerida.longitudinal
-    const trans = result.armaduraSugerida.transversal
-    armaduraTexto = `Adotar armadura longitudinal de ${long.quantidade} barras Ø${long.bitolaMm} mm (As = ${long.areaCalculadaCm2.toFixed(2)} cm²).\nTransversal: Estribos Ø${trans.bitolaMm} mm espaçados a cada c/${trans.espaçamentoCm} cm.`
+    if (isContinua) {
+      const v1 = result.armaduraSugerida.longitudinalVao1
+      const ap = result.armaduraSugerida.longitudinalApoio
+      const v2 = result.armaduraSugerida.longitudinalVao2
+      const trans = result.armaduraSugerida.transversal
+      armaduraTexto = `Armadura Longitudinal Sugerida:\n  Vão L1 (Inferior): ${v1.quantidade} barras Ø${v1.bitolaMm} mm (As = ${v1.areaCalculadaCm2.toFixed(2)} cm²)\n  Apoio Intermediário B (Superior): ${ap.quantidade} barras Ø${ap.bitolaMm} mm (As = ${ap.areaCalculadaCm2.toFixed(2)} cm²)\n  Vão L2 (Inferior): ${v2.quantidade} barras Ø${v2.bitolaMm} mm (As = ${v2.areaCalculadaCm2.toFixed(2)} cm²)\nTransversal: Estribos Ø${trans.bitolaMm} mm espaçados a cada c/${trans.espaçamentoCm} cm.`
+    } else {
+      const long = result.armaduraSugerida.longitudinal
+      const trans = result.armaduraSugerida.transversal
+      armaduraTexto = `Adotar armadura longitudinal de ${long.quantidade} barras Ø${long.bitolaMm} mm (As = ${long.areaCalculadaCm2.toFixed(2)} cm²).\nTransversal: Estribos Ø${trans.bitolaMm} mm espaçados a cada c/${trans.espaçamentoCm} cm.`
+    }
   } else if (element.tipo === 'PILAR') {
     const long = result.armaduraSugerida.longitudinal
     const trans = result.armaduraSugerida.transversal
@@ -235,12 +252,13 @@ export function generateMemorialPDF(
   }
 
   // Desenha caixa de armadura
+  const caixaHeight = isContinua ? 32 : 20
   doc.setFillColor(lightBg[0], lightBg[1], lightBg[2])
-  doc.rect(marginX, currentY, 170, 20, 'F')
+  doc.rect(marginX, currentY, 170, caixaHeight, 'F')
   doc.setFont('Helvetica', 'bold')
   doc.text(armaduraTexto, marginX + 5, currentY + 6)
   
-  currentY += 26
+  currentY += (caixaHeight + 6)
 
   // Quantitativos finais
   doc.setFont('Helvetica', 'normal')

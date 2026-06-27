@@ -389,11 +389,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Registrar Movimentação para Obra
   const handleMoveAsset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAsset || !activeOrganizationId) return;
+    if (!selectedAsset) return;
+    const targetOrgId = activeOrganizationId || selectedAsset.organization_id;
+    if (!targetOrgId) return;
     setActionLoading(true);
     try {
       await assetService.createMovement({
-        organization_id: activeOrganizationId,
+        organization_id: targetOrgId,
         asset_id: selectedAsset.id,
         origin_project_id: selectedAsset.current_project_id || undefined,
         destination_project_id: moveForm.destination_project_id || undefined,
@@ -419,13 +421,15 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Registrar Reserva de Ativo
   const handleReserveAsset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAsset || !activeOrganizationId) return;
+    if (!selectedAsset) return;
+    const targetOrgId = activeOrganizationId || selectedAsset.organization_id;
+    if (!targetOrgId) return;
     setActionLoading(true);
     try {
       // Obter email fictício de teste ou do user logado
       const email = 'gestor.ativos@alpaconstrutora.com.br';
       await assetService.createReservation({
-        organization_id: activeOrganizationId,
+        organization_id: targetOrgId,
         asset_id: selectedAsset.id,
         project_id: reserveForm.project_id,
         start_date: reserveForm.start_date,
@@ -532,15 +536,17 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Cadastrar Nova Ordem de Manutenção
   const handleCreateMaintenance = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrganizationId) return;
     if (!maintForm.asset_id) {
       alert('Por favor, selecione um ativo para realizar a manutenção.');
       return;
     }
+    const targetAsset = assets.find(a => a.id === maintForm.asset_id);
+    const targetOrgId = activeOrganizationId || targetAsset?.organization_id;
+    if (!targetOrgId) return;
     setActionLoading(true);
     try {
       await assetService.createMaintenance({
-        organization_id: activeOrganizationId,
+        organization_id: targetOrgId,
         asset_id: maintForm.asset_id,
         type: maintForm.type,
         description: maintForm.description,
@@ -666,7 +672,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Cadastrar Novo Documento / Seguro
   const handleCreateDocument = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAsset || !activeOrganizationId) return;
+    if (!selectedAsset) return;
+    const targetOrgId = activeOrganizationId || selectedAsset.organization_id;
+    if (!targetOrgId) return;
     if (!docForm.name) {
       alert('Por favor, informe o nome ou descrição do documento.');
       return;
@@ -682,7 +690,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       }
 
       await assetService.createDocument({
-        organization_id: activeOrganizationId,
+        organization_id: targetOrgId,
         asset_id: selectedAsset.id,
         type: docForm.type,
         name: docForm.name,

@@ -195,14 +195,20 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
                                         <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 px-2 py-1">
                                             <span>Faça upload do arquivo</span>
                                             <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={(e) => {
-                                                if (e.target.files && e.target.files[0]) {
-                                                    setSelectedFile(e.target.files[0]);
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                const MAX_MB = 60;
+                                                if (file.size > MAX_MB * 1024 * 1024) {
+                                                    alert(`O arquivo é muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB). O limite é ${MAX_MB} MB.`);
+                                                    e.target.value = '';
+                                                    return;
                                                 }
+                                                setSelectedFile(file);
                                             }} />
                                         </label>
                                     </div>
                                     <p className="text-xs text-gray-400">
-                                        {selectedFile ? <span className="text-blue-600 font-bold">{selectedFile.name}</span> : (formData.file_url ? 'Arquivo já enviado (Envie outro para substituir)' : 'PDF, Imagens, Tabelas ou Zip até 50MB')}
+                                        {selectedFile ? <span className="text-blue-600 font-bold">{selectedFile.name}</span> : (formData.file_url ? 'Arquivo já enviado (Envie outro para substituir)' : 'PDF, Imagens, Tabelas ou Zip até 60MB')}
                                     </p>
                                 </div>
                             </div>

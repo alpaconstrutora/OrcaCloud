@@ -24,6 +24,10 @@ import {
   FolderPlus,
   ChevronRight,
   CornerDownRight,
+  Clock,
+  ThumbsUp,
+  ThumbsDown,
+  UserCheck,
 } from 'lucide-react';
 import { documentService } from '../services/documentService';
 import {
@@ -33,6 +37,8 @@ import {
   OpuraDocumentStatus,
   OpuraFolder,
   OpuraFolderInsert,
+  OpuraDocumentApproval,
+  OpuraDocumentApprovalStatus,
 } from '../types';
 import { useStore } from '../store/useStore';
 
@@ -78,6 +84,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [movingDocId, setMovingDocId] = React.useState<string | null>(null);
   const [moveModalOpen, setMoveModalOpen] = React.useState(false);
   const [targetFolderId, setTargetFolderId] = React.useState<string | null>(null);
+
+  // Estados locais da Onda 2 (Fluxo de Aprovação & Workflows)
+  const [orgMembers, setOrgMembers] = React.useState<{ name: string; email: string }[]>([]);
+  const [pendingApprovals, setPendingApprovals] = React.useState<any[]>([]);
+  const [showPendingOnly, setShowPendingOnly] = React.useState(false);
+  const [selectedApproverEmail, setSelectedApproverEmail] = React.useState('');
+  const [submittingApproval, setSubmittingApproval] = React.useState(false);
+  const [approvingId, setApprovingId] = React.useState<string | null>(null);
+  const [rejectingId, setRejectingId] = React.useState<string | null>(null);
+  const [feedbackText, setFeedbackText] = React.useState('');
+  const [processingAction, setProcessingAction] = React.useState(false);
+  const [documentApprovals, setDocumentApprovals] = React.useState<OpuraDocumentApproval[]>([]);
 
   // Form State para Upload
   const [newDocName, setNewDocName] = React.useState('');
@@ -167,6 +185,140 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
+  // Buscar aprovações pendentes atribuídas ao usuário logado
+  const fetchPendingApprovals = async () => {
+    if (!currentProfile?.email) return;
+    try {
+      const data = await documentService.listPendingApprovals(currentProfile.email);
+      setPendingApprovals(data);
+    } catch (err) {
+      console.error('[OpuraDocsModule] Erro ao buscar aprovações pendentes:', err);
+    }
+  };
+
+  // Buscar membros da organização ativa
+  const fetchOrgMembers = async () => {
+    if (!activeOrganizationId) return;
+    try {
+      const data = await documentService.listOrganizationMembers(activeOrganizationId);
+      setOrgMembers(data);
+    } catch (err) {
+      console.error('[OpuraDocsModule] Erro ao buscar membros da organização:', err);
+    }
+  };
+
+  // Buscar histórico de pareceres de aprovação do documento
+  const loadApprovalsForDoc = async (docId: string) => {
+    try {
+      const data = await documentService.listApprovalsForDocument(docId);
+      setDocumentApprovals(data);
+    } catch (err) {
+      console.error('[OpuraDocsModule] Erro ao buscar histórico de aprovações do documento:', err);
+    }
+  };
+
+  // Solicitar aprovação de documento
+  const handleRequestApprovalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDocForVersions || !selectedApproverEmail || !currentProfile?.email) return;
+    setSubmittingApproval(true);
+    try {
+      await documentService.submitForApproval(
+        selectedDocForVersions.id,
+        currentProfile.email,
+        selectedApproverEmail
+      );
+      alert('Aprovação solicitada com sucesso!');
+      setSelectedApproverEmail('');
+      // Atualizar o histórico exibido
+      const updatedDoc = await documentService.getDocumentById(selectedDocForVersions.id);
+      setSelectedDocForVersions(updatedDoc);
+      if (updatedDoc) loadApprovalsForDoc(updatedDoc.id);
+      fetchDocs();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao solicitar aprovação.');
+    } finally {
+      setSubmittingApproval(false);
+    }
+  };
+
+  // Aprovar parecer
+  const handleApproveAction = async (approvalId: string) => {
+    setProcessingAction(true);
+    try {
+      await documentService.approveDocument(approvalId, feedbackText || undefined);
+      setFeedbackText('');
+      setApprovingId(null);
+      alert('Documento aprovado com sucesso!');
+      fetchPendingApprovals();
+      fetchDocs();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao aprovar documento.');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  // Rejeitar parecer
+  const handleRejectAction = async (approvalId: string) => {
+    if (!feedbackText.trim()) {
+      alert('Por favor, informe a justificativa para a rejeição do documento.');
+      return;
+    }
+    setProcessingAction(true);
+    try {
+      await documentService.rejectDocument(approvalId, feedbackText);
+      setFeedbackText('');
+      setRejectingId(null);
+      alert('Documento rejeitado com sucesso!');
+      fetchPendingApprovals();
+      fetchDocs();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao rejeitar documento.');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  // Helper para renderizar badge de aprovação
+  const getApprovalBadge = (status?: OpuraDocumentApprovalStatus) => {
+    switch (status) {
+      case 'rascunho':
+        return (
+          <span className="px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 rounded border border-slate-200">
+            Rascunho
+          </span>
+        );
+      case 'pendente':
+        return (
+          <span className="flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-black bg-blue-50 text-blue-600 rounded border border-blue-100 uppercase tracking-wider">
+            <Clock className="w-3 h-3" />
+            Pendente
+          </span>
+        );
+      case 'aprovado':
+        return (
+          <span className="flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-black bg-emerald-50 text-emerald-600 rounded border border-emerald-100 uppercase tracking-wider">
+            <CheckCircle2 className="w-3 h-3" />
+            Aprovado
+          </span>
+        );
+      case 'rejeitado':
+        return (
+          <span className="flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-black bg-rose-50 text-rose-600 rounded border border-rose-100 uppercase tracking-wider">
+            <ThumbsDown className="w-3 h-3" />
+            Rejeitado
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 rounded border border-slate-200">
+            Rascunho
+          </span>
+        );
+    }
+  };
+
   // Resetar a pasta ativa para a raiz ao mudar de projeto ou categoria
   React.useEffect(() => {
     setCurrentFolderId(null);
@@ -175,7 +327,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   React.useEffect(() => {
     fetchDocs();
     fetchFolders();
-  }, [activeOrganizationId, selectedProjectId, activeTab, currentFolderId]);
+    fetchPendingApprovals();
+    fetchOrgMembers();
+  }, [activeOrganizationId, selectedProjectId, activeTab, currentFolderId, currentProfile]);
 
   // Função para criar uma pasta virtual
   const handleCreateFolderSubmit = async (e: React.FormEvent) => {
@@ -545,6 +699,20 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             </button>
           );
         })}
+
+        {pendingApprovals.length > 0 && (
+          <button
+            onClick={() => setShowPendingOnly(!showPendingOnly)}
+            className={`ml-auto flex items-center gap-1.5 px-4 py-2 my-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all border ${
+              showPendingOnly
+                ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 animate-pulse'
+            }`}
+          >
+            <UserCheck className="w-4 h-4" />
+            Pendências ({pendingApprovals.length})
+          </button>
+        )}
       </div>
 
       {/* ─── FILTROS DE BUSCA E LISTAGEM ─── */}
@@ -605,6 +773,112 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 Selecione uma organização no menu superior para visualizar os documentos.
               </p>
             </div>
+          </div>
+        ) : showPendingOnly ? (
+          /* Painel de Pendências de Aprovação (Onda 2) */
+          <div className="p-6 space-y-4 bg-slate-50/50">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-blue-600" />
+                <h3 className="font-black text-slate-800 text-xs uppercase tracking-wider">
+                  Aprovações sob sua responsabilidade
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowPendingOnly(false)}
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+              >
+                Voltar ao Acervo
+              </button>
+            </div>
+
+            {pendingApprovals.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400 font-bold uppercase tracking-wider bg-white border border-slate-100 rounded-2xl">
+                Você não possui pendências de aprovação de documentos atribuídas a você.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm">
+                {pendingApprovals.map((app) => (
+                  <div key={app.id} className="p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-50/50 transition-colors">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-blue-500" />
+                        <span className="font-bold text-slate-800">{app.document?.nome || 'Documento sem nome'}</span>
+                        <span className="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 rounded">
+                          {app.document?.tipo_documento}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 font-semibold">
+                        Solicitado por <span className="text-slate-600 font-bold">{app.requested_by}</span> em {new Date(app.created_at).toLocaleString()}
+                      </p>
+                      {app.document?.descricao && (
+                        <p className="text-xs text-slate-500 max-w-xl truncate">{app.document.descricao}</p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+                      {approvingId === app.id || rejectingId === app.id ? (
+                        <div className="flex flex-col gap-2 w-full min-w-[280px]">
+                          <textarea
+                            placeholder={approvingId === app.id ? "Comentários da aprovação (opcional)..." : "Justificativa da rejeição (obrigatório)..."}
+                            value={feedbackText}
+                            onChange={(e) => setFeedbackText(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50"
+                            rows={2}
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setApprovingId(null);
+                                setRejectingId(null);
+                                setFeedbackText('');
+                              }}
+                              className="px-3 py-1.5 border border-slate-200 text-slate-500 text-[10px] font-bold uppercase rounded-lg hover:bg-slate-50"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={() => approvingId === app.id ? handleApproveAction(app.id) : handleRejectAction(app.id)}
+                              disabled={processingAction || (rejectingId === app.id && !feedbackText.trim())}
+                              className={`px-4 py-1.5 text-white text-[10px] font-black uppercase rounded-lg shadow-sm disabled:opacity-50 ${
+                                approvingId === app.id ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
+                              }`}
+                            >
+                              {processingAction ? 'Processando...' : 'Confirmar'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 w-full justify-end">
+                          {app.document?.active_version?.storage_path && (
+                            <button
+                              onClick={() => handleDownload(app.document.active_version.storage_path, app.document.nome)}
+                              className="px-3.5 py-2 border border-slate-200 text-slate-600 hover:text-blue-600 rounded-xl text-xs font-bold bg-white active:scale-95 transition-all shadow-sm"
+                              title="Visualizar arquivo"
+                            >
+                              Visualizar
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setRejectingId(app.id)}
+                            className="px-3.5 py-2 border border-rose-100 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 transition-all"
+                          >
+                            Rejeitar
+                          </button>
+                          <button
+                            onClick={() => setApprovingId(app.id)}
+                            className="px-3.5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 transition-all shadow-md shadow-emerald-500/10"
+                          >
+                            Aprovar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div>
@@ -682,6 +956,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             {doc.tipo_documento}
                           </span>
                           {getValidadeBadge(doc.data_validade)}
+                          {!doc.is_integrated && getApprovalBadge(doc.approval_status)}
                         </div>
                         {doc.descricao && (
                           <p className="text-slate-500 text-sm max-w-2xl truncate">{doc.descricao}</p>
@@ -757,6 +1032,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             onClick={async () => {
                               const fullDoc = await documentService.getDocumentById(doc.id);
                               setSelectedDocForVersions(fullDoc);
+                              if (fullDoc) {
+                                loadApprovalsForDoc(fullDoc.id);
+                              }
                             }}
                             title="Histórico de versões"
                             className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm text-xs font-bold active:scale-95"
@@ -1082,6 +1360,78 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   })}
                 </div>
               </div>
+
+              {/* Solicitar Aprovação (Onda 2) */}
+              {canAccessTab(selectedDocForVersions.categoria) && (selectedDocForVersions.approval_status === 'rascunho' || selectedDocForVersions.approval_status === 'rejeitado') && (
+                <form onSubmit={handleRequestApprovalSubmit} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+                  <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-blue-600" />
+                    Enviar para aprovação de um revisor
+                  </h4>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex-grow">
+                      <select
+                        required
+                        value={selectedApproverEmail}
+                        onChange={(e) => setSelectedApproverEmail(e.target.value)}
+                        className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-bold bg-white focus:outline-none"
+                      >
+                        <option value="">Selecione um Revisor...</option>
+                        {orgMembers.map((member) => (
+                          <option key={member.email} value={member.email}>
+                            {member.name} ({member.email})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={submittingApproval || !selectedApproverEmail}
+                      className="px-6 py-2.5 bg-blue-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {submittingApproval ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        'Solicitar'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Histórico de Pareceres de Aprovação (Onda 2) */}
+              {documentApprovals.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">Histórico de Pareceres</h4>
+                  <div className="max-h-40 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-2xl">
+                    {documentApprovals.map((app) => (
+                      <div key={app.id} className="p-4 hover:bg-slate-50/50 transition-colors text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded ${
+                              app.status === 'aprovado'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : app.status === 'rejeitado'
+                                ? 'bg-rose-100 text-rose-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {app.status}
+                            </span>
+                            <span className="font-bold text-slate-600">Revisor: {app.approver_email}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-semibold">{new Date(app.created_at).toLocaleString()}</span>
+                        </div>
+                        <p className="text-slate-500">Solicitado por: <span className="font-bold text-slate-600">{app.requested_by}</span></p>
+                        {app.feedback && (
+                          <div className="mt-1 bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-slate-700 italic">
+                            "{app.feedback}"
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -28,6 +28,7 @@ export interface OpuraDocument {
   active_version_id?: string;
   folder_id?: string;
   is_integrated?: boolean;
+  approval_status?: OpuraDocumentApprovalStatus;
 
   // Joins opcionais carregados pelo service
   active_version?: OpuraDocumentVersion;
@@ -71,4 +72,25 @@ export type OpuraDocumentUpdate = Partial<OpuraDocumentInsert>;
 export type OpuraDocumentVersionInsert = Omit<
   OpuraDocumentVersion,
   'id' | 'created_at' | 'criado_por'
+>;
+
+export type OpuraDocumentApprovalStatus = 'rascunho' | 'pendente' | 'aprovado' | 'rejeitado';
+
+export interface OpuraDocumentApproval {
+  id: string;
+  document_id: string;
+  requested_by: string;
+  approver_email: string;
+  status: 'pendente' | 'aprovado' | 'rejeitado';
+  feedback?: string;
+  created_at: string;
+  updated_at: string;
+
+  // Join opcional
+  document?: OpuraDocument;
+}
+
+export type OpuraDocumentApprovalInsert = Omit<
+  OpuraDocumentApproval,
+  'id' | 'created_at' | 'updated_at' | 'document'
 >;

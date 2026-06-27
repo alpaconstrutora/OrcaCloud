@@ -7,6 +7,9 @@ import {
   OpuraFolder,
   OpuraFolderInsert,
   OpuraDocumentCategoria,
+  OpuraDocumentApproval,
+  OpuraDocumentApprovalInsert,
+  OpuraDocumentApprovalStatus,
 } from '../types';
 
 function normalizeProjectName(name: string): string {
@@ -853,5 +856,157 @@ export const documentService = {
       console.error('[DocumentService] Erro ao mover documento:', error);
       throw new Error(`Erro ao mover documento: ${error.message}`);
     }
+  },
+
+  // ─── FLUXO DE APROVAÇÃO E WORKFLOWS ──────────────────────────
+  async submitForApproval(
+    documentId: string,
+    requestedByEmail: string,
+    approverEmail: string
+  ): Promise<OpuraDocumentApproval> {
+    // 1. Atualizar o status do documento para 'pendente'
+    const { error: docError } = await supabase
+      .from('opura_documents')
+      .update({ approval_status: 'pendente' })
+      .eq('id', documentId);
+
+    if (docError) {
+      console.error('[DocumentService] Erro ao atualizar status de aprovação do documento:', docError);
+      throw new Error(`Erro ao solicitar aprovação: ${docError.message}`);
+    }
+
+    // 2. Criar o registro de aprovação
+    const { data: approval, error: approvalError } = await supabase
+      .from('opura_document_approvals')
+      .insert({
+        document_id: documentId,
+        requested_by: requestedByEmail,
+        approver_email: approverEmail,
+        status: 'pendente',
+      })
+      .select()
+      .single();
+
+    if (approvalError) {
+      console.error('[DocumentService] Erro ao registrar aprovação:', approvalError);
+      // Rollback status do documento
+      await supabase
+        .from('opura_documents')
+        .update({ approval_status: 'rascunho' })
+        .eq('id', documentId);
+      throw new Error(`Erro ao registrar aprovação: ${approvalError.message}`);
+    }
+
+    return approval as OpuraDocumentApproval;
+  },
+
+  async approveDocument(approvalId: string, feedback?: string): Promise<void> {
+    // 1. Atualizar a aprovação para 'aprovado'
+    const { data: approval, error: approvalError } = await supabase
+      .from('opura_document_approvals')
+      .update({
+        status: 'aprovado',
+        feedback: feedback || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', approvalId)
+      .select()
+      .single();
+
+    if (approvalError || !approval) {
+      console.error('[DocumentService] Erro ao aprovar documento no histórico:', approvalError);
+      throw new Error(`Erro ao registrar aprovação: ${approvalError?.message || 'Histórico não encontrado'}`);
+    }
+
+    // 2. Atualizar o status final do documento para 'aprovado'
+    const { error: docError } = await supabase
+      .from('opura_documents')
+      .update({ approval_status: 'aprovado' })
+      .eq('id', approval.document_id);
+
+    if (docError) {
+      console.error('[DocumentService] Erro ao atualizar status do documento para aprovado:', docError);
+      throw new Error(`Erro ao atualizar status do documento: ${docError.message}`);
+    }
+  },
+
+  async rejectDocument(approvalId: string, feedback: string): Promise<void> {
+    if (!feedback || !feedback.trim()) {
+      throw new Error('O feedback (justificativa) é obrigatório ao rejeitar um documento.');
+    }
+
+    // 1. Atualizar a aprovação para 'rejeitado'
+    const { data: approval, error: approvalError } = await supabase
+      .from('opura_document_approvals')
+      .update({
+        status: 'rejeitado',
+        feedback: feedback.trim(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', approvalId)
+      .select()
+      .single();
+
+    if (approvalError || !approval) {
+      console.error('[DocumentService] Erro ao rejeitar documento no histórico:', approvalError);
+      throw new Error(`Erro ao registrar rejeição: ${approvalError?.message || 'Histórico não encontrado'}`);
+    }
+
+    // 2. Atualizar o status final do documento para 'rejeitado'
+    const { error: docError } = await supabase
+      .from('opura_documents')
+      .update({ approval_status: 'rejeitado' })
+      .eq('id', approval.document_id);
+
+    if (docError) {
+      console.error('[DocumentService] Erro ao atualizar status do documento para rejeitado:', docError);
+      throw new Error(`Erro ao atualizar status do documento: ${docError.message}`);
+    }
+  },
+
+  async listPendingApprovals(approverEmail: string): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('opura_document_approvals')
+      .select('*, document:opura_documents(*)')
+      .eq('approver_email', approverEmail)
+      .eq('status', 'pendente')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao listar aprovações pendentes:', error);
+      throw new Error(`Erro ao listar aprovações pendentes: ${error.message}`);
+    }
+
+    return data || [];
+  },
+
+  async listOrganizationMembers(organizationId: string): Promise<{ name: string; email: string }[]> {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('name, email')
+      .eq('organization_id', organizationId)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao listar membros da organização:', error);
+      throw new Error(`Erro ao listar membros: ${error.message}`);
+    }
+
+    return data || [];
+  },
+
+  async listApprovalsForDocument(documentId: string): Promise<OpuraDocumentApproval[]> {
+    const { data, error } = await supabase
+      .from('opura_document_approvals')
+      .select('*')
+      .eq('document_id', documentId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao obter histórico de aprovações do documento:', error);
+      throw new Error(`Erro ao obter histórico de aprovações: ${error.message}`);
+    }
+
+    return (data || []) as OpuraDocumentApproval[];
   },
 };

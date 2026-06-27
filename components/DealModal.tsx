@@ -8,6 +8,8 @@ import { propertyExportService } from '../services/propertyExportService';
 import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
+import { contractService } from '../services/contractService';
+import { Contract } from '../types';
 import DealWorkflowBar from './DealWorkflowBar';
 import { DealWorkflowStatus } from '../lib/dealWorkflow';
 import DealSignaturePanel from './DealSignaturePanel';
@@ -72,6 +74,53 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
     const [loading, setLoading] = useState(false);
     const [org, setOrg] = useState<Organization | null>(null);
+
+    // Ponte Negociação → Contrato de Venda (domain='VENDAS')
+    const [salesContract, setSalesContract] = useState<Contract | null>(null);
+    const [generatingContract, setGeneratingContract] = useState(false);
+    const [contractError, setContractError] = useState<string | null>(null);
+
+    // Ao abrir uma negociação de venda já salva, verifica se já existe contrato gerado
+    useEffect(() => {
+        setSalesContract(null);
+        setContractError(null);
+        if (isOpen && formData.id && formData.type === 'SALE') {
+            contractService.getContractByDealId(formData.id)
+                .then(setSalesContract)
+                .catch(err => console.error('[DealModal] Erro ao buscar contrato da negociação:', err));
+        }
+    }, [isOpen, formData.id, formData.type]);
+
+    const handleGenerateContract = async () => {
+        if (!formData.id) return;
+        if (!formData.client_id) { setContractError('Selecione o comprador antes de gerar o contrato.'); return; }
+        setGeneratingContract(true);
+        setContractError(null);
+        try {
+            const contract = await contractService.createFromDeal({
+                id: formData.id,
+                organization_id: formData.organization_id || organizationId,
+                client_id: formData.client_id,
+                property_id: formData.property_id,
+                value: formData.value || 0,
+                date: formData.date,
+                contract_number: formData.contract_number,
+                notes: formData.notes,
+                payment_method: formData.payment_method,
+                installments: formData.installments,
+                status: formData.status,
+                signature_status: formData.signature_status,
+                signature_url: formData.signature_url,
+                signed_contract_url: formData.signed_contract_url,
+            });
+            setSalesContract(contract);
+        } catch (err: any) {
+            console.error('[DealModal] Erro ao gerar contrato de venda:', err);
+            setContractError(err?.message || 'Erro ao gerar contrato.');
+        } finally {
+            setGeneratingContract(false);
+        }
+    };
 
     useEffect(() => {
         const load = async () => {
@@ -799,6 +848,40 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             />
                                         </div>
                                     </div>
+
+                                    {/* Ponte → Contrato de Venda (somente SALE, negociação já salva) */}
+                                    {formData.type === 'SALE' && formData.id && (
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Contrato de Venda</label>
+                                            {salesContract ? (
+                                                <div className="p-5 bg-emerald-50 rounded-3xl border border-emerald-100 flex gap-4 items-start">
+                                                    <Check className="w-6 h-6 text-emerald-500 shrink-0 mt-0.5" />
+                                                    <div className="min-w-0">
+                                                        <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-1">Contrato Gerado</p>
+                                                        <p className="text-xs text-emerald-700 leading-relaxed">
+                                                            Nº <span className="font-black">{salesContract.number}</span> · {salesContract.status}.
+                                                            Disponível em <span className="font-bold">Vendas de Ativos → Contratos</span> e no Portal do Cliente.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleGenerateContract}
+                                                    disabled={generatingContract}
+                                                    className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-purple-600 text-white rounded-2xl font-black hover:bg-purple-700 transition-all shadow-sm active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                >
+                                                    <FileText className="w-5 h-5" />
+                                                    <span className="uppercase text-xs tracking-widest">{generatingContract ? 'Gerando…' : 'Gerar Contrato de Venda'}</span>
+                                                </button>
+                                            )}
+                                            {contractError && (
+                                                <p className="text-[11px] font-bold text-red-500 px-2 flex items-center gap-1">
+                                                    <AlertCircle className="w-3 h-3" /> {contractError}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
 
                                     <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 flex gap-4">
                                         <AlertCircle className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" />

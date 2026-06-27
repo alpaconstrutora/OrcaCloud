@@ -561,10 +561,10 @@ export const contractService = {
             try {
                 const { data: prop } = await supabase
                     .from('commercial_properties')
-                    .select('name, unit_number')
+                    .select('name')
                     .eq('id', deal.property_id)
                     .maybeSingle();
-                unitLabel = (prop?.name || (prop as any)?.unit_number || '').toString().trim();
+                unitLabel = (prop?.name || '').toString().trim();
             } catch { /* título sem unidade, não bloqueia */ }
         }
 

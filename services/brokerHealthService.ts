@@ -3,6 +3,7 @@ import type { BrokerHealthKPI } from '../types';
 
 export const brokerHealthService = {
     async getHealthData(organizationId: string): Promise<BrokerHealthKPI | null> {
+      try {
         // 1. Units por status
         const { data: props, error: propsErr } = await supabase
             .from('commercial_properties')
@@ -26,17 +27,18 @@ export const brokerHealthService = {
         // 2. Deals para VGV vendido, canal dominante e curva de absorção
         const { data: deals, error: dealsErr } = await supabase
             .from('commercial_deals')
-            .select('id, value, status, type, date, origin')
+            .select('id, value, status, type, date, broker_name, payment_method')
             .eq('organization_id', organizationId);
         if (dealsErr) throw dealsErr;
 
-        const closedDeals = (deals || []).filter(d => ['FECHADO','VENDIDO','CLOSED'].includes(String(d.status).toUpperCase()));
+        const CLOSED_STATUSES = ['COMPLETED', 'FECHADO', 'VENDIDO', 'CLOSED', 'ASSINATURA'];
+        const closedDeals = (deals || []).filter(d => CLOSED_STATUSES.includes(String(d.status).toUpperCase()));
         const vgvSold = closedDeals.reduce((s, d) => s + (Number(d.value) || 0), 0);
 
-        // Canal dominante
+        // Canal dominante (usa type: SALE/RENTAL/SERVICE, ou payment_method como proxy)
         const channelCounts: Record<string, number> = {};
         closedDeals.forEach(d => {
-            const ch = d.origin || d.type || 'Direto';
+            const ch = d.broker_name ? 'Corretor' : d.payment_method || d.type || 'Direto';
             channelCounts[ch] = (channelCounts[ch] || 0) + 1;
         });
         const topChannel = Object.entries(channelCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '–';
@@ -101,5 +103,9 @@ export const brokerHealthService = {
             top_channel: topChannel,
             avg_ticket: avgTicket,
         };
+      } catch (err) {
+        console.error('[BrokerHealthService] getHealthData error:', err);
+        return null;
+      }
     },
 };

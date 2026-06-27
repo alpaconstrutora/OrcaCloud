@@ -413,7 +413,7 @@ export const orgGovernanceService = {
       nome: committee.nome,
       descricao: committee.descricao || null,
       data_constituicao: committee.data_constituicao || null,
-      data_Campanha: committee.data_encerramento || null,
+      data_encerramento: committee.data_encerramento || null,
       status: committee.status
     };
 

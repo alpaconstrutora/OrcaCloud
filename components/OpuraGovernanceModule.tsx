@@ -77,9 +77,6 @@ export default function OpuraGovernanceModule({
   const [sandboxScenarios, setSandboxScenarios] = useState<OrgSandboxScenario[]>([]);
 
   // Modais de Criação
-  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
-  const [newRole, setNewRole] = useState({ nome: '', codigo: '', descricao: '', nivel_hierarquico: 3, responsabilidades: '' });
-
   const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
   const [newLimit, setNewLimit] = useState({ flow_type: 'compras' as AuthorityFlowType, target_type: 'role', target_id: '', limite_minimo: 0, limite_maximo: 5000, requer_dupla_assinatura: false });
 
@@ -213,28 +210,6 @@ export default function OpuraGovernanceModule({
   }, [selectedCompanyId, activeOrganizationId]);
 
   // ── Ações Rápidas ───────────────────────────────────────────
-  const handleCreateRole = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newRole.nome) return;
-    try {
-      await orgGovernanceService.saveRole({
-        company_id: selectedCompanyId,
-        nome: newRole.nome,
-        codigo: newRole.codigo || null,
-        descricao: newRole.descricao || null,
-        nivel_hierarquico: newRole.nivel_hierarquico,
-        responsabilidades: newRole.responsabilidades.split('\n').filter(Boolean)
-      });
-      setIsRoleModalOpen(false);
-      setNewRole({ nome: '', codigo: '', descricao: '', nivel_hierarquico: 3, responsabilidades: '' });
-      // Recarregar
-      const data = await orgGovernanceService.listRoles(selectedCompanyId);
-      setRoles(data);
-    } catch (err) {
-      alert('Erro ao criar cargo: ' + (err as Error).message);
-    }
-  };
-
   const handleCreateLimit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLimit.target_id) return;
@@ -533,7 +508,7 @@ export default function OpuraGovernanceModule({
             </div>
           )}
 
-          {/* 2. ORGANOGRAMA INTERATIVO (VISUALIZADOR EM ÁRVORE HIERÁRQUICA) */}
+          {/* 2. ORGANOGRAMA — cargos gerenciados em RH (read-only aqui) */}
           {activeTab === 'organograma' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
@@ -541,59 +516,57 @@ export default function OpuraGovernanceModule({
                   <h3 className="text-lg font-black text-white">Hierarquia de Cargos</h3>
                   <p className="text-xs text-gray-500 mt-0.5">Estrutura organizacional ativa ordenada por nível hierárquico.</p>
                 </div>
-                <button
-                  onClick={() => setIsRoleModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[1rem] font-bold text-xs uppercase tracking-wider transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  Criar Cargo
-                </button>
+                {onChangeView && (
+                  <button
+                    onClick={() => onChangeView('labor-cargos')}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[1rem] font-bold text-xs uppercase tracking-wider transition-all"
+                  >
+                    <Briefcase className="w-4 h-4" />
+                    Gerenciar em RH
+                  </button>
+                )}
               </div>
 
-              {/* Renderizador de Árvore Simplificado em CSS/HTML */}
-              <div className="bg-gray-950/40 border border-gray-800 rounded-[1.25rem] p-6 min-h-[400px] flex flex-col items-center">
+              {/* Banner informativo */}
+              <div className="flex items-start gap-3 bg-indigo-950/30 border border-indigo-900/50 rounded-[1.25rem] px-5 py-4">
+                <Briefcase className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-black text-indigo-300">Cargos &amp; Funções são gerenciados em Recursos Humanos</p>
+                  <p className="text-xs text-indigo-400/70 mt-0.5">
+                    O cadastro, edição e exclusão de cargos foi centralizado no módulo de RH.
+                    Os cargos listados abaixo continuam sendo usados nas alçadas, delegações, RACI e sucessão desta tela.
+                  </p>
+                </div>
+              </div>
+
+              {/* Lista read-only agrupada por nível */}
+              <div className="bg-gray-950/40 border border-gray-800 rounded-[1.25rem] p-6 min-h-[300px]">
                 {roles.length === 0 ? (
-                  <p className="text-gray-500 text-sm mt-20">Nenhum cargo estruturado nesta empresa.</p>
+                  <p className="text-gray-500 text-sm text-center mt-10">Nenhum cargo estruturado nesta empresa.</p>
                 ) : (
-                  <div className="space-y-6 w-full max-w-2xl">
-                    {/* Agrupados por nível hierárquico */}
-                    {Array.from(new Set(roles.map(r => r.nivel_hierarquico))).sort((a,b) => a - b).map(nivel => (
+                  <div className="space-y-6">
+                    {Array.from(new Set(roles.map(r => r.nivel_hierarquico))).sort((a, b) => a - b).map(nivel => (
                       <div key={nivel} className="border-b border-gray-900 pb-4 last:border-b-0">
                         <span className="text-[10px] font-black uppercase tracking-wider text-gray-600 block mb-3">Nível {nivel}</span>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {roles.filter(r => r.nivel_hierarquico === nivel).map(role => {
                             const occupiedBy = employees.filter(e => e.role_id === role.id && e.status === 'ATIVO');
                             return (
-                              <div key={role.id} className="bg-gray-900/60 border border-gray-800 hover:border-gray-700 p-4 rounded-[1.25rem] transition-all flex items-start justify-between">
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs bg-gray-800 text-gray-300 font-bold px-2 py-0.5 rounded-[0.5rem]">{role.codigo || 'S/C'}</span>
-                                    <h4 className="font-black text-sm text-white">{role.nome}</h4>
-                                  </div>
-                                  <p className="text-xs text-gray-500 mt-1">{role.descricao || 'Sem descrição'}</p>
-                                  
-                                  {/* Ocupantes */}
-                                  <div className="mt-3 flex flex-wrap gap-1.5">
-                                    {occupiedBy.length === 0 ? (
-                                      <span className="text-[10px] bg-rose-950/20 text-rose-400 border border-rose-950/80 px-2 py-0.5 rounded-[0.5rem] font-bold">Vago</span>
-                                    ) : (
-                                      occupiedBy.map(occ => (
-                                        <span key={occ.id} className="text-[10px] bg-emerald-950/20 text-emerald-400 border border-emerald-950/80 px-2 py-0.5 rounded-[0.5rem] font-bold">{occ.name}</span>
-                                      ))
-                                    )}
-                                  </div>
+                              <div key={role.id} className="bg-gray-900/60 border border-gray-800 p-4 rounded-[1.25rem]">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs bg-gray-800 text-gray-300 font-bold px-2 py-0.5 rounded-[0.5rem]">{role.codigo || 'S/C'}</span>
+                                  <h4 className="font-black text-sm text-white">{role.nome}</h4>
                                 </div>
-                                <button
-                                  onClick={async () => {
-                                    if(await confirm({ title: `Excluir cargo ${role.nome}?`, message: 'Isso desassociará funcionários associados.', variant: 'danger', confirmLabel: 'Excluir' })) {
-                                      await orgGovernanceService.deleteRole(role.id);
-                                      setRoles(roles.filter(r => r.id !== role.id));
-                                    }
-                                  }}
-                                  className="text-gray-600 hover:text-rose-500 p-1"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                {role.descricao && <p className="text-xs text-gray-500 mt-1">{role.descricao}</p>}
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                  {occupiedBy.length === 0 ? (
+                                    <span className="text-[10px] bg-rose-950/20 text-rose-400 border border-rose-950/80 px-2 py-0.5 rounded-[0.5rem] font-bold">Vago</span>
+                                  ) : (
+                                    occupiedBy.map(occ => (
+                                      <span key={occ.id} className="text-[10px] bg-emerald-950/20 text-emerald-400 border border-emerald-950/80 px-2 py-0.5 rounded-[0.5rem] font-bold">{occ.name}</span>
+                                    ))
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
@@ -966,84 +939,6 @@ export default function OpuraGovernanceModule({
             </div>
           )}
 
-        </div>
-      )}
-
-      {/* ── MODAL DE CRIAR CARGO ────────────────────────────── */}
-      {isRoleModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-gray-950 border border-gray-800 w-full max-w-md rounded-[1.5rem] p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-black text-white">Criar Novo Cargo</h3>
-              <button onClick={() => setIsRoleModalOpen(false)} className="text-gray-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateRole} className="space-y-4 text-sm">
-              <div className="space-y-1">
-                <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Nome do Cargo</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Diretor de Engenharia"
-                  value={newRole.nome}
-                  onChange={(e) => setNewRole({ ...newRole, nome: e.target.value })}
-                  className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 focus:border-blue-500 focus:ring-0 text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Código</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: DIR_ENG"
-                    value={newRole.codigo}
-                    onChange={(e) => setNewRole({ ...newRole, codigo: e.target.value })}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 focus:border-blue-500 focus:ring-0 text-white"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Nível Hierárquico</label>
-                  <input
-                    type="number"
-                    min={1}
-                    required
-                    value={newRole.nivel_hierarquico}
-                    onChange={(e) => setNewRole({ ...newRole, nivel_hierarquico: Number(e.target.value) })}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 focus:border-blue-500 focus:ring-0 text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Descrição</label>
-                <textarea
-                  placeholder="Descrição das responsabilidades..."
-                  value={newRole.descricao}
-                  onChange={(e) => setNewRole({ ...newRole, descricao: e.target.value })}
-                  className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 focus:border-blue-500 focus:ring-0 text-white h-20"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsRoleModalOpen(false)}
-                  className="px-5 py-3 bg-gray-900 hover:bg-gray-800 text-gray-300 font-bold text-xs uppercase tracking-wider rounded-[1rem] transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-[1rem] transition-all"
-                >
-                  Salvar Cargo
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
 

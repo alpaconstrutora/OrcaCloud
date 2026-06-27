@@ -10,6 +10,7 @@ export * from "./supplyChain";
 export * from "./contracts";
 export * from "./broker";
 export * from "./imovib";
+export * from "./empreendimento";
 export * from "./common";
 export * from "./company";
 export * from "./fiscal";

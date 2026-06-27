@@ -93,6 +93,7 @@ const ObraTypesManager      = React.lazy(() => import('./ObraTypesManager'));
 const OpuraMarketModule     = React.lazy(() => import('./OpuraMarketModule'));
 const OpuraGovernanceModule = React.lazy(() => import('./OpuraGovernanceModule'));
 const OpuraAssetsModule     = React.lazy(() => import('./OpuraAssetsModule'));
+const EmpreendimentoModule  = React.lazy(() => import('./empreendimento/EmpreendimentoModule'));
 const InventoryModule       = React.lazy(() => import('./InventoryModule').then(m => ({ default: m.InventoryModule })));
 const ProcurementModule     = React.lazy(() => import('./ProcurementModule').then(m => ({ default: m.ProcurementModule })));
 const PartnerPortal         = React.lazy(() => import('./partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
@@ -279,7 +280,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewOffices', 'offices');
     } else if (['sales', 'rentals', 'gestao-vendas'].includes(activeView)) {
       allowed = isModuleAllowed('canViewSales', 'crm');
-    } else if (activeView === 'imovib') {
+    } else if (activeView === 'imovib' || activeView === 'empreendimentos') {
       allowed = isModuleAllowed('canViewImovib', 'incorporacao');
     } else if (activeView === 'fiscal-nfe') {
       allowed = isModuleAllowed('canViewFiscal', 'fiscal');
@@ -416,6 +417,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <OpuraAssetsModule
+            activeOrganizationId={activeOrganizationId}
+            onChangeView={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    case 'empreendimentos':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <EmpreendimentoModule
             activeOrganizationId={activeOrganizationId}
             onChangeView={setActiveView}
           />

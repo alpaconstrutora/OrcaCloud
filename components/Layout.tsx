@@ -830,7 +830,7 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={TrendingUp}
                     isOpen={isVendasOpen}
                     onToggle={() => setIsVendasOpen(!isVendasOpen)}
-                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib'].includes(activeView)}
+                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib','empreendimentos'].includes(activeView)}
                   >
                     {(mod.crm || isDev) && (
                       <>
@@ -841,7 +841,10 @@ const Layout: React.FC<LayoutProps> = ({
                       </>
                     )}
                     {(mod.incorporacao || isDev) && (
-                      <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
+                      <>
+                        <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
+                        <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
+                      </>
                     )}
                   </NavDropdown>
                 </>

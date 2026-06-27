@@ -1,14 +1,16 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { Plus, Phone, MapPin, Wifi, WifiOff, Search, X } from 'lucide-react';
+import { Plus, Phone, MapPin, Wifi, WifiOff, Search, X, Clock, History, Settings } from 'lucide-react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import {
   servicesCommercialService,
   ServiceOpportunity,
   OpportunityStage,
+  PipelineStageConfig,
 } from '../../services/servicesCommercialService';
 import { ServicesView } from '../ServicesCommercialModule';
 import ServicesOpportunityModal from './ServicesOpportunityModal';
+import ServicesPipelineConfigModal from './ServicesPipelineConfigModal';
 
 interface Props {
   organizationId: string | null;
@@ -30,6 +32,45 @@ const PRIORITY_BADGE: Record<string, { label: string; bg: string; color: string 
   medium: { label: 'NORMAL', bg: '#dbeafe', color: '#2563eb' },
   low:    { label: 'BAIXA',  bg: '#f0fdf4', color: '#16a34a' },
 };
+
+// ── Aging / SLA ──────────────────────────────────────────────────────────────
+// Formata a diferença entre `iso` e agora em "3h", "5d", "2sem"…
+const formatAge = (iso: string | null): string => {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return 'agora';
+  const min = Math.floor(ms / 60000);
+  if (min < 60) return `${min}min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 14) return `${d}d`;
+  return `${Math.floor(d / 7)}sem`;
+};
+
+// Cor por faixa de tempo parado (verde < 2d, amarelo 2–5d, vermelho > 5d).
+const ageColor = (iso: string | null): string => {
+  if (!iso) return '#94a3b8';
+  const days = (Date.now() - new Date(iso).getTime()) / 86_400_000;
+  if (days < 2) return '#16a34a';
+  if (days < 5) return '#eab308';
+  return '#ef4444';
+};
+
+const AgingBadges: React.FC<{ createdAt: string; updatedAt: string }> = ({ createdAt, updatedAt }) => (
+  <div className="flex items-center gap-2 text-[11px] font-semibold">
+    <span className="flex items-center gap-0.5 text-slate-400" title="Idade do lead (desde a criação)">
+      <Clock size={11} className="flex-shrink-0" /> {formatAge(createdAt)}
+    </span>
+    <span
+      className="flex items-center gap-0.5"
+      style={{ color: ageColor(updatedAt) }}
+      title="Parado há (desde a última movimentação)"
+    >
+      <History size={11} className="flex-shrink-0" /> {formatAge(updatedAt)}
+    </span>
+  </div>
+);
 
 // ── Card ─────────────────────────────────────────────────────────────────────
 const OpportunityCard: React.FC<{
@@ -67,6 +108,17 @@ const OpportunityCard: React.FC<{
         {/* Título */}
         <p className="text-sm font-bold text-slate-900 leading-snug">{opp.contact_name}</p>
 
+        {/* Sub-status (etapa dentro do estágio) */}
+        {opp.sub_status && (
+          <span
+            className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border"
+            style={{ borderColor: `${stageHex}55`, color: stageHex, backgroundColor: `${stageHex}11` }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: stageHex }} />
+            {opp.sub_status}
+          </span>
+        )}
+
         {/* Tipo de trabalho */}
         {opp.work_type && (
           <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{opp.work_type}</p>
@@ -92,6 +144,13 @@ const OpportunityCard: React.FC<{
             </span>
           )}
         </div>
+
+        {/* Aging / SLA — oculto em estágios terminais (ganho/perdido) */}
+        {opp.stage !== 'won' && opp.stage !== 'lost' && (
+          <div className="pt-1.5 border-t border-slate-100">
+            <AgingBadges createdAt={opp.created_at} updatedAt={opp.updated_at} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -191,6 +250,8 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const [search, setSearch] = useState('');
   const [filterPriority, setFilterPriority] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+  const [stageConfig, setStageConfig] = useState<PipelineStageConfig[]>([]);
+  const [showConfig, setShowConfig] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -199,7 +260,25 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
       .finally(() => setLoading(false));
   }, [organizationId]);
 
+  const loadConfig = useCallback(() => {
+    if (!organizationId) { setStageConfig([]); return; }
+    servicesCommercialService.listStageConfig(organizationId)
+      .then(setStageConfig)
+      .catch(() => setStageConfig([]));
+  }, [organizationId]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadConfig(); }, [loadConfig]);
+
+  // Mescla rótulo/cor configurados por org sobre os estágios canônicos.
+  const stageView = useMemo(() => {
+    const byStage = new Map(stageConfig.map(c => [c.stage, c]));
+    const apply = (s: { id: OpportunityStage; label: string; hex: string }) => {
+      const cfg = byStage.get(s.id);
+      return { ...s, label: cfg?.label ?? s.label, hex: cfg?.color ?? s.hex };
+    };
+    return { stages: STAGES.map(apply), lost: apply({ id: 'lost', label: 'Perdido', hex: LOST_HEX }) };
+  }, [stageConfig]);
 
   useEffect(() => {
     // Visão "todas as organizações": sem assinatura realtime filtrada por org
@@ -231,7 +310,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
     const id = draggingId;
     setDraggingId(null);
     setDragOverStage(null);
-    setOpportunities(prev => prev.map(o => o.id === id ? { ...o, stage } : o));
+    setOpportunities(prev => prev.map(o => o.id === id ? { ...o, stage, updated_at: new Date().toISOString() } : o));
     try {
       await servicesCommercialService.moveStage(id, stage);
     } catch {
@@ -268,14 +347,24 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
             <span title="Tempo real indisponível" className="text-red-400"><WifiOff size={14} /></span>
           )}
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          disabled={!organizationId}
-          title={!organizationId ? 'Selecione uma organização específica para criar um lead' : undefined}
-          className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Plus size={15} /> Novo Lead
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowConfig(true)}
+            disabled={!organizationId}
+            title={!organizationId ? 'Selecione uma organização específica para configurar' : 'Configurar funil'}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Settings size={16} />
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            disabled={!organizationId}
+            title={!organizationId ? 'Selecione uma organização específica para criar um lead' : undefined}
+            className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Plus size={15} /> Novo Lead
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -316,7 +405,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
 
       {/* Board */}
       <div className="flex gap-4 overflow-x-auto pb-6 flex-1 min-h-0">
-        {STAGES.map(({ id, label, hex }) => (
+        {stageView.stages.map(({ id, label, hex }) => (
           <PipelineColumn
             key={id}
             id={id}
@@ -339,8 +428,8 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
         {/* Coluna Perdido — somente leitura */}
         <PipelineColumn
           id="lost"
-          label="Perdido"
-          hex={LOST_HEX}
+          label={stageView.lost.label}
+          hex={stageView.lost.hex}
           cards={opportunities.filter(o => o.stage === 'lost')}
           loading={loading}
           isOver={false}
@@ -359,6 +448,14 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
           organizationId={organizationId}
           onClose={() => setIsModalOpen(false)}
           onSaved={() => { setIsModalOpen(false); load(); }}
+        />
+      )}
+
+      {showConfig && organizationId && (
+        <ServicesPipelineConfigModal
+          organizationId={organizationId}
+          onClose={() => setShowConfig(false)}
+          onSaved={() => { setShowConfig(false); loadConfig(); }}
         />
       )}
     </div>

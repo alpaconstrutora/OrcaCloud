@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, Edit2, MapPin, Phone, Mail, Calendar, ClipboardList, Calculator, FileText, CheckCircle, XCircle, Clock, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Edit2, MapPin, Phone, Mail, Calendar, ClipboardList, Calculator, FileText, CheckCircle, Clock, ExternalLink, CheckSquare, Square, Plus } from 'lucide-react';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
 import ServicesWonModal from './ServicesWonModal';
@@ -10,6 +10,8 @@ import {
   ServiceOpportunityEvent,
   OpportunityStage,
   EngineeringProjectSummary,
+  PipelineStageConfig,
+  OpportunityTask,
 } from '../../services/servicesCommercialService';
 import { ServicesView } from '../ServicesCommercialModule';
 import ServicesOpportunityModal from './ServicesOpportunityModal';
@@ -62,23 +64,65 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
   const [lostReason, setLostReason] = useState('');
   const [moving, setMoving] = useState(false);
   const [orgMembers, setOrgMembers] = useState<{ email: string; role: string }[]>([]);
+  const [stageConfig, setStageConfig] = useState<PipelineStageConfig[]>([]);
+  const [tasks, setTasks] = useState<OpportunityTask[]>([]);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDue, setNewTaskDue] = useState('');
   const { toasts, show: showToast, dismiss } = useServicesToast();
 
   const load = useCallback(async () => {
-    const [oppData, eventsData] = await Promise.all([
+    const [oppData, eventsData, tasksData] = await Promise.all([
       servicesCommercialService.getOpportunity(opportunityId),
       servicesCommercialService.listEvents(opportunityId),
+      servicesCommercialService.listOpportunityTasks(opportunityId).catch(() => [] as OpportunityTask[]),
     ]);
     setOpp(oppData);
     setEvents(eventsData);
+    setTasks(tasksData);
     setLoading(false);
   }, [opportunityId]);
+
+  const handleAddTask = async () => {
+    if (!opp || !newTaskTitle.trim()) return;
+    try {
+      await servicesCommercialService.createOpportunityTask(opp, newTaskTitle.trim(), newTaskDue || null);
+      setNewTaskTitle('');
+      setNewTaskDue('');
+      setTasks(await servicesCommercialService.listOpportunityTasks(opp.id));
+      showToast('Tarefa criada.');
+    } catch {
+      showToast('Erro ao criar tarefa.', 'error');
+    }
+  };
+
+  const handleToggleTask = async (task: OpportunityTask) => {
+    const done = task.status !== 'done';
+    setTasks(ts => ts.map(t => t.id === task.id ? { ...t, status: done ? 'done' : 'open' } : t));
+    try {
+      await servicesCommercialService.toggleOpportunityTask(task.id, done);
+    } catch {
+      setTasks(ts => ts.map(t => t.id === task.id ? { ...t, status: done ? 'open' : 'done' } : t));
+      showToast('Erro ao atualizar tarefa.', 'error');
+    }
+  };
 
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     servicesCommercialService.listOrgMembers(organizationId).then(setOrgMembers);
+    servicesCommercialService.listStageConfig(organizationId).then(setStageConfig).catch(() => setStageConfig([]));
   }, [organizationId]);
+
+  const handleSetSubStatus = async (value: string) => {
+    if (!opp) return;
+    try {
+      const updated = await servicesCommercialService.updateOpportunity(opp.id, { sub_status: value || null });
+      setOpp(updated);
+      showToast(value ? `Etapa: ${value}` : 'Etapa removida.');
+    } catch {
+      showToast('Erro ao atualizar etapa.', 'error');
+    }
+  };
 
   useEffect(() => {
     if (opp?.budget_source === 'engineering' && opp.engineering_project_id) {
@@ -232,6 +276,22 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STAGE_COLORS[opp.stage]}`}>
               {STAGE_LABELS[opp.stage]}
             </span>
+            {!isTerminal && (() => {
+              const presets = stageConfig.find(c => c.stage === opp.stage)?.sub_statuses ?? [];
+              return (
+                <select
+                  value={opp.sub_status ?? ''}
+                  onChange={e => handleSetSubStatus(e.target.value)}
+                  className="text-xs px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-600 bg-transparent text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer"
+                >
+                  <option value="">— Etapa —</option>
+                  {presets.map(s => <option key={s} value={s}>{s}</option>)}
+                  {opp.sub_status && !presets.includes(opp.sub_status) && (
+                    <option value={opp.sub_status}>{opp.sub_status}</option>
+                  )}
+                </select>
+              );
+            })()}
             {opp.work_type && <span className="text-xs text-gray-400">{opp.work_type}</span>}
           </div>
         </div>
@@ -445,6 +505,67 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
           {moving ? 'Reabrindo...' : '↩ Reabrir como Lead'}
         </button>
       )}
+
+      {/* Tarefas vinculadas */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+          <ClipboardList size={15} /> Tarefas
+          {tasks.filter(t => t.status !== 'done').length > 0 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+              {tasks.filter(t => t.status !== 'done').length} pendente{tasks.filter(t => t.status !== 'done').length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </h3>
+
+        <div className="space-y-1.5 mb-3">
+          {tasks.map(task => {
+            const done = task.status === 'done';
+            const overdue = !done && task.due_date && new Date(task.due_date) < new Date();
+            return (
+              <div key={task.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <button onClick={() => handleToggleTask(task)} className={done ? 'text-green-600' : 'text-gray-300 hover:text-blue-600'}>
+                  {done ? <CheckSquare size={16} /> : <Square size={16} />}
+                </button>
+                <span className={`flex-1 text-sm ${done ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                  {task.title}
+                </span>
+                {task.due_date && (
+                  <span className={`text-xs flex items-center gap-1 ${overdue ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+                    <Calendar size={11} />
+                    {new Date(task.due_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          {tasks.length === 0 && <p className="text-xs text-gray-400">Nenhuma tarefa para esta oportunidade.</p>}
+        </div>
+
+        {/* Adição rápida */}
+        <div className="flex items-center gap-2">
+          <input
+            value={newTaskTitle}
+            onChange={e => setNewTaskTitle(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddTask(); } }}
+            placeholder="Nova tarefa (ex: Ligar para o cliente)…"
+            className="flex-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="date"
+            value={newTaskDue}
+            onChange={e => setNewTaskDue(e.target.value)}
+            title="Vencimento (opcional)"
+            className="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm text-gray-600 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={handleAddTask}
+            disabled={!newTaskTitle.trim()}
+            className="flex items-center gap-1 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-40"
+          >
+            <Plus size={14} /> Add
+          </button>
+        </div>
+      </div>
 
       {/* Timeline */}
       <div>

@@ -109,3 +109,37 @@ export type OpuraAssetReservationInsert = Omit<
 >;
 
 export type OpuraAssetReservationUpdate = Partial<OpuraAssetReservationInsert>;
+
+export type AssetDocumentType = 'seguro' | 'licenciamento' | 'termo_responsabilidade' | 'outro';
+export type AssetDocumentStatus = 'ativo' | 'vencido' | 'suspenso';
+
+export interface OpuraAssetDocument {
+  id: string;
+  organization_id: string;
+  asset_id: string;
+  type: AssetDocumentType;
+  name: string;
+  document_number?: string;
+  expiration_date?: string;
+  file_url?: string;
+  status: AssetDocumentStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export type OpuraAssetDocumentInsert = Omit<
+  OpuraAssetDocument,
+  'id' | 'created_at' | 'updated_at'
+>;
+
+export type OpuraAssetDocumentUpdate = Partial<OpuraAssetDocumentInsert>;
+
+// Estrutura consolidada para rateio de depreciação linear por obra
+export interface OpuraAssetDepreciationRateio {
+  project_id: string;
+  project_name: string;
+  assets_count: number;
+  total_days: number;
+  allocated_cost: number;
+  percentage: number;
+}

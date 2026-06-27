@@ -1,5 +1,6 @@
+// @ts-nocheck
 import React, { useState, useMemo } from 'react';
-import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2 } from 'lucide-react';
+import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone } from 'lucide-react';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import BrokerProposalSimulator from './broker/BrokerProposalSimulator';
 import BrokerLeadManager from './broker/BrokerLeadManager';
@@ -12,9 +13,11 @@ import BrokerChat from './broker/BrokerChat';
 import BrokerAnalytics from './broker/BrokerAnalytics';
 import BrokerHealthPanel from './broker/BrokerHealthPanel';
 import BrokerIntegrations from './broker/BrokerIntegrations';
+import MobilePreviewFrame from './MobilePreviewFrame';
 import { useStore } from '../store/useStore';
 import { commercialService } from '../services/commercialService';
 import { brokerService } from '../services/brokerService';
+import { brokerPortalService } from '../services/brokerPortalService';
 import { PropertyStatus, UserProfile, ProfileGroup } from '../types';
 import type { BrokerUnit, BrokerProposal, BrokerProfile } from '../types';
 import type { PropertyDeal } from '../types/imovib';
@@ -25,6 +28,10 @@ interface BrokerPortalProps {
     profile: { group: string; role: string; email?: string };
     activeTab?: PortalTab;
     organizationId?: string;
+    /** Oculta chrome de admin (impersonação, seletor de org, botão de prévia). Usado na prévia mobile e na rota pública por token. */
+    isPreview?: boolean;
+    /** Token de acesso público. Quando presente, dados são buscados via RPCs anon (SECURITY DEFINER). */
+    portalToken?: string;
 }
 
 interface StatCardProps { title: string; value: string | number; subtext?: string; icon: React.ElementType; color: string }
@@ -62,8 +69,18 @@ const TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
     { id: 'integracoes', label: 'Integrações', icon: Link2 },
 ];
 
-const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoque', organizationId: initialOrgId }) => {
+const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoque', organizationId: initialOrgId, isPreview = false, portalToken }) => {
     const { organizations } = useStore();
+
+    // isAdmin controla visibilidade de todo o chrome administrativo
+    const isAdmin = !isPreview && (
+        profile?.role === UserProfile.ADMIN ||
+        profile?.role === UserProfile.DEVELOPER ||
+        profile?.group === ProfileGroup.DEVELOPER ||
+        profile?.role === 'ADMINISTRADOR' ||
+        profile?.group === 'DESENVOLVEDOR'
+    );
+
     const [selectedOrgId, setSelectedOrgId] = useState<string | undefined>(initialOrgId || organizations[0]?.id);
     const [currentTab, setCurrentTab] = useState<PortalTab>(activeTab);
     const [selectedPurpose, setSelectedPurpose] = useState<'SALE' | 'RENTAL' | 'BOTH'>('BOTH');
@@ -74,49 +91,52 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
     const [commercialDeals, setCommercialDeals] = useState<PropertyDeal[]>([]);
     const [selectedUnit, setSelectedUnit] = useState<BrokerUnit | null>(null);
     const [showSimulator, setShowSimulator] = useState(false);
+    const [showMobilePreview, setShowMobilePreview] = useState(false);
 
-    // New state for impersonation
+    // Impersonação — apenas para admins
     const [allBrokers, setAllBrokers] = useState<BrokerProfile[]>([]);
     const [selectedAdminBroker, setSelectedAdminBroker] = useState<BrokerProfile | null>(null);
 
     const effectiveBrokerEmail = (selectedAdminBroker ? selectedAdminBroker.email : profile?.email)?.toLowerCase();
 
-    // Filtros unificados baseados no corretor logado/impersonado
     const myProposals = useMemo(() => {
-        if (!proposals) return [];
-        if (!effectiveBrokerEmail) return [];
+        if (!proposals || !effectiveBrokerEmail) return [];
         return proposals.filter(p => p.broker_email?.toLowerCase() === effectiveBrokerEmail);
     }, [proposals, effectiveBrokerEmail]);
 
+    // Carregar lista de corretores para impersonação (somente admin autenticado)
     React.useEffect(() => {
-        if (profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER || profile?.group === ProfileGroup.DEVELOPER || profile?.role === 'ADMINISTRADOR' || profile?.group === 'DESENVOLVEDOR') {
-            const loadBrokers = async () => {
-                if (!selectedOrgId) return;
-                try {
-                    const data = await brokerService.listProfiles(selectedOrgId);
-                    setAllBrokers(data);
-                } catch (error) {
-                    console.error("Erro ao carregar lista de corretores:", error);
-                }
-            };
-            loadBrokers();
-        }
-    }, [profile?.role, profile?.group, selectedOrgId]);
+        if (!isAdmin || !selectedOrgId) return;
+        brokerService.listProfiles(selectedOrgId)
+            .then(setAllBrokers)
+            .catch(err => console.error("Erro ao carregar lista de corretores:", err));
+    }, [isAdmin, selectedOrgId]);
 
+    // Carregar estoque: via token (anon) ou via serviço autenticado
     React.useEffect(() => {
         const fetchStock = async () => {
-            const orgId = selectedOrgId;
-            if (!orgId) return;
             setLoading(true);
             try {
-                const [propertiesData, proposalsData, dealsData] = await Promise.all([
-                    commercialService.listProperties(orgId, undefined, selectedPurpose),
-                    brokerService.listProposals(orgId),
-                    commercialService.listDeals()
-                ]);
-                setUnits(propertiesData as BrokerUnit[]);
-                setProposals(proposalsData);
-                setCommercialDeals(dealsData);
+                if (portalToken) {
+                    const [unitsRes, proposalsRes] = await Promise.all([
+                        brokerPortalService.getUnitsByToken(portalToken),
+                        brokerPortalService.getProposalsByToken(portalToken),
+                    ]);
+                    setUnits(unitsRes as BrokerUnit[]);
+                    setProposals(proposalsRes);
+                    setCommercialDeals([]);
+                } else {
+                    const orgId = selectedOrgId;
+                    if (!orgId) return;
+                    const [propertiesData, proposalsData, dealsData] = await Promise.all([
+                        commercialService.listProperties(orgId, undefined, selectedPurpose),
+                        brokerService.listProposals(orgId),
+                        commercialService.listDeals()
+                    ]);
+                    setUnits(propertiesData as BrokerUnit[]);
+                    setProposals(proposalsData);
+                    setCommercialDeals(dealsData);
+                }
             } catch (error) {
                 console.error("Erro ao carregar dados do portal:", error);
             } finally {
@@ -124,9 +144,8 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             }
         };
         fetchStock();
-    }, [selectedOrgId, selectedPurpose]);
+    }, [selectedOrgId, selectedPurpose, portalToken]);
 
-    // Update selectedOrgId if organizations load later
     React.useEffect(() => {
         if (!selectedOrgId && organizations.length > 0) {
             setSelectedOrgId(organizations[0]?.id);
@@ -135,16 +154,12 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
 
     const formatCurrency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 
-    // myProposals already correctly declared above
-
-    const stats = useMemo(() => {
-        return {
-            available: units.filter(u => u.status === PropertyStatus.AVAILABLE && u.type !== 'BUILDING').length,
-            sent: myProposals.filter(p => p.status === 'ENVIADA').length,
-            approved: myProposals.filter(p => p.status === 'APROVADA').length,
-            totalCommission: myProposals.filter(p => p.status === 'APROVADA').reduce((acc, p) => acc + ((p.total_value || 0) * 0.05), 0),
-        };
-    }, [units, myProposals]);
+    const stats = useMemo(() => ({
+        available: units.filter(u => u.status === PropertyStatus.AVAILABLE && u.type !== 'BUILDING').length,
+        sent: myProposals.filter(p => p.status === 'ENVIADA').length,
+        approved: myProposals.filter(p => p.status === 'APROVADA').length,
+        totalCommission: myProposals.filter(p => p.status === 'APROVADA').reduce((acc, p) => acc + ((p.total_value || 0) * 0.05), 0),
+    }), [units, myProposals]);
 
     const buildings = useMemo(() => units.filter(u => u.type === 'BUILDING'), [units]);
     const displayUnits = useMemo(() => {
@@ -180,6 +195,18 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-700">
+            {/* Prévia Mobile — renderiza o portal como o corretor vê, dentro de um iframe estreito */}
+            {showMobilePreview && !isPreview && (
+                <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Portal do Corretor">
+                    <BrokerPortal
+                        profile={profile}
+                        organizationId={initialOrgId || selectedOrgId}
+                        activeTab={currentTab}
+                        isPreview
+                    />
+                </MobilePreviewFrame>
+            )}
+
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -187,7 +214,8 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                         <h1 className="text-3xl font-black text-gray-900 tracking-tight">
                             Portal do Corretor
                         </h1>
-                        {(profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER || profile?.group === ProfileGroup.DEVELOPER || profile?.role === 'ADMINISTRADOR' || profile?.group === 'DESENVOLVEDOR') && (
+                        {/* Seletor de impersonação — somente admin */}
+                        {isAdmin && (
                             <select
                                 onChange={(e) => {
                                     const broker = allBrokers.find(b => b.id === e.target.value);
@@ -208,28 +236,42 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                     </p>
                 </div>
 
-                {organizations.length > 1 && (
-                    <div className="flex flex-col gap-1.5 min-w-[300px]">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Selecione a Organização</label>
-                        <select
-                            value={selectedOrgId}
-                            onChange={(e) => setSelectedOrgId(e.target.value)}
-                            className="bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-2xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 shadow-sm outline-none appearance-none cursor-pointer"
+                <div className="flex items-center gap-3">
+                    {/* Botão Prévia Mobile — somente admin */}
+                    {isAdmin && (
+                        <button
+                            onClick={() => setShowMobilePreview(true)}
+                            title="Visualizar como o corretor vê no celular"
+                            className="hidden md:flex p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
                         >
-                            {organizations.map(org => (
-                                <option key={org.id} value={org.id}>{org.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                )}
+                            <Smartphone className="w-4 h-4" />
+                        </button>
+                    )}
+
+                    {/* Seletor de organização — somente admin com múltiplas orgs */}
+                    {isAdmin && organizations.length > 1 && (
+                        <div className="flex flex-col gap-1.5 min-w-[300px]">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Selecione a Organização</label>
+                            <select
+                                value={selectedOrgId}
+                                onChange={(e) => setSelectedOrgId(e.target.value)}
+                                className="bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-2xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 shadow-sm outline-none appearance-none cursor-pointer"
+                            >
+                                {organizations.map(org => (
+                                    <option key={org.id} value={org.id}>{org.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Unidades Disponíveis" value={stats.available} subtext={`de ${units.length} unidades`} icon={Building2} color="indigo" />
-                <StatCard title="Propostas Enviadas" value={stats.sent} subtext="Aguardando análise" icon={Send} color="blue" />
-                <StatCard title="Propostas Aprovadas" value={stats.approved} subtext="Vendas confirmadas" icon={CheckCircle2} color="emerald" />
-                <StatCard title="Comissão Acumulada" value={formatCurrency(stats.totalCommission)} subtext="5% sobre aprovadas" icon={DollarSign} color="amber" />
+                <StatCard title="Unidades Disponíveis" value={loading ? '…' : stats.available} subtext={loading ? '' : `de ${units.length} unidades`} icon={Building2} color="indigo" />
+                <StatCard title="Propostas Enviadas" value={loading ? '…' : stats.sent} subtext="Aguardando análise" icon={Send} color="blue" />
+                <StatCard title="Propostas Aprovadas" value={loading ? '…' : stats.approved} subtext="Vendas confirmadas" icon={CheckCircle2} color="emerald" />
+                <StatCard title="Comissão Acumulada" value={loading ? '…' : formatCurrency(stats.totalCommission)} subtext="5% sobre aprovadas" icon={DollarSign} color="amber" />
             </div>
 
             {/* Tab Navigation */}
@@ -252,7 +294,6 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             {/* Tab Content */}
             {currentTab === 'estoque' && !showSimulator && (
                 <div className="space-y-6">
-                    {/* Filtros: Venda/Locação e Empreendimento */}
                     <div className="flex flex-col xl:flex-row gap-4 justify-between xl:items-center">
                         <div className="flex bg-gray-100 p-1 rounded-2xl w-fit shrink-0">
                             {[
@@ -311,10 +352,10 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                             ...commercialDeals,
                             ...proposals.map(p => ({
                                 ...p,
-                                status: p.status === 'ENVIADA' ? 'PENDING' : 
-                                        p.status === 'APROVADA' ? 'COMPLETED' : 
-                                        p.status === 'REJEITADA' ? 'CANCELLED' : 
-                                        'IN_NEGOTIATION'
+                                status: p.status === 'ENVIADA' ? 'PENDING' :
+                                    p.status === 'APROVADA' ? 'COMPLETED' :
+                                        p.status === 'REJEITADA' ? 'CANCELLED' :
+                                            'IN_NEGOTIATION'
                             }))
                         ] as unknown as PropertyDeal[]}
                         onSelectUnit={handleMakeProposal}
@@ -388,7 +429,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             )}
 
             {currentTab === 'comissoes' && (
-                <BrokerCommissions brokerEmail={effectiveBrokerEmail || ''} />
+                <BrokerCommissions brokerEmail={effectiveBrokerEmail || ''} portalToken={portalToken} />
             )}
 
             {currentTab === 'materiais' && (

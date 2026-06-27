@@ -2,10 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { DollarSign, CheckCircle2, Clock, AlertCircle, TrendingUp, Building2, ChevronDown } from 'lucide-react';
 import type { BrokerCommission } from '../../types';
 import { brokerService } from '../../services/brokerService';
+import { brokerPortalService } from '../../services/brokerPortalService';
 
 interface BrokerCommissionsProps {
     brokerEmail: string;
     organizationId?: string;
+    portalToken?: string;
 }
 
 const STATUS_CONFIG: Record<BrokerCommission['status'], { label: string; color: string; bg: string; icon: React.ElementType }> = {

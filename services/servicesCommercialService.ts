@@ -19,6 +19,7 @@ export interface ServiceOpportunity {
   estimated_value: number | null;
   scope_summary: string | null;
   stage: OpportunityStage;
+  sub_status: string | null;
   assigned_to: string | null;
   priority: Priority;
   origin_channel: string | null;
@@ -33,6 +34,27 @@ export interface ServiceOpportunity {
   engineering_request_status: EngineeringRequestStatus;
   assigned_email: string | null;
   notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OpportunityTask {
+  id: string;
+  title: string;
+  due_date: string | null;
+  status: 'open' | 'done' | 'snoozed';
+  priority: 1 | 2 | 3 | 4;
+  completed_at: string | null;
+}
+
+export interface PipelineStageConfig {
+  id: string;
+  organization_id: string;
+  stage: OpportunityStage;
+  label: string;
+  color: string;
+  position: number;
+  sub_statuses: string[];
   created_at: string;
   updated_at: string;
 }
@@ -151,7 +173,7 @@ export const servicesCommercialService = {
   async listOpportunities(organizationId?: string | null): Promise<ServiceOpportunity[]> {
     let query = supabase
       .from('services_opportunities')
-      .select('id, organization_id, contact_name, contact_phone, contact_email, contact_whatsapp, city, work_type, estimated_area, estimated_value, scope_summary, stage, assigned_to, priority, origin_channel, lost_reason, won_at, lost_at, converted_project_id, converted_contract_id, rich_contract_id, budget_source, engineering_project_id, engineering_request_status, assigned_email, notes, created_at, updated_at')
+      .select('id, organization_id, contact_name, contact_phone, contact_email, contact_whatsapp, city, work_type, estimated_area, estimated_value, scope_summary, stage, sub_status, assigned_to, priority, origin_channel, lost_reason, won_at, lost_at, converted_project_id, converted_contract_id, rich_contract_id, budget_source, engineering_project_id, engineering_request_status, assigned_email, notes, created_at, updated_at')
       .order('created_at', { ascending: false });
     if (organizationId) query = query.eq('organization_id', organizationId);
     const { data, error } = await query;
@@ -162,7 +184,7 @@ export const servicesCommercialService = {
   async getOpportunity(id: string): Promise<ServiceOpportunity | null> {
     const { data, error } = await supabase
       .from('services_opportunities')
-      .select('id, organization_id, contact_name, contact_phone, contact_email, contact_whatsapp, city, work_type, estimated_area, estimated_value, scope_summary, stage, assigned_to, priority, origin_channel, lost_reason, won_at, lost_at, converted_project_id, converted_contract_id, rich_contract_id, budget_source, engineering_project_id, engineering_request_status, assigned_email, notes, created_at, updated_at')
+      .select('id, organization_id, contact_name, contact_phone, contact_email, contact_whatsapp, city, work_type, estimated_area, estimated_value, scope_summary, stage, sub_status, assigned_to, priority, origin_channel, lost_reason, won_at, lost_at, converted_project_id, converted_contract_id, rich_contract_id, budget_source, engineering_project_id, engineering_request_status, assigned_email, notes, created_at, updated_at')
       .eq('id', id)
       .single();
     if (error) throw error;
@@ -170,7 +192,7 @@ export const servicesCommercialService = {
   },
 
   async createOpportunity(
-    payload: Omit<ServiceOpportunity, 'id' | 'created_at' | 'updated_at' | 'won_at' | 'lost_at' | 'converted_project_id' | 'converted_contract_id' | 'rich_contract_id' | 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email'> & Partial<Pick<ServiceOpportunity, 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email'>>
+    payload: Omit<ServiceOpportunity, 'id' | 'created_at' | 'updated_at' | 'won_at' | 'lost_at' | 'converted_project_id' | 'converted_contract_id' | 'rich_contract_id' | 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email' | 'sub_status'> & Partial<Pick<ServiceOpportunity, 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email' | 'sub_status'>>
   ): Promise<ServiceOpportunity> {
     const { data, error } = await supabase
       .from('services_opportunities')
@@ -598,5 +620,72 @@ export const servicesCommercialService = {
     const conversionRate = closed.length > 0 ? Math.round((won.length / closed.length) * 100) : 0;
     const inNegotiation = active.reduce((acc, o) => acc + (o.estimated_value ?? 0), 0);
     return { activeLeads: active.length, proposalsSent: sent.length, inNegotiation, conversionRate };
+  },
+
+  // ─── Tarefas vinculadas à oportunidade (integração TasksModule) ──────────────
+
+  async listOpportunityTasks(opportunityId: string): Promise<OpportunityTask[]> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('id, title, due_date, status, priority, completed_at')
+      .eq('source_module', 'services')
+      .filter('source_ref->>id', 'eq', opportunityId)
+      .order('status', { ascending: true })
+      .order('due_date', { ascending: true, nullsFirst: false });
+    if (error) throw error;
+    return (data ?? []) as OpportunityTask[];
+  },
+
+  async createOpportunityTask(
+    opp: Pick<ServiceOpportunity, 'id' | 'organization_id' | 'contact_name'>,
+    title: string,
+    dueDate?: string | null,
+    priority: 1 | 2 | 3 | 4 = 3
+  ): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Não autenticado');
+    const { error } = await supabase.rpc('create_task', {
+      p_user_id: user.id,
+      p_org_id: opp.organization_id,
+      p_title: title,
+      p_due: dueDate ?? null,
+      p_source_module: 'services',
+      p_source_ref: { type: 'services_opportunity', id: opp.id, route: 'services' },
+      p_priority: priority,
+      p_description: `Cliente: ${opp.contact_name}`,
+    });
+    if (error) throw error;
+  },
+
+  async toggleOpportunityTask(taskId: string, done: boolean): Promise<void> {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ status: done ? 'done' : 'open', completed_at: done ? new Date().toISOString() : null })
+      .eq('id', taskId);
+    if (error) throw error;
+  },
+
+  // ─── Configuração de pipeline (engrenagem por estágio) ───────────────────────
+
+  async listStageConfig(organizationId: string): Promise<PipelineStageConfig[]> {
+    const { data, error } = await supabase
+      .from('services_pipeline_stages')
+      .select('id, organization_id, stage, label, color, position, sub_statuses, created_at, updated_at')
+      .eq('organization_id', organizationId)
+      .order('position', { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async upsertStageConfig(
+    config: Pick<PipelineStageConfig, 'organization_id' | 'stage' | 'label' | 'color' | 'position' | 'sub_statuses'>
+  ): Promise<PipelineStageConfig> {
+    const { data, error } = await supabase
+      .from('services_pipeline_stages')
+      .upsert(config, { onConflict: 'organization_id,stage' })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   },
 };

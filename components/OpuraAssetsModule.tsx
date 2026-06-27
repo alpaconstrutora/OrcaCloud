@@ -26,7 +26,11 @@ import {
   CheckCircle,
   X,
   FileSpreadsheet,
-  Copy
+  Copy,
+  Shield,
+  PenTool,
+  ExternalLink,
+  TrendingDown
 } from 'lucide-react';
 import { assetService } from '../services/assetService';
 import { useStore } from '../store/useStore';
@@ -39,7 +43,11 @@ import {
   OpuraAssetReservation,
   OpuraAssetMaintenance,
   MaintenanceType,
-  MaintenanceStatus
+  MaintenanceStatus,
+  AssetDocumentType,
+  AssetDocumentStatus,
+  OpuraAssetDocument,
+  OpuraAssetDepreciationRateio
 } from '../types';
 
 interface OpuraAssetsModuleProps {
@@ -54,7 +62,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const { projects } = useStore();
   
   // Tabs e UI States
-  const [activeTab, setActiveTab] = React.useState<'dashboard' | 'bens' | 'reservas' | 'manutencoes'>('dashboard');
+  const [activeTab, setActiveTab] = React.useState<'dashboard' | 'bens' | 'reservas' | 'manutencoes' | 'custos_rateio'>('dashboard');
   const [loading, setLoading] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
   
@@ -62,10 +70,12 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const [assets, setAssets] = React.useState<OpuraAsset[]>([]);
   const [reservations, setReservations] = React.useState<OpuraAssetReservation[]>([]);
   const [maintenances, setMaintenances] = React.useState<OpuraAssetMaintenance[]>([]);
+  const [deprRateio, setDeprRateio] = React.useState<OpuraAssetDepreciationRateio[]>([]);
   
   // Estado de Visualização/Ação de Ativo Específico
   const [selectedAsset, setSelectedAsset] = React.useState<OpuraAsset | null>(null);
   const [movements, setMovements] = React.useState<OpuraAssetMovement[]>([]);
+  const [selectedAssetDocs, setSelectedAssetDocs] = React.useState<OpuraAssetDocument[]>([]);
   const [isNewAssetModalOpen, setIsNewAssetModalOpen] = React.useState(false);
   const [isMoveAssetModalOpen, setIsMoveAssetModalOpen] = React.useState(false);
   const [isReserveModalOpen, setIsReserveModalOpen] = React.useState(false);
@@ -74,10 +84,16 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const [editingAssetId, setEditingAssetId] = React.useState<string | null>(null);
   const [isDuplicate, setIsDuplicate] = React.useState<boolean>(false);
 
-  // Modais de Manutenção
+  // Modais de Manutenção e Documentos
   const [isNewMaintModalOpen, setIsNewMaintModalOpen] = React.useState(false);
   const [isFinishMaintModalOpen, setIsFinishMaintModalOpen] = React.useState(false);
   const [selectedMaintenance, setSelectedMaintenance] = React.useState<OpuraAssetMaintenance | null>(null);
+  
+  const [isNewDocModalOpen, setIsNewDocModalOpen] = React.useState(false);
+
+  // Filtros de Rateio Contábil
+  const [rateioStartDate, setRateioStartDate] = React.useState('');
+  const [rateioEndDate, setRateioEndDate] = React.useState('');
 
   // Estados dos Formulários
   const [assetForm, setAssetForm] = React.useState({
@@ -127,6 +143,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     notes: ''
   });
 
+  const [docForm, setDocForm] = React.useState({
+    type: 'seguro' as AssetDocumentType,
+    name: '',
+    document_number: '',
+    expiration_date: '',
+    file_url: ''
+  });
+
   // Filtros de listagem
   const [searchQuery, setSearchQuery] = React.useState('');
   const [filterCategory, setFilterCategory] = React.useState<string>('todos');
@@ -170,6 +194,37 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       console.error('[OpuraAssetsModule] Erro ao carregar histórico de movimentações:', err);
     }
   };
+
+  // Carregar documentos do ativo selecionado
+  const loadAssetDocuments = async (assetId: string) => {
+    try {
+      const docs = await assetService.listDocuments(assetId);
+      setSelectedAssetDocs(docs);
+    } catch (err) {
+      console.error('[OpuraAssetsModule] Erro ao carregar documentos do ativo:', err);
+    }
+  };
+
+  // Carregar rateio de depreciação contábil por obra
+  const loadRateioData = React.useCallback(async () => {
+    if (!activeOrganizationId) return;
+    try {
+      const loadedRateio = await assetService.calculateDepreciationRateio(
+        activeOrganizationId,
+        rateioStartDate || undefined,
+        rateioEndDate || undefined
+      );
+      setDeprRateio(loadedRateio);
+    } catch (err) {
+      console.error('[OpuraAssetsModule] Erro ao carregar dados de rateio:', err);
+    }
+  }, [activeOrganizationId, rateioStartDate, rateioEndDate]);
+
+  React.useEffect(() => {
+    if (activeTab === 'custos_rateio') {
+      loadRateioData();
+    }
+  }, [activeTab, loadRateioData]);
 
   // Cadastrar / Editar / Duplicar Ativo
   const handleCreateAsset = async (e: React.FormEvent) => {
@@ -265,6 +320,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       const updated = await assetService.getById(selectedAsset.id);
       setSelectedAsset(updated);
       loadAssetMovements(selectedAsset.id);
+      loadAssetDocuments(selectedAsset.id);
       loadData();
     } catch (err: any) {
       alert(`Erro ao registrar movimentação: ${err.message}`);
@@ -518,6 +574,70 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     }
   };
 
+  // Cadastrar Novo Documento / Seguro
+  const handleCreateDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAsset || !activeOrganizationId) return;
+    if (!docForm.name) {
+      alert('Por favor, informe o nome ou descrição do documento.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      let docStatus: AssetDocumentStatus = 'ativo';
+      if (docForm.expiration_date) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (docForm.expiration_date < todayStr) {
+          docStatus = 'vencido';
+        }
+      }
+
+      await assetService.createDocument({
+        organization_id: activeOrganizationId,
+        asset_id: selectedAsset.id,
+        type: docForm.type,
+        name: docForm.name,
+        document_number: docForm.document_number || undefined,
+        expiration_date: docForm.expiration_date || undefined,
+        file_url: docForm.file_url || undefined,
+        status: docStatus
+      });
+
+      alert('Documento cadastrado com sucesso!');
+      setIsNewDocModalOpen(false);
+      setDocForm({
+        type: 'seguro',
+        name: '',
+        document_number: '',
+        expiration_date: '',
+        file_url: ''
+      });
+      loadAssetDocuments(selectedAsset.id);
+    } catch (err: any) {
+      alert(`Erro ao cadastrar documento: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Excluir Documento / Seguro
+  const handleDeleteDocument = async (docId: string) => {
+    if (!selectedAsset) return;
+    if (!window.confirm('Tem certeza que deseja excluir este documento?')) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await assetService.deleteDocument(docId);
+      alert('Documento excluído com sucesso!');
+      loadAssetDocuments(selectedAsset.id);
+    } catch (err: any) {
+      alert(`Erro ao excluir documento: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Calcular valor depreciado acumulado (Linear)
   const calculateDepreciation = (asset: OpuraAsset) => {
     if (!asset.purchase_date || !asset.useful_life_months) return { current: asset.purchase_value, depreciated: 0 };
@@ -602,7 +722,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 gap-6 overflow-x-auto">
-        {(['dashboard', 'bens', 'reservas', 'manutencoes'] as const).map(tab => (
+        {(['dashboard', 'bens', 'reservas', 'manutencoes', 'custos_rateio'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -611,7 +731,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 ? 'border-blue-600 text-blue-600' 
                 : 'border-transparent text-gray-400 hover:text-gray-600'}`}
           >
-            {tab === 'bens' ? 'Ativos Patrimoniais' : tab === 'reservas' ? 'Reservas & Locação' : tab === 'manutencoes' ? 'Manutenções' : tab}
+            {tab === 'bens' ? 'Ativos Patrimoniais' : tab === 'reservas' ? 'Reservas & Locação' : tab === 'manutencoes' ? 'Manutenções' : tab === 'custos_rateio' ? 'Custos & Rateio' : tab}
           </button>
         ))}
       </div>
@@ -807,6 +927,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         onClick={async () => {
                           setSelectedAsset(asset);
                           loadAssetMovements(asset.id);
+                          loadAssetDocuments(asset.id);
                         }}
                         className={`bg-white p-5 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between h-44 hover:shadow-xl group
                           ${selectedAsset?.id === asset.id ? 'border-blue-500 shadow-md' : 'border-gray-100 shadow-sm'}`}
@@ -1025,6 +1146,101 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         })}
                         {movements.length === 0 && (
                           <p className="text-xs text-gray-400 text-center py-4">Nenhuma movimentação registrada.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Documentos & Seguros */}
+                    <div className="border-t border-gray-100 pt-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
+                          <Shield className="w-4 h-4 text-gray-400" />
+                          Documentos & Seguros
+                        </h4>
+                        <button
+                          onClick={() => {
+                            setDocForm({
+                              type: 'seguro',
+                              name: '',
+                              document_number: '',
+                              expiration_date: '',
+                              file_url: ''
+                            });
+                            setIsNewDocModalOpen(true);
+                          }}
+                          className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold uppercase tracking-wider px-2.5 py-1 rounded-xl transition-all shadow-sm active:scale-95"
+                        >
+                          + Novo
+                        </button>
+                      </div>
+
+                      <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                        {selectedAssetDocs.map(doc => {
+                          const today = new Date();
+                          const expDate = doc.expiration_date ? new Date(doc.expiration_date) : null;
+                          const diffTime = expDate ? expDate.getTime() - today.getTime() : null;
+                          const diffDays = diffTime ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
+
+                          let docStatusBadge = 'bg-emerald-500/10 text-emerald-600';
+                          let docStatusLabel = 'Vigente';
+
+                          if (doc.status === 'vencido' || (diffDays !== null && diffDays < 0)) {
+                            docStatusBadge = 'bg-rose-500/10 text-rose-600';
+                            docStatusLabel = 'Vencido';
+                          } else if (diffDays !== null && diffDays <= 30) {
+                            docStatusBadge = 'bg-amber-500/10 text-amber-600';
+                            docStatusLabel = `Vence em ${diffDays}d`;
+                          }
+
+                          const DocIcon = 
+                            doc.type === 'seguro' ? Shield :
+                            doc.type === 'licenciamento' ? FileText :
+                            doc.type === 'termo_responsabilidade' ? PenTool : FileText;
+
+                          return (
+                            <div key={doc.id} className="p-3 bg-gray-50/50 border border-gray-100 rounded-2xl flex items-center justify-between text-xs hover:border-blue-100 transition-colors">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="p-1.5 bg-white text-gray-400 rounded-lg border border-gray-100">
+                                  <DocIcon className="w-3.5 h-3.5" />
+                                </div>
+                                <div className="min-w-0">
+                                  <h5 className="font-bold text-gray-700 truncate" title={doc.name}>{doc.name}</h5>
+                                  <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-gray-400 font-semibold">
+                                    {doc.document_number && <span>Nº {doc.document_number}</span>}
+                                    {doc.document_number && doc.expiration_date && <span>•</span>}
+                                    {doc.expiration_date && <span>Vence: {new Date(doc.expiration_date).toLocaleDateString('pt-BR')}</span>}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className={`px-2 py-0.5 rounded font-black text-[8px] uppercase tracking-wider ${docStatusBadge}`}>
+                                  {docStatusLabel}
+                                </span>
+                                {doc.file_url && (
+                                  <a
+                                    href={doc.file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                                    title="Visualizar documento anexo"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                                <button
+                                  onClick={() => handleDeleteDocument(doc.id)}
+                                  className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                                  title="Remover documento"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {selectedAssetDocs.length === 0 && (
+                          <p className="text-xs text-gray-400 text-center py-4">Nenhum documento ou seguro anexado.</p>
                         )}
                       </div>
                     </div>
@@ -1349,6 +1565,121 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* 3.6. TAB: CUSTOS & RATEIO */}
+          {activeTab === 'custos_rateio' && (
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-50 pb-5">
+                <div>
+                  <h3 className="font-bold text-gray-800 text-lg">Rateio Contábil de Depreciação</h3>
+                  <p className="text-gray-400 text-xs">Distribuição financeira de custos de desvalorização linear com base nos dias reais de uso dos bens em cada obra.</p>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Período</span>
+                    <input
+                      type="date"
+                      value={rateioStartDate}
+                      onChange={(e) => setRateioStartDate(e.target.value)}
+                      className="px-3 py-1.5 border border-gray-250 rounded-xl text-xs font-bold text-gray-600 bg-white"
+                    />
+                    <span className="text-gray-400 text-xs font-bold">até</span>
+                    <input
+                      type="date"
+                      value={rateioEndDate}
+                      onChange={(e) => setRateioEndDate(e.target.value)}
+                      className="px-3 py-1.5 border border-gray-250 rounded-xl text-xs font-bold text-gray-600 bg-white"
+                    />
+                  </div>
+                  {(rateioStartDate || rateioEndDate) && (
+                    <button
+                      onClick={() => {
+                        setRateioStartDate('');
+                        setRateioEndDate('');
+                      }}
+                      className="text-xs text-rose-600 hover:text-rose-700 font-bold underline"
+                    >
+                      Limpar Filtros
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {deprRateio.length > 0 ? (
+                <div className="space-y-6">
+                  {/* Grid de Métricas do Período */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                      <div>
+                        <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest block">Total Depreciado no Período</span>
+                        <h4 className="text-xl font-bold text-slate-800 mt-1">
+                          R$ {deprRateio.reduce((acc, r) => acc + r.allocated_cost, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </h4>
+                      </div>
+                      <TrendingDown className="w-8 h-8 text-rose-500 bg-rose-50 p-1.5 rounded-xl border border-rose-100" />
+                    </div>
+
+                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                      <div>
+                        <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest block">Obras com Alocações</span>
+                        <h4 className="text-xl font-bold text-slate-800 mt-1">
+                          {deprRateio.filter(r => r.allocated_cost > 0).length} canteiros ativos
+                        </h4>
+                      </div>
+                      <Building2 className="w-8 h-8 text-blue-500 bg-blue-50 p-1.5 rounded-xl border border-blue-100" />
+                    </div>
+                  </div>
+
+                  {/* Tabela de Rateio */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider">
+                          <th className="py-3 px-4">Obra / Projeto</th>
+                          <th className="py-3 px-4 text-center">Nº Ativos Usados</th>
+                          <th className="py-3 px-4 text-center">Dias Acumulados</th>
+                          <th className="py-3 px-4">Custo Alocado (Depreciação)</th>
+                          <th className="py-3 px-4">Participação no Custo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {deprRateio.map(r => (
+                          <tr key={r.project_id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                            <td className="py-4 px-4 font-bold text-gray-800">{r.project_name}</td>
+                            <td className="py-4 px-4 text-center text-gray-600 font-semibold">{r.assets_count}</td>
+                            <td className="py-4 px-4 text-center text-gray-600 font-medium">{r.total_days} dias</td>
+                            <td className="py-4 px-4 font-bold text-gray-800">
+                              R$ {r.allocated_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-24 bg-gray-100 rounded-full h-2">
+                                  <div
+                                    className="bg-blue-600 h-2 rounded-full transition-all"
+                                    style={{ width: `${r.percentage}%` }}
+                                  />
+                                </div>
+                                <span className="font-bold text-gray-600">{r.percentage}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-20 text-center text-gray-400 space-y-3">
+                  <TrendingDown className="w-12 h-12 text-gray-200 mx-auto" />
+                  <p className="font-semibold text-sm">Nenhum custo de depreciação a ratear encontrado no período selecionado.</p>
+                  <p className="text-xs text-gray-400 max-w-md mx-auto">
+                    Certifique-se de que os bens patrimoniais possuem valor de compra e vida útil cadastrados e contam com histórico de locações (reservas aprovadas, ativas ou finalizadas).
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -2010,6 +2341,104 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 >
                   {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                   Concluir Manutenção
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* 11. MODAL: CADASTRAR NOVO DOCUMENTO */}
+      {isNewDocModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-2xl w-full max-w-md relative animate-in zoom-in-95 duration-200 space-y-6">
+            <button
+              onClick={() => setIsNewDocModalOpen(false)}
+              className="absolute right-4 top-4 p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div>
+              <h3 className="font-bold text-gray-800 text-lg">Anexar Documento / Seguro</h3>
+              <p className="text-gray-400 text-xs">Adicione apólices de seguro, licenciamento ou termos de responsabilidade ao ativo.</p>
+            </div>
+
+            <form onSubmit={handleCreateDocument} className="space-y-4 text-xs font-semibold">
+              <div className="space-y-1">
+                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Tipo de Documento</label>
+                <select
+                  value={docForm.type}
+                  onChange={(e) => setDocForm(prev => ({ ...prev, type: e.target.value as AssetDocumentType }))}
+                  className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                >
+                  <option value="seguro">Apólice de Seguro</option>
+                  <option value="licenciamento">IPVA / Licenciamento</option>
+                  <option value="termo_responsabilidade">Termo de Responsabilidade</option>
+                  <option value="outro">Outro Documento</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Nome / Descrição do Documento</label>
+                <input
+                  type="text"
+                  required
+                  value={docForm.name}
+                  onChange={(e) => setDocForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  placeholder="Ex: Apólice Porto Seguro 2026"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Número do Documento / Apólice</label>
+                  <input
+                    type="text"
+                    value={docForm.document_number}
+                    onChange={(e) => setDocForm(prev => ({ ...prev, document_number: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    placeholder="Opcional"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Data de Vencimento</label>
+                  <input
+                    type="date"
+                    value={docForm.expiration_date}
+                    onChange={(e) => setDocForm(prev => ({ ...prev, expiration_date: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Link / URL do Arquivo Anexo</label>
+                <input
+                  type="url"
+                  value={docForm.file_url}
+                  onChange={(e) => setDocForm(prev => ({ ...prev, file_url: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  placeholder="Ex: https://drive.google.com/..."
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsNewDocModalOpen(false)}
+                  className="px-5 py-2.5 border border-gray-200 text-gray-500 rounded-xl hover:bg-gray-50 font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
+                >
+                  {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Confirmar Anexo
                 </button>
               </div>
             </form>

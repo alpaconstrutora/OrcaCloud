@@ -148,7 +148,59 @@ const ClientPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
 import PublicOrderView from './components/PublicOrderView';
 import { PublicEspecificacoesView } from './components/PublicEspecificacoesView';
 import { clientPortalService } from './services/clientPortalService';
+import { brokerPortalService } from './services/brokerPortalService';
 const ClientArea = React.lazy(() => import('./components/ClientArea').then(m => ({ default: m.ClientArea })));
+const BrokerPortal = React.lazy(() => import('./components/BrokerPortal'));
+
+// Portal do Corretor via token público
+const BrokerPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
+  const [state, setState] = React.useState<'loading' | 'ok' | 'error'>('loading');
+  const [brokerData, setBrokerData] = React.useState<any>(null);
+  const [orgId, setOrgId] = React.useState('');
+
+  React.useEffect(() => {
+    brokerPortalService.getPortalData(token)
+      .then(res => {
+        if (!res.valid || !res.broker) { setState('error'); return; }
+        setBrokerData(res.broker);
+        setOrgId(res.org_id || res.broker.organization_id || '');
+        setState('ok');
+      })
+      .catch(() => setState('error'));
+  }, [token]);
+
+  if (state === 'loading') return (
+    <div className="h-screen flex items-center justify-center bg-indigo-50">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-black text-indigo-700 uppercase tracking-widest">Carregando portal...</p>
+      </div>
+    </div>
+  );
+
+  if (state === 'error') return (
+    <div className="h-screen flex items-center justify-center bg-slate-50">
+      <div className="text-center space-y-3 p-8">
+        <p className="text-4xl">🔒</p>
+        <p className="text-lg font-black text-slate-800">Link inválido ou expirado</p>
+        <p className="text-sm text-slate-500">Solicite um novo link à construtora.</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" /></div>}>
+        <BrokerPortal
+          profile={{ group: 'CORRETOR', role: '', email: brokerData.email }}
+          organizationId={orgId}
+          portalToken={token}
+          isPreview
+        />
+      </React.Suspense>
+    </div>
+  );
+};
 import { ContractModal } from './components/ContractModal';
 import SupplyChainQuotationForm from './components/SupplyChainQuotationForm';
 import SupplyChainOrderForm from './components/SupplyChainOrderForm';
@@ -350,6 +402,16 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (clientPortalToken) return <ClientPortalTokenGate token={clientPortalToken} />;
+
+  // ── Guard público: portal do corretor via token ───────────────────────────────
+  const brokerPortalToken = React.useMemo(() => {
+    if (window.location.pathname === '/portal-corretor') {
+      return new URLSearchParams(window.location.search).get('token');
+    }
+    return null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (brokerPortalToken) return <BrokerPortalTokenGate token={brokerPortalToken} />;
 
   // ── Guard público: pedido de compra via share_token ──────────────────────────
   const orderShareToken = React.useMemo(() => {

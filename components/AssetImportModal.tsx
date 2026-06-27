@@ -121,7 +121,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
 
       // Cabeçalho da Planilha
       const headers = [
-        'Código Patrimonial*',
+        'Código Patrimonial',
         'Nome do Ativo*',
         'Categoria*',
         'Subcategoria',
@@ -129,7 +129,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
         'Modelo',
         'Número de Série',
         'Data de Aquisição (AAAA-MM-DD)',
-        'Valor de Aquisição (R$)*',
+        'Valor de Aquisição (R$)',
         'Vida Útil (meses)',
         'Valor Residual (R$)',
         'Observações'
@@ -275,23 +275,28 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
 
         const rowErrors: string[] = [];
 
-        // Validações obrigatórias
-        if (!codeRaw) {
-          rowErrors.push('O Código Patrimonial é obrigatório.');
+        // Validação do Código Patrimonial (Opcional - gera se vazio)
+        let rowCode = codeRaw;
+        if (!rowCode) {
+          rowCode = `OPR-PAT-${Math.floor(100000 + Math.random() * 900000)}`;
+          while (codeSet.has(rowCode.toLowerCase()) || existingAssets.some(a => a.code.toLowerCase() === rowCode.toLowerCase())) {
+            rowCode = `OPR-PAT-${Math.floor(100000 + Math.random() * 900000)}`;
+          }
+          codeSet.add(rowCode.toLowerCase());
         } else {
           // Checa duplicidade interna no Excel
-          if (codeSet.has(codeRaw.toLowerCase())) {
-            rowErrors.push(`Código "${codeRaw}" está repetido na planilha.`);
+          if (codeSet.has(rowCode.toLowerCase())) {
+            rowErrors.push(`Código "${rowCode}" está repetido na planilha.`);
           } else {
-            codeSet.add(codeRaw.toLowerCase());
+            codeSet.add(rowCode.toLowerCase());
           }
 
           // Checa duplicidade contra banco de dados
           const codeExistsInDb = existingAssets.some(
-            (a) => a.code.toLowerCase() === codeRaw.toLowerCase()
+            (a) => a.code.toLowerCase() === rowCode.toLowerCase()
           );
           if (codeExistsInDb) {
-            rowErrors.push(`Código "${codeRaw}" já está cadastrado no sistema.`);
+            rowErrors.push(`Código "${rowCode}" já está cadastrado no sistema.`);
           }
         }
 
@@ -307,11 +312,9 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
           );
         }
 
-        // Validação do valor de aquisição
+        // Validação do valor de aquisição (Opcional)
         let purchase_value = 0;
-        if (!purchaseValueRaw) {
-          rowErrors.push('O Valor de Aquisição é obrigatório.');
-        } else {
+        if (purchaseValueRaw) {
           purchase_value = Number(purchaseValueRaw.replace(/[R$\s]/g, '').replace(',', '.'));
           if (isNaN(purchase_value) || purchase_value < 0) {
             rowErrors.push('Valor de aquisição inválido.');
@@ -358,7 +361,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
 
         rows.push({
           index: rowNumber,
-          code: codeRaw,
+          code: rowCode,
           name: nameRaw,
           category: categoryRaw,
           subcategory,

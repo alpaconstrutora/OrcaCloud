@@ -17,7 +17,7 @@ const STATUS_CONFIG: Record<BrokerCommission['status'], { label: string; color: 
     PAGA: { label: 'Paga', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CheckCircle2 },
 };
 
-const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, organizationId }) => {
+const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, organizationId, portalToken }) => {
     const [commissions, setCommissions] = useState<BrokerCommission[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -25,14 +25,16 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
 
     React.useEffect(() => {
         const load = async () => {
-            if (!organizationId) {
-                setLoading(false);
-                return;
-            }
             setLoading(true);
             try {
-                const data = await brokerService.listCommissions(organizationId, brokerEmail);
-                setCommissions(data);
+                if (portalToken) {
+                    const data = await brokerPortalService.getCommissionsByToken(portalToken);
+                    setCommissions(data as BrokerCommission[]);
+                } else {
+                    if (!organizationId) return;
+                    const data = await brokerService.listCommissions(organizationId, brokerEmail);
+                    setCommissions(data);
+                }
             } catch (err) {
                 console.error(err);
             } finally {
@@ -40,7 +42,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
             }
         };
         load();
-    }, [organizationId, brokerEmail]);
+    }, [organizationId, brokerEmail, portalToken]);
 
     const formatCurrency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 

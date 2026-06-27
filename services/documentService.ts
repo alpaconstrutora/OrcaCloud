@@ -10,6 +10,7 @@ import {
   OpuraDocumentApproval,
   OpuraDocumentApprovalInsert,
   OpuraDocumentApprovalStatus,
+  OpuraDocumentAuditLog,
 } from '../types';
 import { notificationService } from './notificationService';
 
@@ -643,6 +644,15 @@ export const documentService = {
 
       if (updateError) throw updateError;
 
+      // Registrar auditoria (Onda 4)
+      await this.logDocumentAction(
+        docData.organization_id,
+        documentId,
+        docData.criado_por || 'sistema',
+        'criado',
+        `Arquivo inicial: ${file.name}`
+      );
+
       return finalDoc as OpuraDocument;
     } catch (err: any) {
       console.error('[DocumentService] Erro no upload/processamento, executando rollback:', err);
@@ -658,7 +668,8 @@ export const documentService = {
     documentId: string,
     organizationId: string,
     nextVersionNumber: number,
-    file: File
+    file: File,
+    uploadedByEmail: string
   ): Promise<OpuraDocumentVersion> {
     const versionId = generateUUID();
     const storagePath = `${organizationId}/${documentId}/${versionId}_${file.name}`;
@@ -704,6 +715,15 @@ export const documentService = {
         .eq('id', documentId);
 
       if (updateError) throw updateError;
+
+      // Registrar auditoria (Onda 4)
+      await this.logDocumentAction(
+        organizationId,
+        documentId,
+        uploadedByEmail,
+        'versao_enviada',
+        `Nova versão física R${nextVersionNumber} enviada: ${file.name}`
+      );
 
       return newVersion as OpuraDocumentVersion;
     } catch (err: any) {
@@ -772,7 +792,12 @@ export const documentService = {
   },
 
   // ─── GERAR LINK DE DOWNLOAD ASSINADO SEGURO ─────────────────
-  async generateDownloadUrl(storagePath: string): Promise<string> {
+  async generateDownloadUrl(
+    storagePath: string,
+    organizationId?: string,
+    documentId?: string,
+    email?: string
+  ): Promise<string> {
     if (!storagePath) {
       throw new Error('Caminho de armazenamento do arquivo é nulo ou indefinido');
     }
@@ -796,6 +821,17 @@ export const documentService = {
     if (error) {
       console.error(`[DocumentService] Erro ao gerar link assinado para o bucket ${bucket}:`, error);
       throw new Error(`Erro ao gerar link de download: ${error.message}`);
+    }
+
+    // Registrar auditoria se os dados do operador forem passados (Onda 4)
+    if (organizationId && documentId && email) {
+      await this.logDocumentAction(
+        organizationId,
+        documentId,
+        email,
+        'download',
+        `Download iniciado do arquivo físico: ${cleanPath.split('/').pop()}`
+      );
     }
 
     return data.signedUrl;
@@ -858,7 +894,9 @@ export const documentService = {
 
   async moveDocumentToFolder(
     documentId: string,
-    folderId: string | null
+    folderId: string | null,
+    organizationId: string,
+    email: string
   ): Promise<void> {
     const { error } = await supabase
       .from('opura_documents')
@@ -869,6 +907,15 @@ export const documentService = {
       console.error('[DocumentService] Erro ao mover documento:', error);
       throw new Error(`Erro ao mover documento: ${error.message}`);
     }
+
+    // Registrar auditoria (Onda 4)
+    await this.logDocumentAction(
+      organizationId,
+      documentId,
+      email,
+      'movido_pasta',
+      folderId ? `Movido para pasta ID: ${folderId}` : 'Movido para o diretório raiz'
+    );
   },
 
   // ─── FLUXO DE APROVAÇÃO E WORKFLOWS ──────────────────────────
@@ -914,11 +961,20 @@ export const documentService = {
     try {
       const { data: doc } = await supabase
         .from('opura_documents')
-        .select('nome, categoria')
+        .select('nome, categoria, organization_id')
         .eq('id', documentId)
         .single();
 
       if (doc) {
+        // Registrar auditoria (Onda 4)
+        await this.logDocumentAction(
+          doc.organization_id,
+          documentId,
+          requestedByEmail,
+          'status_alterado',
+          `Solicitada revisão de aprovação ao revisor: ${approverEmail}`
+        );
+
         await notificationService.sendNotification({
           recipientEmail: approverEmail,
           title: 'Aprovação de Documento Pendente',
@@ -967,11 +1023,20 @@ export const documentService = {
     try {
       const { data: doc } = await supabase
         .from('opura_documents')
-        .select('nome, categoria')
+        .select('nome, categoria, organization_id')
         .eq('id', approval.document_id)
         .single();
 
       if (doc) {
+        // Registrar auditoria (Onda 4)
+        await this.logDocumentAction(
+          doc.organization_id,
+          approval.document_id,
+          approval.approver_email,
+          'status_alterado',
+          `Documento Aprovado. Comentários: ${feedback || 'Sem observações'}`
+        );
+
         await notificationService.sendNotification({
           recipientEmail: approval.requested_by,
           title: 'Documento Aprovado',
@@ -1022,11 +1087,20 @@ export const documentService = {
     try {
       const { data: doc } = await supabase
         .from('opura_documents')
-        .select('nome, categoria')
+        .select('nome, categoria, organization_id')
         .eq('id', approval.document_id)
         .single();
 
       if (doc) {
+        // Registrar auditoria (Onda 4)
+        await this.logDocumentAction(
+          doc.organization_id,
+          approval.document_id,
+          approval.approver_email,
+          'status_alterado',
+          `Documento Rejeitado. Justificativa: ${feedback.trim()}`
+        );
+
         await notificationService.sendNotification({
           recipientEmail: approval.requested_by,
           title: 'Documento Rejeitado',
@@ -1084,5 +1158,42 @@ export const documentService = {
     }
 
     return (data || []) as OpuraDocumentApproval[];
+  },
+
+  async logDocumentAction(
+    organizationId: string,
+    documentId: string,
+    email: string,
+    action: 'criado' | 'versao_enviada' | 'download' | 'visualizado' | 'movido_pasta' | 'status_alterado',
+    details?: string
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('opura_document_audit_logs')
+      .insert({
+        organization_id: organizationId,
+        document_id: documentId,
+        user_email: email,
+        action,
+        details: details || null
+      });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao registrar log de auditoria do documento:', error);
+    }
+  },
+
+  async listAuditLogsForDocument(documentId: string): Promise<OpuraDocumentAuditLog[]> {
+    const { data, error } = await supabase
+      .from('opura_document_audit_logs')
+      .select('*')
+      .eq('document_id', documentId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao carregar logs de auditoria:', error);
+      throw new Error(`Erro ao carregar histórico: ${error.message}`);
+    }
+
+    return (data || []) as OpuraDocumentAuditLog[];
   },
 };

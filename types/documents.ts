@@ -94,3 +94,13 @@ export type OpuraDocumentApprovalInsert = Omit<
   OpuraDocumentApproval,
   'id' | 'created_at' | 'updated_at' | 'document'
 >;
+
+export interface OpuraDocumentAuditLog {
+  id: string;
+  organization_id: string;
+  document_id: string;
+  user_email: string;
+  action: 'criado' | 'versao_enviada' | 'download' | 'visualizado' | 'movido_pasta' | 'status_alterado';
+  details?: string;
+  created_at: string;
+}

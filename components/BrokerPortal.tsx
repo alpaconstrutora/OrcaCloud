@@ -233,6 +233,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                         organizationId={initialOrgId || selectedOrgId}
                         activeTab={currentTab}
                         isPreview
+                        initialBroker={selectedAdminBroker ?? undefined}
                     />
                 </MobilePreviewFrame>
             )}

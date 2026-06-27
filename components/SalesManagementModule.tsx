@@ -73,6 +73,19 @@ const SalesManagementModule: React.FC<Props> = ({
   // Broker internal tab — preserva quando sourceView indica sub-aba
   const brokerInternalTab = sourceView ? (BROKER_INTERNAL_TAB[sourceView] ?? 'estoque') : 'estoque'
 
+  // Portal do Corretor é acesso externo — renderiza sem a barra de abas internas
+  if (activeTab === 'corretores') {
+    return (
+      <Suspense fallback={<Spinner />}>
+        <BrokerPortal
+          profile={profile}
+          organizationId={organizationId}
+          activeTab={brokerInternalTab as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'}
+        />
+      </Suspense>
+    )
+  }
+
   return (
     <div className="space-y-0">
       {/* Barra de abas */}
@@ -107,14 +120,6 @@ const SalesManagementModule: React.FC<Props> = ({
 
           {activeTab === 'alugueis' && (
             <RentalsModule organizationId={organizationId} />
-          )}
-
-          {activeTab === 'corretores' && (
-            <BrokerPortal
-              profile={profile}
-              organizationId={organizationId}
-              activeTab={brokerInternalTab as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'}
-            />
           )}
 
           {activeTab === 'crm' && (

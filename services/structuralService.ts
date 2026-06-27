@@ -324,5 +324,270 @@ export const structuralService = {
     if (error) throw error
     return data as OpuraStructuralCalculationRevision
   },
+
+  async syncCalculatedRebars(
+    orgId: string,
+    structuralElementId: string,
+    tipo: 'VIGA' | 'PILAR' | 'LAJE' | 'SAPATA' | 'VIGA_BALDRAME',
+    geometria: Record<string, any>,
+    result: any
+  ): Promise<void> {
+    if (!structuralElementId) return
+
+    // 1. Busca catálogo de aço da organização
+    const catalog = await this.listSteelCatalog(orgId)
+    const findBitolaId = (bitolaMm: number, tipoAço = 'CA-50') => {
+      const match = catalog.find(
+        item => Math.abs(item.bitola_mm - bitolaMm) < 0.05 && item.tipo === tipoAço
+      )
+      if (match) return match.id
+      const matchApprox = catalog.find(
+        item => Math.abs(item.bitola_mm - bitolaMm) < 0.05
+      )
+      if (matchApprox) return matchApprox.id
+      return catalog[0]?.id || ''
+    }
+
+    // 2. Limpa as armaduras antigas associadas ao elemento
+    const { error: deleteError } = await supabase
+      .from('structural_rebars')
+      .delete()
+      .eq('element_id', structuralElementId)
+
+    if (deleteError) throw deleteError
+
+    const rebars: any[] = []
+    const cobrimentoCm = geometria.cobrimentoCm ?? 3
+    const isContinua = tipo === 'VIGA' && Number(geometria.isContinua ?? 0) === 1
+
+    // 3. Mapeamento das armaduras calculadas
+    if (tipo === 'VIGA' || tipo === 'VIGA_BALDRAME') {
+      if (isContinua) {
+        const v1 = result.armaduraSugerida?.longitudinalVao1
+        const ap = result.armaduraSugerida?.longitudinalApoio
+        const v2 = result.armaduraSugerida?.longitudinalVao2
+        const trans = result.armaduraSugerida?.transversal
+
+        const L1 = geometria.L1M ?? 4.0
+        const L2 = geometria.L2M ?? 4.0
+        const compTotalViga = (L1 + L2) * 100
+
+        if (v1 && v1.quantidade > 0) {
+          rebars.push({
+            org_id: orgId,
+            element_id: structuralElementId,
+            bitola_id: findBitolaId(v1.bitolaMm, 'CA-50'),
+            funcao: 'longitudinal',
+            posicao: 1,
+            quantidade: v1.quantidade,
+            comprimento_unit_cm: Math.round(L1 * 100 + 20),
+            formato_dobra: 'reta',
+            dobras: []
+          })
+        }
+
+        if (ap && ap.quantidade > 0) {
+          const compNeg = (L1 / 3 + L2 / 3) * 100
+          rebars.push({
+            org_id: orgId,
+            element_id: structuralElementId,
+            bitola_id: findBitolaId(ap.bitolaMm, 'CA-50'),
+            funcao: 'longitudinal',
+            posicao: 2,
+            quantidade: ap.quantidade,
+            comprimento_unit_cm: Math.round(compNeg),
+            formato_dobra: 'reta',
+            dobras: []
+          })
+        }
+
+        if (v2 && v2.quantidade > 0) {
+          rebars.push({
+            org_id: orgId,
+            element_id: structuralElementId,
+            bitola_id: findBitolaId(v2.bitolaMm, 'CA-50'),
+            funcao: 'longitudinal',
+            posicao: 3,
+            quantidade: v2.quantidade,
+            comprimento_unit_cm: Math.round(L2 * 100 + 20),
+            formato_dobra: 'reta',
+            dobras: []
+          })
+        }
+
+        if (trans && trans.espaçamentoCm > 0) {
+          const qtd = Math.ceil(compTotalViga / trans.espaçamentoCm) + 1
+          const b = geometria.bCm ?? 15
+          const h = geometria.hCm ?? 40
+          const compEstribo = 2 * (b - 2 * cobrimentoCm) + 2 * (h - 2 * cobrimentoCm) + 10
+          rebars.push({
+            org_id: orgId,
+            element_id: structuralElementId,
+            bitola_id: findBitolaId(trans.bitolaMm, trans.bitolaMm <= 5.0 ? 'CA-60' : 'CA-50'),
+            funcao: 'estribo',
+            posicao: 4,
+            quantidade: qtd,
+            espacamento_cm: trans.espaçamentoCm,
+            comprimento_unit_cm: Math.round(compEstribo),
+            formato_dobra: 'estribo_fechado',
+            dobras: []
+          })
+        }
+      } else {
+        const long = result.armaduraSugerida?.longitudinal
+        const trans = result.armaduraSugerida?.transversal
+        const vaoM = geometria.comprimentoVaoM ?? 4.0
+
+        if (long && long.quantidade > 0) {
+          rebars.push({
+            org_id: orgId,
+            element_id: structuralElementId,
+            bitola_id: findBitolaId(long.bitolaMm, 'CA-50'),
+            funcao: 'longitudinal',
+            posicao: 1,
+            quantidade: long.quantidade,
+            comprimento_unit_cm: Math.round(vaoM * 100 + 30),
+            formato_dobra: 'reta',
+            dobras: []
+          })
+        }
+
+        if (trans && trans.espaçamentoCm > 0) {
+          const qtd = Math.ceil((vaoM * 100) / trans.espaçamentoCm) + 1
+          const b = geometria.bCm ?? 15
+          const h = geometria.hCm ?? 40
+          const compEstribo = 2 * (b - 2 * cobrimentoCm) + 2 * (h - 2 * cobrimentoCm) + 10
+          rebars.push({
+            org_id: orgId,
+            element_id: structuralElementId,
+            bitola_id: findBitolaId(trans.bitolaMm, trans.bitolaMm <= 5.0 ? 'CA-60' : 'CA-50'),
+            funcao: 'estribo',
+            posicao: 2,
+            quantidade: qtd,
+            espacamento_cm: trans.espaçamentoCm,
+            comprimento_unit_cm: Math.round(compEstribo),
+            formato_dobra: 'estribo_fechado',
+            dobras: []
+          })
+        }
+      }
+    } else if (tipo === 'PILAR') {
+      const long = result.armaduraSugerida?.longitudinal
+      const trans = result.armaduraSugerida?.transversal
+      const compM = geometria.comprimentoLivreM ?? 2.8
+
+      if (long && long.quantidade > 0) {
+        rebars.push({
+          org_id: orgId,
+          element_id: structuralElementId,
+          bitola_id: findBitolaId(long.bitolaMm, 'CA-50'),
+          funcao: 'longitudinal',
+          posicao: 1,
+          quantidade: long.quantidade,
+          comprimento_unit_cm: Math.round(compM * 100 + 60),
+          formato_dobra: 'reta',
+          dobras: []
+        })
+      }
+
+      if (trans && trans.espaçamentoCm > 0) {
+        const qtd = Math.ceil((compM * 100) / trans.espaçamentoCm) + 1
+        const b = geometria.bCm ?? 20
+        const h = geometria.hCm ?? 20
+        const compEstribo = 2 * (b - 2 * cobrimentoCm) + 2 * (h - 2 * cobrimentoCm) + 10
+        rebars.push({
+          org_id: orgId,
+          element_id: structuralElementId,
+          bitola_id: findBitolaId(trans.bitolaMm, trans.bitolaMm <= 5.0 ? 'CA-60' : 'CA-50'),
+          funcao: 'estribo',
+          posicao: 2,
+          quantidade: qtd,
+          espacamento_cm: trans.espaçamentoCm,
+          comprimento_unit_cm: Math.round(compEstribo),
+          formato_dobra: 'estribo_fechado',
+          dobras: []
+        })
+      }
+    } else if (tipo === 'LAJE') {
+      const flex = result.armaduraSugerida?.flexao
+      const lx = geometria.lxM ?? 3.5
+      const ly = geometria.lyM ?? 4.0
+
+      if (flex && flex.espaçamentoCm > 0) {
+        const qtdX = Math.ceil((ly * 100) / flex.espaçamentoCm) + 1
+        const qtdY = Math.ceil((lx * 100) / flex.espaçamentoCm) + 1
+
+        rebars.push({
+          org_id: orgId,
+          element_id: structuralElementId,
+          bitola_id: findBitolaId(flex.bitolaMm, 'CA-50'),
+          funcao: 'longitudinal',
+          posicao: 1,
+          quantidade: qtdX,
+          espacamento_cm: flex.espaçamentoCm,
+          comprimento_unit_cm: Math.round(lx * 100 + 15),
+          formato_dobra: 'reta',
+          dobras: []
+        })
+
+        rebars.push({
+          org_id: orgId,
+          element_id: structuralElementId,
+          bitola_id: findBitolaId(flex.bitolaMm, 'CA-50'),
+          funcao: 'distribuicao',
+          posicao: 2,
+          quantidade: qtdY,
+          espacamento_cm: flex.espaçamentoCm,
+          comprimento_unit_cm: Math.round(ly * 100 + 15),
+          formato_dobra: 'reta',
+          dobras: []
+        })
+      }
+    } else if (tipo === 'SAPATA') {
+      const dirA = result.armaduraSugerida?.direcaoA
+      const dirB = result.armaduraSugerida?.direcaoB
+      const aSap = result.detalhesTecnicos?.dimensaoACm ?? 100
+      const bSap = result.detalhesTecnicos?.dimensaoBCm ?? 100
+      const hSap = geometria.hCm ?? 30
+
+      if (dirA && dirA.quantidade > 0) {
+        rebars.push({
+          org_id: orgId,
+          element_id: structuralElementId,
+          bitola_id: findBitolaId(dirA.bitolaMm, 'CA-50'),
+          funcao: 'longitudinal',
+          posicao: 1,
+          quantidade: dirA.quantidade,
+          comprimento_unit_cm: Math.round(aSap + 2 * (hSap - 5)),
+          formato_dobra: 'reta',
+          dobras: []
+        })
+      }
+
+      if (dirB && dirB.quantidade > 0) {
+        rebars.push({
+          org_id: orgId,
+          element_id: structuralElementId,
+          bitola_id: findBitolaId(dirB.bitolaMm, 'CA-50'),
+          funcao: 'distribuicao',
+          posicao: 2,
+          quantidade: dirB.quantidade,
+          comprimento_unit_cm: Math.round(bSap + 2 * (hSap - 5)),
+          formato_dobra: 'reta',
+          dobras: []
+        })
+      }
+    }
+
+    // 4. Insere todas as armaduras calculadas
+    if (rebars.length > 0) {
+      const { error: insertError } = await supabase
+        .from('structural_rebars')
+        .insert(rebars)
+
+      if (insertError) throw insertError
+    }
+  },
 }
+
 

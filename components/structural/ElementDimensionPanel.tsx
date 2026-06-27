@@ -229,7 +229,18 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
         calculado_por: project.responsavel_tecnico
       })
 
-      alert('Dimensionamento salvo com sucesso!')
+      // 4.3 Sincroniza armaduras com a tabela de ferragem armada do elemento se vinculado
+      if (element.structural_element_id) {
+        await structuralService.syncCalculatedRebars(
+          element.organization_id,
+          element.structural_element_id,
+          element.tipo,
+          geometria,
+          result
+        )
+      }
+
+      alert('Dimensionamento e armaduras da obra salvos com sucesso!')
     } catch (err) {
       console.error('Erro ao salvar:', err)
       alert('Erro ao salvar rodada de dimensionamento.')

@@ -9,7 +9,10 @@ import {
   OpuraAssetMovementInsert,
   OpuraAssetReservation,
   OpuraAssetReservationInsert,
-  OpuraAssetReservationUpdate
+  OpuraAssetReservationUpdate,
+  OpuraAssetMaintenance,
+  OpuraAssetMaintenanceInsert,
+  OpuraAssetMaintenanceUpdate
 } from '../types';
 
 export const assetService = {
@@ -310,6 +313,131 @@ export const assetService = {
     if (error) {
       console.error(`[AssetService] Error canceling reservation ${reservationId}:`, error);
       throw new Error(`Falha ao cancelar reserva: ${error.message}`);
+    }
+  },
+
+  // MANUTENÇÕES
+  async listMaintenances(organizationId?: string): Promise<OpuraAssetMaintenance[]> {
+    let query = supabase.from('opura_asset_maintenances').select('*').order('scheduled_date', { ascending: false });
+
+    if (organizationId) {
+      query = query.eq('organization_id', organizationId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('[AssetService] Error listing maintenances:', error);
+      throw new Error(`Falha ao listar manutenções: ${error.message}`);
+    }
+    return data || [];
+  },
+
+  async createMaintenance(maintenance: OpuraAssetMaintenanceInsert): Promise<OpuraAssetMaintenance> {
+    const { data, error } = await supabase
+      .from('opura_asset_maintenances')
+      .insert(maintenance)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[AssetService] Error creating maintenance:', error);
+      throw new Error(`Falha ao cadastrar manutenção: ${error.message}`);
+    }
+
+    // Se a manutenção entrar direto "em_execucao", altera o status do ativo para "manutencao"
+    if (maintenance.status === 'em_execucao') {
+      try {
+        await supabase
+          .from('opura_assets')
+          .update({ status: 'manutencao' })
+          .eq('id', maintenance.asset_id);
+      } catch (err) {
+        console.error('[AssetService] Error updating asset status on maintenance create:', err);
+      }
+    }
+
+    return data;
+  },
+
+  async updateMaintenance(id: string, updates: OpuraAssetMaintenanceUpdate): Promise<OpuraAssetMaintenance> {
+    const { data, error } = await supabase
+      .from('opura_asset_maintenances')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`[AssetService] Error updating maintenance ${id}:`, error);
+      throw new Error(`Falha ao atualizar manutenção: ${error.message}`);
+    }
+
+    // Se mudou para em_execucao, coloca o ativo em manutencao
+    if (updates.status === 'em_execucao') {
+      try {
+        await supabase
+          .from('opura_assets')
+          .update({ status: 'manutencao' })
+          .eq('id', data.asset_id);
+      } catch (err) {
+        console.error('[AssetService] Error updating asset status to maintenance:', err);
+      }
+    } 
+    // Se foi concluída ou cancelada, e o ativo está no status de manutencao, libera ele
+    else if (updates.status === 'concluida' || updates.status === 'cancelada') {
+      try {
+        const { data: asset } = await supabase
+          .from('opura_assets')
+          .select('status')
+          .eq('id', data.asset_id)
+          .single();
+        if (asset && asset.status === 'manutencao') {
+          await supabase
+            .from('opura_assets')
+            .update({ status: 'disponivel' })
+            .eq('id', data.asset_id);
+        }
+      } catch (err) {
+        console.error('[AssetService] Error releasing asset status after maintenance:', err);
+      }
+    }
+
+    return data;
+  },
+
+  async deleteMaintenance(id: string): Promise<void> {
+    const { data: maint } = await supabase
+      .from('opura_asset_maintenances')
+      .select('asset_id, status')
+      .eq('id', id)
+      .maybeSingle();
+
+    const { error } = await supabase
+      .from('opura_asset_maintenances')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error(`[AssetService] Error deleting maintenance ${id}:`, error);
+      throw new Error(`Falha ao excluir manutenção: ${error.message}`);
+    }
+
+    if (maint && maint.status === 'em_execucao') {
+      try {
+        const { data: asset } = await supabase
+          .from('opura_assets')
+          .select('status')
+          .eq('id', maint.asset_id)
+          .single();
+        if (asset && asset.status === 'manutencao') {
+          await supabase
+            .from('opura_assets')
+            .update({ status: 'disponivel' })
+            .eq('id', maint.asset_id);
+        }
+      } catch (err) {
+        console.error('[AssetService] Error releasing asset status after deleting maintenance:', err);
+      }
     }
   }
 };

@@ -36,7 +36,10 @@ import {
   AssetCategory,
   AssetStatus,
   OpuraAssetMovement,
-  OpuraAssetReservation
+  OpuraAssetReservation,
+  OpuraAssetMaintenance,
+  MaintenanceType,
+  MaintenanceStatus
 } from '../types';
 
 interface OpuraAssetsModuleProps {
@@ -51,13 +54,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const { projects } = useStore();
   
   // Tabs e UI States
-  const [activeTab, setActiveTab] = React.useState<'dashboard' | 'bens' | 'reservas'>('dashboard');
+  const [activeTab, setActiveTab] = React.useState<'dashboard' | 'bens' | 'reservas' | 'manutencoes'>('dashboard');
   const [loading, setLoading] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
   
   // Dados do banco
   const [assets, setAssets] = React.useState<OpuraAsset[]>([]);
   const [reservations, setReservations] = React.useState<OpuraAssetReservation[]>([]);
+  const [maintenances, setMaintenances] = React.useState<OpuraAssetMaintenance[]>([]);
   
   // Estado de Visualização/Ação de Ativo Específico
   const [selectedAsset, setSelectedAsset] = React.useState<OpuraAsset | null>(null);
@@ -69,6 +73,11 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
   const [editingAssetId, setEditingAssetId] = React.useState<string | null>(null);
   const [isDuplicate, setIsDuplicate] = React.useState<boolean>(false);
+
+  // Modais de Manutenção
+  const [isNewMaintModalOpen, setIsNewMaintModalOpen] = React.useState(false);
+  const [isFinishMaintModalOpen, setIsFinishMaintModalOpen] = React.useState(false);
+  const [selectedMaintenance, setSelectedMaintenance] = React.useState<OpuraAssetMaintenance | null>(null);
 
   // Estados dos Formulários
   const [assetForm, setAssetForm] = React.useState({
@@ -99,10 +108,34 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     notes: ''
   });
 
+  const [maintForm, setMaintForm] = React.useState({
+    asset_id: '',
+    type: 'preventiva' as MaintenanceType,
+    description: '',
+    scheduled_date: new Date().toISOString().split('T')[0],
+    cost: '' as string | number,
+    status: 'agendada' as MaintenanceStatus,
+    current_odometer: '' as string | number,
+    current_hourmeter: '' as string | number
+  });
+
+  const [finishMaintForm, setFinishMaintForm] = React.useState({
+    cost: '' as string | number,
+    executed_date: new Date().toISOString().split('T')[0],
+    current_odometer: '' as string | number,
+    current_hourmeter: '' as string | number,
+    notes: ''
+  });
+
   // Filtros de listagem
   const [searchQuery, setSearchQuery] = React.useState('');
   const [filterCategory, setFilterCategory] = React.useState<string>('todos');
   const [filterStatus, setFilterStatus] = React.useState<string>('todos');
+
+  // Filtros de manutenção
+  const [maintSearchQuery, setMaintSearchQuery] = React.useState('');
+  const [filterMaintType, setFilterMaintType] = React.useState<string>('todos');
+  const [filterMaintStatus, setFilterMaintStatus] = React.useState<string>('todos');
 
   // Carregar dados
   const loadData = React.useCallback(async () => {
@@ -114,6 +147,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       
       const loadedRes = await assetService.listReservations(activeOrganizationId);
       setReservations(loadedRes);
+
+      const loadedMaint = await assetService.listMaintenances(activeOrganizationId);
+      setMaintenances(loadedMaint);
     } catch (err) {
       console.error('[OpuraAssetsModule] Erro ao carregar dados:', err);
     } finally {
@@ -348,6 +384,140 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     }
   };
 
+  // Cadastrar Nova Ordem de Manutenção
+  const handleCreateMaintenance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeOrganizationId) return;
+    if (!maintForm.asset_id) {
+      alert('Por favor, selecione um ativo para realizar a manutenção.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await assetService.createMaintenance({
+        organization_id: activeOrganizationId,
+        asset_id: maintForm.asset_id,
+        type: maintForm.type,
+        description: maintForm.description,
+        status: maintForm.status,
+        scheduled_date: maintForm.scheduled_date,
+        cost: Number(maintForm.cost) || 0,
+        current_odometer: maintForm.current_odometer ? Number(maintForm.current_odometer) : undefined,
+        current_hourmeter: maintForm.current_hourmeter ? Number(maintForm.current_hourmeter) : undefined
+      });
+      alert('Ordem de manutenção agendada com sucesso!');
+      setIsNewMaintModalOpen(false);
+      setMaintForm({
+        asset_id: '',
+        type: 'preventiva',
+        description: '',
+        scheduled_date: new Date().toISOString().split('T')[0],
+        cost: 0,
+        status: 'agendada',
+        current_odometer: '',
+        current_hourmeter: ''
+      });
+      loadData();
+    } catch (err: any) {
+      alert(`Erro ao cadastrar manutenção: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Iniciar Manutenção (muda status para em_execucao e ativo para 'manutencao')
+  const handleStartMaintenance = async (maint: OpuraAssetMaintenance) => {
+    if (!window.confirm('Confirmar o início desta manutenção? O ativo ficará indisponível e marcado como "Em Manutenção".')) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await assetService.updateMaintenance(maint.id, {
+        status: 'em_execucao'
+      });
+      alert('Manutenção iniciada com sucesso!');
+      loadData();
+    } catch (err: any) {
+      alert(`Erro ao iniciar manutenção: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Prepara o fechamento abrindo o modal de preenchimento
+  const handleOpenFinishMaintModal = (maint: OpuraAssetMaintenance) => {
+    setSelectedMaintenance(maint);
+    setFinishMaintForm({
+      cost: maint.cost || '',
+      executed_date: new Date().toISOString().split('T')[0],
+      current_odometer: maint.current_odometer || '',
+      current_hourmeter: maint.current_hourmeter || '',
+      notes: ''
+    });
+    setIsFinishMaintModalOpen(true);
+  };
+
+  // Concluir Manutenção (registra data real, custo final e libera o ativo)
+  const handleFinalizeMaintenance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMaintenance) return;
+    setActionLoading(true);
+    try {
+      await assetService.updateMaintenance(selectedMaintenance.id, {
+        status: 'concluida',
+        cost: Number(finishMaintForm.cost) || 0,
+        executed_date: finishMaintForm.executed_date,
+        current_odometer: finishMaintForm.current_odometer ? Number(finishMaintForm.current_odometer) : undefined,
+        current_hourmeter: finishMaintForm.current_hourmeter ? Number(finishMaintForm.current_hourmeter) : undefined,
+        checklist_responses: finishMaintForm.notes ? { observacoes_fechamento: finishMaintForm.notes } : undefined
+      });
+      alert('Manutenção concluída com sucesso! O ativo retornou ao estoque disponível.');
+      setIsFinishMaintModalOpen(false);
+      setSelectedMaintenance(null);
+      loadData();
+    } catch (err: any) {
+      alert(`Erro ao finalizar manutenção: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Cancelar Manutenção
+  const handleCancelMaintenance = async (maintId: string) => {
+    if (!window.confirm('Tem certeza que deseja cancelar esta manutenção?')) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await assetService.updateMaintenance(maintId, {
+        status: 'cancelada'
+      });
+      alert('Manutenção cancelada com sucesso!');
+      loadData();
+    } catch (err: any) {
+      alert(`Erro ao cancelar manutenção: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Excluir Manutenção
+  const handleDeleteMaintenance = async (maintId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta manutenção do histórico? Esta ação é irreversível.')) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await assetService.deleteMaintenance(maintId);
+      alert('Registro de manutenção excluído com sucesso!');
+      loadData();
+    } catch (err: any) {
+      alert(`Erro ao excluir manutenção: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Calcular valor depreciado acumulado (Linear)
   const calculateDepreciation = (asset: OpuraAsset) => {
     if (!asset.purchase_date || !asset.useful_life_months) return { current: asset.purchase_value, depreciated: 0 };
@@ -432,7 +602,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 gap-6 overflow-x-auto">
-        {(['dashboard', 'bens', 'reservas'] as const).map(tab => (
+        {(['dashboard', 'bens', 'reservas', 'manutencoes'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -441,7 +611,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 ? 'border-blue-600 text-blue-600' 
                 : 'border-transparent text-gray-400 hover:text-gray-600'}`}
           >
-            {tab === 'bens' ? 'Ativos Patrimoniais' : tab === 'reservas' ? 'Reservas & Locação' : tab}
+            {tab === 'bens' ? 'Ativos Patrimoniais' : tab === 'reservas' ? 'Reservas & Locação' : tab === 'manutencoes' ? 'Manutenções' : tab}
           </button>
         ))}
       </div>
@@ -743,6 +913,25 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                           <Calendar className="w-3.5 h-3.5" />
                           Reservar
                         </button>
+                        <button
+                          onClick={() => {
+                            setMaintForm({
+                              asset_id: selectedAsset.id,
+                              type: 'preventiva',
+                              description: '',
+                              scheduled_date: new Date().toISOString().split('T')[0],
+                              cost: 0,
+                              status: 'agendada',
+                              current_odometer: '',
+                              current_hourmeter: ''
+                            });
+                            setIsNewMaintModalOpen(true);
+                          }}
+                          className="flex-1 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Wrench className="w-3.5 h-3.5" />
+                          Manutenção
+                        </button>
                       </div>
 
                       <div className="flex gap-2">
@@ -943,6 +1132,223 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   <p className="font-semibold text-sm">Nenhuma solicitação ou reserva ativa registrada.</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 3.5. TAB: MANUTENÇÕES */}
+          {activeTab === 'manutencoes' && (
+            <div className="space-y-6">
+              {/* Header Interno e Métricas Rápidas */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-28 hover:shadow-lg hover:border-blue-100 transition-all">
+                  <div className="flex items-center justify-between text-gray-400">
+                    <span className="text-[10px] font-black uppercase tracking-widest">Total Gasto em Oficina</span>
+                    <DollarSign className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-800">
+                    R$ {maintenances.reduce((acc, m) => acc + (m.cost || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+
+                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-28 hover:shadow-lg hover:border-blue-100 transition-all">
+                  <div className="flex items-center justify-between text-gray-400">
+                    <span className="text-[10px] font-black uppercase tracking-widest">Em Oficina</span>
+                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-800">
+                    {maintenances.filter(m => m.status === 'em_execucao').length} ordens
+                  </h3>
+                </div>
+
+                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-28 hover:shadow-lg hover:border-blue-100 transition-all">
+                  <div className="flex items-center justify-between text-gray-400">
+                    <span className="text-[10px] font-black uppercase tracking-widest">Próximas Agendadas</span>
+                    <Calendar className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-800">
+                    {maintenances.filter(m => m.status === 'agendada').length} agendamentos
+                  </h3>
+                </div>
+              </div>
+
+              {/* Seção Filtros e Botão Agendar */}
+              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="relative flex-1 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 flex items-center gap-2">
+                    <Search className="w-4 h-4 text-gray-400" />
+                    <input
+                      value={maintSearchQuery}
+                      onChange={(e) => setMaintSearchQuery(e.target.value)}
+                      placeholder="Pesquisar descrição do serviço ou ativo..."
+                      className="bg-transparent border-none outline-none text-sm w-full font-medium"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 shrink-0">
+                    <select
+                      value={filterMaintType}
+                      onChange={(e) => setFilterMaintType(e.target.value)}
+                      className="px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 bg-white"
+                    >
+                      <option value="todos">Todos Tipos</option>
+                      <option value="preventiva">Preventiva</option>
+                      <option value="corretiva">Corretiva</option>
+                      <option value="calibracao">Calibração</option>
+                    </select>
+
+                    <select
+                      value={filterMaintStatus}
+                      onChange={(e) => setFilterMaintStatus(e.target.value)}
+                      className="px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 bg-white"
+                    >
+                      <option value="todos">Todos Status</option>
+                      <option value="agendada">Agendada</option>
+                      <option value="em_execucao">Em Oficina</option>
+                      <option value="concluida">Concluída</option>
+                      <option value="cancelada">Cancelada</option>
+                    </select>
+
+                    <button
+                      onClick={() => {
+                        setMaintForm({
+                          asset_id: selectedAsset?.id || '',
+                          type: 'preventiva',
+                          description: '',
+                          scheduled_date: new Date().toISOString().split('T')[0],
+                          cost: 0,
+                          status: 'agendada',
+                          current_odometer: '',
+                          current_hourmeter: ''
+                        });
+                        setIsNewMaintModalOpen(true);
+                      }}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-colors shadow-lg shadow-blue-900/10 active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Agendar Manutenção
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tabela de Manutenções */}
+                {maintenances.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider">
+                          <th className="py-3 px-4">Ativo</th>
+                          <th className="py-3 px-4">Tipo</th>
+                          <th className="py-3 px-4">Serviço / Descrição</th>
+                          <th className="py-3 px-4">Data Programada</th>
+                          <th className="py-3 px-4">Custo</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {maintenances
+                          .filter(m => {
+                            const asset = assets.find(a => a.id === m.asset_id);
+                            const matchesSearch = m.description.toLowerCase().includes(maintSearchQuery.toLowerCase()) ||
+                              (asset && asset.name.toLowerCase().includes(maintSearchQuery.toLowerCase())) ||
+                              (asset && asset.code.toLowerCase().includes(maintSearchQuery.toLowerCase()));
+
+                            const matchesType = filterMaintType === 'todos' || m.type === filterMaintType;
+                            const matchesStatus = filterMaintStatus === 'todos' || m.status === filterMaintStatus;
+
+                            return matchesSearch && matchesType && matchesStatus;
+                          })
+                          .map(m => {
+                            const asset = assets.find(a => a.id === m.asset_id);
+                            
+                            const statusMaintBadgeClass = 
+                              m.status === 'concluida' ? 'bg-emerald-500/10 text-emerald-600' :
+                              m.status === 'em_execucao' ? 'bg-amber-500/10 text-amber-600' :
+                              m.status === 'agendada' ? 'bg-blue-500/10 text-blue-600' :
+                              m.status === 'cancelada' ? 'bg-rose-500/10 text-rose-600' :
+                              'bg-gray-150 text-gray-400 bg-gray-100/85';
+
+                            const typeLabel = 
+                              m.type === 'preventiva' ? 'Preventiva' :
+                              m.type === 'corretiva' ? 'Corretiva' : 'Calibração';
+
+                            return (
+                              <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                                <td className="py-3 px-4 font-bold text-gray-800">
+                                  <div>
+                                    <p>{asset?.name || 'Ativo Desconhecido'}</p>
+                                    <p className="text-[10px] text-gray-400 font-semibold">{asset?.code || ''}</p>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 font-semibold uppercase text-[10px] text-gray-600">{typeLabel}</td>
+                                <td className="py-3 px-4 text-gray-600 font-medium max-w-[240px] truncate" title={m.description}>{m.description}</td>
+                                <td className="py-3 px-4 text-gray-500">{new Date(m.scheduled_date).toLocaleDateString('pt-BR')}</td>
+                                <td className="py-3 px-4 font-bold text-gray-700">R$ {m.cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                <td className="py-3 px-4">
+                                  <span className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase ${statusMaintBadgeClass}`}>
+                                    {m.status === 'em_execucao' ? 'Em Oficina' : m.status}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <div className="flex justify-end items-center gap-1.5">
+                                    {m.status === 'agendada' && (
+                                      <>
+                                        <button
+                                          onClick={() => handleStartMaintenance(m)}
+                                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-md font-bold text-[10px] uppercase transition-colors"
+                                          title="Iniciar execução da manutenção"
+                                        >
+                                          Iniciar
+                                        </button>
+                                        <button
+                                          onClick={() => handleCancelMaintenance(m.id)}
+                                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-[10px] uppercase transition-colors"
+                                          title="Cancelar manutenção agendada"
+                                        >
+                                          Cancelar
+                                        </button>
+                                      </>
+                                    )}
+                                    {m.status === 'em_execucao' && (
+                                      <>
+                                        <button
+                                          onClick={() => handleOpenFinishMaintModal(m)}
+                                          className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-md font-bold text-[10px] uppercase transition-colors"
+                                          title="Concluir manutenção e liberar ativo"
+                                        >
+                                          Concluir
+                                        </button>
+                                        <button
+                                          onClick={() => handleCancelMaintenance(m.id)}
+                                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-[10px] uppercase transition-colors"
+                                          title="Cancelar manutenção em andamento"
+                                        >
+                                          Cancelar
+                                        </button>
+                                      </>
+                                    )}
+                                    <button
+                                      onClick={() => handleDeleteMaintenance(m.id)}
+                                      className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all"
+                                      title="Excluir do histórico"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="py-20 text-center text-gray-400">
+                    <Wrench className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                    <p className="font-semibold text-sm">Nenhuma ordem de manutenção registrada.</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1361,6 +1767,255 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         activeOrganizationId={activeOrganizationId}
         existingAssets={assets}
       />
+
+      {/* 9. MODAL: CADASTRAR NOVA MANUTENÇÃO */}
+      {isNewMaintModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto space-y-6 relative animate-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setIsNewMaintModalOpen(false)}
+              className="absolute right-4 top-4 p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div>
+              <h3 className="font-bold text-gray-800 text-lg">Agendar Ordem de Manutenção</h3>
+              <p className="text-gray-400 text-xs">Abra ou agende uma intervenção corretiva ou preventiva em um bem.</p>
+            </div>
+
+            <form onSubmit={handleCreateMaintenance} className="space-y-4 text-xs font-semibold">
+              <div className="space-y-1">
+                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Ativo Patrimonial</label>
+                {selectedAsset ? (
+                  <div className="w-full px-4 py-2.5 border border-gray-150 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm">
+                    {selectedAsset.name} ({selectedAsset.code})
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={maintForm.asset_id}
+                    onChange={(e) => setMaintForm(prev => ({ ...prev, asset_id: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  >
+                    <option value="">Selecione o Ativo...</option>
+                    {assets.map(a => (
+                      <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Tipo de Manutenção</label>
+                  <select
+                    value={maintForm.type}
+                    onChange={(e) => setMaintForm(prev => ({ ...prev, type: e.target.value as MaintenanceType }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  >
+                    <option value="preventiva">Preventiva</option>
+                    <option value="corretiva">Corretiva</option>
+                    <option value="calibracao">Calibração</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Status Inicial</label>
+                  <select
+                    value={maintForm.status}
+                    onChange={(e) => setMaintForm(prev => ({ ...prev, status: e.target.value as MaintenanceStatus }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  >
+                    <option value="agendada">Agendada</option>
+                    <option value="em_execucao">Em Oficina (Em Execução)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Descrição do Serviço / Sintomas</label>
+                <textarea
+                  required
+                  value={maintForm.description}
+                  onChange={(e) => setMaintForm(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-4 py-2 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold h-20 resize-none"
+                  placeholder="Descreva detalhadamente o serviço ou as falhas apresentadas..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Data Agendada</label>
+                  <input
+                    type="date"
+                    required
+                    value={maintForm.scheduled_date}
+                    onChange={(e) => setMaintForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Custo Estimado (R$)</label>
+                  <input
+                    type="number"
+                    value={maintForm.cost || ''}
+                    onChange={(e) => setMaintForm(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    placeholder="Opcional"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Odômetro Inicial (Km)</label>
+                  <input
+                    type="number"
+                    value={maintForm.current_odometer || ''}
+                    onChange={(e) => setMaintForm(prev => ({ ...prev, current_odometer: parseInt(e.target.value, 10) || '' }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    placeholder="Se aplicável a frotas"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Horímetro Inicial (Horas)</label>
+                  <input
+                    type="number"
+                    value={maintForm.current_hourmeter || ''}
+                    onChange={(e) => setMaintForm(prev => ({ ...prev, current_hourmeter: parseInt(e.target.value, 10) || '' }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    placeholder="Se aplicável a máquinas pesadas"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsNewMaintModalOpen(false)}
+                  className="px-5 py-2.5 border border-gray-200 text-gray-500 rounded-xl hover:bg-gray-50 font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
+                >
+                  {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Confirmar Abertura
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 10. MODAL: CONCLUIR MANUTENÇÃO */}
+      {isFinishMaintModalOpen && selectedMaintenance && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-2xl w-full max-w-md relative animate-in zoom-in-95 duration-200 space-y-6">
+            <button
+              onClick={() => setIsFinishMaintModalOpen(false)}
+              className="absolute right-4 top-4 p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div>
+              <h3 className="font-bold text-gray-800 text-lg">Concluir Ordem de Manutenção</h3>
+              <p className="text-gray-400 text-xs">Lance os dados reais finais para fechar a ordem de serviço e liberar o bem.</p>
+            </div>
+
+            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl text-xs space-y-1.5">
+              <p className="text-gray-400 font-bold uppercase tracking-wider text-[8px]">Descrição do Serviço</p>
+              <p className="font-bold text-gray-700">{selectedMaintenance.description}</p>
+            </div>
+
+            <form onSubmit={handleFinalizeMaintenance} className="space-y-4 text-xs font-semibold">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Data de Execução Real</label>
+                  <input
+                    type="date"
+                    required
+                    value={finishMaintForm.executed_date}
+                    onChange={(e) => setFinishMaintForm(prev => ({ ...prev, executed_date: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Custo Real Final (R$)</label>
+                  <input
+                    type="number"
+                    required
+                    value={finishMaintForm.cost || ''}
+                    onChange={(e) => setFinishMaintForm(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    placeholder="Custo real final do serviço"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Odômetro Final (Km)</label>
+                  <input
+                    type="number"
+                    value={finishMaintForm.current_odometer || ''}
+                    onChange={(e) => setFinishMaintForm(prev => ({ ...prev, current_odometer: parseInt(e.target.value, 10) || '' }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    placeholder="Opcional"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Horímetro Final (Horas)</label>
+                  <input
+                    type="number"
+                    value={finishMaintForm.current_hourmeter || ''}
+                    onChange={(e) => setFinishMaintForm(prev => ({ ...prev, current_hourmeter: parseInt(e.target.value, 10) || '' }))}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    placeholder="Opcional"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Notas de Encerramento</label>
+                <textarea
+                  value={finishMaintForm.notes}
+                  onChange={(e) => setFinishMaintForm(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full px-4 py-2 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold h-20 resize-none"
+                  placeholder="Ex: Peças trocadas, garantia de 3 meses da oficina autorizada..."
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsFinishMaintModalOpen(false)}
+                  className="px-5 py-2.5 border border-gray-200 text-gray-500 rounded-xl hover:bg-gray-50 font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
+                >
+                  {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Concluir Manutenção
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

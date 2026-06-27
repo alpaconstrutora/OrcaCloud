@@ -282,61 +282,92 @@ export function dimensionarPilar(params: {
   const fydKnc2 = fyd / 10
   const fcdKnc2 = fcd / 10
 
-  // 1. Verificação de Esbeltez
+  const ac = bCm * hCm // área da seção em cm²
   const menorLado = Math.min(bCm, hCm)
   const le = comprimentoLivreM * 100 // cm
   const lambda = (le * Math.sqrt(12)) / menorLado // esbeltez para pilar retangular
-  let esbeltezStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
-  let esbeltezMsg = 'Pilar classificado como curto (sem efeitos de 2ª ordem).'
 
-  if (lambda >= 90) {
+  // 1. Esbeltez e Classificação
+  let esbeltezStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  let esbeltezMsg = 'Pilar curto (efeitos de 2ª ordem locais desprezíveis).'
+
+  if (lambda > 90) {
     esbeltezStatus = 'REPROVADO'
-    esbeltezMsg = `Esbeltez muito alta (λ = ${lambda.toFixed(1)}). O sistema não dimensiona acima de 90. Aumente as dimensões do pilar.`
+    esbeltezMsg = `Esbeltez crítica (λ = ${lambda.toFixed(1)} > 90). O sistema não dimensiona acima de 90 (NBR 6118). Aumente as dimensões.`
   } else if (lambda >= 35) {
     esbeltezStatus = 'ATENCAO'
-    esbeltezMsg = `Pilar esbelto (λ = ${lambda.toFixed(1)}). Exige método de 2ª ordem para dimensionamento definitivo.`
+    esbeltezMsg = `Pilar esbelto (35 ≤ λ ≤ 90). Efeitos de 2ª ordem calculados pelo método do pilar-padrão.`
   }
 
   diagnosticos.push({
     criterio: 'Esbeltez estrutural',
     status: esbeltezStatus,
     valorCalculado: `λ = ${lambda.toFixed(1)}`,
-    valorLimite: 'λ < 35 (Curto)',
-    referenciaNormativa: 'Art. 18.3',
+    valorLimite: 'λ ≤ 90',
+    referenciaNormativa: 'Art. 15.8 / 18.3',
     mensagem: esbeltezMsg
   })
 
-  // 2. Compressão e Cálculo de Armadura
-  const nd = 1.4 * nkKn // esforço normal de cálculo em kN
-  const ac = bCm * hCm // área da seção em cm²
+  // 2. Determinação das Excentricidades e 2ª Ordem
+  const nd = 1.4 * nkKn // normal de cálculo (kN)
+  
+  // Excentricidade acidental (imperfeição geométrica local)
+  const ea = le / 400
+  // Excentricidade mínima (Art. 18.3.3)
+  const e1Min = Math.max(2.0, 1.5 + 0.03 * menorLado)
+  // Excentricidade de 1ª ordem de cálculo
+  const e1 = Math.max(ea, e1Min)
 
-  // Capacidade resistente do concreto: N_Rc = 0.85 * fcd * Ac
-  const nRc = 0.85 * fcdKnc2 * ac // kN
+  // Altura útil d (direção crítica de flambagem)
+  const bitolaEstriboMm = Math.max(5.0, Math.ceil(bitolaLongitudinalMm / 4))
+  const dPrime = cNomCm + (bitolaEstriboMm / 10) + (bitolaLongitudinalMm / 20)
+  const dCm = menorLado - dPrime
 
-  let asNec = 0
-  let resistenciaStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
-  let resistenciaMsg = 'Seção de concreto resistente à compressão.'
-
-  if (nd > nRc) {
-    // Aço é necessário para resistir à compressão complementar
-    asNec = (nd - nRc) / fydKnc2
+  // Excentricidade de 2ª ordem pelo método da curvatura aproximada (Art. 15.8.2)
+  let e2 = 0
+  if (lambda >= 35 && lambda <= 90) {
+    const nu = nd / (ac * fcdKnc2) // normal adimensional
+    const curvatura = 0.005 / (dCm * (nu + 0.5))
+    const curvaturaLim = 0.005 / dCm
+    const curvaturaFinal = Math.min(curvatura, curvaturaLim)
+    e2 = (le * le / 10) * curvaturaFinal
   }
 
-  // Limite mínimo normativo (Art. 18.4)
+  const eTot = e1 + e2
+  const mSdTotKnm = (nd * eTot) / 100 // momento fletor total em kNm
+
+  // 3. Dimensionamento à Flexo-Compressão Composta (Equilíbrio de Pequena Excentricidade)
+  // Capacidade resistente do concreto
+  const nRc = 0.85 * fcdKnc2 * ac // kN
+
+  // Parcela da armadura para compressão centrada
+  const asComp = Math.max(0, (nd - nRc) / fydKnc2)
+  // Parcela da armadura para momento fletor total (binário de forças simétrico)
+  const asFlex = (nd * eTot) / (fydKnc2 * (menorLado - 2 * dPrime))
+  const asNec = asComp + asFlex
+
+  // Taxa de armadura mínima (Art. 18.4)
   const asMin = Math.max(0.15 * nd / fydKnc2, 0.004 * ac)
   const asFinal = Math.max(asNec, asMin)
 
   // Verificação de taxa máxima (8% em traspasse)
   const asMax = 0.08 * ac
-  if (asFinal > asMax) {
+  let resistenciaStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  let resistenciaMsg = esbeltezStatus === 'REPROVADO'
+    ? 'Cálculo inviabilizado pela esbeltez excessiva.'
+    : 'Seção de concreto e armadura adequadas para flexo-compressão.'
+
+  if (esbeltezStatus === 'REPROVADO') {
     resistenciaStatus = 'REPROVADO'
-    resistenciaMsg = 'Armadura necessária excede o limite máximo normativo. Aumente a seção do pilar.'
+  } else if (asFinal > asMax) {
+    resistenciaStatus = 'REPROVADO'
+    resistenciaMsg = 'Armadura necessária excede o limite máximo normativo de 8%. Aumente a seção do pilar.'
   }
 
   diagnosticos.push({
-    criterio: 'Resistência à compressão (ELU)',
+    criterio: 'Resistência à flexo-compressão (ELU)',
     status: resistenciaStatus,
-    valorCalculado: `${asFinal.toFixed(2)} cm²`,
+    valorCalculado: resistenciaStatus === 'REPROVADO' && esbeltezStatus === 'REPROVADO' ? 'Inviável' : `${asFinal.toFixed(2)} cm²`,
     valorLimite: `Mín: ${asMin.toFixed(2)} cm²`,
     referenciaNormativa: 'Art. 18.4',
     mensagem: resistenciaMsg
@@ -344,10 +375,9 @@ export function dimensionarPilar(params: {
 
   // Sugestão de bitolas longitudinais (mínimo de 4 barras em pilares retangulares)
   const areaBarra = (Math.PI * Math.pow(bitolaLongitudinalMm / 10, 2)) / 4
-  const numBarras = Math.max(4, Math.ceil(asFinal / areaBarra))
+  const numBarras = resistenciaStatus === 'REPROVADO' ? 0 : Math.max(4, Math.ceil(asFinal / areaBarra))
 
   // Estribos do pilar (conforme Art. 18.4.3)
-  const bitolaEstriboMm = Math.max(5.0, Math.ceil(bitolaLongitudinalMm / 4))
   const espaçamentoEstribo = Math.min(20, menorLado, Math.floor(12 * (bitolaLongitudinalMm / 10)))
 
   // Status Geral do Semáforo
@@ -380,7 +410,14 @@ export function dimensionarPilar(params: {
       taxaArmadura: (asFinal / ac * 100),
       volumeConcretoM3,
       pesoAcoKg,
-      areaFormaM2: (2 * bCm + 2 * hCm) / 100 * comprimentoLivreM
+      areaFormaM2: (2 * bCm + 2 * hCm) / 100 * comprimentoLivreM,
+      esforcos: {
+        lambda,
+        e1Cm: e1,
+        e2Cm: e2,
+        eTotCm: eTot,
+        mSdTotKnm
+      }
     }
   }
 }

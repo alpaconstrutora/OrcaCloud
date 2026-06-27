@@ -111,6 +111,25 @@ describe('dimensionarPilar', () => {
     expect(result.status).toBe('REPROVADO')
     expect(result.diagnosticos.some(d => d.criterio.includes('Esbeltez') && d.status === 'REPROVADO')).toBe(true)
   })
+
+  it('Pilar médio (35 <= lambda <= 90) que calcula efeitos de 2ª ordem locais (15x20, Nk=120kN, L=2.5m)', () => {
+    const result = dimensionarPilar({
+      bCm: 15,
+      hCm: 20,
+      comprimentoLivreM: 2.5,
+      fckMpa: 25,
+      caa: 'II',
+      nkKn: 120,
+      bitolaLongitudinalMm: 10,
+    })
+
+    expect(result.status).toBe('ATENCAO')
+    expect(result.detalhesTecnicos.esforcos.lambda).toBeGreaterThanOrEqual(35)
+    expect(result.detalhesTecnicos.esforcos.e2Cm).toBeGreaterThan(0) // excentricidade de 2ª ordem calculada
+    expect(result.detalhesTecnicos.esforcos.mSdTotKnm).toBeGreaterThan(0)
+    expect(result.diagnosticos.some(d => d.criterio.includes('Esbeltez') && d.status === 'ATENCAO')).toBe(true)
+    expect(result.diagnosticos.some(d => d.criterio.includes('flexo-compressão') && d.status === 'OK')).toBe(true)
+  })
 })
 
 describe('dimensionarLaje', () => {

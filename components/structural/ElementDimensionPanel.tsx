@@ -822,6 +822,18 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   </div>
                 </div>
               </div>
+
+              {element.tipo === 'PILAR' && result.detalhesTecnicos.esforcos && (
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mt-3 space-y-2">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Análise de Esbeltez e Segunda Ordem (NBR 6118)</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold text-slate-700">
+                    <div>Índice de Esbeltez (λ): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.lambda.toFixed(1)}</span></div>
+                    <div>Exc. 1ª Ordem (e1): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.e1Cm.toFixed(2)} cm</span></div>
+                    <div>Exc. 2ª Ordem (e2): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.e2Cm.toFixed(2)} cm</span></div>
+                    <div>Momento Total (MSd): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.mSdTotKnm.toFixed(2)} kN.m</span></div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

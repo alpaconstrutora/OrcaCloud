@@ -93,9 +93,9 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
             } catch { /* noop */ }
           }}
         />
-        {isFormOpen && orgIdParam && (
+        {isFormOpen && (editing?.organization_id || orgIdParam) && (
           <EmpreendimentoForm
-            organizationId={orgIdParam}
+            organizationId={(editing?.organization_id || orgIdParam) as string}
             editing={editing}
             onClose={() => { setIsFormOpen(false); setEditing(null); }}
             onSaved={handleSaved}

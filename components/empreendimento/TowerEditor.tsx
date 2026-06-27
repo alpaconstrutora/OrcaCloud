@@ -1,6 +1,6 @@
 // components/empreendimento/TowerEditor.tsx
 import React from 'react';
-import { Plus, Trash2, Loader2, Building, Link2, HardHat, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Loader2, Building, Link2, HardHat, ChevronRight, Edit, Check, X } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { useStore } from '../../store/useStore';
 import { EmpreendimentoTower, EmpreendimentoTowerInsert } from '../../types';
@@ -17,9 +17,10 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [editForm, setEditForm] = React.useState({ name: '', floors_count: '', units_per_floor: '' });
   const [form, setForm] = React.useState({ name: '', floors_count: '', units_per_floor: '' });
 
-  // Obras da organização disponíveis para vínculo
   const orgProjects = React.useMemo(() => projects.filter(p => {
     const s: any = p.settings || {};
     return s.classification === 'OBRA' && (!organizationId || s.organizationId === organizationId);
@@ -60,6 +61,35 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
     }
   };
 
+  const startEdit = (tower: EmpreendimentoTower) => {
+    setEditingId(tower.id);
+    setEditForm({
+      name: tower.name,
+      floors_count: tower.floors_count?.toString() ?? '',
+      units_per_floor: tower.units_per_floor?.toString() ?? '',
+    });
+  };
+
+  const handleSaveEdit = async (tower: EmpreendimentoTower) => {
+    if (!editForm.name.trim()) { alert('Informe o nome da torre.'); return; }
+    try {
+      await empreendimentoService.updateTower(tower.id, {
+        name: editForm.name.trim(),
+        floors_count: editForm.floors_count ? Number(editForm.floors_count) : undefined,
+        units_per_floor: editForm.units_per_floor ? Number(editForm.units_per_floor) : undefined,
+      });
+      setTowers(prev => prev.map(t => t.id === tower.id ? {
+        ...t,
+        name: editForm.name.trim(),
+        floors_count: editForm.floors_count ? Number(editForm.floors_count) : undefined,
+        units_per_floor: editForm.units_per_floor ? Number(editForm.units_per_floor) : undefined,
+      } : t));
+      setEditingId(null);
+    } catch (err: any) {
+      alert(`Erro ao salvar torre: ${err.message}`);
+    }
+  };
+
   const handleDelete = async (tower: EmpreendimentoTower) => {
     if (!window.confirm(`Excluir a torre "${tower.name}" e todas as suas unidades?`)) return;
     try {
@@ -96,6 +126,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
   };
 
   const inputCls = 'px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium outline-none focus:border-blue-400';
+  const editInputCls = 'px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm font-medium outline-none focus:border-blue-400 bg-white';
 
   return (
     <div className="space-y-4">
@@ -121,51 +152,100 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
           {towers.map(tower => {
             const linkedObra = orgProjects.find(p => p.id === tower.project_id);
             const isOpen = expandedId === tower.id;
+            const isEditing = editingId === tower.id;
             return (
               <div key={tower.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 <div className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <button onClick={() => setExpandedId(isOpen ? null : tower.id)} className="flex items-center gap-3 text-left flex-1">
-                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                      <Building className="w-4 h-4" />
+                  {isEditing ? (
+                    // Edição inline da torre
+                    <div className="flex items-center gap-2 flex-1 flex-wrap">
+                      <input
+                        className={editInputCls}
+                        placeholder="Nome da torre"
+                        value={editForm.name}
+                        onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
+                        autoFocus
+                      />
+                      <input
+                        className={`${editInputCls} w-28`}
+                        placeholder="Nº pav."
+                        type="number"
+                        value={editForm.floors_count}
+                        onChange={e => setEditForm(p => ({ ...p, floors_count: e.target.value }))}
+                      />
+                      <input
+                        className={`${editInputCls} w-32`}
+                        placeholder="Un./pav."
+                        type="number"
+                        value={editForm.units_per_floor}
+                        onChange={e => setEditForm(p => ({ ...p, units_per_floor: e.target.value }))}
+                      />
+                      <button
+                        onClick={() => handleSaveEdit(tower)}
+                        className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="p-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-lg"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
-                    <div>
-                      <h4 className="font-bold text-gray-800 text-sm">{tower.name}</h4>
-                      <p className="text-xs text-gray-400 font-medium">
-                        {tower.floors_count ? `${tower.floors_count} pav.` : 'sem pavimentos'}
-                        {tower.units_per_floor ? ` · ${tower.units_per_floor} un/pav` : ''}
-                      </p>
-                    </div>
-                    <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                  </button>
+                  ) : (
+                    <button onClick={() => setExpandedId(isOpen ? null : tower.id)} className="flex items-center gap-3 text-left flex-1">
+                      <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                        <Building className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-gray-800 text-sm">{tower.name}</h4>
+                        <p className="text-xs text-gray-400 font-medium">
+                          {tower.floors_count ? `${tower.floors_count} pav.` : 'sem pavimentos'}
+                          {tower.units_per_floor ? ` · ${tower.units_per_floor} un/pav` : ''}
+                        </p>
+                      </div>
+                      <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                    </button>
+                  )}
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    {linkedObra ? (
-                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 flex items-center gap-1.5">
-                        <HardHat className="w-3.5 h-3.5" /> {linkedObra.name}
-                      </span>
-                    ) : (
-                      <>
-                        <select
-                          defaultValue=""
-                          onChange={e => handleLinkObra(tower, e.target.value)}
-                          className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 bg-white outline-none"
-                        >
-                          <option value="">Vincular obra…</option>
-                          {orgProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                        <button
-                          onClick={() => handleCreateObra(tower)}
-                          className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5"
-                        >
-                          <Link2 className="w-3.5 h-3.5" /> Criar Obra
-                        </button>
-                      </>
-                    )}
-                    <button onClick={() => handleDelete(tower)} className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                  </div>
+                  {!isEditing && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      {linkedObra ? (
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 flex items-center gap-1.5">
+                          <HardHat className="w-3.5 h-3.5" /> {linkedObra.name}
+                        </span>
+                      ) : (
+                        <>
+                          <select
+                            defaultValue=""
+                            onChange={e => handleLinkObra(tower, e.target.value)}
+                            className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 bg-white outline-none"
+                          >
+                            <option value="">Vincular obra…</option>
+                            {orgProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                          <button
+                            onClick={() => handleCreateObra(tower)}
+                            className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5"
+                          >
+                            <Link2 className="w-3.5 h-3.5" /> Criar Obra
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => startEdit(tower)}
+                        className="p-1.5 hover:bg-blue-50 text-blue-500 rounded-lg"
+                        title="Editar torre"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handleDelete(tower)} className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  )}
                 </div>
 
-                {isOpen && (
+                {isOpen && !isEditing && (
                   <div className="border-t border-gray-100 p-4 bg-gray-50/30">
                     <UnitEditor tower={tower} />
                   </div>

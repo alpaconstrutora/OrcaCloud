@@ -331,6 +331,42 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     fetchOrgMembers();
   }, [activeOrganizationId, selectedProjectId, activeTab, currentFolderId, currentProfile]);
 
+  // Sincronizar parâmetros de rota de notificação (Onda 3)
+  React.useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('?')) {
+      const queryString = hash.split('?')[1];
+      const params = new URLSearchParams(queryString);
+      
+      const tabParam = params.get('tab') as OpuraDocumentCategoria | null;
+      const docIdParam = params.get('docId');
+      const pendingParam = params.get('pending');
+
+      if (tabParam && CATEGORIES.some(c => c.id === tabParam)) {
+        setActiveTab(tabParam);
+      }
+
+      if (pendingParam === 'true') {
+        setShowPendingOnly(true);
+      }
+
+      if (docIdParam) {
+        const fetchAndSelectDoc = async () => {
+          try {
+            const doc = await documentService.getDocumentById(docIdParam);
+            if (doc) {
+              setSelectedDocForVersions(doc);
+              loadApprovalsForDoc(doc.id);
+            }
+          } catch (err) {
+            console.error('[OpuraDocsModule] Erro ao carregar documento por parâmetro de URL:', err);
+          }
+        };
+        fetchAndSelectDoc();
+      }
+    }
+  }, [window.location.hash]);
+
   // Função para criar uma pasta virtual
   const handleCreateFolderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

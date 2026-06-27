@@ -11,6 +11,7 @@ import {
   OpuraDocumentApprovalInsert,
   OpuraDocumentApprovalStatus,
 } from '../types';
+import { notificationService } from './notificationService';
 
 function generateUUID(): string {
   if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
@@ -909,6 +910,27 @@ export const documentService = {
       throw new Error(`Erro ao registrar aprovação: ${approvalError.message}`);
     }
 
+    // 3. Disparar notificação em tempo real
+    try {
+      const { data: doc } = await supabase
+        .from('opura_documents')
+        .select('nome, categoria')
+        .eq('id', documentId)
+        .single();
+
+      if (doc) {
+        await notificationService.sendNotification({
+          recipientEmail: approverEmail,
+          title: 'Aprovação de Documento Pendente',
+          message: `Você tem uma solicitação de aprovação pendente para o documento "${doc.nome}" enviada por ${requestedByEmail}.`,
+          link: `#/documentos?tab=${doc.categoria}&docId=${documentId}&pending=true`,
+          type: 'solicitacao_aprovacao'
+        });
+      }
+    } catch (notifErr) {
+      console.error('[DocumentService] Erro ao enviar notificação de aprovação pendente:', notifErr);
+    }
+
     return approval as OpuraDocumentApproval;
   },
 
@@ -939,6 +961,27 @@ export const documentService = {
     if (docError) {
       console.error('[DocumentService] Erro ao atualizar status do documento para aprovado:', docError);
       throw new Error(`Erro ao atualizar status do documento: ${docError.message}`);
+    }
+
+    // 3. Disparar notificação em tempo real
+    try {
+      const { data: doc } = await supabase
+        .from('opura_documents')
+        .select('nome, categoria')
+        .eq('id', approval.document_id)
+        .single();
+
+      if (doc) {
+        await notificationService.sendNotification({
+          recipientEmail: approval.requested_by,
+          title: 'Documento Aprovado',
+          message: `O revisor ${approval.approver_email} aprovou o seu documento "${doc.nome}".${feedback ? ` Comentários: "${feedback}"` : ''}`,
+          link: `#/documentos?tab=${doc.categoria}&docId=${approval.document_id}`,
+          type: 'documento_aprovado'
+        });
+      }
+    } catch (notifErr) {
+      console.error('[DocumentService] Erro ao disparar notificação de aprovação:', notifErr);
     }
   },
 
@@ -973,6 +1016,27 @@ export const documentService = {
     if (docError) {
       console.error('[DocumentService] Erro ao atualizar status do documento para rejeitado:', docError);
       throw new Error(`Erro ao atualizar status do documento: ${docError.message}`);
+    }
+
+    // 3. Disparar notificação em tempo real
+    try {
+      const { data: doc } = await supabase
+        .from('opura_documents')
+        .select('nome, categoria')
+        .eq('id', approval.document_id)
+        .single();
+
+      if (doc) {
+        await notificationService.sendNotification({
+          recipientEmail: approval.requested_by,
+          title: 'Documento Rejeitado',
+          message: `O revisor ${approval.approver_email} rejeitou o seu documento "${doc.nome}". Justificativa: "${feedback.trim()}"`,
+          link: `#/documentos?tab=${doc.categoria}&docId=${approval.document_id}`,
+          type: 'documento_rejeitado'
+        });
+      }
+    } catch (notifErr) {
+      console.error('[DocumentService] Erro ao disparar notificação de rejeição:', notifErr);
     }
   },
 

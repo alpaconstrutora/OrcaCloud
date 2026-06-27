@@ -725,6 +725,7 @@ const Layout: React.FC<LayoutProps> = ({
 
                   <DropdownGroupLabel label="Pessoas" />
                   <DropdownItem id="labor-employees" label="Colaboradores" icon={Users} />
+                  <DropdownItem id="labor-cargos" label="Cargos & Funções" icon={Briefcase} />
                   <DropdownItem id="labor-teams" label="Equipes" icon={Shield} />
                   <DropdownItem id="labor-ats" label="Recrutamento" icon={Briefcase} />
                   <DropdownItem id="labor-termination" label="Desligamentos" icon={TrendingDown} />

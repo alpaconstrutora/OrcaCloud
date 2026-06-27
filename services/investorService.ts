@@ -37,6 +37,10 @@ export interface Investor {
     phone?: string;
     document?: string;
     organization_id?: string;
+    settings?: {
+        investorPortalTabs?: string[];
+        [key: string]: any;
+    };
     created_at?: string;
 }
 
@@ -44,7 +48,7 @@ export const investorService = {
     async listInvestors(organizationId?: string) {
         // We'll try to fetch, if it fails because table doesn't exist, we return empty
         try {
-            const INVESTOR_COLS = 'id, name, email, phone, document, organization_id, created_at';
+            const INVESTOR_COLS = 'id, name, email, phone, document, organization_id, settings, created_at';
 
             let query = supabase
                 .from('investors')
@@ -75,7 +79,7 @@ export const investorService = {
     },
 
     async saveInvestor(investor: Partial<Investor>) {
-        const INVESTOR_COLS = 'id, name, email, phone, document, organization_id, created_at';
+        const INVESTOR_COLS = 'id, name, email, phone, document, organization_id, settings, created_at';
         if (investor.id) {
             // Strip immutable fields from update payload
             const { id, created_at, ...updatePayload } = investor;
@@ -113,7 +117,7 @@ export const investorService = {
         try {
             const { data, error } = await supabase
                 .from('investors')
-                .select('id, name, email, phone, document, organization_id, created_at')
+                .select('id, name, email, phone, document, organization_id, settings, created_at')
                 .eq('email', email.toLowerCase())
                 .maybeSingle();
 

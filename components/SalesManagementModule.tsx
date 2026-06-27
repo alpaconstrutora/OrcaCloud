@@ -107,36 +107,12 @@ const SalesManagementModule: React.FC<Props> = ({
     }
 
     return (
-      <div className="space-y-0">
-        {/* Barra de abas mantida para navegar entre módulos */}
-        <div className="flex items-center gap-1 border-b border-slate-200 bg-white px-4 pt-2 overflow-x-auto">
-          {TABS.map(tab => {
-            const Icon = tab.icon
-            const isActive = activeTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={[
-                  'flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-widest whitespace-nowrap border-b-2 transition-all -mb-px',
-                  isActive
-                    ? 'border-blue-600 text-blue-700'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300',
-                ].join(' ')}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {tab.label}
-              </button>
-            )
-          })}
-        </div>
-        <Suspense fallback={<Spinner />}>
-          <BrokerList
-            organizationId={organizationId}
-            onSelectBroker={setSelectedBroker}
-          />
-        </Suspense>
-      </div>
+      <Suspense fallback={<Spinner />}>
+        <BrokerList
+          organizationId={organizationId}
+          onSelectBroker={setSelectedBroker}
+        />
+      </Suspense>
     )
   }
 

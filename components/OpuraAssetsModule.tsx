@@ -802,7 +802,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
                   <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider mb-4">Localização de Ativos por Projeto</h3>
                   <div className="space-y-4">
-                    {projects.map(proj => {
+                    {projects.filter(p => p.name !== 'Gestão Comercial').map(proj => {
                       const count = assets.filter(a => a.current_project_id === proj.id).length;
                       if (count === 0) return null;
                       return (
@@ -1972,7 +1972,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                 >
                   <option value="">Sede / Central de Equipamentos</option>
-                  {projects.map(p => (
+                  {projects.filter(p => p.name !== 'Gestão Comercial').map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
@@ -2035,8 +2035,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   onChange={(e) => setReserveForm(prev => ({ ...prev, project_id: e.target.value }))}
                   className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                 >
-                  <option value="">Selecione a Obra...</option>
-                  {projects.map(p => (
+                  <option value="">Sede / Central de Equipamentos</option>
+                  {projects.filter(p => p.name !== 'Gestão Comercial').map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>

@@ -12,8 +12,8 @@ interface BrokerListProps {
 }
 
 const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker }) => {
-    const { activeOrganizationId } = useStore();
-    const orgId = organizationId || activeOrganizationId || undefined;
+    const { activeOrganizationId, organizations } = useStore();
+    const orgId = organizationId || activeOrganizationId || organizations[0]?.id || undefined;
 
     const [brokers, setBrokers] = React.useState<BrokerProfile[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);

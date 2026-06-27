@@ -1192,7 +1192,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             docStatusLabel = `Vence em ${diffDays}d`;
                           }
 
-                          const DocIcon = 
+                          const DocIcon: React.ComponentType<{ className?: string }> =
                             doc.type === 'seguro' ? Shield :
                             doc.type === 'licenciamento' ? FileText :
                             doc.type === 'termo_responsabilidade' ? PenTool : FileText;

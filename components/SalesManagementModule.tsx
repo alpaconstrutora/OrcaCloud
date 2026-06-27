@@ -1,5 +1,5 @@
 import React, { Suspense, useState } from 'react'
-import { Building2, Home, Users, Briefcase, FileText, BarChart3, ArrowLeft } from 'lucide-react'
+import { Building2, Home, Briefcase, FileText, BarChart3, ArrowLeft } from 'lucide-react'
 import type { BrokerProfile } from '../types'
 
 // Sub-módulos carregados sob demanda (lazy) por aba
@@ -40,7 +40,6 @@ interface Props {
 const TABS: Array<{ id: SalesTab; label: string; icon: React.ElementType }> = [
   { id: 'espelho',    label: 'Vendas de Ativos',   icon: Building2 },
   { id: 'alugueis',   label: 'Aluguéis',            icon: Home      },
-  { id: 'corretores', label: 'Corretores',           icon: Users     },
   { id: 'crm',        label: 'CRM Serviços',         icon: Briefcase },
   { id: 'contratos',  label: 'Contratos de Serviço', icon: FileText  },
   { id: 'viabilidade',label: 'Viabilidade',          icon: BarChart3 },

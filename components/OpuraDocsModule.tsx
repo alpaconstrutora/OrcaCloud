@@ -440,7 +440,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Submeter Upload de Novo Documento
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrganizationId) return;
+    console.log('[OpuraDocsModule] Iniciando submissão do documento:', {
+      nome: newDocName,
+      org: activeOrganizationId,
+      arquivo: newDocFile?.name
+    });
+    if (!activeOrganizationId) {
+      console.warn('[OpuraDocsModule] Erro: activeOrganizationId está nulo ou vazio ao submeter.');
+      alert('Sessão expirada ou organização não selecionada.');
+      return;
+    }
     if (!newDocFile) {
       alert('Selecione um arquivo para upload.');
       return;
@@ -1086,7 +1095,6 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center hover:border-blue-400 transition-colors bg-slate-50/50 relative">
                   <input
                     type="file"
-                    required
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
                         setNewDocFile(e.target.files[0]);

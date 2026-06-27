@@ -12,6 +12,18 @@ import {
   OpuraDocumentApprovalStatus,
 } from '../types';
 
+function generateUUID(): string {
+  if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+
 function normalizeProjectName(name: string): string {
   if (!name) return '';
   return name
@@ -589,7 +601,7 @@ export const documentService = {
     }
 
     const documentId = newDoc.id;
-    const versionId = crypto.randomUUID();
+    const versionId = generateUUID();
     // Caminho físico estruturado: "orgId/docId/versionId_filename"
     const storagePath = `${docData.organization_id}/${documentId}/${versionId}_${file.name}`;
 
@@ -647,7 +659,7 @@ export const documentService = {
     nextVersionNumber: number,
     file: File
   ): Promise<OpuraDocumentVersion> {
-    const versionId = crypto.randomUUID();
+    const versionId = generateUUID();
     const storagePath = `${organizationId}/${documentId}/${versionId}_${file.name}`;
 
     // 1. Upload do arquivo físico

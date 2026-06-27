@@ -64,6 +64,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   onChangeView
 }) => {
   const { projects } = useStore();
+  const isWriteDisabled = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
   
   // Tabs e UI States
   const [activeTab, setActiveTab] = React.useState<'dashboard' | 'bens' | 'reservas' | 'manutencoes' | 'custos_rateio'>('dashboard');
@@ -177,9 +178,11 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Carregar marcas de forma memorizada
   const loadBrands = React.useCallback(async () => {
-    if (!activeOrganizationId) return;
     try {
-      const loadedBrands = await assetService.listBrands(activeOrganizationId);
+      const orgIdParam = (!activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS')
+        ? undefined
+        : activeOrganizationId;
+      const loadedBrands = await assetService.listBrands(orgIdParam);
       setBrands(loadedBrands);
     } catch (err) {
       console.error('[OpuraAssetsModule] Erro ao carregar marcas:', err);
@@ -188,24 +191,27 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Carregar dados
   const loadData = React.useCallback(async () => {
-    if (!activeOrganizationId) return;
     setLoading(true);
     try {
-      const loadedAssets = await assetService.list(activeOrganizationId);
+      const orgIdParam = (!activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS')
+        ? undefined
+        : activeOrganizationId;
+
+      const loadedAssets = await assetService.list(orgIdParam);
       setAssets(loadedAssets);
       
-      const loadedRes = await assetService.listReservations(activeOrganizationId);
+      const loadedRes = await assetService.listReservations(orgIdParam);
       setReservations(loadedRes);
 
-      const loadedMaint = await assetService.listMaintenances(activeOrganizationId);
+      const loadedMaint = await assetService.listMaintenances(orgIdParam);
       setMaintenances(loadedMaint);
 
       // Carregar marcas
-      const loadedBrands = await assetService.listBrands(activeOrganizationId);
+      const loadedBrands = await assetService.listBrands(orgIdParam);
       setBrands(loadedBrands);
 
       // Carregar colaboradores ativos do RH
-      const loadedEmps = await laborService.listEmployees(activeOrganizationId);
+      const loadedEmps = await laborService.listEmployees(orgIdParam);
       setEmployees(loadedEmps.filter((e: any) => e.status === 'ATIVO'));
     } catch (err) {
       console.error('[OpuraAssetsModule] Erro ao carregar dados:', err);
@@ -787,7 +793,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="px-6 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 rounded-[1.25rem] font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all shadow-sm active:scale-95"
+            disabled={isWriteDisabled}
+            title={isWriteDisabled ? "Selecione uma organização específica para importar ativos" : "Importar ativos via Excel"}
+            className="px-6 py-3 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.25rem] font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all shadow-sm active:scale-95"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Importar Planilha
@@ -795,7 +803,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
           <button
             onClick={() => setIsNewAssetModalOpen(true)}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-[1.25rem] font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-blue-900/10 active:scale-95"
+            disabled={isWriteDisabled}
+            title={isWriteDisabled ? "Selecione uma organização específica para cadastrar ativos" : "Cadastrar novo ativo"}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 text-white rounded-[1.25rem] font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-blue-900/10 active:scale-95"
           >
             <Plus className="w-4 h-4" />
             Cadastrar Ativo

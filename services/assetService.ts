@@ -25,8 +25,8 @@ export const assetService = {
   async list(organizationId?: string): Promise<OpuraAsset[]> {
     let query = supabase.from('opura_assets').select('*').order('created_at', { ascending: false });
 
-    // Regra 1: Se organizationId for undefined, não bloqueamos o retorno de dados
-    if (organizationId) {
+    // Regra 1: Se organizationId for undefined ou 'all', não bloqueamos o retorno de dados
+    if (organizationId && organizationId !== 'all') {
       query = query.eq('organization_id', organizationId);
     }
 
@@ -153,7 +153,7 @@ export const assetService = {
   async listReservations(organizationId?: string): Promise<OpuraAssetReservation[]> {
     let query = supabase.from('opura_asset_reservations').select('*').order('start_date', { ascending: true });
 
-    if (organizationId) {
+    if (organizationId && organizationId !== 'all') {
       query = query.eq('organization_id', organizationId);
     }
 
@@ -325,7 +325,7 @@ export const assetService = {
   async listMaintenances(organizationId?: string): Promise<OpuraAssetMaintenance[]> {
     let query = supabase.from('opura_asset_maintenances').select('*').order('scheduled_date', { ascending: false });
 
-    if (organizationId) {
+    if (organizationId && organizationId !== 'all') {
       query = query.eq('organization_id', organizationId);
     }
 
@@ -605,12 +605,14 @@ export const assetService = {
   },
 
   // GESTÃO DE MARCAS (Fase 7)
-  async listBrands(orgId: string): Promise<OpuraAssetBrand[]> {
-    const { data, error } = await supabase
-      .from('opura_asset_brands')
-      .select('*')
-      .eq('organization_id', orgId)
-      .order('name', { ascending: true });
+  async listBrands(orgId?: string): Promise<OpuraAssetBrand[]> {
+    let query = supabase.from('opura_asset_brands').select('*').order('name', { ascending: true });
+
+    if (orgId && orgId !== 'all') {
+      query = query.eq('organization_id', orgId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('[AssetService] Error listing brands:', error);

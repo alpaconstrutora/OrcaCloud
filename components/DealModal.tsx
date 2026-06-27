@@ -400,6 +400,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     </div>
                                                     <div className="h-3 w-px bg-gray-200" />
                                                     <p className="text-sm font-black text-purple-600 font-mono">R$ {(selectedProperty.price || 0).toLocaleString('pt-BR')}</p>
+                                                    {formData.linked_project_id && (() => {
+                                                        const proj = projects.find(p => p.id === formData.linked_project_id);
+                                                        return proj ? (
+                                                            <>
+                                                                <div className="h-3 w-px bg-gray-200" />
+                                                                <div className="flex items-center gap-1.5 text-gray-400">
+                                                                    <Layers className="w-3.5 h-3.5" />
+                                                                    <span className="text-[10px] font-black tracking-widest truncate max-w-[140px]">{proj.name}</span>
+                                                                </div>
+                                                            </>
+                                                        ) : null;
+                                                    })()}
                                                 </div>
                                             </div>
                                         </div>
@@ -625,25 +637,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     ══════════════════════════════════════════ */}
                     {activeTab === 'partes' && (
                         <div className="max-w-2xl space-y-8">
-                            {/* Obra Vinculada */}
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 text-purple-600">
-                                    <Layers className="w-5 h-5" />
-                                    <h3 className="font-black uppercase tracking-widest text-xs">Obra Vinculada</h3>
-                                    <span className="text-[9px] font-black bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full border border-gray-200 uppercase tracking-wider">Opcional</span>
-                                </div>
-                                <select
-                                    value={formData.linked_project_id || ''}
-                                    onChange={(e) => setFormData({ ...formData, linked_project_id: e.target.value })}
-                                    className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
-                                >
-                                    <option value="">Nenhuma Obra Vinculada</option>
-                                    {projects.map(p => (
-                                        <option key={p.id} value={p.id}>{p.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-
                             {/* Corretor */}
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2 text-amber-600">

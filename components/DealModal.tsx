@@ -803,18 +803,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             className="w-full p-6 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-[2rem] outline-none font-medium text-gray-700 transition-all shadow-inner resize-none text-sm leading-relaxed"
                         />
                     </div>
-                </form>
 
-                {/* Painel de Assinatura — visível a partir do estágio CONTRATO */}
-                {formData.id && ['WAITING_PAYMENT', 'CONTRATO', 'ASSINATURA'].includes(formData.status || '') && (
-                    <div className="px-8 pb-4">
+                    {/* Painel de Assinatura — visível a partir do estágio CONTRATO */}
+                    {formData.id && ['WAITING_PAYMENT', 'CONTRATO', 'ASSINATURA'].includes(formData.status || '') && (
                         <DealSignaturePanel
                             deal={formData}
                             client={selectedClient}
                             organizationId={formData.organization_id || organizationId || ''}
                             onStatusChange={(sigStatus: 'PENDING' | 'SIGNED') => {
                                 setFormData(prev => ({ ...prev, signature_status: sigStatus }));
-                                // Quando assinado, sugere avançar para Concluído se estiver em ASSINATURA
                                 if (sigStatus === 'SIGNED' && formData.status === 'ASSINATURA') {
                                     // eslint-disable-next-line no-alert
                                     if (window.confirm('Contrato assinado! Deseja avançar a negociação para Concluído?')) {
@@ -823,19 +820,17 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 }
                             }}
                         />
-                    </div>
-                )}
+                    )}
 
-                {/* Análise de Crédito — visível quando há id de deal */}
-                {formData.id && (formData.organization_id || organizationId) && (
-                    <div className="px-8 pb-4">
+                    {/* Análise de Crédito — visível quando há id de deal */}
+                    {formData.id && (formData.organization_id || organizationId) && (
                         <CreditAnalysisPanel
                             dealId={formData.id}
                             organizationId={(formData.organization_id || organizationId) as string}
                             clientName={selectedClient?.name}
                         />
-                    </div>
-                )}
+                    )}
+                </form>
 
                 {/* Footer Executivo Premium */}
                 <div className="p-8 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between shrink-0">

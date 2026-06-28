@@ -138,7 +138,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             'Cancelado': 'bg-red-100 text-red-800',
         };
         return (
-            <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
+            <span className={`px-2 py-1 rounded-full text-xs font-black uppercase tracking-wider ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
                 {status}
             </span>
         );
@@ -243,7 +243,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                             <Package className="w-6 h-6" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total de Pedidos</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total de Pedidos</p>
                             <h3 className="text-3xl font-black text-gray-900">{orders.length}</h3>
                         </div>
                     </div>
@@ -259,7 +259,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                             <DollarSign className="w-6 h-6" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Valor Total</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Valor Total</p>
                             <h3 className="text-2xl font-black text-gray-900">
                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(
                                     orders.reduce((sum, order) => sum + (order.items?.reduce((is: number, i: any) => is + (i.total || 0), 0) || 0), 0)
@@ -279,7 +279,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                             <Filter className="w-6 h-6" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Em Aberto</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Em Aberto</p>
                             <h3 className="text-3xl font-black text-gray-900">
                                 {orders.filter(o => ['Rascunho', 'Enviado'].includes(o.status)).length}
                             </h3>
@@ -297,7 +297,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                             <Package className="w-6 h-6" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Confirmados</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Confirmados</p>
                             <h3 className="text-3xl font-black text-gray-900">
                                 {orders.filter(o => o.status === 'Confirmado').length}
                             </h3>
@@ -321,11 +321,11 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                 <TrendingUp className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Lead Time Médio</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-0.5">Lead Time Médio</p>
                                 <p className="text-2xl font-black text-gray-900">
                                     {kpis.leadTimeDays !== null ? `${kpis.leadTimeDays} dias` : '—'}
                                 </p>
-                                <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                                <p className="text-xs text-gray-400 font-medium mt-0.5">
                                     {kpis.receivedCount > 0
                                         ? `Baseado em ${kpis.receivedCount + kpis.divergenceCount} pedido(s) concluído(s)`
                                         : 'Nenhum pedido concluído ainda'}
@@ -339,11 +339,11 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                 <AlertTriangle className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Taxa de Divergência</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-0.5">Taxa de Divergência</p>
                                 <p className={`text-2xl font-black ${kpis.divergenceRate !== null && kpis.divergenceRate > 20 ? 'text-red-600' : 'text-gray-900'}`}>
                                     {kpis.divergenceRate !== null ? `${kpis.divergenceRate}%` : '—'}
                                 </p>
-                                <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                                <p className="text-xs text-gray-400 font-medium mt-0.5">
                                     {kpis.divergenceCount} divergência(s) em {kpis.divergenceCount + kpis.receivedCount} pedido(s)
                                 </p>
                             </div>
@@ -355,11 +355,11 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                 <CheckCircle2 className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Aprovação Financeira</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-0.5">Aprovação Financeira</p>
                                 <p className="text-2xl font-black text-gray-900">
                                     {kpis.financialApprovalRate !== null ? `${kpis.financialApprovalRate}%` : '—'}
                                 </p>
-                                <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                                <p className="text-xs text-gray-400 font-medium mt-0.5">
                                     {kpis.approvedCount} de {kpis.completedCount} pedido(s) aprovado(s)
                                 </p>
                             </div>
@@ -381,7 +381,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     />
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
@@ -424,7 +424,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                 viewMode === 'list' ? (
                     <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
                         <table className="w-full text-left border-collapse">
-                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-widest border-b border-gray-200">
+                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs tracking-widest border-b border-gray-200">
                                 <tr>
                                     {tableColumns.visibleColumns.includes('number') && (
                                         <SortableHeader colKey="number" label="Número" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
@@ -594,21 +594,21 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
 
                                 <div className="grid grid-cols-2 gap-4 py-4 border-t border-gray-50 mb-6">
                                     <div>
-                                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Pedido</p>
+                                        <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Pedido</p>
                                         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
                                             <Calendar className="w-3.5 h-3.5 text-indigo-500" />
                                             {order.created_at ? new Date(order.created_at).toLocaleDateString('pt-BR') : '-'}
                                         </div>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Entrega</p>
+                                        <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Entrega</p>
                                         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
                                             <Clock className="w-3.5 h-3.5 text-blue-500" />
                                             {order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
                                         </div>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Itens</p>
+                                        <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Itens</p>
                                         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
                                             <Package className="w-3.5 h-3.5 text-blue-500" />
                                             {order.items?.length || 0} Materiais
@@ -618,7 +618,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
 
                                 <div className="flex items-center justify-between pt-6 border-t border-gray-50">
                                     <div className="flex flex-col">
-                                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Total</p>
+                                        <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Total</p>
                                         <span className="text-base font-black text-gray-900">
                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                                                 order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0

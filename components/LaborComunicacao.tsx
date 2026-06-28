@@ -47,9 +47,9 @@ const WPP_PROVIDERS: Record<WppProvider, string> = {
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300 transition-all';
 const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({ label, children, hint }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
         {children}
-        {hint && <p className="text-[10px] text-slate-400">{hint}</p>}
+        {hint && <p className="text-xs text-slate-400">{hint}</p>}
     </div>
 );
 
@@ -58,7 +58,7 @@ const ReadBar: React.FC<{ pct: number; label?: string }> = ({ pct, label }) => (
         <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div className="h-full bg-teal-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
         </div>
-        <span className="text-[11px] font-black text-slate-500 w-10 text-right">{label ?? `${pct}%`}</span>
+        <span className="text-xs font-black text-slate-500 w-10 text-right">{label ?? `${pct}%`}</span>
     </div>
 );
 
@@ -167,7 +167,7 @@ const CommForm: React.FC<CommFormProps> = ({ orgId, comm, employees, projects, o
                     {/* DDS fields */}
                     {isDds && (
                         <div className="p-4 bg-emerald-50 rounded-2xl space-y-3 border border-emerald-100">
-                            <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Configurações do DDS</p>
+                            <p className="text-xs font-black text-emerald-700 uppercase tracking-widest">Configurações do DDS</p>
                             <div className="grid grid-cols-2 gap-3">
                                 <Field label="Tema do DDS">
                                     <input className={inputCls} placeholder="Ex: Trabalho em Altura"
@@ -205,7 +205,7 @@ const CommForm: React.FC<CommFormProps> = ({ orgId, comm, employees, projects, o
                         </div>
                         {form.scope === 'INDIVIDUAL' && (
                             <div className="space-y-2">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selecionar colaboradores</p>
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Selecionar colaboradores</p>
                                 <div className="max-h-32 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
                                     {employees.map(e => (
                                         <label key={e.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer">
@@ -308,7 +308,7 @@ const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispa
                             <TipoIcon className={`w-4 h-4 ${TIPO.color}`} />
                         </div>
                         <h2 className="text-xl font-black text-slate-900">{comm.titulo}</h2>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${STATUS.color} ${STATUS.bg}`}>{STATUS.label}</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${STATUS.color} ${STATUS.bg}`}>{STATUS.label}</span>
                     </div>
                     <p className="text-xs text-slate-400 mt-1 ml-10">
                         {TIPO.label}
@@ -349,7 +349,7 @@ const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispa
                         { label: 'Assinaram', value: assinados, icon: CheckCheck, color: 'emerald' },
                     ].map(({ label, value, icon: Icon, color }) => (
                         <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
                             <div className="flex items-center justify-between mt-2">
                                 <span className="text-xl font-black text-slate-900">{value}</span>
                                 <div className={`p-2 bg-${color}-50 rounded-xl`}>
@@ -385,7 +385,7 @@ const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispa
                             <thead>
                                 <tr className="border-b border-slate-50">
                                     {['Colaborador', 'Lido em', 'Assinado em', 'WhatsApp'].map(h => (
-                                        <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -403,7 +403,7 @@ const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispa
                                         </td>
                                         <td className="px-4 py-3">
                                             {r.whatsapp_status ? (
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
                                                     r.whatsapp_status === 'LIDO' ? 'bg-emerald-100 text-emerald-700' :
                                                     r.whatsapp_status === 'ENTREGUE' ? 'bg-blue-100 text-blue-700' :
                                                     r.whatsapp_status === 'FALHOU' ? 'bg-red-100 text-red-700' :
@@ -645,7 +645,7 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
                     { label: 'Taxa leitura média', value: `${taxaMedia}%`, icon: Eye, color: 'blue' },
                 ].map(({ label, value, icon: Icon, color }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
                         <div className="flex items-center justify-between mt-2">
                             <span className="text-2xl font-black text-slate-900">{value}</span>
                             <div className={`p-2 bg-${color}-50 rounded-xl`}>
@@ -713,13 +713,13 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <p className="font-black text-slate-800 truncate">{comm.titulo}</p>
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${STATUS.color} ${STATUS.bg}`}>{STATUS.label}</span>
-                                                <span className={`text-[10px] font-bold ${TIPO.color}`}>{TIPO.label}</span>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${STATUS.color} ${STATUS.bg}`}>{STATUS.label}</span>
+                                                <span className={`text-xs font-bold ${TIPO.color}`}>{TIPO.label}</span>
                                             </div>
                                             <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{comm.conteudo}</p>
                                             {comm.status === 'ENVIADO' && comm.total_destinatarios != null && (
                                                 <div className="mt-1.5 flex items-center gap-3">
-                                                    <span className="text-[11px] text-slate-400">{comm.total_destinatarios} destinatários</span>
+                                                    <span className="text-xs text-slate-400">{comm.total_destinatarios} destinatários</span>
                                                     <div className="flex-1 max-w-[120px]">
                                                         <ReadBar pct={taxa} />
                                                     </div>

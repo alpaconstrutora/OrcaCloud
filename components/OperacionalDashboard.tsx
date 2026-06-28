@@ -239,14 +239,14 @@ const OperacionalDashboard: React.FC<Props> = ({ projectId, orgId, tipoObra }) =
               }
               return (
                 <div key={ind.key} className="rounded-xl bg-indigo-50 border border-indigo-100 p-3">
-                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-wider truncate">{ind.label}</p>
+                  <p className="text-xs font-black text-indigo-400 uppercase tracking-wider truncate">{ind.label}</p>
                   <p className="text-lg font-black text-indigo-900 mt-1">{value}</p>
-                  <p className="text-[10px] text-indigo-400 font-medium">{ind.unit}</p>
+                  <p className="text-xs text-indigo-400 font-medium">{ind.unit}</p>
                 </div>
               )
             })}
           </div>
-          <p className="text-[10px] text-slate-400 font-medium mt-3">Indicadores calculados à medida que dados são lançados nas OEs</p>
+          <p className="text-xs text-slate-400 font-medium mt-3">Indicadores calculados à medida que dados são lançados nas OEs</p>
         </div>
       )}
 

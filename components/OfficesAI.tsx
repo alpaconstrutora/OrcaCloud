@@ -208,7 +208,7 @@ Com base na sua solicitação sobre **"${text}"**, recomendo estruturar os segui
       // Checkbox listas
       if (line.startsWith('- [ ] ')) {
         return (
-          <div key={idx} className="flex items-start gap-2 text-[11px] text-slate-350 my-0.5">
+          <div key={idx} className="flex items-start gap-2 text-xs text-slate-350 my-0.5">
             <span className="text-[#D47A55] shrink-0 font-bold">☐</span>
             <span>{line.substring(6)}</span>
           </div>
@@ -216,7 +216,7 @@ Com base na sua solicitação sobre **"${text}"**, recomendo estruturar os segui
       }
       if (line.startsWith('- [x] ')) {
         return (
-          <div key={idx} className="flex items-start gap-2 text-[11px] text-slate-500 line-through my-0.5">
+          <div key={idx} className="flex items-start gap-2 text-xs text-slate-500 line-through my-0.5">
             <span className="text-emerald-500 shrink-0 font-bold">☑</span>
             <span>{line.substring(6)}</span>
           </div>
@@ -225,7 +225,7 @@ Com base na sua solicitação sobre **"${text}"**, recomendo estruturar os segui
       // Listas de tópicos
       if (line.trim().startsWith('- ')) {
         return (
-          <div key={idx} className="flex items-start gap-1.5 text-[11px] text-slate-350 ml-2 my-0.5">
+          <div key={idx} className="flex items-start gap-1.5 text-xs text-slate-350 ml-2 my-0.5">
             <span className="text-[#D47A55] shrink-0">•</span>
             <span>{line.trim().substring(2)}</span>
           </div>
@@ -236,7 +236,7 @@ Com base na sua solicitação sobre **"${text}"**, recomendo estruturar os segui
         const match = line.trim().match(/^(\d+\.)\s(.*)/);
         if (match) {
           return (
-            <div key={idx} className="flex items-start gap-1.5 text-[11px] text-slate-350 ml-2 my-0.5">
+            <div key={idx} className="flex items-start gap-1.5 text-xs text-slate-350 ml-2 my-0.5">
               <span className="text-[#D47A55] font-black shrink-0">{match[1]}</span>
               <span>{match[2]}</span>
             </div>
@@ -265,7 +265,7 @@ Com base na sua solicitação sobre **"${text}"**, recomendo estruturar os segui
       }
 
       return (
-        <p key={idx} className="text-[11px] text-slate-300 leading-relaxed font-medium">
+        <p key={idx} className="text-xs text-slate-300 leading-relaxed font-medium">
           {formattedParts.length > 0 ? formattedParts : line}
         </p>
       );

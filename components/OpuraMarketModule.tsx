@@ -930,7 +930,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Market Map™</h3>
-                  <span className="text-[10px] text-slate-500 font-semibold">Selecione uma camada e clique no mapa para analisar a vocação imobiliária</span>
+                  <span className="text-xs text-slate-500 font-semibold">Selecione uma camada e clique no mapa para analisar a vocação imobiliária</span>
                 </div>
                 
                 {/* Camadas do Mapa */}
@@ -939,7 +939,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                     <button
                       key={layer}
                       onClick={() => setActiveLayer(layer)}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                      className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
                         activeLayer === layer 
                           ? 'bg-white text-slate-900 shadow-xs' 
                           : 'text-slate-500 hover:text-slate-800'
@@ -970,7 +970,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                     <h2 className="text-base font-black text-slate-900 tracking-tight">🏢 Bairro: {selectedNeighborhood.name}</h2>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Bairro Score™</span>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Bairro Score™</span>
                     <span className="text-lg font-black text-slate-900 bg-slate-100 px-3 py-1 rounded-xl">
                       {selectedNeighborhood.bairroScore} / 100
                     </span>
@@ -1035,7 +1035,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 <div className="border-t border-slate-100 pt-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="block font-black text-slate-400 uppercase text-[9px] tracking-wider">Evolução do Preço Ofertado (m²)</span>
-                    <span className="text-[10px] text-slate-500 font-semibold">Últimos 6 Meses</span>
+                    <span className="text-xs text-slate-500 font-semibold">Últimos 6 Meses</span>
                   </div>
 
                   {loadingHistory ? (
@@ -1069,7 +1069,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                       </ResponsiveContainer>
                     </div>
                   ) : (
-                    <div className="h-40 flex items-center justify-center bg-slate-50 rounded-2xl border border-slate-100 text-[10px] text-slate-400 font-semibold">
+                    <div className="h-40 flex items-center justify-center bg-slate-50 rounded-2xl border border-slate-100 text-xs text-slate-400 font-semibold">
                       Sem histórico de dados disponível para este bairro.
                     </div>
                   )}
@@ -1086,7 +1086,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
               <div className="flex border-b border-slate-100 pb-1 gap-1">
                 <button
                   onClick={() => setActiveTab('analise')}
-                  className={`flex-1 pb-2 text-[10px] font-black uppercase tracking-wider border-b-2 text-center transition-all ${
+                  className={`flex-1 pb-2 text-xs font-black uppercase tracking-wider border-b-2 text-center transition-all ${
                     activeTab === 'analise' 
                       ? 'border-slate-900 text-slate-900' 
                       : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -1096,7 +1096,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 </button>
                 <button
                   onClick={() => setActiveTab('estudos')}
-                  className={`flex-1 pb-2 text-[10px] font-black uppercase tracking-wider border-b-2 text-center transition-all ${
+                  className={`flex-1 pb-2 text-xs font-black uppercase tracking-wider border-b-2 text-center transition-all ${
                     activeTab === 'estudos' 
                       ? 'border-slate-900 text-slate-900' 
                       : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -1106,7 +1106,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 </button>
                 <button
                   onClick={() => setActiveTab('anuncios')}
-                  className={`flex-1 pb-2 text-[10px] font-black uppercase tracking-wider border-b-2 text-center transition-all ${
+                  className={`flex-1 pb-2 text-xs font-black uppercase tracking-wider border-b-2 text-center transition-all ${
                     activeTab === 'anuncios' 
                       ? 'border-slate-900 text-slate-900' 
                       : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -1130,7 +1130,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                     <>
                       <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl text-xs space-y-2">
                         <span className="block font-black text-blue-800 uppercase text-[9px] tracking-wider">Terreno Selecionado (Georreferenciado)</span>
-                        <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-600 font-semibold">
+                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 font-semibold">
                           <span>Lat: {terrainPin.lat.toFixed(6)}</span>
                           <span>Lng: {terrainPin.lng.toFixed(6)}</span>
                         </div>
@@ -1138,7 +1138,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
 
                       <div className="space-y-3">
                         <div className="space-y-1">
-                          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Estudo</label>
+                          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Nome do Estudo</label>
                           <input
                             type="text"
                             required
@@ -1150,7 +1150,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                         </div>
 
                         <div className="space-y-1">
-                          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Área do Terreno (m²)</label>
+                          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Área do Terreno (m²)</label>
                           <input
                             type="number"
                             value={terrainArea}
@@ -1162,7 +1162,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                         </div>
 
                         <div className="space-y-1">
-                          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Raio de Análise de Concorrência</label>
+                          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Raio de Análise de Concorrência</label>
                           <select
                             value={analysisRadius}
                             onChange={(e) => setAnalysisRadius(e.target.value)}
@@ -1193,7 +1193,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                       {/* Exibição dos resultados espaciais de vocação do produto */}
                       {analysisResult && (
                         <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50/50 space-y-4 animate-fadeIn">
-                          <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vocação e Recomendação IA</h4>
+                          <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Vocação e Recomendação IA</h4>
                           
                           <div className="grid grid-cols-2 gap-3 text-xs">
                             <div className="space-y-0.5">
@@ -1210,7 +1210,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                             <span className="block text-[9px] text-slate-400 font-bold uppercase">Mix de Tipologias Recomendadas</span>
                             <div className="space-y-1">
                               {analysisResult.productMix.tipologias.map((tip: any, idx: number) => (
-                                <div key={idx} className="flex justify-between text-[10px] bg-white p-2 rounded-lg border border-slate-100 font-semibold text-slate-600">
+                                <div key={idx} className="flex justify-between text-xs bg-white p-2 rounded-lg border border-slate-100 font-semibold text-slate-600">
                                   <span>{tip.tipo} ({tip.area}m²)</span>
                                   <span className="text-slate-800 font-bold">{tip.mix}% do VGV</span>
                                 </div>
@@ -1300,7 +1300,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                               e.stopPropagation();
                               handleDeleteStudy(study.id);
                             }}
-                            className="w-6 h-6 rounded-lg bg-white border border-slate-200 text-rose-500 hidden group-hover:flex items-center justify-center text-[10px] active:scale-90 shadow-sm"
+                            className="w-6 h-6 rounded-lg bg-white border border-slate-200 text-rose-500 hidden group-hover:flex items-center justify-center text-xs active:scale-90 shadow-sm"
                             title="Deletar Estudo"
                           >
                             🗑️
@@ -1332,7 +1332,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                       <select
                         value={filterSource}
                         onChange={(e) => setFilterSource(e.target.value)}
-                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-500"
                       >
                         <option value="Todos">Todas as Fontes</option>
                         {sources.map(src => (
@@ -1360,7 +1360,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                               }`}>
                                 {isPrivate ? 'Privado (Importado)' : 'Global'}
                               </span>
-                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate max-w-[120px]">
+                              <span className="text-xs font-black text-slate-400 uppercase tracking-widest truncate max-w-[120px]">
                                 {l.source}
                               </span>
                             </div>
@@ -1370,13 +1370,13 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                               <span className="block font-black text-slate-900 text-sm">
                                 R$ {l.price.toLocaleString('pt-BR')}
                               </span>
-                              <span className="block text-[10px] text-slate-500 font-semibold truncate leading-normal" title={l.address || ''}>
+                              <span className="block text-xs text-slate-500 font-semibold truncate leading-normal" title={l.address || ''}>
                                 📍 {l.address || 'Endereço não geocodificado'}
                               </span>
                             </div>
 
                             {/* Características físicas do imóvel */}
-                            <div className="flex flex-wrap gap-1.5 text-[10px] font-bold text-slate-500">
+                            <div className="flex flex-wrap gap-1.5 text-xs font-bold text-slate-500">
                               <span className="bg-white px-2 py-0.5 rounded border border-slate-100">{l.propertyType}</span>
                               {l.areaPrivate && <span className="bg-white px-2 py-0.5 rounded border border-slate-100">📐 {l.areaPrivate}m²</span>}
                               {l.bedrooms > 0 && <span className="bg-white px-2 py-0.5 rounded border border-slate-100">🛏️ {l.bedrooms}D</span>}
@@ -1399,7 +1399,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                                   e.stopPropagation();
                                   handleDeleteListing(l.id);
                                 }}
-                                className="absolute right-3 top-3 w-6 h-6 rounded-lg bg-white border border-slate-200 text-rose-500 hidden group-hover:flex items-center justify-center text-[10px] active:scale-90 shadow-sm transition-all"
+                                className="absolute right-3 top-3 w-6 h-6 rounded-lg bg-white border border-slate-200 text-rose-500 hidden group-hover:flex items-center justify-center text-xs active:scale-90 shadow-sm transition-all"
                                 title="Excluir Ocorrência"
                               >
                                 🗑️

@@ -350,7 +350,7 @@ export default function OpuraGovernanceModule({
                     </div>
                     <div>
                       <p className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors uppercase">{org.name}</p>
-                      {org.cnpj && <p className="text-[10px] text-gray-500 font-mono mt-0.5">{org.cnpj}</p>}
+                      {org.cnpj && <p className="text-xs text-gray-500 font-mono mt-0.5">{org.cnpj}</p>}
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-gray-600 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
@@ -547,7 +547,7 @@ export default function OpuraGovernanceModule({
                   <div className="space-y-6">
                     {Array.from(new Set(roles.map(r => r.nivel_hierarquico))).sort((a, b) => a - b).map(nivel => (
                       <div key={nivel} className="border-b border-gray-900 pb-4 last:border-b-0">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-600 block mb-3">Nível {nivel}</span>
+                        <span className="text-xs font-black uppercase tracking-wider text-gray-600 block mb-3">Nível {nivel}</span>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {roles.filter(r => r.nivel_hierarquico === nivel).map(role => {
                             const occupiedBy = employees.filter(e => e.role_id === role.id && e.status === 'ATIVO');
@@ -560,10 +560,10 @@ export default function OpuraGovernanceModule({
                                 {role.descricao && <p className="text-xs text-gray-500 mt-1">{role.descricao}</p>}
                                 <div className="mt-3 flex flex-wrap gap-1.5">
                                   {occupiedBy.length === 0 ? (
-                                    <span className="text-[10px] bg-rose-950/20 text-rose-400 border border-rose-950/80 px-2 py-0.5 rounded-[0.5rem] font-bold">Vago</span>
+                                    <span className="text-xs bg-rose-950/20 text-rose-400 border border-rose-950/80 px-2 py-0.5 rounded-[0.5rem] font-bold">Vago</span>
                                   ) : (
                                     occupiedBy.map(occ => (
-                                      <span key={occ.id} className="text-[10px] bg-emerald-950/20 text-emerald-400 border border-emerald-950/80 px-2 py-0.5 rounded-[0.5rem] font-bold">{occ.name}</span>
+                                      <span key={occ.id} className="text-xs bg-emerald-950/20 text-emerald-400 border border-emerald-950/80 px-2 py-0.5 rounded-[0.5rem] font-bold">{occ.name}</span>
                                     ))
                                   )}
                                 </div>
@@ -599,7 +599,7 @@ export default function OpuraGovernanceModule({
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-gray-800 text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                    <tr className="border-b border-gray-800 text-xs font-black uppercase text-gray-500 tracking-wider">
                       <th className="pb-3 pl-4">Fluxo</th>
                       <th className="pb-3">Alvo</th>
                       <th className="pb-3">Min</th>
@@ -626,9 +626,9 @@ export default function OpuraGovernanceModule({
                             <td className="py-4 text-gray-300">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lim.limite_maximo)}</td>
                             <td className="py-4">
                               {lim.requer_dupla_assinatura ? (
-                                <span className="text-[10px] bg-amber-950/20 text-amber-400 border border-amber-950/80 px-2.5 py-1 rounded-[0.5rem] font-bold">Sim</span>
+                                <span className="text-xs bg-amber-950/20 text-amber-400 border border-amber-950/80 px-2.5 py-1 rounded-[0.5rem] font-bold">Sim</span>
                               ) : (
-                                <span className="text-[10px] bg-gray-800 text-gray-400 px-2.5 py-1 rounded-[0.5rem] font-bold">Não</span>
+                                <span className="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-[0.5rem] font-bold">Não</span>
                               )}
                             </td>
                             <td className="py-4 pr-4 text-right">
@@ -674,7 +674,7 @@ export default function OpuraGovernanceModule({
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-gray-800 text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                    <tr className="border-b border-gray-800 text-xs font-black uppercase text-gray-500 tracking-wider">
                       <th className="pb-3 pl-4">Delegador</th>
                       <th className="pb-3">Substituto</th>
                       <th className="pb-3">Fluxo</th>
@@ -702,13 +702,13 @@ export default function OpuraGovernanceModule({
                             <td className="py-4 text-gray-300 text-table-body font-semibold">{start} a {end}</td>
                             <td className="py-4">
                               {del.status === 'ativa' && (
-                                <span className="text-[10px] bg-emerald-950/20 text-emerald-400 border border-emerald-950/80 px-2.5 py-1 rounded-[0.5rem] font-bold">Ativa</span>
+                                <span className="text-xs bg-emerald-950/20 text-emerald-400 border border-emerald-950/80 px-2.5 py-1 rounded-[0.5rem] font-bold">Ativa</span>
                               )}
                               {del.status === 'revogada' && (
-                                <span className="text-[10px] bg-rose-950/20 text-rose-400 border border-rose-950/80 px-2.5 py-1 rounded-[0.5rem] font-bold">Revogada</span>
+                                <span className="text-xs bg-rose-950/20 text-rose-400 border border-rose-950/80 px-2.5 py-1 rounded-[0.5rem] font-bold">Revogada</span>
                               )}
                               {del.status === 'expirada' && (
-                                <span className="text-[10px] bg-gray-800 text-gray-400 px-2.5 py-1 rounded-[0.5rem] font-bold">Expirada</span>
+                                <span className="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-[0.5rem] font-bold">Expirada</span>
                               )}
                             </td>
                             <td className="py-4 pr-4 text-right">
@@ -754,7 +754,7 @@ export default function OpuraGovernanceModule({
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-gray-800 text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                      <tr className="border-b border-gray-800 text-xs font-black uppercase text-gray-500 tracking-wider">
                         <th className="pb-3 pl-4">Processo / Atividade</th>
                         <th className="pb-3">R (Executa)</th>
                         <th className="pb-3">A (Aprova)</th>
@@ -802,7 +802,7 @@ export default function OpuraGovernanceModule({
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-black text-white text-base">{com.nome}</h4>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[0.5rem] uppercase inline-block mt-1 ${com.status === 'ativo' ? 'bg-emerald-950/30 text-emerald-400 border border-emerald-900/50' : 'bg-gray-800 text-gray-400'}`}>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-[0.5rem] uppercase inline-block mt-1 ${com.status === 'ativo' ? 'bg-emerald-950/30 text-emerald-400 border border-emerald-900/50' : 'bg-gray-800 text-gray-400'}`}>
                             {com.status}
                           </span>
                         </div>
@@ -837,7 +837,7 @@ export default function OpuraGovernanceModule({
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-gray-800 text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                    <tr className="border-b border-gray-800 text-xs font-black uppercase text-gray-500 tracking-wider">
                       <th className="pb-3 pl-4">Posição Crítica</th>
                       <th className="pb-3">Titular</th>
                       <th className="pb-3">Sucessor Mapeado</th>
@@ -862,7 +862,7 @@ export default function OpuraGovernanceModule({
                             <td className="py-4 text-white font-semibold">{successor || 'Não Definido'}</td>
                             <td className="py-4 font-bold uppercase text-table-body text-amber-500">{plan.prontidao.replace('_', ' ')}</td>
                             <td className="py-4 pr-4 text-right">
-                              <span className={`text-[10px] font-bold px-2 py-1 rounded-[0.5rem] uppercase ${plan.risco_perda === 'baixo' ? 'bg-emerald-950/20 text-emerald-400' : (plan.risco_perda === 'medio' ? 'bg-amber-950/20 text-amber-400' : 'bg-rose-950/20 text-rose-400')}`}>
+                              <span className={`text-xs font-bold px-2 py-1 rounded-[0.5rem] uppercase ${plan.risco_perda === 'baixo' ? 'bg-emerald-950/20 text-emerald-400' : (plan.risco_perda === 'medio' ? 'bg-amber-950/20 text-amber-400' : 'bg-rose-950/20 text-rose-400')}`}>
                                 {plan.risco_perda}
                               </span>
                             </td>
@@ -918,7 +918,7 @@ export default function OpuraGovernanceModule({
                     <div key={sc.id} className="bg-gray-950/60 border border-gray-800 p-5 rounded-[1.25rem] flex items-center justify-between">
                       <div>
                         <h4 className="font-black text-white text-sm">{sc.nome}</h4>
-                        <span className="text-[10px] text-gray-400 block mt-1">Criador: {sc.criador_email}</span>
+                        <span className="text-xs text-gray-400 block mt-1">Criador: {sc.criador_email}</span>
                       </div>
                       <button
                         onClick={async () => {

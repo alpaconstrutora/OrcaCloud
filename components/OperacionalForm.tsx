@@ -637,7 +637,7 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
                     </span>
                   )}
                 </div>
-                <p className="text-[10px] text-violet-500 mt-1">{selectedPlanningItem.planningProjectName}</p>
+                <p className="text-xs text-violet-500 mt-1">{selectedPlanningItem.planningProjectName}</p>
               </div>
               <div className="flex items-center gap-2 ml-4 shrink-0">
                 <button

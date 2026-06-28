@@ -435,7 +435,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                         <div className="flex flex-wrap items-center gap-2 bg-gray-50/80 p-1.5 rounded-xl border border-gray-100">
                             {/* Project Selector */}
                             <div className="flex items-center gap-2 px-2 py-1 bg-white rounded-lg border border-gray-200 shadow-sm">
-                                <span className="text-[10px] font-black text-gray-400 uppercase flex items-center gap-1.5">
+                                <span className="text-xs font-black text-gray-400 uppercase flex items-center gap-1.5">
                                     <Building2 className="w-3.5 h-3.5 text-blue-500" />
                                     Obra:
                                 </span>
@@ -456,7 +456,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
 
                             {/* Organization Selector */}
                             <div className="flex items-center gap-2 px-2 py-1 bg-white rounded-lg border border-gray-200 shadow-sm">
-                                <span className="text-[10px] font-black text-gray-400 uppercase flex items-center gap-1.5">
+                                <span className="text-xs font-black text-gray-400 uppercase flex items-center gap-1.5">
                                     <Layers className="w-3.5 h-3.5 text-indigo-500" />
                                     Org:
                                 </span>
@@ -475,7 +475,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                             {/* Detail Level Selector */}
                             {(reportType === 'ANALYTIC' || reportType === 'INPUTS_ANALYTIC') && detailLevel && (
                                 <div className="flex items-center gap-2 px-2 py-1 bg-white rounded-lg border border-gray-200 shadow-sm">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase flex items-center gap-1.5 whitespace-nowrap">
+                                    <span className="text-xs font-black text-gray-400 uppercase flex items-center gap-1.5 whitespace-nowrap">
                                         <Search className="w-3.5 h-3.5 text-amber-500" />
                                         Detalhar Até:
                                     </span>
@@ -496,7 +496,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                             {reportType === 'ANALYTIC' && (
                                 <button
                                     onClick={() => setShowNatureBreakdown(!showNatureBreakdown)}
-                                    className={`flex items-center gap-2 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${showNatureBreakdown ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                                    className={`flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all border ${showNatureBreakdown ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
                                 >
                                     <Layers className="w-3.5 h-3.5" />
                                     Composição de Custos
@@ -543,7 +543,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                 <button
                                     key={nature.id}
                                     onClick={() => setSelectedNature(nature.id)}
-                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${selectedNature === nature.id ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
+                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${selectedNature === nature.id ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
                                 >
                                     <nature.icon className="w-3 h-3" />
                                     {nature.label}
@@ -671,7 +671,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                             ) : (
                                 <table className="w-full text-xs text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-gray-800 text-white uppercase tracking-wider text-[10px] items-center">
+                                        <tr className="bg-gray-800 text-white uppercase tracking-wider text-xs items-center">
                                             <th className="py-2 px-2 w-20 font-bold border-r border-gray-700">Tipo</th>
                                             <th className="py-2 px-2 w-20 font-bold border-r border-gray-700">Código</th>
                                             <th className="py-2 px-2 font-bold border-r border-gray-700">Descrição do Insumo</th>
@@ -683,7 +683,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {insumosGlobal.map((item, index) => (
-                                            <tr key={index} className="hover:bg-gray-50 text-[10px]">
+                                            <tr key={index} className="hover:bg-gray-50 text-xs">
                                                 <td className="py-1.5 px-2 border-r border-gray-100 text-gray-500">{item.type}</td>
                                                 <td className="py-1.5 px-2 border-r border-gray-100 font-mono text-gray-500">{item.code}</td>
                                                 <td className="py-1.5 px-2 border-r border-gray-100 text-gray-800 font-medium">
@@ -710,7 +710,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                         ) : (
                             <table className="w-full text-xs text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-blue-600 text-white uppercase tracking-wider text-[10px] items-center">
+                                    <tr className="bg-blue-600 text-white uppercase tracking-wider text-xs items-center">
                                         <th className={`py-2 px-2 ${showNatureBreakdown ? 'w-12' : 'w-16'} font-bold border-r border-blue-500`}>Item</th>
                                         <th className="py-2 px-2 w-12 text-center font-bold border-r border-blue-500">Base</th>
                                         <th className="py-2 px-2 w-16 font-bold border-r border-blue-500">Código</th>
@@ -738,7 +738,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                         return (
                                             <React.Fragment key={group.id}>
                                                 {/* GROUP ROW */}
-                                                <tr className="bg-blue-800 text-white font-bold uppercase text-[11px] break-inside-avoid print:bg-blue-800 print:text-white">
+                                                <tr className="bg-blue-800 text-white font-bold uppercase text-xs break-inside-avoid print:bg-blue-800 print:text-white">
                                                     <td className="py-2 px-2 border-r border-blue-700">{groupItemStr}</td>
                                                     <td className="py-2 px-2 border-r border-blue-700"></td>
                                                     <td className="py-2 px-2 border-r border-blue-700"></td>
@@ -766,7 +766,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                                     return (
                                                         <React.Fragment key={phase.id}>
                                                             {/* PHASE ROW */}
-                                                            <tr className="bg-gray-100 font-bold text-gray-800 uppercase text-[10px] break-inside-avoid">
+                                                            <tr className="bg-gray-100 font-bold text-gray-800 uppercase text-xs break-inside-avoid">
                                                                 <td className="py-1.5 px-2 border-r border-gray-200">{phaseItemStr}</td>
                                                                 <td className="py-1.5 px-2 border-r border-gray-200"></td>
                                                                 <td className="py-1.5 px-2 border-r border-gray-200"></td>
@@ -798,7 +798,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                                                 return (
                                                                     <React.Fragment key={subPhase}>
                                                                         {/* SUBPHASE ROW */}
-                                                                        <tr className="text-[10px] font-bold text-gray-500 uppercase break-inside-avoid border-b border-gray-100">
+                                                                        <tr className="text-xs font-bold text-gray-500 uppercase break-inside-avoid border-b border-gray-100">
                                                                             <td className="py-1 px-2 border-r border-gray-100">{subPhaseItemStr}</td>
                                                                             <td className="py-1 px-2 border-r border-gray-100"></td>
                                                                             <td className="py-1 px-2 border-r border-gray-100"></td>
@@ -825,7 +825,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                                                         {reportType === 'ANALYTIC' && detailLevel === 'ITEM' && items.map((item, itemIndex) => {
                                                                             const breakdown = showNatureBreakdown ? getNatureBreakdown(item) : null;
                                                                             return (
-                                                                                <tr key={item.id} className="text-[10px] hover:bg-gray-50 break-inside-avoid">
+                                                                                <tr key={item.id} className="text-xs hover:bg-gray-50 break-inside-avoid">
                                                                                     <td className="py-1 px-2 border-r border-gray-100 text-gray-400 font-mono">
                                                                                         {subPhaseItemStr}.{String(itemIndex + 1).padStart(2, '0')}
                                                                                     </td>
@@ -855,7 +855,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                                                         {reportType === 'INPUTS_ANALYTIC' && detailLevel === 'ITEM' && items.length > 0 && (() => {
                                                                             const subPhaseInputs = calculateInsumos(items);
                                                                             return subPhaseInputs.map((input, inputIndex) => (
-                                                                                <tr key={`${subPhaseItemStr}-input-${input.code}`} className="text-[10px] hover:bg-gray-50 break-inside-avoid">
+                                                                                <tr key={`${subPhaseItemStr}-input-${input.code}`} className="text-xs hover:bg-gray-50 break-inside-avoid">
                                                                                     <td className="py-1 px-2 border-r border-gray-100 text-gray-400 font-mono pl-6">
                                                                                         {subPhaseItemStr}.{String(inputIndex + 1).padStart(2, '0')}
                                                                                     </td>
@@ -895,7 +895,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                     < div className="border-t-2 border-gray-200 pt-4 mt-8 flex justify-between text-xs text-gray-400" >
                         <div>
                             <p>BDI Aplicado: {settings.bdi}% ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBDI)})</p>
-                            <p className="text-[10px] mt-1">Gerado via Opura em {new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                            <p className="text-xs mt-1">Gerado via Opura em {new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                         </div>
                         <div className="text-right">
                             Página 1 de 1

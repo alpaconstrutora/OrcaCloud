@@ -104,7 +104,7 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
           <nav className="space-y-1">
             <button
               onClick={() => handleTabChange('DASHBOARD')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                 activeTab === 'DASHBOARD'
                   ? 'bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white shadow-md shadow-[#D47A55]/10'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
@@ -116,7 +116,7 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
 
             <button
               onClick={() => handleTabChange('CRM')}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                 activeTab === 'CRM'
                   ? 'bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white shadow-md shadow-[#D47A55]/10'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
@@ -137,7 +137,7 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
 
             <button
               onClick={() => handleTabChange('ESPECIFICADOR')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                 activeTab === 'ESPECIFICADOR'
                   ? 'bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white shadow-md shadow-[#D47A55]/10'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
@@ -149,7 +149,7 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
 
             <button
               onClick={() => handleTabChange('BIBLIOTECA')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                 activeTab === 'BIBLIOTECA'
                   ? 'bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white shadow-md shadow-[#D47A55]/10'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
@@ -161,7 +161,7 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
 
             <button
               onClick={() => handleTabChange('TIMESHEET')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                 activeTab === 'TIMESHEET'
                   ? 'bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white shadow-md shadow-[#D47A55]/10'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
@@ -173,7 +173,7 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
 
             <button
               onClick={() => handleTabChange('FINANCEIRO')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                 activeTab === 'FINANCEIRO'
                   ? 'bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white shadow-md shadow-[#D47A55]/10'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
@@ -224,7 +224,7 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
               <input 
                 type="text" 
                 placeholder="Buscar no escritório..." 
-                className="bg-slate-50 border border-slate-200/80 rounded-xl pl-8 pr-3 py-1.5 text-[10px] text-slate-700 outline-none focus:border-[#D47A55] font-medium w-48 transition-all"
+                className="bg-slate-50 border border-slate-200/80 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-700 outline-none focus:border-[#D47A55] font-medium w-48 transition-all"
               />
               <span className="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
             </div>
@@ -237,7 +237,7 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
 
             {/* Perfil */}
             <div className="flex items-center gap-2.5 pl-3 border-l border-slate-200/80">
-              <span className="text-[10px] font-bold text-slate-500">Olá, Altair!</span>
+              <span className="text-xs font-bold text-slate-500">Olá, Altair!</span>
               <div className="w-7 h-7 rounded-full bg-[#D47A55]/15 border border-[#D47A55]/20 flex items-center justify-center font-black text-[#D47A55] text-xs">
                 AS
               </div>

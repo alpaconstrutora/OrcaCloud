@@ -241,10 +241,10 @@ const TaskStatusManager: React.FC<Props> = ({ orgId, onClose, onChanged }) => {
                       <span className="flex-1 text-sm font-bold text-slate-800">{s.name}</span>
                       <div className="flex items-center gap-1.5">
                         {s.is_default && (
-                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">Padrão</span>
+                          <span className="text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">Padrão</span>
                         )}
                         {s.is_done && (
-                          <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
+                          <span className="flex items-center gap-1 text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
                             <Check className="w-3 h-3" />Conclusão
                           </span>
                         )}

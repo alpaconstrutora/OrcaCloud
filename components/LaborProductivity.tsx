@@ -212,7 +212,7 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                                         />
                                     </div>
                                 </div>
-                                <span className="text-[10px] text-slate-400">{r.logCount} registros</span>
+                                <span className="text-xs text-slate-400">{r.logCount} registros</span>
                             </div>
                         ))}
                     </div>
@@ -248,12 +248,12 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                             )}
                             {logs.map(log => (
                                 <tr key={log.id} className="group hover:bg-slate-50/50 transition-all">
-                                    <td className="px-5 py-3 text-[10px] font-bold text-slate-500">
+                                    <td className="px-5 py-3 text-xs font-bold text-slate-500">
                                         {new Date(log.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                                     </td>
                                     <td className="px-4 py-3">
                                         <p className="text-xs font-bold text-slate-900">{log.activity_description}</p>
-                                        {log.phase && <p className="text-[10px] text-slate-400">{log.phase}</p>}
+                                        {log.phase && <p className="text-xs text-slate-400">{log.phase}</p>}
                                         {log.project_name && <span className="text-[9px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-bold">{log.project_name}</span>}
                                     </td>
                                     <td className="px-4 py-3">

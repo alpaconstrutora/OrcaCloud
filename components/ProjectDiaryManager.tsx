@@ -661,7 +661,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                         <div className="relative">
                             <button
                                 onClick={() => setIsLinkingPlanningOpen(!isLinkingPlanningOpen)}
-                                className={`flex items-center gap-2 text-[10px] font-bold px-3 py-1.5 rounded-full transition-all border uppercase tracking-widest ${autoLinkedProjectId
+                                className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full transition-all border uppercase tracking-widest ${autoLinkedProjectId
                                     ? (settings.linkedProjectId ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-blue-600 bg-blue-50 border-blue-100')
                                     : 'text-amber-600 bg-amber-50 border-amber-100 animate-pulse'
                                     }`}
@@ -707,7 +707,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                             })}
                                         {projects.filter(p => p.settings?.classification === 'PLANEJAMENTO').length === 0 && (
                                             <div className="py-8 text-center">
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase">Nenhum planejamento encontrado</p>
+                                                <p className="text-xs font-bold text-gray-400 uppercase">Nenhum planejamento encontrado</p>
                                             </div>
                                         )}
                                     </div>
@@ -721,7 +721,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                 });
                                                 setIsLinkingPlanningOpen(false);
                                             }}
-                                            className="w-full mt-3 py-2 text-[10px] font-bold text-red-500 hover:bg-red-50 rounded-xl transition-all uppercase tracking-widest"
+                                            className="w-full mt-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 rounded-xl transition-all uppercase tracking-widest"
                                         >
                                             Remover Vínculo
                                         </button>
@@ -803,7 +803,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             <div className="flex flex-wrap items-center gap-6">
                                 <div className="flex items-center gap-3">
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Status do Relatório</span>
+                                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Status do Relatório</span>
                                         <div className="flex bg-gray-100/50 p-1 rounded-xl">
                                             {[
                                                 { val: 'Rascunho', color: 'bg-white text-gray-500 shadow-sm border border-gray-100' },
@@ -814,7 +814,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                 <button
                                                     key={s.val}
                                                     onClick={() => setFormData({ ...formData, status: s.val as DiaryEntry['status'] })}
-                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${formData.status === s.val ? s.color : 'text-gray-400 hover:text-gray-600'}`}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-tighter transition-all ${formData.status === s.val ? s.color : 'text-gray-400 hover:text-gray-600'}`}
                                                 >
                                                     {s.val}
                                                 </button>
@@ -825,7 +825,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                     <div className="flex items-center gap-3 bg-indigo-50/50 px-4 py-2 rounded-2xl border border-indigo-100/50">
                                         <Calendar className="w-5 h-5 text-indigo-600" />
                                         <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Data do Diário</span>
+                                            <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Data do Diário</span>
                                             <input
                                                 type="date"
                                                 value={formData.date}
@@ -873,7 +873,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                         {/* Bug 3: replaced fake hardcoded forecast with informational banner */}
                                         <div className="flex items-center gap-3 mb-6 px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl text-amber-700">
                                             <CloudSun className="w-5 h-5 shrink-0 text-amber-500" />
-                                            <span className="text-[11px] font-medium">Previsão do tempo automática estará disponível em breve. Registre as condições observadas na tabela abaixo.</span>
+                                            <span className="text-xs font-medium">Previsão do tempo automática estará disponível em breve. Registre as condições observadas na tabela abaixo.</span>
                                         </div>
 
                                         <div className="overflow-hidden rounded-2xl border border-gray-100 shadow-sm">
@@ -904,7 +904,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                         <button
                                                                             key={c}
                                                                             onClick={() => handleWeatherShiftChange(idx, 'condition', c)}
-                                                                            className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${shift.condition === c ? (c === 'Praticável' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100' : 'bg-red-500 text-white shadow-md shadow-red-100') : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                                                                            className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${shift.condition === c ? (c === 'Praticável' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100' : 'bg-red-500 text-white shadow-md shadow-red-100') : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
                                                                         >
                                                                             {c}
                                                                         </button>
@@ -944,12 +944,12 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                 notify('Nenhuma mão de obra encontrada no planejamento vinculado.');
                                                             }
                                                         }}
-                                                        className="flex items-center gap-2 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-4 py-2 rounded-xl hover:bg-emerald-100 active:scale-95 transition-all outline-none border border-emerald-100 uppercase tracking-widest"
+                                                        className="flex items-center gap-2 text-xs font-bold text-emerald-600 bg-emerald-50 px-4 py-2 rounded-xl hover:bg-emerald-100 active:scale-95 transition-all outline-none border border-emerald-100 uppercase tracking-widest"
                                                     >
                                                         <Download className="w-4 h-4" /> Importar do Planejamento
                                                     </button>
                                                 )}
-                                                <button onClick={addLabor} className="flex items-center gap-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 active:scale-95 transition-all outline-none border border-indigo-100 uppercase tracking-widest">
+                                                <button onClick={addLabor} className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 active:scale-95 transition-all outline-none border border-indigo-100 uppercase tracking-widest">
                                                     <Plus className="w-4 h-4" /> Adicionar Mão de Obra
                                                 </button>
                                             </div>
@@ -995,7 +995,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                             if (organizations.length === 0) {
                                                                                 return (
                                                                                     <div className="px-3 py-4 text-center">
-                                                                                        <p className="text-[10px] font-bold text-indigo-500 animate-pulse uppercase tracking-widest">Carregando banco de talentos...</p>
+                                                                                        <p className="text-xs font-bold text-indigo-500 animate-pulse uppercase tracking-widest">Carregando banco de talentos...</p>
                                                                                     </div>
                                                                                 );
                                                                             }
@@ -1003,7 +1003,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                             if (filtered.length === 0) {
                                                                                 return (
                                                                                     <div className="px-3 py-4 text-center">
-                                                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nenhum recurso encontrado no time</p>
+                                                                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Nenhum recurso encontrado no time</p>
                                                                                     </div>
                                                                                 );
                                                                             }
@@ -1026,7 +1026,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                                                 >
                                                                                                     <div className="flex items-center gap-2">
                                                                                                         <User className="w-3.5 h-3.5 text-indigo-500" />
-                                                                                                        <span className="text-[11px] font-bold text-gray-700">{s.name}</span>
+                                                                                                        <span className="text-xs font-bold text-gray-700">{s.name}</span>
                                                                                                     </div>
                                                                                                     {s.subLabel && <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-widest ml-5.5">{s.subLabel}</span>}
                                                                                                 </button>
@@ -1048,7 +1048,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                                                 >
                                                                                                     <div className="flex items-center gap-2">
                                                                                                         <Users className="w-3.5 h-3.5 text-emerald-500" />
-                                                                                                        <span className="text-[11px] font-bold text-gray-700">{s.name}</span>
+                                                                                                        <span className="text-xs font-bold text-gray-700">{s.name}</span>
                                                                                                     </div>
                                                                                                     {s.subLabel && <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest ml-5.5">{s.subLabel}</span>}
                                                                                                 </button>
@@ -1070,7 +1070,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                                                 >
                                                                                                     <div className="flex items-center gap-2">
                                                                                                         <BriefcaseIcon className="w-3.5 h-3.5 text-amber-500" />
-                                                                                                        <span className="text-[11px] font-bold text-gray-700">{s.name}</span>
+                                                                                                        <span className="text-xs font-bold text-gray-700">{s.name}</span>
                                                                                                     </div>
                                                                                                 </button>
                                                                                             ))}
@@ -1085,7 +1085,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                         </div>
                                                         <div className="flex gap-2">
                                                             <div className="flex-1 flex items-center gap-2">
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase">Qtd:</span>
+                                                                <span className="text-xs font-bold text-gray-400 uppercase">Qtd:</span>
                                                                 <input
                                                                     type="number"
                                                                     value={lab.quantity}
@@ -1094,7 +1094,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                 />
                                                             </div>
                                                             <div className="flex-1 flex items-center gap-2">
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase">Horas:</span>
+                                                                <span className="text-xs font-bold text-gray-400 uppercase">Horas:</span>
                                                                 <input
                                                                     type="number"
                                                                     placeholder="8"
@@ -1108,7 +1108,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                             placeholder="Observações (ex: Terceirizado)"
                                                             value={lab.observations || ''}
                                                             onChange={(e) => handleLaborChange(idx, 'observations', e.target.value)}
-                                                            className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-[10px] focus:ring-2 focus:ring-indigo-100 outline-none"
+                                                            className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-100 outline-none"
                                                         />
                                                     </div>
                                                 </div>
@@ -1123,7 +1123,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                 <CheckCircle2 className="w-5 h-5 text-indigo-500" />
                                                 Atividades do Dia
                                             </h3>
-                                            <button onClick={addActivity} className="flex items-center gap-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 active:scale-95 transition-all outline-none border border-indigo-100 uppercase tracking-widest">
+                                            <button onClick={addActivity} className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 active:scale-95 transition-all outline-none border border-indigo-100 uppercase tracking-widest">
                                                 <Plus className="w-4 h-4" /> Adicionar Atividade
                                             </button>
                                         </div>
@@ -1135,7 +1135,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                         <div className="flex-1 space-y-2">
                                                             {linkedSchedule && linkedSchedule.itemSchedules && linkedSchedule.itemSchedules.length > 0 ? (
                                                                 <div className="flex flex-col gap-1">
-                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter ml-1">Vincular Item do Cronograma</span>
+                                                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-tighter ml-1">Vincular Item do Cronograma</span>
                                                                     <select
                                                                         value={act.itemId || ''}
                                                                         onChange={(e) => {
@@ -1182,8 +1182,8 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                     </div>
                                                     <div className="w-64 flex flex-col gap-2">
                                                         <div className="flex justify-between px-1">
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase">Evolução</span>
-                                                            <span className="text-[10px] font-bold text-indigo-600 uppercase">{act.evolution || 0}%</span>
+                                                            <span className="text-xs font-bold text-gray-400 uppercase">Evolução</span>
+                                                            <span className="text-xs font-bold text-indigo-600 uppercase">{act.evolution || 0}%</span>
                                                         </div>
                                                         <input
                                                             type="range"
@@ -1196,7 +1196,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                         />
                                                     </div>
                                                     <div className="flex items-center gap-2 shrink-0">
-                                                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border ${act.evolution === 100 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border ${act.evolution === 100 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                                                             {act.evolution === 100 ? 'Finalizada' : 'Em Andamento'}
                                                         </span>
                                                         <button onClick={() => removeActivity(idx)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 className="w-5 h-5" /></button>
@@ -1248,19 +1248,19 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                             <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, 'image')} className="absolute inset-0 opacity-0 cursor-pointer" />
                                             <Camera className="w-8 h-8 text-indigo-500 mb-3" />
                                             <span className="text-xs font-bold text-indigo-800 uppercase tracking-widest">Fotos</span>
-                                            <span className="text-[10px] text-indigo-400 font-medium">JPG, PNG</span>
+                                            <span className="text-xs text-indigo-400 font-medium">JPG, PNG</span>
                                         </div>
                                         <div className="relative group overflow-hidden bg-blue-50 border-2 border-dashed border-blue-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center hover:bg-blue-100/50 hover:border-blue-400 transition-all cursor-pointer shadow-sm active:scale-95">
                                             <input type="file" accept="video/*" onChange={(e) => handleFileUpload(e, 'video')} className="absolute inset-0 opacity-0 cursor-pointer" />
                                             <Video className="w-8 h-8 text-blue-500 mb-3" />
                                             <span className="text-xs font-bold text-blue-800 uppercase tracking-widest">Vídeos</span>
-                                            <span className="text-[10px] text-blue-400 font-medium">MP4</span>
+                                            <span className="text-xs text-blue-400 font-medium">MP4</span>
                                         </div>
                                         <div className="relative group overflow-hidden bg-emerald-50 border-2 border-dashed border-emerald-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center hover:bg-emerald-100/50 hover:border-emerald-400 transition-all cursor-pointer shadow-sm active:scale-95">
                                             <input type="file" onChange={(e) => handleFileUpload(e, 'document')} className="absolute inset-0 opacity-0 cursor-pointer" />
                                             <FileText className="w-8 h-8 text-emerald-500 mb-3" />
                                             <span className="text-xs font-bold text-emerald-800 uppercase tracking-widest">Documentos</span>
-                                            <span className="text-[10px] text-emerald-400 font-medium">PDF, DOC, XLS</span>
+                                            <span className="text-xs text-emerald-400 font-medium">PDF, DOC, XLS</span>
                                         </div>
                                     </div>
 

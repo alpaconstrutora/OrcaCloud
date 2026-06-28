@@ -199,7 +199,7 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
                                     </div>
                                     <div>
                                         <p className="font-black text-gray-900">{t.ano}</p>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Metas</p>
+                                        <p className="text-xs font-black uppercase tracking-widest text-gray-400">Metas</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1">
@@ -223,7 +223,7 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
                                     { label: 'Lim. Endividamento', value: pct(t.limite_endividamento_pct) },
                                 ].map(kpi => (
                                     <div key={kpi.label} className="bg-gray-50 rounded-xl p-3">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{kpi.label}</p>
+                                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">{kpi.label}</p>
                                         <p className="text-sm font-black text-gray-900">{kpi.value}</p>
                                     </div>
                                 ))}

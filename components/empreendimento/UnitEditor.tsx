@@ -287,7 +287,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                   onChange={e => setGenForm(p => ({ ...p, prefix: e.target.value }))} />
               </div>
             </div>
-            <div className="text-[10px] text-gray-500 font-medium">
+            <div className="text-xs text-gray-500 font-medium">
               {genTotal > 0 ? (
                 <>
                   Exemplo: <span className="font-bold text-gray-700">{genForm.prefix ? `${genForm.prefix}-` : ''}{genForm.start_floor || 1}01</span>
@@ -377,7 +377,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                           <select
                             value={u.status}
                             onChange={e => handleStatusChange(u, e.target.value as UnitStatus)}
-                            className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${STATUS_STYLE[u.status]}`}
+                            className={`text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${STATUS_STYLE[u.status]}`}
                           >
                             {(Object.keys(STATUS_LABELS) as UnitStatus[]).map(s => (
                               <option key={s} value={s}>{STATUS_LABELS[s]}</option>
@@ -404,7 +404,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                           <select
                             value={u.status}
                             onChange={e => handleStatusChange(u, e.target.value as UnitStatus)}
-                            className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${STATUS_STYLE[u.status]}`}
+                            className={`text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${STATUS_STYLE[u.status]}`}
                           >
                             {(Object.keys(STATUS_LABELS) as UnitStatus[]).map(s => (
                               <option key={s} value={s}>{STATUS_LABELS[s]}</option>
@@ -441,7 +441,7 @@ const TotalsRow: React.FC<{ units: EmpreendimentoUnit[] }> = ({ units }) => {
   return (
     <tr className="border-t-2 border-gray-200 bg-gray-50/70 font-bold text-xs text-gray-700">
       <td className="py-2.5 px-4" colSpan={3}>
-        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total ({units.length} unid.)</span>
+        <span className="text-xs font-black uppercase tracking-widest text-gray-400">Total ({units.length} unid.)</span>
       </td>
       <td className="py-2.5 px-4">{fmt(totalPriv)} m²</td>
       <td className="py-2.5 px-4">{fmt(totalComum)} m²</td>

@@ -185,7 +185,7 @@ const DatabaseManagerModal: React.FC<DatabaseManagerModalProps> = ({ isOpen, onC
                                         {db.description && (
                                             <p className="text-xs text-gray-500">{db.description}</p>
                                         )}
-                                        <span className="text-[10px] text-gray-400">
+                                        <span className="text-xs text-gray-400">
                                             Criado em: {new Date(db.created_at).toLocaleDateString()}
                                         </span>
                                     </div>

@@ -208,17 +208,17 @@ export const LastPlannerPanel: React.FC<Props> = ({ organizationId, projectId, h
             <div className="grid grid-cols-3 gap-3">
                 <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
                     <div className="text-2xl font-black text-indigo-700">{ppcGlobal !== null ? `${ppcGlobal}%` : '—'}</div>
-                    <div className="text-[11px] font-medium text-gray-500 mt-0.5">PPC acumulado</div>
+                    <div className="text-xs font-medium text-gray-500 mt-0.5">PPC acumulado</div>
                 </div>
                 <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
                     <div className="text-2xl font-black text-blue-700">{lastPpc !== null ? `${lastPpc}%` : '—'}</div>
-                    <div className="text-[11px] font-medium text-gray-500 mt-0.5">PPC última semana</div>
+                    <div className="text-xs font-medium text-gray-500 mt-0.5">PPC última semana</div>
                 </div>
                 <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
                     <div className="text-2xl font-black text-amber-700">
                         {Object.keys(openConstraintsByItem).length}
                     </div>
-                    <div className="text-[11px] font-medium text-gray-500 mt-0.5">Atividades bloqueadas</div>
+                    <div className="text-xs font-medium text-gray-500 mt-0.5">Atividades bloqueadas</div>
                 </div>
             </div>
 
@@ -308,7 +308,7 @@ const LookaheadView: React.FC<{
                             {weeks.map((w, i) => (
                                 <th key={w} className={`text-center px-3 py-3 font-bold min-w-[120px] ${i === 0 ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-500'}`}>
                                     {i === 0 ? 'Esta semana' : `+${i} sem`}
-                                    <div className="font-normal text-[10px] opacity-70">{fmtWeek(w)}</div>
+                                    <div className="font-normal text-xs opacity-70">{fmtWeek(w)}</div>
                                 </th>
                             ))}
                         </tr>
@@ -336,7 +336,7 @@ const LookaheadView: React.FC<{
                                             return (
                                                 <td key={w} className="px-3 py-2.5 text-center">
                                                     {inWeek && (
-                                                        <div className={`mx-auto h-5 rounded-md text-[10px] flex items-center justify-center font-bold ${
+                                                        <div className={`mx-auto h-5 rounded-md text-xs flex items-center justify-center font-bold ${
                                                             hasConstraint
                                                                 ? 'bg-red-100 text-red-600'
                                                                 : i === 0
@@ -354,7 +354,7 @@ const LookaheadView: React.FC<{
                             })}
                         {leafItems.filter(item => weeks.some(w => itemsInWeek([item], w).length > 0)).length === 0 && (
                             <tr>
-                                <td colSpan={weeksCount + 1} className="px-4 py-10 text-center text-gray-400 text-[11px]">
+                                <td colSpan={weeksCount + 1} className="px-4 py-10 text-center text-gray-400 text-xs">
                                     Nenhuma atividade programada para as próximas {weeksCount} semanas.
                                 </td>
                             </tr>
@@ -362,7 +362,7 @@ const LookaheadView: React.FC<{
                     </tbody>
                 </table>
             </div>
-            <div className="px-4 py-2 border-t border-gray-100 flex items-center gap-4 text-[10px] text-gray-400">
+            <div className="px-4 py-2 border-t border-gray-100 flex items-center gap-4 text-xs text-gray-400">
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-indigo-100 inline-block" /> Esta semana</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-50 inline-block" /> Lookahead</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-100 inline-block" /> Com restrição</span>
@@ -410,7 +410,7 @@ const WeeklyView: React.FC<{
                     <div className="text-sm font-bold text-gray-800">
                         {weekOffset === 0 ? 'Esta semana' : weekOffset === 1 ? 'Próxima semana' : weekOffset === -1 ? 'Semana passada' : weekOffset > 0 ? `+${weekOffset} semanas` : `${Math.abs(weekOffset)} semanas atrás`}
                     </div>
-                    <div className="text-[11px] text-gray-400">{fmtWeek(selectedWeekStart)}</div>
+                    <div className="text-xs text-gray-400">{fmtWeek(selectedWeekStart)}</div>
                 </div>
                 <button
                     onClick={() => setWeekOffset(weekOffset + 1)}
@@ -421,7 +421,7 @@ const WeeklyView: React.FC<{
                 {weekOffset !== 0 && (
                     <button
                         onClick={() => setWeekOffset(0)}
-                        className="text-[11px] text-indigo-600 font-medium px-2 py-1 rounded-lg hover:bg-indigo-50 transition-all"
+                        className="text-xs text-indigo-600 font-medium px-2 py-1 rounded-lg hover:bg-indigo-50 transition-all"
                     >
                         Hoje
                     </button>
@@ -435,7 +435,7 @@ const WeeklyView: React.FC<{
                     <div className="text-xs font-bold text-indigo-700">
                         PPC semana: {ppc !== null ? `${ppc}%` : '—'}
                     </div>
-                    <div className="text-[11px] text-indigo-500 ml-auto">
+                    <div className="text-xs text-indigo-500 ml-auto">
                         {completedCount}/{committed.length} compromissos cumpridos
                     </div>
                 </div>
@@ -444,16 +444,16 @@ const WeeklyView: React.FC<{
             {/* Items table */}
             <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
                 <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">
+                    <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
                         Atividades da semana ({itemsThisWeek.length})
                     </span>
                     {isPast && (
-                        <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full">Semana passada — apontamento permitido</span>
+                        <span className="text-xs bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full">Semana passada — apontamento permitido</span>
                     )}
                 </div>
 
                 {itemsThisWeek.length === 0 ? (
-                    <div className="px-4 py-10 text-center text-[11px] text-gray-400">
+                    <div className="px-4 py-10 text-center text-xs text-gray-400">
                         Nenhuma atividade programada para esta semana.
                     </div>
                 ) : (
@@ -485,12 +485,12 @@ const WeeklyView: React.FC<{
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="text-[10px] text-gray-400 flex items-center gap-2 mt-0.5">
+                                        <div className="text-xs text-gray-400 flex items-center gap-2 mt-0.5">
                                             <Clock className="w-3 h-3" />
                                             <span>{item.earlyStart ?? item.schedule?.startDate ?? '—'} → {item.earlyFinish ?? item.schedule?.endDate ?? '—'}</span>
                                         </div>
                                         {cmt?.failureReason && (
-                                            <div className="text-[10px] text-red-500 flex items-center gap-1 mt-0.5">
+                                            <div className="text-xs text-red-500 flex items-center gap-1 mt-0.5">
                                                 <XCircle className="w-3 h-3" />
                                                 {cmt.failureReason}
                                             </div>
@@ -506,7 +506,7 @@ const WeeklyView: React.FC<{
                                                 <>
                                                     <button
                                                         onClick={() => onMarkComplete(item, true)}
-                                                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${cmt.isComplete === true ? 'bg-emerald-100 text-emerald-700' : 'text-gray-400 hover:bg-emerald-50 hover:text-emerald-600'}`}
+                                                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-all ${cmt.isComplete === true ? 'bg-emerald-100 text-emerald-700' : 'text-gray-400 hover:bg-emerald-50 hover:text-emerald-600'}`}
                                                         title="Concluído"
                                                     >
                                                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -514,7 +514,7 @@ const WeeklyView: React.FC<{
                                                     </button>
                                                     <button
                                                         onClick={() => { setFailureModal({ item }); setFailureReason(cmt.failureReason ?? ''); }}
-                                                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${cmt.isComplete === false ? 'bg-red-100 text-red-700' : 'text-gray-400 hover:bg-red-50 hover:text-red-600'}`}
+                                                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-all ${cmt.isComplete === false ? 'bg-red-100 text-red-700' : 'text-gray-400 hover:bg-red-50 hover:text-red-600'}`}
                                                         title="Não concluído"
                                                     >
                                                         <XCircle className="w-3.5 h-3.5" />
@@ -585,7 +585,7 @@ const WeeklyView: React.FC<{
 const PpcChart: React.FC<{ ppcData: PpcWeek[] }> = ({ ppcData }) => {
     if (ppcData.length === 0) {
         return (
-            <div className="bg-white border border-gray-100 rounded-xl px-4 py-12 text-center text-[11px] text-gray-400">
+            <div className="bg-white border border-gray-100 rounded-xl px-4 py-12 text-center text-xs text-gray-400">
                 Nenhum dado de PPC registrado ainda. Comece a apontar compromissos na aba Semanal.
             </div>
         );
@@ -626,7 +626,7 @@ const PpcChart: React.FC<{ ppcData: PpcWeek[] }> = ({ ppcData }) => {
                     })}
                 </div>
                 {/* Meta line */}
-                <div className="flex items-center gap-3 mt-3 text-[10px]">
+                <div className="flex items-center gap-3 mt-3 text-xs">
                     <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-emerald-400 inline-block" /> ≥ 80%</span>
                     <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-amber-400 inline-block" /> 60–79%</span>
                     <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-red-400 inline-block" /> &lt; 60%</span>

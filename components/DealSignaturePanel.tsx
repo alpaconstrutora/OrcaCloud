@@ -121,7 +121,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, o
                 /* Formulário de envio */
                 <div className="space-y-3">
                     <div>
-                        <label className="text-[10px] font-black text-purple-700 uppercase tracking-widest mb-1 block">Contrato (PDF)</label>
+                        <label className="text-xs font-black text-purple-700 uppercase tracking-widest mb-1 block">Contrato (PDF)</label>
                         <label className="flex items-center gap-3 px-4 py-3 bg-white border border-purple-200 rounded-xl cursor-pointer hover:border-purple-400 transition-all">
                             <Upload className="w-4 h-4 text-purple-500 shrink-0" />
                             <span className="text-xs font-bold text-purple-700 truncate">
@@ -138,7 +138,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, o
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="text-[10px] font-black text-purple-700 uppercase tracking-widest mb-1 block">E-mail do signatário</label>
+                            <label className="text-xs font-black text-purple-700 uppercase tracking-widest mb-1 block">E-mail do signatário</label>
                             <input
                                 type="email"
                                 value={signerEmail}
@@ -148,7 +148,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, o
                             />
                         </div>
                         <div>
-                            <label className="text-[10px] font-black text-purple-700 uppercase tracking-widest mb-1 block">WhatsApp (opcional)</label>
+                            <label className="text-xs font-black text-purple-700 uppercase tracking-widest mb-1 block">WhatsApp (opcional)</label>
                             <input
                                 type="tel"
                                 value={signerPhone}

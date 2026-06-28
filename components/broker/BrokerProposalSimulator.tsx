@@ -131,7 +131,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                         </p>
                     </div>
                     <div className="text-right">
-                        <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Valor da Unidade</p>
+                        <p className="text-xs font-black text-indigo-300 uppercase tracking-widest">Valor da Unidade</p>
                         <p className="text-2xl font-black text-white">{formatCurrency(unitPrice)}</p>
                     </div>
                 </div>
@@ -298,12 +298,12 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
 
                         {/* Summary */}
                         <div className="bg-gray-900 rounded-xl p-6 text-white">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">
+                            <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">
                                 {unit.purpose === 'RENTAL' ? 'Resumo da Locação' : 'Resumo da Simulação'}
                             </h4>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div>
-                                    <p className="text-[10px] text-gray-400 font-bold uppercase">
+                                    <p className="text-xs text-gray-400 font-bold uppercase">
                                         {unit.purpose === 'RENTAL' ? 'Aluguel Proposto' : 'Valor Total'}
                                     </p>
                                     <p className="text-lg font-black">{formatCurrency(simulation.totalValue)}</p>
@@ -311,15 +311,15 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                 {unit.purpose !== 'RENTAL' && (
                                     <>
                                         <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Entrada</p>
+                                            <p className="text-xs text-gray-400 font-bold uppercase">Entrada</p>
                                             <p className="text-lg font-black text-emerald-400">{formatCurrency(simulation.downPayment)}</p>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Parcela Mensal</p>
+                                            <p className="text-xs text-gray-400 font-bold uppercase">Parcela Mensal</p>
                                             <p className="text-lg font-black text-blue-400">{formatCurrency(simulation.monthlyValue)}</p>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Financiamento</p>
+                                            <p className="text-xs text-gray-400 font-bold uppercase">Financiamento</p>
                                             <p className="text-lg font-black text-purple-400">{formatCurrency(simulation.financingValue)}</p>
                                         </div>
                                     </>
@@ -327,15 +327,15 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                 {unit.purpose === 'RENTAL' && (
                                     <>
                                         <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Meses de Contrato</p>
+                                            <p className="text-xs text-gray-400 font-bold uppercase">Meses de Contrato</p>
                                             <p className="text-lg font-black text-blue-400">{monthlyInstallments}</p>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Desconto</p>
+                                            <p className="text-xs text-gray-400 font-bold uppercase">Desconto</p>
                                             <p className="text-lg font-black text-amber-400">{discountPct}%</p>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Valor Original</p>
+                                            <p className="text-xs text-gray-400 font-bold uppercase">Valor Original</p>
                                             <p className="text-lg font-black text-gray-500 line-through decoration-red-500">{formatCurrency(unitPrice)}</p>
                                         </div>
                                     </>

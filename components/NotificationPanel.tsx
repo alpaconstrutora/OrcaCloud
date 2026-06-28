@@ -86,7 +86,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ email, onClose, o
                         </div>
                         <div>
                             <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest">Notificações</h2>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Acompanhe seus alertas</p>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Acompanhe seus alertas</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
@@ -134,7 +134,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ email, onClose, o
                 {loading ? (
                     <div className="p-12 text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse">Carregando Notificações...</p>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest animate-pulse">Carregando Notificações...</p>
                     </div>
                 ) : filteredNotifications.length === 0 ? (
                     <div className="p-12 text-center flex flex-col items-center justify-center h-full opacity-40">
@@ -158,19 +158,19 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ email, onClose, o
                                         <h3 className="text-xs font-black text-gray-900 uppercase tracking-tight mb-1">{n.title}</h3>
                                         <p className="text-sm text-gray-600 font-medium leading-relaxed mb-3">{n.message}</p>
                                         <div className="flex items-center gap-4">
-                                            <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
+                                            <span className="flex items-center gap-1 text-xs font-bold text-gray-400">
                                                 <Clock className="w-3 h-3" />
                                                 {new Date(n.createdAt).toLocaleDateString()}
                                             </span>
                                             {!email && n.recipientEmail && (
-                                                <span className="text-[10px] font-bold text-indigo-400 truncate max-w-[120px]" title={n.recipientEmail}>
+                                                <span className="text-xs font-bold text-indigo-400 truncate max-w-[120px]" title={n.recipientEmail}>
                                                     @{n.recipientEmail.split('@')[0]}
                                                 </span>
                                             )}
                                             {n.link && (
                                                 <button
                                                     onClick={() => onNavigate ? onNavigate(n.link!) : window.location.href = n.link!}
-                                                    className="flex items-center gap-1 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                                                    className="flex items-center gap-1 text-xs font-black text-indigo-600 uppercase tracking-widest hover:underline"
                                                 >
                                                     Ver Detalhes
                                                     <ExternalLink className="w-3 h-3" />
@@ -206,13 +206,13 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ email, onClose, o
             <div className="p-4 border-t border-gray-50 bg-gray-50/30 flex items-center justify-between">
                 <button
                     onClick={loadNotifications}
-                    className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors"
+                    className="text-xs font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors"
                 >
                     Atualizar
                 </button>
                 <button
                     onClick={() => { onNavigate?.('notifications-center'); onClose(); }}
-                    className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors flex items-center gap-1"
+                    className="text-xs font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors flex items-center gap-1"
                 >
                     Ver todas
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>

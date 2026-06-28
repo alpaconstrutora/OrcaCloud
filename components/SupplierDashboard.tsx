@@ -208,7 +208,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                         <div className={`p-2.5 rounded-xl bg-gray-50 text-gray-600 transition-colors group-hover:bg-indigo-600 group-hover:text-white w-fit mb-4`}>
                             {stat.icon}
                         </div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{stat.label}</p>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">{stat.label}</p>
                         <h3 className="text-2xl font-black text-gray-900 mt-1">{stat.val}</h3>
                     </div>
                 ))}
@@ -259,12 +259,12 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                                 <span className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-1">{neg.date}</span>
                                                 <h4 className="font-black text-gray-900 group-hover:text-indigo-600 transition-colors">{neg.item}</h4>
                                             </div>
-                                            <span className="px-2.5 py-1 rounded-lg bg-white text-gray-500 text-[10px] font-black uppercase tracking-widest border border-gray-100">
+                                            <span className="px-2.5 py-1 rounded-lg bg-white text-gray-500 text-xs font-black uppercase tracking-widest border border-gray-100">
                                                 {neg.status}
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200/50">
-                                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{neg.project}</span>
+                                            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">{neg.project}</span>
                                             <span className="text-sm font-black text-gray-900">{neg.price}</span>
                                         </div>
                                     </div>
@@ -274,7 +274,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left">
                                     <thead className="bg-gray-50/50 border-b border-gray-100">
-                                        <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                        <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
                                             <th className="px-8 py-5">Item de Suprimento</th>
                                             <th className="px-8 py-5">Projeto Destino</th>
                                             <th className="px-8 py-5 text-center">Status</th>
@@ -291,7 +291,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                                 <td className="px-8 py-5">
                                                     <div className="flex flex-col">
                                                         <span className="font-black text-gray-900 group-hover:text-indigo-600">{neg.item}</span>
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">Ref: {Math.random().toString(36).substr(2, 6).toUpperCase()}</span>
+                                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-1">Ref: {Math.random().toString(36).substr(2, 6).toUpperCase()}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-8 py-5">
@@ -301,7 +301,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                                     </div>
                                                 </td>
                                                 <td className="px-8 py-5 text-center">
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${neg.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest ${neg.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'
                                                         }`}>
                                                         {neg.status}
                                                     </span>
@@ -324,7 +324,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 px-2 mb-2">
                             <Sparkles className="w-4 h-4 text-indigo-500" />
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Supply AI Insights</span>
+                            <span className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Supply AI Insights</span>
                         </div>
                         {insights.map((insight, idx) => (
                             <AIInsightCard
@@ -358,7 +358,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 <div className="space-y-6 animate-in fade-in duration-500">
                     <button
                         onClick={() => setActiveNegotiationId(null)}
-                        className="flex items-center gap-2 text-[10px] font-black text-gray-400 hover:text-indigo-600 uppercase tracking-widest transition-colors mb-4 group"
+                        className="flex items-center gap-2 text-xs font-black text-gray-400 hover:text-indigo-600 uppercase tracking-widest transition-colors mb-4 group"
                     >
                         <ArrowRight className="w-4 h-4 rotate-180 group-hover:-translate-x-1 transition-transform" />
                         Voltar para Oportunidades
@@ -440,11 +440,11 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                         </div>
                                         <div className="flex items-center gap-12">
                                             <div className="text-right">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Membro Líder</p>
+                                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Membro Líder</p>
                                                 <span className="text-sm font-black text-gray-900">{neg.bestBid}</span>
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Seu Lance</p>
+                                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Seu Lance</p>
                                                 <span className={`text-xl font-black ${neg.status === 'Winning' ? 'text-emerald-600' : 'text-gray-900'}`}>{neg.yourBid}</span>
                                             </div>
                                             <div className="flex items-center gap-3">
@@ -475,13 +475,13 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                                     <Sparkles className="w-4 h-4" />
                                                 </div>
                                                 <div className="flex-1">
-                                                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">{bidAnalysis[neg.id]?.title}</p>
+                                                    <p className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-1">{bidAnalysis[neg.id]?.title}</p>
                                                     <p className="text-sm font-bold text-gray-700 leading-relaxed">{bidAnalysis[neg.id]?.message}</p>
                                                 </div>
                                                 {bidAnalysis[neg.id]?.actionable && (
                                                     <button
                                                         onClick={() => setActiveNegotiationId(neg.id)}
-                                                        className="text-[10px] font-black text-indigo-600 uppercase tracking-widest border-b-2 border-indigo-200 hover:border-indigo-600 transition-all"
+                                                        className="text-xs font-black text-indigo-600 uppercase tracking-widest border-b-2 border-indigo-200 hover:border-indigo-600 transition-all"
                                                     >
                                                         {bidAnalysis[neg.id]?.actionable?.label}
                                                     </button>
@@ -497,7 +497,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
                         <table className="w-full text-left">
                             <thead className="bg-gray-50/50 border-b border-gray-100">
-                                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
                                     <th className="px-8 py-5">Nº Pedido</th>
                                     <th className="px-8 py-5">Data</th>
                                     <th className="px-8 py-5">Itens</th>
@@ -596,7 +596,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                     setOrderViewMode('list');
                                     setIsEditingLogistics(false);
                                 }}
-                                className="flex items-center gap-2 text-[10px] font-black text-gray-400 hover:text-indigo-600 uppercase tracking-widest transition-colors group"
+                                className="flex items-center gap-2 text-xs font-black text-gray-400 hover:text-indigo-600 uppercase tracking-widest transition-colors group"
                             >
                                 <ArrowRight className="w-4 h-4 rotate-180 group-hover:-translate-x-1 transition-transform" />
                                 Voltar para Pedidos
@@ -605,7 +605,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 {!isEditingLogistics ? (
                                     <button
                                         onClick={() => setIsEditingLogistics(true)}
-                                        className="flex items-center gap-2 px-6 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100/50 hover:bg-indigo-100 transition-all"
+                                        className="flex items-center gap-2 px-6 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest border border-indigo-100/50 hover:bg-indigo-100 transition-all"
                                     >
                                         <FileText className="w-3 h-3" />
                                         Editar Logística
@@ -614,13 +614,13 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                     <div className="flex items-center gap-3">
                                         <button
                                             onClick={() => setIsEditingLogistics(false)}
-                                            className="px-6 py-2 bg-gray-50 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-gray-100 hover:bg-white transition-all"
+                                            className="px-6 py-2 bg-gray-50 text-gray-400 rounded-xl text-xs font-black uppercase tracking-widest border border-gray-100 hover:bg-white transition-all"
                                         >
                                             Cancelar
                                         </button>
                                         <button
                                             onClick={handleSaveLogistics}
-                                            className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:scale-105 transition-all"
+                                            className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:scale-105 transition-all"
                                         >
                                             Salvar Alterações
                                         </button>
@@ -628,7 +628,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 )}
                                 <div className="text-right">
                                     <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Rastreamento Logístico</h3>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Pedido: {order?.number || order?.id.slice(0, 8)}</p>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Pedido: {order?.number || order?.id.slice(0, 8)}</p>
                                 </div>
                             </div>
                         </div>
@@ -648,7 +648,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
                         <div className="mt-12 p-8 bg-indigo-50/50 rounded-3xl border border-indigo-100/50 grid grid-cols-1 md:grid-cols-3 gap-8">
                             <div>
-                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">Previsão de Entrega</p>
+                                <p className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-2">Previsão de Entrega</p>
                                 {isEditingLogistics ? (
                                     <input
                                         type="date"
@@ -661,15 +661,15 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 )}
                             </div>
                             <div>
-                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">Local de Entrega</p>
+                                <p className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-2">Local de Entrega</p>
                                 <p className="text-sm font-bold text-gray-900">{order?.deliveryLocation || 'Canteiro'}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">Forma de Entrega</p>
+                                <p className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-2">Forma de Entrega</p>
                                 <p className="text-sm font-bold text-gray-900">{order?.deliveryMethod || 'CIF'}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">Status Atual</p>
+                                <p className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-2">Status Atual</p>
                                 {isEditingLogistics ? (
                                     <select
                                         value={editingStatus}
@@ -692,7 +692,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 <h4 className="text-sm font-black text-indigo-900 uppercase tracking-widest mb-8">Datas por Estágio</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                     <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block">Data de Separação</label>
+                                        <label className="text-xs font-black text-indigo-600 uppercase tracking-widest block">Data de Separação</label>
                                         <input
                                             type="date"
                                             value={editingSeparationDate}
@@ -701,7 +701,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                         />
                                     </div>
                                     <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block">Data de Saída (Trânsito)</label>
+                                        <label className="text-xs font-black text-indigo-600 uppercase tracking-widest block">Data de Saída (Trânsito)</label>
                                         <input
                                             type="date"
                                             value={editingShippedDate}
@@ -710,7 +710,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                         />
                                     </div>
                                     <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block">Data de Entrega Efetiva</label>
+                                        <label className="text-xs font-black text-indigo-600 uppercase tracking-widest block">Data de Entrega Efetiva</label>
                                         <input
                                             type="date"
                                             value={editingActualDeliveryDate}
@@ -770,7 +770,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 <div key={order.id} className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all overflow-hidden relative">
                                     <div className="absolute top-0 right-0 p-8">
                                         <div className="text-right">
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Valor Total</p>
+                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Valor Total</p>
                                             <span className="text-xl font-black text-gray-900">
                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                                                     order.items?.reduce((sum: number, item: { total?: number }) => sum + (item.total || 0), 0) || 0
@@ -779,10 +779,10 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-4 mb-10">
-                                        <div className="px-5 py-2 bg-gray-50 rounded-2xl border border-gray-100 text-[10px] font-black text-gray-900 uppercase tracking-wider">
+                                        <div className="px-5 py-2 bg-gray-50 rounded-2xl border border-gray-100 text-xs font-black text-gray-900 uppercase tracking-wider">
                                             {order.number || order.id.slice(0, 8)}
                                         </div>
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                                             Data: {new Date(order.created_at || '').toLocaleDateString()} • {order.items?.length || 0} itens • {order.paymentMethod || 'Pagamento a definir'} ({order.paymentTermType || 'Vista'})
                                         </span>
                                         {invoices.some(inv => inv.orderId === order.id) && (
@@ -835,7 +835,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
                                 <table className="w-full text-left">
                                     <thead className="bg-gray-50/50 border-b border-gray-100">
-                                        <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                        <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
                                             <th className="px-8 py-5">Nº Pedido</th>
                                             <th className="px-8 py-5">Data</th>
                                             <th className="px-8 py-5">Itens</th>
@@ -849,7 +849,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                         {orders.map((order) => (
                                             <tr key={order.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onClick={() => handleViewOrder(order.id, 'details')}>
                                                 <td className="px-8 py-5">
-                                                    <div className="px-4 py-1.5 bg-gray-50 rounded-xl border border-gray-100 text-[10px] font-black text-gray-900 w-fit">
+                                                    <div className="px-4 py-1.5 bg-gray-50 rounded-xl border border-gray-100 text-xs font-black text-gray-900 w-fit">
                                                         {order.number || order.id.slice(0, 8)}
                                                     </div>
                                                 </td>
@@ -956,7 +956,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 className="pl-11 pr-6 py-3 bg-gray-50 border border-gray-100 rounded-xl text-form-input font-bold w-64 outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all"
                             />
                         </div>
-                        <button className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-all shadow-sm active:scale-95">
+                        <button className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-100 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-all shadow-sm active:scale-95">
                             <Filter className="w-4 h-4" />
                             Filtros
                         </button>
@@ -973,7 +973,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                         <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
                             <table className="w-full text-left">
                                 <thead className="bg-gray-50/50 border-b border-gray-100">
-                                    <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                    <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
                                         <th className="px-8 py-5">Nº RFQ</th>
                                         <th className="px-8 py-5">Título</th>
                                         <th className="px-8 py-5">Projeto</th>
@@ -986,7 +986,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                     {filteredQuotations.map((q) => (
                                         <tr key={q.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onClick={() => setActiveQuotationId(q.id)}>
                                             <td className="px-8 py-5">
-                                                <div className="px-4 py-1.5 bg-gray-50 rounded-xl border border-gray-100 text-[10px] font-black text-gray-900 w-fit">
+                                                <div className="px-4 py-1.5 bg-gray-50 rounded-xl border border-gray-100 text-xs font-black text-gray-900 w-fit">
                                                     {q.number}
                                                 </div>
                                             </td>
@@ -999,7 +999,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                             <td className="px-8 py-5 text-right">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setActiveQuotationId(q.id); }}
-                                                    className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:scale-105 transition-all"
+                                                    className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:scale-105 transition-all"
                                                 >
                                                     Responder
                                                 </button>
@@ -1064,7 +1064,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                     const supplier = allSuppliers.find(s => s.id === e.target.value);
                                     if (supplier) setSelectedAdminSupplier(supplier);
                                 }}
-                                className="bg-amber-50 border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-xl px-4 py-1.5 focus:ring-0 cursor-pointer shadow-sm hover:bg-amber-100 transition-colors"
+                                className="bg-amber-50 border-amber-200 text-amber-700 text-xs font-black uppercase tracking-widest rounded-xl px-4 py-1.5 focus:ring-0 cursor-pointer shadow-sm hover:bg-amber-100 transition-colors"
                                 value={selectedAdminSupplier?.id || ''}
                             >
                                 <option value="">Impersonar Fornecedor</option>
@@ -1088,7 +1088,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                            className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black transition-all duration-300 uppercase tracking-widest ${activeTab === tab.id
+                            className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-xs font-black transition-all duration-300 uppercase tracking-widest ${activeTab === tab.id
                                 ? 'bg-white text-indigo-600 shadow-xl scale-105'
                                 : 'text-gray-400 hover:text-gray-600'
                                 }`}
@@ -1107,14 +1107,14 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 {activeTab === 'orders' && renderOrders()}
                 {activeTab === 'documents' && renderDocuments()}
                 {activeTab === 'profile' && (
-                    <div className="flex flex-col items-center justify-center h-64 bg-white rounded-2xl border border-gray-100 text-gray-400 uppercase tracking-widest text-[10px] font-black">
+                    <div className="flex flex-col items-center justify-center h-64 bg-white rounded-2xl border border-gray-100 text-gray-400 uppercase tracking-widest text-xs font-black">
                         Módulo de Perfil em Manutenção
                     </div>
                 )}
             </main>
 
             <div className="pt-12 text-center opacity-30 select-none pointer-events-none">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Supply Chain Intelligence • Opura Ecosystem</p>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Supply Chain Intelligence • Opura Ecosystem</p>
             </div>
         </div>
     );

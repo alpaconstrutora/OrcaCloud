@@ -15,7 +15,7 @@ import { STALE } from '../lib/queryClient';
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
         {children}
     </div>
 );
@@ -152,7 +152,7 @@ const DiaryForm: React.FC<DiaryFormProps> = ({ orgId, employees, teams, projects
 
                     {/* Condição do tempo */}
                     <div>
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Condição do Tempo</p>
+                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Condição do Tempo</p>
                         <div className="grid grid-cols-4 gap-2">
                             {(Object.entries(WEATHER_CONFIG) as [LaborDiaryEntry['condicao_tempo'], typeof WEATHER_CONFIG['BOM']][]).map(([k, v]) => {
                                 const Icon = v.icon;
@@ -160,7 +160,7 @@ const DiaryForm: React.FC<DiaryFormProps> = ({ orgId, employees, teams, projects
                                     <button key={k} type="button" onClick={() => setForm(p => ({ ...p, condicao_tempo: k }))}
                                         className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all ${form.condicao_tempo === k ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:border-slate-300'}`}>
                                         <Icon className={`w-5 h-5 ${v.color}`} />
-                                        <span className="text-[10px] font-black text-slate-600">{v.label}</span>
+                                        <span className="text-xs font-black text-slate-600">{v.label}</span>
                                     </button>
                                 );
                             })}
@@ -178,13 +178,13 @@ const DiaryForm: React.FC<DiaryFormProps> = ({ orgId, employees, teams, projects
                     {/* Trabalhadores */}
                     <div>
                         <div className="flex items-center justify-between mb-3">
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                            <p className="text-xs font-black text-slate-500 uppercase tracking-widest">
                                 Colaboradores Presentes ({workers.filter(w => w.presente).length})
                             </p>
                             <div className="flex items-center gap-2">
                                 {form.team_id && teamMembers.length > 0 && (
                                     <button type="button" onClick={addTeamWorkers}
-                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black hover:bg-emerald-200 transition-all">
+                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-black hover:bg-emerald-200 transition-all">
                                         <Users className="w-3 h-3" /> Adicionar Equipe
                                     </button>
                                 )}
@@ -216,13 +216,13 @@ const DiaryForm: React.FC<DiaryFormProps> = ({ orgId, employees, teams, projects
                                             <p className="text-sm font-bold text-slate-800 w-40 truncate shrink-0">{emp?.name || w.employee_id}</p>
                                             <div className="flex items-center gap-2 flex-1">
                                                 <div className="flex items-center gap-1">
-                                                    <span className="text-[10px] text-slate-400 font-bold">HN</span>
+                                                    <span className="text-xs text-slate-400 font-bold">HN</span>
                                                     <input type="number" min="0" max="24" step="0.5" value={w.horas_trabalhadas}
                                                         onChange={e => updateWorker(idx, 'horas_trabalhadas', parseFloat(e.target.value) || 0)}
                                                         className="w-14 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-form-input font-bold text-center outline-none focus:ring-1 focus:ring-indigo-100" />
                                                 </div>
                                                 <div className="flex items-center gap-1">
-                                                    <span className="text-[10px] text-slate-400 font-bold">HE</span>
+                                                    <span className="text-xs text-slate-400 font-bold">HE</span>
                                                     <input type="number" min="0" max="8" step="0.5" value={w.horas_extras}
                                                         onChange={e => updateWorker(idx, 'horas_extras', parseFloat(e.target.value) || 0)}
                                                         className="w-14 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-form-input font-bold text-center outline-none focus:ring-1 focus:ring-indigo-100" />
@@ -316,7 +316,7 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
                     { label: 'Total Colaboradores/dia', value: diaries.reduce((s, d) => s + d.efetivo, 0), bg: 'bg-slate-50', text: 'text-slate-700' },
                 ].map(({ label, value, bg, text }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
                         <p className={`text-2xl font-black ${text} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
                     </div>
                 ))}
@@ -371,14 +371,14 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-3 flex-wrap">
                                                 <span className="text-sm font-black text-slate-900">{d.data}</span>
-                                                <span className="text-[10px] font-bold text-slate-500">{TURNO_LABELS[d.turno]}</span>
+                                                <span className="text-xs font-bold text-slate-500">{TURNO_LABELS[d.turno]}</span>
                                                 {d.project_name && <span className="text-xs font-bold text-indigo-700">{d.project_name}</span>}
                                                 {d.team_name && <span className="text-xs text-slate-400">{d.team_name}</span>}
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${d.status === 'FECHADO' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${d.status === 'FECHADO' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                                                     {d.status === 'FECHADO' ? 'Fechado' : 'Em Aberto'}
                                                 </span>
                                                 {d.batch_generated && (
-                                                    <span className="flex items-center gap-1 text-[10px] font-black text-indigo-600">
+                                                    <span className="flex items-center gap-1 text-xs font-black text-indigo-600">
                                                         <CheckCircle2 className="w-3 h-3" /> Ponto gerado
                                                     </span>
                                                 )}
@@ -397,7 +397,7 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
                                                 <button
                                                     onClick={() => handleClose(d.id)}
                                                     disabled={closingId === d.id}
-                                                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-[10px] font-black transition-all disabled:opacity-50"
+                                                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-black transition-all disabled:opacity-50"
                                                 >
                                                     {closingId === d.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
                                                     Fechar + Gerar Ponto

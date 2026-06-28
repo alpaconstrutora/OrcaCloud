@@ -63,17 +63,17 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
             {/* Filtros */}
             <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm">
                 <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">De</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">De</label>
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
                         className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Até</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Até</label>
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
                         className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Regime</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Regime</label>
                     <select value={regime} onChange={e => setRegime(e.target.value as RegimeContabil)}
                         className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <option value="CAIXA">Regime de Caixa</option>
@@ -106,11 +106,11 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
                     <table className="w-full text-left">
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-200">
-                                <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest sticky left-0 bg-slate-50 min-w-[180px]">
+                                <th className="px-5 py-3 text-xs font-black text-slate-400 uppercase tracking-widest sticky left-0 bg-slate-50 min-w-[180px]">
                                     Linha DRE
                                 </th>
                                 {data.map(spe => (
-                                    <th key={spe.empresa_id} className="px-4 py-3 text-[10px] font-black text-slate-600 uppercase tracking-widest text-right min-w-[160px]">
+                                    <th key={spe.empresa_id} className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-widest text-right min-w-[160px]">
                                         {spe.empresa_nome}
                                         <span className="block text-slate-400 font-normal normal-case tracking-normal">
                                             {spe.n_transacoes} lançamentos
@@ -138,7 +138,7 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
                                                         {fmt(v)}
                                                     </span>
                                                     {pct !== null && (
-                                                        <span className={`ml-2 text-[10px] font-semibold flex items-center justify-end gap-0.5 ${pct >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                                        <span className={`ml-2 text-xs font-semibold flex items-center justify-end gap-0.5 ${pct >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                                                             {pct >= 0
                                                                 ? <TrendingUp className="w-3 h-3" />
                                                                 : <TrendingDown className="w-3 h-3" />

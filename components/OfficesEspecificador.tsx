@@ -301,7 +301,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
     return (
       <div className="flex flex-col items-center justify-center p-8 min-h-[400px] bg-[#F3F7F9]">
         <div className="w-8 h-8 border-4 border-[#D47A55] border-t-transparent rounded-full animate-spin mb-3" />
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Buscando Projetos...</span>
+        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Buscando Projetos...</span>
       </div>
     );
   }
@@ -400,7 +400,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
             Projeto Ativo
           </span>
           <h2 className="text-xl font-black text-slate-800 tracking-tight mt-1.5">{selectedProjeto.name}</h2>
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">
+          <p className="text-xs font-black uppercase tracking-widest text-slate-400 mt-0.5">
             Área: 320 m² · {BRL(custoTotal || 48000)} especificado
           </p>
         </div>
@@ -420,7 +420,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id as any)}
-              className={`relative flex items-center gap-1.5 px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-colors whitespace-nowrap ${
+              className={`relative flex items-center gap-1.5 px-4 py-3 text-xs font-black uppercase tracking-widest transition-colors whitespace-nowrap ${
                 activeSubTab === sub.id ? 'text-[#D47A55]' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
@@ -546,7 +546,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
               )}
 
               {financeiroItens.length === 0 ? (
-                <div className="text-center py-8 text-[11px] text-slate-400">Nenhuma parcela registrada para este projeto.</div>
+                <div className="text-center py-8 text-xs text-slate-400">Nenhuma parcela registrada para este projeto.</div>
               ) : (
                 <div className="space-y-2">
                   {financeiroItens.map((item: any) => (
@@ -608,7 +608,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                   return (
                     <div key={amb}>
                       <div className="flex justify-between items-center mb-3 px-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-[#D47A55]">🛋️ {amb}</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-[#D47A55]">🛋️ {amb}</span>
                         <span className="text-[9px] font-black text-slate-500">{BRL(subTotal)}</span>
                       </div>
                       <div className="space-y-2.5">
@@ -622,7 +622,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                               )}
                               <div className="min-w-0">
                                 <span className="block font-black text-xs text-slate-800 group-hover:text-[#D47A55] transition-colors truncate">{item.item_nome}</span>
-                                <span className="block text-[10px] text-slate-500 truncate">{item.fabricante_fornecedor || 'Sem fornecedor'}</span>
+                                <span className="block text-xs text-slate-500 truncate">{item.fabricante_fornecedor || 'Sem fornecedor'}</span>
                                 <span className="block text-[8px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">{item.quantidade}x · {BRL(item.preco_unitario)}</span>
                               </div>
                             </div>

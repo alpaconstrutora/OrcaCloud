@@ -33,7 +33,7 @@ const STATUS_COLORS = {
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
         {children}
     </div>
 );
@@ -157,7 +157,7 @@ const CourseForm: React.FC<CourseFormProps> = ({ orgId, course, onClose, onSaved
 
                     {form.is_obrigatorio && (
                         <div className="space-y-2">
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Funções que exigem este treinamento</p>
+                            <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Funções que exigem este treinamento</p>
                             <div className="grid grid-cols-2 gap-1.5">
                                 {ROLES.map(role => {
                                     const sel = (form.roles_obrigatorios || []).includes(role);
@@ -311,7 +311,7 @@ const TrainingRecordForm: React.FC<TrainingRecordFormProps> = ({ orgId, employee
                     </InputGroup>
                     {/* Certificado */}
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Certificado (opcional)</label>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Certificado (opcional)</label>
                         <div onClick={() => fileRef.current?.click()} className="border-2 border-dashed border-slate-200 rounded-xl p-3 text-center cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/30 transition-all">
                             {certFile ? (
                                 <div className="flex items-center justify-center gap-2 text-indigo-700">
@@ -426,7 +426,7 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees }) => 
                         <p className="text-xs font-black text-amber-900 uppercase tracking-tight">
                             {alerts.length} treinamento{alerts.length > 1 ? 's' : ''} vencendo em 30 dias
                         </p>
-                        <p className="text-[11px] text-amber-700 mt-1">
+                        <p className="text-xs text-amber-700 mt-1">
                             {alerts.slice(0, 4).map(a => `${a.employee_name} — ${a.course_nome}`).join(' · ')}
                             {alerts.length > 4 && ` e mais ${alerts.length - 4}…`}
                         </p>
@@ -443,7 +443,7 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees }) => 
                     { label: 'Alertas 30 dias',     value: alerts.length,  bg: 'bg-amber-50',   text: 'text-amber-700' },
                 ].map(({ label, value, bg, text }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
                         <p className={`text-2xl font-black ${text} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
                     </div>
                 ))}
@@ -508,7 +508,7 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees }) => 
                             <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/50">
                                     {['Colaborador', 'Curso / NR', 'Realizado em', 'Validade', 'Nota', 'Status', ''].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -522,7 +522,7 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees }) => 
                                             <td className="px-4 py-3 text-sm font-bold text-slate-900">{r.employee_name || '—'}</td>
                                             <td className="px-4 py-3">
                                                 <p className="text-sm font-bold text-slate-800">{r.course_nome || '—'}</p>
-                                                {r.nr_referencia && <p className="text-[10px] font-black text-rose-600">{r.nr_referencia}</p>}
+                                                {r.nr_referencia && <p className="text-xs font-black text-rose-600">{r.nr_referencia}</p>}
                                             </td>
                                             <td className="px-4 py-3 text-table-body text-slate-500 font-medium">{r.data_realizacao}</td>
                                             <td className="px-4 py-3">
@@ -538,7 +538,7 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees }) => 
                                                 ) : '—'}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${sc.bg} ${sc.text}`}>{r.status}</span>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${sc.bg} ${sc.text}`}>{r.status}</span>
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-1">
@@ -574,7 +574,7 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees }) => 
                             <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/50">
                                     {['Curso', 'Categoria', 'NR', 'Carga', 'Validade', 'Obrigatório', ''].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -585,10 +585,10 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees }) => 
                                         <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 py-3">
                                                 <p className="text-sm font-bold text-slate-900">{c.nome}</p>
-                                                {c.instrutor && <p className="text-[11px] text-slate-400">{c.instrutor}</p>}
+                                                {c.instrutor && <p className="text-xs text-slate-400">{c.instrutor}</p>}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${cat.bg} ${cat.color}`}>{cat.label}</span>
+                                                <span className={`px-2 py-0.5 rounded-lg text-xs font-black ${cat.bg} ${cat.color}`}>{cat.label}</span>
                                             </td>
                                             <td className="px-4 py-3 text-table-body font-black text-rose-600">{c.nr_referencia || '—'}</td>
                                             <td className="px-4 py-3 text-table-body font-bold text-slate-600">{c.carga_horaria}h</td>
@@ -597,10 +597,10 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees }) => 
                                             </td>
                                             <td className="px-4 py-3">
                                                 {c.is_obrigatorio ? (
-                                                    <span className="flex items-center gap-1 text-[10px] font-black text-rose-700">
+                                                    <span className="flex items-center gap-1 text-xs font-black text-rose-700">
                                                         <Shield className="w-3 h-3" /> Sim
                                                     </span>
-                                                ) : <span className="text-[10px] text-slate-400">Não</span>}
+                                                ) : <span className="text-xs text-slate-400">Não</span>}
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-1">

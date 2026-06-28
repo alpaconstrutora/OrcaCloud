@@ -108,7 +108,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Status do Projeto</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Status do Projeto</label>
                             <select
                                 value={formData.status || 'Em Andamento'}
                                 onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
@@ -121,7 +121,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             </select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Tipo de Orçamento</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Tipo de Orçamento</label>
                             <select
                                 value={formData.budgetType || 'ANALYTIC'}
                                 onChange={(e) => setFormData({ ...formData, budgetType: e.target.value as any })}
@@ -132,7 +132,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             </select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Status do Orçamento</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Status do Orçamento</label>
                             <select
                                 value={formData.budgetStatus || 'Em Andamento'}
                                 onChange={(e) => setFormData({ ...formData, budgetStatus: e.target.value as any })}
@@ -146,7 +146,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
 
                     <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Área Prox. (m²)</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Área Prox. (m²)</label>
                             <div className="relative">
                                 <Ruler className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                                 <input
@@ -158,7 +158,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Padrão Construtivo</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Padrão Construtivo</label>
                             <select
                                 value={formData.standard}
                                 onChange={(e) => setFormData({ ...formData, standard: e.target.value })}
@@ -183,7 +183,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Base de Dados</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Base de Dados</label>
                             <select
                                 value={formData.database}
                                 onChange={(e) => setFormData({ ...formData, database: e.target.value })}
@@ -194,7 +194,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             </select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Mês de Referência</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Mês de Referência</label>
                             <div className="relative">
                                 <Calendar className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                                 <input
@@ -209,7 +209,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Localidade (Estado)</label>
+                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Localidade (Estado)</label>
                         <div className="relative">
                             <Globe className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                             <select
@@ -236,7 +236,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">BDI Padrão (%)</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">BDI Padrão (%)</label>
                             <div className="relative">
                                 <Percent className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                                 <input
@@ -249,7 +249,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Encargos Sociais (LS %)</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Encargos Sociais (LS %)</label>
                             <div className="relative">
                                 <Percent className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                                 <input
@@ -264,7 +264,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Regime de Encargos</label>
+                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Regime de Encargos</label>
                         <select
                             value={formData.socialChargesMode}
                             onChange={(e) => setFormData({ ...formData, socialChargesMode: e.target.value })}
@@ -287,7 +287,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             <h2 className="text-lg font-bold text-gray-800 tracking-tight">Composição Detalhada de BDI (Fórmula Científica)</h2>
                         </div>
                         <div className="flex items-center gap-2 bg-purple-50 px-4 py-2 rounded-xl">
-                            <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">BDI Calculado:</span>
+                            <span className="text-xs font-black text-purple-400 uppercase tracking-widest">BDI Calculado:</span>
                             <span className="text-lg font-black text-purple-700">{calculateBdi(formData.bdiComposition).toFixed(2)}%</span>
                         </div>
                     </div>
@@ -329,7 +329,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                     </div>
 
                     <div className="p-4 bg-purple-50/50 rounded-xl border border-purple-100/50">
-                        <p className="text-[10px] text-purple-800 font-medium leading-relaxed italic">
+                        <p className="text-xs text-purple-800 font-medium leading-relaxed italic">
                             A fórmula científica de BDI é utilizada para garantir que as despesas indiretas e lucros sejam aplicados corretamente sobre o custo direto, considerando a incidência de impostos sobre o faturamento bruto.
                         </p>
                     </div>
@@ -351,7 +351,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             </div>
                             <div>
                                 <h4 className="text-sm font-bold text-gray-800">Salvamento Automático</h4>
-                                <p className="text-[10px] text-gray-500 font-medium">Salva alterações na nuvem em tempo real.</p>
+                                <p className="text-xs text-gray-500 font-medium">Salva alterações na nuvem em tempo real.</p>
                             </div>
                         </div>
                         <button
@@ -365,7 +365,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
 
                     <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex gap-3">
                         <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                        <p className="text-[10px] text-amber-800 font-medium uppercase leading-relaxed tracking-tight">
+                        <p className="text-xs text-amber-800 font-medium uppercase leading-relaxed tracking-tight">
                             Atenção: A alteração da Base de Dados ou Mês de Referência pode impactar o cálculo de itens SINAPI já existentes no orçamento.
                         </p>
                     </div>

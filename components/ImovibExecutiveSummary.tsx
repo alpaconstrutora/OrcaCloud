@@ -266,14 +266,14 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study }
                         </div>
                         <div className="flex items-center gap-6 md:gap-8 shrink-0">
                             <div className="text-right">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Custo Provisionado (CAPEX)</div>
+                                <div className="text-xs font-black uppercase tracking-widest text-emerald-600 mb-1">Custo Provisionado (CAPEX)</div>
                                 <div className="text-2xl font-black text-slate-800">
                                     {formatCurrency(cashFlowData.esgCostTotal)}
                                 </div>
                             </div>
                             <div className="w-px h-12 bg-emerald-200 hidden md:block"></div>
                             <div className="text-right">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Valorização do Produto (VGV)</div>
+                                <div className="text-xs font-black uppercase tracking-widest text-emerald-600 mb-1">Valorização do Produto (VGV)</div>
                                 <div className="text-2xl font-black text-emerald-700">
                                     +{formatCurrency(cashFlowData.esgVgvPremiumValue)}
                                 </div>

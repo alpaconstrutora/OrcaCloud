@@ -465,7 +465,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                             ) : (
                                 <div className="text-center py-12">
                                     <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-3" />
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nenhum erro recorrente detectado</p>
+                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Nenhum erro recorrente detectado</p>
                                 </div>
                             )}
                         </div>
@@ -560,7 +560,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                     <div className="flex-1 space-y-3">
                                         <div className="grid grid-cols-2 gap-3">
                                             <div>
-                                                <label className="text-[11px] font-medium text-gray-400 uppercase tracking-widest mb-1 block">Nome do Template</label>
+                                                <label className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1 block">Nome do Template</label>
                                                 <input
                                                     type="text"
                                                     value={template.name}
@@ -574,7 +574,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                 />
                                             </div>
                                             <div>
-                                                <label className="text-[11px] font-medium text-gray-400 uppercase tracking-widest mb-1 block">ID Externo (Make/Webhook)</label>
+                                                <label className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1 block">ID Externo (Make/Webhook)</label>
                                                 <input
                                                     type="text"
                                                     value={template.externalId}
@@ -760,7 +760,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                     
                                                     <div className="grid grid-cols-4 flex-1 gap-4 items-center">
                                                         <div className="flex flex-col">
-                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Disparo</span>
+                                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Disparo</span>
                                                             <select
                                                                 value={rule.days}
                                                                 onChange={e => {
@@ -768,7 +768,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                                     newRules[idx].days = Number(e.target.value);
                                                                     handleSaveGlobal('billingRules', newRules);
                                                                 }}
-                                                                className="bg-transparent text-[11px] font-bold text-gray-700 outline-none mt-1"
+                                                                className="bg-transparent text-xs font-bold text-gray-700 outline-none mt-1"
                                                             >
                                                                 <option value="-1">1 dia antes</option>
                                                                 <option value="0">No dia</option>
@@ -779,8 +779,8 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                         </div>
 
                                                         <div className="flex flex-col">
-                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Mínimo</span>
-                                                            <div className="flex items-center gap-1 mt-1 text-[11px] font-bold text-gray-700">
+                                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Mínimo</span>
+                                                            <div className="flex items-center gap-1 mt-1 text-xs font-bold text-gray-700">
                                                                 <span>R$</span>
                                                                 <input
                                                                     type="number"
@@ -797,19 +797,19 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                         </div>
 
                                                         <div className="flex flex-col">
-                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Modo</span>
-                                                            <span className="text-[11px] font-bold text-gray-700 mt-1">{rule.triggerMode === 'AUTOMATIC' ? 'Automático' : 'Manual'}</span>
+                                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Modo</span>
+                                                            <span className="text-xs font-bold text-gray-700 mt-1">{rule.triggerMode === 'AUTOMATIC' ? 'Automático' : 'Manual'}</span>
                                                         </div>
 
                                                         <div className="flex flex-col">
-                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Status</span>
+                                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Status</span>
                                                             <button
                                                                 onClick={() => {
                                                                     const newRules = [...(financialInfo.billingRules || [])];
                                                                     newRules[idx].active = !newRules[idx].active;
                                                                     handleSaveGlobal('billingRules', newRules);
                                                                 }}
-                                                                className={`text-[10px] font-black uppercase text-left mt-1 ${rule.active ? 'text-emerald-600' : 'text-gray-400'}`}
+                                                                className={`text-xs font-black uppercase text-left mt-1 ${rule.active ? 'text-emerald-600' : 'text-gray-400'}`}
                                                             >
                                                                 {rule.active ? 'Ativo' : 'Pausado'}
                                                             </button>
@@ -829,7 +829,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                 
                                                 <div className="flex items-center gap-4 pl-12">
                                                     <div className="flex-1 bg-white/40 rounded-xl px-3 py-1.5 flex items-center justify-between group/template">
-                                                        <span className="text-[11px] font-medium text-gray-500 italic truncate max-w-[400px]">
+                                                        <span className="text-xs font-medium text-gray-500 italic truncate max-w-[400px]">
                                                             {rule.messageTemplate || "Sem template de mensagem configurado..."}
                                                         </span>
                                                         <button 
@@ -853,7 +853,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                     ))}
                                     {(!financialInfo.billingRules || financialInfo.billingRules.length === 0) && (
                                         <div className="text-center py-8 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nenhuma regra configurada</p>
+                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Nenhuma regra configurada</p>
                                         </div>
                                     )}
                                 </div>
@@ -864,9 +864,9 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                             <div className="p-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
                                 <div>
                                     <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Régua de Hoje</h4>
-                                    <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Parcelas prontas para disparo</p>
+                                    <p className="text-xs text-gray-400 font-bold uppercase mt-1">Parcelas prontas para disparo</p>
                                 </div>
-                                <span className="px-3 py-1 bg-white border border-gray-100 text-blue-600 rounded-full text-[10px] font-black">{readyInstallments.length} Ativas</span>
+                                <span className="px-3 py-1 bg-white border border-gray-100 text-blue-600 rounded-full text-xs font-black">{readyInstallments.length} Ativas</span>
                             </div>
                             <div className="p-6">
                                 {readyInstallments.length > 0 ? (
@@ -875,10 +875,10 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                             <div key={`${inst.id}-${idx}`} className="p-5 border border-gray-100 bg-gray-50/50 rounded-3xl hover:border-blue-200 transition-all group">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="flex flex-col">
-                                                        <span className="text-[11px] font-bold text-gray-900">{inst.clientName || 'N/A'}</span>
+                                                        <span className="text-xs font-bold text-gray-900">{inst.clientName || 'N/A'}</span>
                                                         <span className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">{inst.description || inst.propertyName || 'N/A'}</span>
                                                     </div>
-                                                    <span className="text-[10px] font-black text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">{fmt(inst.value)}</span>
+                                                    <span className="text-xs font-black text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">{fmt(inst.value)}</span>
                                                 </div>
                                                 <div className="flex justify-between items-center mt-3">
                                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
@@ -911,16 +911,16 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                             </div>
                             <button
                                 onClick={handleSyncRuler}
-                                className="w-full bg-white text-indigo-600 py-5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all shadow-lg active:scale-95 relative z-10"
+                                className="w-full bg-white text-indigo-600 py-5 rounded-2xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] transition-all shadow-lg active:scale-95 relative z-10"
                             >
                                 Rodar Régua Agora
                             </button>
                             <div className="pt-4 border-t border-white/10 relative z-10">
-                                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-80">
+                                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest opacity-80">
                                     <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
                                     Agendamento Ativo
                                 </div>
-                                <p className="text-[10px] opacity-60 mt-1">Próximo disparo automático: {(financialInfo.billingTriggerHour ?? 9).toString().padStart(2, '0')}:00 (Brasília)</p>
+                                <p className="text-xs opacity-60 mt-1">Próximo disparo automático: {(financialInfo.billingTriggerHour ?? 9).toString().padStart(2, '0')}:00 (Brasília)</p>
                             </div>
                         </div>
                     </div>
@@ -933,17 +933,17 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Data/Hora</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Evento</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Referência</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Ações</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest">Data/Hora</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest">Evento</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest">Referência</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest">Status</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {automationHistory.map((item) => (
                                     <tr key={item.id} className="hover:bg-blue-50/20 transition-colors group">
-                                        <td className="px-6 py-4 text-[11px] font-bold text-gray-500 whitespace-nowrap">
+                                        <td className="px-6 py-4 text-xs font-bold text-gray-500 whitespace-nowrap">
                                             {new Date(item.created_at).toLocaleString('pt-BR')}
                                         </td>
                                         <td className="px-6 py-4">
@@ -960,7 +960,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">
                                                 <div className={`w-1.5 h-1.5 rounded-full ${item.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                                                <span className={`text-[10px] font-black uppercase ${item.status === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                <span className={`text-xs font-black uppercase ${item.status === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
                                                     {item.status === 'success' ? 'Sucesso' : 'Falha'}
                                                 </span>
                                                 {item.converted_at && (
@@ -993,7 +993,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                         <div className="flex justify-between items-start mb-8">
                             <div>
                                 <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Detalhes do Evento</h3>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">ID: {selectedHistory.id}</p>
+                                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">ID: {selectedHistory.id}</p>
                             </div>
                             <button onClick={() => setSelectedHistory(null)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
                                 <Plus className="w-6 h-6 rotate-45 text-gray-400" />
@@ -1012,9 +1012,9 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                             )}
 
                             <div>
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 block">Payload Enviado (JSON)</span>
+                                <span className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3 block">Payload Enviado (JSON)</span>
                                 <div className="bg-gray-900 p-6 rounded-3xl overflow-hidden border border-gray-800">
-                                    <pre className="text-[11px] text-emerald-400 font-mono leading-relaxed overflow-x-auto max-h-[300px] custom-scrollbar">
+                                    <pre className="text-xs text-emerald-400 font-mono leading-relaxed overflow-x-auto max-h-[300px] custom-scrollbar">
                                         {JSON.stringify(selectedHistory.payload, null, 2)}
                                     </pre>
                                 </div>
@@ -1024,12 +1024,12 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                         <div className="mt-10 flex gap-4">
                             <button
                                 onClick={() => { handleRetryHistory(selectedHistory); setSelectedHistory(null); }}
-                                className={`flex-1 ${selectedHistory.status === 'success' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl shadow-blue-600/20'} py-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all`}
+                                className={`flex-1 ${selectedHistory.status === 'success' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl shadow-blue-600/20'} py-5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all`}
                                 disabled={selectedHistory.status === 'success'}
                             >
                                 {selectedHistory.status === 'success' ? 'Já Enviado com Sucesso' : 'Tentar Reenvio'}
                             </button>
-                            <button onClick={() => setSelectedHistory(null)} className="px-8 bg-gray-50 text-gray-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-100">Fechar</button>
+                            <button onClick={() => setSelectedHistory(null)} className="px-8 bg-gray-50 text-gray-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-100">Fechar</button>
                         </div>
                     </div>
                 </div>

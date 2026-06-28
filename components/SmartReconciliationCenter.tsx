@@ -248,7 +248,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                         {label}
                     </button>
                 ))}
-                <span className="text-[11px] text-gray-400 font-medium ml-1">Valide as exceções — as de alta confiança podem ir em lote.</span>
+                <span className="text-xs text-gray-400 font-medium ml-1">Valide as exceções — as de alta confiança podem ir em lote.</span>
             </div>
 
             {/* Cards de revisão lado-a-lado */}
@@ -267,17 +267,17 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                             <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-0">
                                 {/* Sistema */}
                                 <div className="p-4 border-b lg:border-b-0 lg:border-r border-gray-50">
-                                    <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                                    <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1">
                                         <FileText className="w-3.5 h-3.5" /> Sistema
                                     </div>
                                     <p className="text-sm font-bold text-gray-800 truncate" title={cand?.description}>{cand?.description || '—'}</p>
                                     {candParty && (
-                                        <p className={`text-[11px] font-bold flex items-center gap-1 mt-0.5 ${candParty.isClient ? 'text-emerald-600' : 'text-indigo-600'}`} title={`${candParty.label}: ${candParty.name}`}>
+                                        <p className={`text-xs font-bold flex items-center gap-1 mt-0.5 ${candParty.isClient ? 'text-emerald-600' : 'text-indigo-600'}`} title={`${candParty.label}: ${candParty.name}`}>
                                             {candParty.isClient ? <User className="w-3 h-3 flex-shrink-0" /> : <Building2 className="w-3 h-3 flex-shrink-0" />}
                                             <span className="truncate">{candParty.label}: {candParty.name}</span>
                                         </p>
                                     )}
-                                    <p className="text-[11px] text-gray-400 font-medium">venc. {formatDate(cand?.due_date || cand?.transaction_date)}</p>
+                                    <p className="text-xs text-gray-400 font-medium">venc. {formatDate(cand?.due_date || cand?.transaction_date)}</p>
                                     <p className="text-sm font-black text-gray-900 tabular-nums mt-1">{formatBRL(cand?.amount)}</p>
                                 </div>
 
@@ -296,24 +296,24 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
 
                                 {/* Extrato */}
                                 <div className="p-4 border-t lg:border-t-0 lg:border-l border-gray-50">
-                                    <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                                    <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1">
                                         <Landmark className="w-3.5 h-3.5" /> Extrato
                                     </div>
                                     <p className="text-sm font-bold text-gray-800 truncate" title={bank?.description_raw}>{bank?.description_normalized || bank?.description_raw || '—'}</p>
                                     {bankParty && (
-                                        <p className="text-[11px] font-bold text-gray-600 flex items-center gap-1 mt-0.5" title={`${bankParty.label}: ${bankParty.name}`}>
+                                        <p className="text-xs font-bold text-gray-600 flex items-center gap-1 mt-0.5" title={`${bankParty.label}: ${bankParty.name}`}>
                                             <Building2 className="w-3 h-3 flex-shrink-0" />
                                             <span className="truncate">{bankParty.label}: {bankParty.name}</span>
                                         </p>
                                     )}
-                                    <p className="text-[11px] text-gray-400 font-medium">{bank ? formatDate(bank.transaction_date) : '—'}</p>
+                                    <p className="text-xs text-gray-400 font-medium">{bank ? formatDate(bank.transaction_date) : '—'}</p>
                                     <p className={`text-sm font-black tabular-nums mt-1 ${bank?.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>{formatBRL(bank?.amount)}</p>
                                 </div>
                             </div>
 
                             {/* Ações */}
                             <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-gray-50 bg-gray-50/40">
-                                <span className="text-[11px] text-gray-400 font-medium">
+                                <span className="text-xs text-gray-400 font-medium">
                                     {alt > 0 ? `+${alt} candidato(s) alternativo(s)` : 'Melhor candidato'}
                                 </span>
                                 <div className="flex items-center gap-2">
@@ -341,7 +341,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-12 text-center">
                         <Zap className="w-8 h-8 text-gray-200 mx-auto mb-2" />
                         <p className="text-sm font-bold text-gray-400">Nenhuma sugestão nesta faixa.</p>
-                        <p className="text-[11px] text-gray-400 mt-1">Importe um extrato ou clique em “Reprocessar” para gerar sugestões.</p>
+                        <p className="text-xs text-gray-400 mt-1">Importe um extrato ou clique em “Reprocessar” para gerar sugestões.</p>
                     </div>
                 )}
             </div>
@@ -367,7 +367,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                         ['suggestion_min', 'Score mínimo sugestão'],
                     ] as [keyof typeof settings, string][]).map(([k, label]) => (
                         <div key={k}>
-                            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">{label}</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{label}</label>
                             <input
                                 type="number"
                                 value={settings[k]}

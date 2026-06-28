@@ -51,7 +51,7 @@ const ORIGEM_LABELS: Record<CandidateOrigem, string> = {
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
         {children}
     </div>
 );
@@ -212,7 +212,7 @@ const CandidateCardInner: React.FC<{
                     </div>
                     <div className="min-w-0">
                         <p className="text-sm font-black text-slate-900 truncate">{candidate.nome}</p>
-                        <p className="text-[11px] text-slate-400">{ORIGEM_LABELS[candidate.origem]}</p>
+                        <p className="text-xs text-slate-400">{ORIGEM_LABELS[candidate.origem]}</p>
                     </div>
                 </div>
                 {candidate.nota_final != null && (
@@ -240,7 +240,7 @@ const CandidateCardInner: React.FC<{
             <div className="flex items-center gap-2 pt-2 border-t border-slate-50 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                 {nextStage && (
                     <button onClick={() => onStageChange(nextStage.id)}
-                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-[10px] font-black transition-all">
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-xs font-black transition-all">
                         <ChevronRight className="w-3 h-3" /> {nextStage.label}
                     </button>
                 )}
@@ -302,7 +302,7 @@ const KanbanColumn: React.FC<{
                 ))}
                 {candidates.length === 0 && !isOver && (
                     <div className="h-20 rounded-2xl border-2 border-dashed border-slate-100 flex items-center justify-center">
-                        <p className="text-[10px] text-slate-300 font-bold">Sem candidatos</p>
+                        <p className="text-xs text-slate-300 font-bold">Sem candidatos</p>
                     </div>
                 )}
             </div>
@@ -408,7 +408,7 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
                     <div>
                         <h2 className="text-lg font-black text-slate-900">{candidate.nome}</h2>
                         <div className="flex items-center gap-2 mt-1">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${stageConfig.bg} ${stageConfig.color} border border-current/20`}>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-black ${stageConfig.bg} ${stageConfig.color} border border-current/20`}>
                                 {stageConfig.label}
                             </span>
                             {candidate.nota_final != null && (
@@ -486,7 +486,7 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
                                     { label: 'Experiência', value: candidate.experiencia_anos ? `${candidate.experiencia_anos} anos` : '—', icon: Briefcase },
                                 ].map(({ label, value, icon: Icon }) => (
                                     <div key={label}>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Icon className="w-3 h-3" />{label}</p>
+                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Icon className="w-3 h-3" />{label}</p>
                                         <p className="text-sm font-bold text-slate-800 mt-0.5">{value || '—'}</p>
                                     </div>
                                 ))}
@@ -523,7 +523,7 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
 
                     {/* Timeline */}
                     <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Histórico de Interações</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Histórico de Interações</p>
                         {interviews.length === 0 ? (
                             <p className="text-xs text-slate-400 text-center py-4">Nenhuma interação registrada</p>
                         ) : (
@@ -533,16 +533,16 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
                                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 shrink-0" />
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-black text-indigo-600">{iv.tipo.replace('_', ' ')}</span>
-                                                <span className="text-[10px] text-slate-400">{new Date(iv.data_hora).toLocaleString('pt-BR')}</span>
+                                                <span className="text-xs font-black text-indigo-600">{iv.tipo.replace('_', ' ')}</span>
+                                                <span className="text-xs text-slate-400">{new Date(iv.data_hora).toLocaleString('pt-BR')}</span>
                                                 {iv.nota != null && (
-                                                    <span className="flex items-center gap-0.5 text-[10px] font-black text-amber-700">
+                                                    <span className="flex items-center gap-0.5 text-xs font-black text-amber-700">
                                                         <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />{iv.nota}
                                                     </span>
                                                 )}
                                             </div>
                                             {iv.notas && <p className="text-xs text-slate-600 mt-0.5">{iv.notas}</p>}
-                                            {iv.proxima_etapa && <p className="text-[10px] font-bold text-indigo-500 mt-1">→ {iv.proxima_etapa}</p>}
+                                            {iv.proxima_etapa && <p className="text-xs font-bold text-indigo-500 mt-1">→ {iv.proxima_etapa}</p>}
                                         </div>
                                     </div>
                                 ))}
@@ -552,7 +552,7 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
 
                     {/* Nova nota */}
                     <div className="space-y-2">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nova Anotação</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Nova Anotação</p>
                         <textarea value={newNote} onChange={e => setNewNote(e.target.value)} className={inputCls + ' resize-none h-20'} placeholder="Registre interação, feedback, observação..." />
                         <div className="flex items-center gap-2">
                             <input type="number" min="0" max="10" step="0.5" value={newNota ?? ''} onChange={e => setNewNota(parseFloat(e.target.value) || undefined)} className="w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-center outline-none" placeholder="Nota" />
@@ -697,7 +697,7 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
                     { label: 'Banco de Talentos',value: talentBank.length,                                      bg: 'bg-amber-50',   text: 'text-amber-700' },
                 ].map(({ label, value, bg, text }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
                         <p className={`text-2xl font-black ${text} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
                     </div>
                 ))}
@@ -798,10 +798,10 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-3 flex-wrap">
                                                 <span className="text-sm font-black text-slate-900">{j.titulo}</span>
-                                                <span className={`flex items-center gap-1 text-[10px] font-black ${prio.color}`}>
+                                                <span className={`flex items-center gap-1 text-xs font-black ${prio.color}`}>
                                                     <span className={`w-1.5 h-1.5 rounded-full ${prio.dot}`} />{prio.label}
                                                 </span>
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${j.status === 'ABERTA' ? 'bg-emerald-100 text-emerald-700' : j.status === 'FECHADA' ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${j.status === 'ABERTA' ? 'bg-emerald-100 text-emerald-700' : j.status === 'FECHADA' ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>
                                                     {j.status}
                                                 </span>
                                                 {j.project_name && <span className="text-xs text-indigo-600 font-bold">{j.project_name}</span>}
@@ -820,7 +820,7 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
                                             <button onClick={() => { setSelectedJobId(j.id); setView('kanban'); }}
-                                                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-[10px] font-black">
+                                                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-xs font-black">
                                                 Pipeline <ChevronRight className="w-3 h-3" />
                                             </button>
                                             <button onClick={() => { setEditingJob(j); setShowJobForm(true); }} className="p-1.5 hover:bg-indigo-50 rounded-lg text-slate-400 hover:text-indigo-600" title="Editar vaga">
@@ -857,7 +857,7 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
                                         </div>
                                         <div>
                                             <p className="text-sm font-black text-slate-900">{c.nome}</p>
-                                            <p className="text-[11px] text-slate-400">{c.job_titulo}</p>
+                                            <p className="text-xs text-slate-400">{c.job_titulo}</p>
                                         </div>
                                     </div>
                                     {c.nota_final != null && (

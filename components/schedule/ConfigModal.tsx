@@ -96,7 +96,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                         <button
                                             key={preset.label}
                                             onClick={() => onUpdate({ workSchedule: { hoursPerDay: preset.hours, workDays: preset.days, dayHours: {} } })}
-                                            className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
                                                 active ? 'bg-blue-50 border-blue-400 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
                                             }`}
                                         >
@@ -111,7 +111,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <span className="text-sm font-bold text-gray-700">Dias e horas por dia</span>
-                                <span className="text-[10px] font-bold text-blue-600">{weeklyTotal}h semanais</span>
+                                <span className="text-xs font-bold text-blue-600">{weeklyTotal}h semanais</span>
                             </div>
 
                             <div className="grid grid-cols-7 gap-1.5">
@@ -126,7 +126,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                             {/* Toggle do dia */}
                                             <button
                                                 onClick={() => toggleDay(value)}
-                                                className={`w-full py-1.5 rounded-lg text-[11px] font-black transition-all border-2 ${
+                                                className={`w-full py-1.5 rounded-lg text-xs font-black transition-all border-2 ${
                                                     active
                                                         ? isWeekend
                                                             ? 'bg-amber-500 border-amber-500 text-white'
@@ -146,7 +146,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                                         max={24}
                                                         value={h}
                                                         onChange={(e) => setDayHours(value, Number(e.target.value))}
-                                                        className={`w-full text-center text-[11px] font-bold border rounded-lg py-1 outline-none focus:ring-2 focus:ring-blue-400 transition-all ${
+                                                        className={`w-full text-center text-xs font-bold border rounded-lg py-1 outline-none focus:ring-2 focus:ring-blue-400 transition-all ${
                                                             isCustom
                                                                 ? 'border-blue-300 bg-blue-50 text-blue-700'
                                                                 : 'border-gray-200 text-gray-500'
@@ -161,13 +161,13 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                             </div>
 
                             <div className="flex items-center justify-between pt-0.5">
-                                <span className="text-[10px] text-gray-400">
+                                <span className="text-xs text-gray-400">
                                     {workDays.length} dia{workDays.length !== 1 ? 's' : ''}/semana
                                 </span>
                                 {Object.keys(dayHours).length > 0 && (
                                     <button
                                         onClick={() => update({ dayHours: {} })}
-                                        className="text-[10px] text-gray-400 hover:text-red-500 underline transition-colors"
+                                        className="text-xs text-gray-400 hover:text-red-500 underline transition-colors"
                                     >
                                         Uniformizar horas
                                     </button>
@@ -185,7 +185,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                         <div className="flex items-center justify-between">
                             <div>
                                 <span className="text-sm font-bold text-gray-700">Dias Úteis</span>
-                                <p className="text-[10px] text-gray-400">Duração calculada em dias úteis (conforme jornada acima)</p>
+                                <p className="text-xs text-gray-400">Duração calculada em dias úteis (conforme jornada acima)</p>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input
@@ -201,7 +201,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                         <div className="flex items-center justify-between">
                             <div>
                                 <span className="text-sm font-bold text-gray-700">Agregação automática de datas</span>
-                                <p className="text-[10px] text-gray-400">Grupos/etapas seguem mín. início / máx. término das tarefas</p>
+                                <p className="text-xs text-gray-400">Grupos/etapas seguem mín. início / máx. término das tarefas</p>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input
@@ -227,7 +227,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                         className={`p-3 rounded-xl border-2 text-left transition-all ${schedule.replanMode === mode.id || (!schedule.replanMode && mode.id === ReplanMode.AFFECTED_TASK) ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}
                                     >
                                         <div className="text-button font-bold text-gray-800">{mode.label}</div>
-                                        <div className="text-[10px] text-gray-400">{mode.desc}</div>
+                                        <div className="text-xs text-gray-400">{mode.desc}</div>
                                     </button>
                                 ))}
                             </div>

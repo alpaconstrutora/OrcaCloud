@@ -21,7 +21,7 @@ function pieceColor(index: number) { return PIECE_COLORS[index % PIECE_COLORS.le
 // ── Barra visual ─────────────────────────────────────────────────────────────
 const BarVisual: React.FC<{ bar: CutBar }> = ({ bar }) => (
   <div className="flex items-center gap-2 group">
-    <span className="text-[10px] font-bold text-slate-400 w-6 text-right flex-shrink-0">
+    <span className="text-xs font-bold text-slate-400 w-6 text-right flex-shrink-0">
       {bar.barIndex + 1}
     </span>
     <div className="flex-1 flex rounded overflow-hidden h-5 border border-slate-100">
@@ -44,7 +44,7 @@ const BarVisual: React.FC<{ bar: CutBar }> = ({ bar }) => (
         />
       )}
     </div>
-    <span className="text-[10px] text-slate-400 w-16 flex-shrink-0 text-right">
+    <span className="text-xs text-slate-400 w-16 flex-shrink-0 text-right">
       {bar.wasteCm.toFixed(0)} cm sobra
     </span>
   </div>
@@ -104,10 +104,10 @@ const BitolaSection: React.FC<{ plan: BitolaCutPlan }> = ({ plan }) => {
       {expanded && (
         <div className="px-5 pb-4 space-y-2 border-t border-slate-50">
           <div className="flex items-center gap-2 pt-3 pb-1">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex-1 ml-8">
+            <span className="text-xs font-black uppercase tracking-widest text-slate-400 flex-1 ml-8">
               Distribuição das peças
             </span>
-            <span className="text-[10px] font-black uppercase tracking-widest text-red-300 w-16 text-right">
+            <span className="text-xs font-black uppercase tracking-widest text-red-300 w-16 text-right">
               Sobra
             </span>
           </div>
@@ -135,28 +135,28 @@ const StructuralBarPlan: React.FC<Props> = ({
       {/* KPIs globais */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-blue-50 rounded-2xl p-4">
-          <p className="text-[11px] font-black uppercase tracking-widest text-blue-400">Barras totais</p>
+          <p className="text-xs font-black uppercase tracking-widest text-blue-400">Barras totais</p>
           <p className="text-3xl font-black text-blue-900 mt-1">{totalBars}</p>
           <p className="text-xs text-blue-400 mt-1">× 12 m cada</p>
         </div>
         <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-          <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Aproveitamento geral</p>
+          <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Aproveitamento geral</p>
           <UsageGauge pct={overallUsagePct} />
         </div>
         <div className="bg-amber-50 rounded-2xl p-4">
-          <p className="text-[11px] font-black uppercase tracking-widest text-amber-500">Sobra total</p>
+          <p className="text-xs font-black uppercase tracking-widest text-amber-500">Sobra total</p>
           <p className="text-2xl font-black text-amber-900 mt-1">{totalWasteKg.toFixed(1)} <span className="text-sm font-bold">kg</span></p>
         </div>
         {totalWasteCostBrl != null ? (
           <div className="bg-red-50 rounded-2xl p-4">
-            <p className="text-[11px] font-black uppercase tracking-widest text-red-400">Custo da sobra</p>
+            <p className="text-xs font-black uppercase tracking-widest text-red-400">Custo da sobra</p>
             <p className="text-2xl font-black text-red-900 mt-1">
               {totalWasteCostBrl.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
           </div>
         ) : (
           <div className="bg-slate-50 rounded-2xl p-4">
-            <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Custo da sobra</p>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-400">Custo da sobra</p>
             <p className="text-sm text-slate-300 mt-2">Cadastre custo/kg no catálogo</p>
           </div>
         )}

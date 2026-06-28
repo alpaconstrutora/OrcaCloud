@@ -176,25 +176,25 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
         switch (status) {
             case 'paid':
                 return (
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 rounded-full text-[10px] font-black uppercase tracking-widest border border-green-100">
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-black uppercase tracking-widest border border-green-100">
                         <CheckCircle2 className="w-3 h-3" /> Pago
                     </div>
                 );
             case 'rejected':
                 return (
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-700 rounded-full text-[10px] font-black uppercase tracking-widest border border-red-100">
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-700 rounded-full text-xs font-black uppercase tracking-widest border border-red-100">
                         <X className="w-3 h-3" /> Recusado
                     </div>
                 );
             case 'approved':
                 return (
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100">
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-black uppercase tracking-widest border border-blue-100">
                         <Clock className="w-3 h-3" /> Aprovado
                     </div>
                 );
             default:
                 return (
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 text-gray-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-gray-100">
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 text-gray-600 rounded-full text-xs font-black uppercase tracking-widest border border-gray-100">
                         <Clock className="w-3 h-3" /> Pendente
                     </div>
                 );
@@ -219,7 +219,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                         <select
                             value={selectedOrderId}
                             onChange={(e) => setSelectedOrderId(e.target.value)}
-                            className="bg-transparent border-none text-[10px] font-black uppercase tracking-wider text-gray-600 focus:ring-0 cursor-pointer pr-8"
+                            className="bg-transparent border-none text-xs font-black uppercase tracking-wider text-gray-600 focus:ring-0 cursor-pointer pr-8"
                         >
                             <option value="">Nenhum Pedido</option>
                             {orders.map(order => (
@@ -251,10 +251,10 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                     </div>
 
                     <div className="flex gap-4 mt-2">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
                             <span className="w-1.5 h-1.5 bg-gray-300 rounded-full"></span> PDF / XML
                         </span>
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
                             <span className="w-1.5 h-1.5 bg-gray-300 rounded-full"></span> Máx 5MB
                         </span>
                     </div>
@@ -306,7 +306,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                             />
                         )}
                     </div>
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{invoices.length} Arquivos</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">{invoices.length} Arquivos</span>
                 </div>
 
                 {loading ? (
@@ -356,7 +356,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                                 )}
                                                 <div className="flex items-center gap-3 mt-1">
                                                     {tableColumns.visibleColumns.includes('createdAt') && (
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                                                             {new Date(invoice.createdAt).toLocaleDateString()}
                                                         </span>
                                                     )}
@@ -383,7 +383,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                                     <select
                                                         value={invoice.orderId || ""}
                                                         onChange={(e) => handleLinkOrder(invoice.id, e.target.value)}
-                                                        className="bg-white border-gray-100 text-[10px] font-black uppercase tracking-tight text-gray-400 focus:ring-0 cursor-pointer rounded-xl py-1.5"
+                                                        className="bg-white border-gray-100 text-xs font-black uppercase tracking-tight text-gray-400 focus:ring-0 cursor-pointer rounded-xl py-1.5"
                                                     >
                                                         <option value="">Vincular Pedido</option>
                                                         {orders.map(order => (
@@ -432,7 +432,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                             </div>
                                             <div className="flex flex-col items-end gap-2">
                                                 {getStatusBadge(invoice.status)}
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                                                     {new Date(invoice.createdAt).toLocaleDateString()}
                                                 </span>
                                             </div>
@@ -443,12 +443,12 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                         </h5>
 
                                         <div className="space-y-4 mb-6">
-                                            <div className="flex items-center justify-between text-[10px] pt-4 border-t border-gray-50">
+                                            <div className="flex items-center justify-between text-xs pt-4 border-t border-gray-50">
                                                 <span className="font-black text-gray-400 uppercase tracking-widest">Vínculo</span>
                                                 <select
                                                     value={invoice.orderId || ""}
                                                     onChange={(e) => handleLinkOrder(invoice.id, e.target.value)}
-                                                    className="bg-gray-50 border-none text-[10px] font-black uppercase tracking-tight text-gray-600 focus:ring-0 cursor-pointer rounded-lg py-1 px-2"
+                                                    className="bg-gray-50 border-none text-xs font-black uppercase tracking-tight text-gray-600 focus:ring-0 cursor-pointer rounded-lg py-1 px-2"
                                                 >
                                                     <option value="">Nenhum</option>
                                                     {orders.map(order => (
@@ -457,7 +457,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                                 </select>
                                             </div>
                                             {linkedOrder && (
-                                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-indigo-100 w-fit">
+                                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-tight border border-indigo-100 w-fit">
                                                     <LinkIcon className="w-3 h-3" /> Pedido {linkedOrder.number}
                                                 </div>
                                             )}
@@ -468,7 +468,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                                 href={invoiceService.getInvoiceUrl(invoice.filePath)}
                                                 target="_blank"
                                                 rel="noreferrer"
-                                                className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all"
+                                                className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border border-gray-100 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all"
                                             >
                                                 <Eye className="w-4 h-4" /> Visualizar
                                             </a>

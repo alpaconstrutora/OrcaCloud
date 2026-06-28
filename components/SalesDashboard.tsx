@@ -133,7 +133,7 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
         <div className="flex flex-wrap items-center gap-4 bg-white px-5 py-2.5 rounded-[1.5rem] border border-gray-100 shadow-sm">
           <div className="flex items-center gap-3">
             <Clock className="w-4 h-4 text-gray-400" />
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Início:</span>
+            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Início:</span>
             <input 
               type="month"
               value={startDate}
@@ -145,7 +145,7 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
           <div className="w-px h-6 bg-gray-100 mx-2 hidden md:block" />
 
           <div className="flex items-center gap-3">
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ciclo:</span>
+            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Ciclo:</span>
             <select 
               value={periodMonths}
               onChange={(e) => setPeriodMonths(Number(e.target.value))}
@@ -175,7 +175,7 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
               {formatCurrency(projectedVGVTotal)}
             </div>
             {mode === 'simulation' && simulationParams?.priceAdjust !== 0 && (
-                <p className="text-[10px] font-bold text-blue-500 mt-1 uppercase tracking-widest">
+                <p className="text-xs font-bold text-blue-500 mt-1 uppercase tracking-widest">
                   {simulationParams?.priceAdjust && simulationParams.priceAdjust > 0 ? '+' : ''}{simulationParams?.priceAdjust}% de ajuste
                 </p>
             )}
@@ -301,7 +301,7 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
                return (
                   <div key={step.name} className="relative group">
                      {conversaoAnterior && (
-                        <div className="absolute -top-3 right-4 z-20 bg-blue-50 text-blue-600 text-[10px] font-black px-2 py-0.5 rounded shadow-sm border border-blue-100">
+                        <div className="absolute -top-3 right-4 z-20 bg-blue-50 text-blue-600 text-xs font-black px-2 py-0.5 rounded shadow-sm border border-blue-100">
                            {conversaoAnterior}
                         </div>
                      )}
@@ -314,7 +314,7 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
                            className="h-full rounded-lg transition-all duration-1000 ease-out flex items-center justify-end pr-3"
                            style={{ width: `${Math.max(pct, 10)}%`, backgroundColor: COLORS[index % COLORS.length] }}
                         >
-                           {index === funilData.length - 1 && <span className="text-white text-[10px] font-black">{((step.value/maxVal)*100).toFixed(1)}% Fim</span>}
+                           {index === funilData.length - 1 && <span className="text-white text-xs font-black">{((step.value/maxVal)*100).toFixed(1)}% Fim</span>}
                         </div>
                      </div>
                   </div>
@@ -323,11 +323,11 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
           </div>
           <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 gap-4">
              <div>
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">CAC Médio</span>
+                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">CAC Médio</span>
                 <p className="text-lg font-black text-gray-900">R$ 3.450</p>
              </div>
              <div>
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tempo Resposta</span>
+                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Tempo Resposta</span>
                 <p className="text-lg font-black text-gray-900">18 min</p>
              </div>
           </div>
@@ -354,7 +354,7 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
                      </div>
                      <div className="text-right">
                         <p className="font-black text-emerald-600">{formatCurrency(broker.vgv)}</p>
-                        <span className="flex items-center justify-end gap-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1"><Clock className="w-3 h-3"/> SLA {broker.responseTime}</span>
+                        <span className="flex items-center justify-end gap-1 text-xs font-bold text-gray-400 uppercase tracking-widest mt-1"><Clock className="w-3 h-3"/> SLA {broker.responseTime}</span>
                      </div>
                   </div>
                ))}
@@ -385,11 +385,11 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
                </div>
                <div className="flex gap-4">
                   <div className="bg-white px-4 py-2 rounded-xl text-center shadow-sm">
-                     <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Distratos Mês</span>
+                     <span className="block text-xs font-black text-gray-400 uppercase tracking-widest">Distratos Mês</span>
                      <span className="block text-xl font-black text-red-600">{metrics?.distratos || 0}</span>
                   </div>
                   <div className="bg-white px-4 py-2 rounded-xl text-center shadow-sm">
-                     <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Reprovação Créd.</span>
+                     <span className="block text-xs font-black text-gray-400 uppercase tracking-widest">Reprovação Créd.</span>
                      <span className="block text-xl font-black text-amber-600">{metrics?.reprovacaoCredito?.toFixed(1) || 0}%</span>
                   </div>
                </div>

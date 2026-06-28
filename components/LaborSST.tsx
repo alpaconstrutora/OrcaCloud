@@ -18,7 +18,7 @@ import { STALE } from '../lib/queryClient';
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
         {children}
     </div>
 );
@@ -435,12 +435,12 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                         <p className="text-xs font-black text-orange-900 uppercase tracking-tight">
                             {regAlerts.length} documento{regAlerts.length > 1 ? 's' : ''} regulatório{regAlerts.length > 1 ? 's' : ''} vencendo em 60 dias
                         </p>
-                        <p className="text-[11px] text-orange-700 mt-1">
+                        <p className="text-xs text-orange-700 mt-1">
                             {regAlerts.slice(0, 3).map(d => `${DOC_TIPO_CONFIG[d.tipo]?.label} — vence ${d.vigencia_fim}`).join(' · ')}
                             {regAlerts.length > 3 && ` e mais ${regAlerts.length - 3}…`}
                         </p>
                     </div>
-                    <button onClick={() => setView('regulatory')} className="ml-auto shrink-0 px-3 py-1 bg-orange-600 text-white text-[10px] font-black rounded-lg hover:bg-orange-700 transition-colors whitespace-nowrap">
+                    <button onClick={() => setView('regulatory')} className="ml-auto shrink-0 px-3 py-1 bg-orange-600 text-white text-xs font-black rounded-lg hover:bg-orange-700 transition-colors whitespace-nowrap">
                         Ver docs
                     </button>
                 </div>
@@ -455,7 +455,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                     { label: 'CAT Pendente',     value: catPending,       bg: 'bg-orange-50',  text: 'text-orange-700' },
                 ].map(({ label, value, bg, text }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
                         <p className={`text-2xl font-black ${text} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
                     </div>
                 ))}
@@ -532,10 +532,10 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-3 flex-wrap">
                                                     <span className="text-sm font-black text-slate-900">{a.employee_name || '—'}</span>
-                                                    <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${grav.bg} ${grav.text}`}>{grav.label}</span>
-                                                    <span className="text-[10px] font-bold text-slate-500">{TIPO_LABELS[a.tipo]}</span>
+                                                    <span className={`px-2 py-0.5 rounded-lg text-xs font-black ${grav.bg} ${grav.text}`}>{grav.label}</span>
+                                                    <span className="text-xs font-bold text-slate-500">{TIPO_LABELS[a.tipo]}</span>
                                                     {!a.cat_emitida && a.gravidade !== 'SEM_AFASTAMENTO' && (
-                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-100 text-orange-700">CAT Pendente</span>
+                                                        <span className="px-2 py-0.5 rounded-full text-xs font-black bg-orange-100 text-orange-700">CAT Pendente</span>
                                                     )}
                                                 </div>
                                                 <p className="text-xs text-slate-500 font-medium mt-1">{a.data_acidente}{a.local_acidente ? ` · ${a.local_acidente}` : ''}</p>
@@ -572,7 +572,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                             <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/50">
                                     {['Checklist', 'NR', 'Obra', 'Data', 'Conformidade', 'Status'].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -591,7 +591,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                                             ) : '—'}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${ck.status === 'CONCLUIDO' ? 'bg-emerald-100 text-emerald-700' : ck.status === 'REPROVADO' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-black ${ck.status === 'CONCLUIDO' ? 'bg-emerald-100 text-emerald-700' : ck.status === 'REPROVADO' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
                                                 {ck.status}
                                             </span>
                                         </td>
@@ -614,7 +614,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                             { label: 'HH Trabalhadas',    value: `${(indicators.hh_trabalhadas / 1000).toFixed(1)}k`, bg: 'bg-indigo-50', text: 'text-indigo-700' },
                         ].map(({ label, value, bg, text }) => (
                             <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
                                 <p className={`text-2xl font-black ${text} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
                             </div>
                         ))}
@@ -627,8 +627,8 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                             <div key={label} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
                                 <p className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</p>
                                 <p className={`text-4xl font-black mt-2 ${color} ${bg} px-3 py-1 rounded-xl inline-block`}>{value.toFixed(2)}</p>
-                                <p className="text-[11px] text-slate-400 mt-2">{desc}</p>
-                                <p className={`text-[11px] font-bold mt-1 ${color}`}>
+                                <p className="text-xs text-slate-400 mt-2">{desc}</p>
+                                <p className={`text-xs font-bold mt-1 ${color}`}>
                                     {value === 0 ? '✓ Zero acidentes no período' : value > (label.includes('TFCA') ? 10 : 500) ? '⚠ Acima da meta — revisar medidas preventivas' : '✓ Dentro do esperado'}
                                 </p>
                             </div>
@@ -648,9 +648,9 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                             return (
                                 <button key={tipo} onClick={() => setRegFilter(regFilter === tipo ? '' : tipo)}
                                     className={`bg-white p-4 rounded-2xl border shadow-sm text-left hover:shadow-md transition-all ${regFilter === tipo ? `border-teal-300 ring-2 ring-teal-100` : 'border-slate-100'}`}>
-                                    <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${conf.text}`}>{conf.label}</p>
+                                    <p className={`text-xs font-black uppercase tracking-widest mb-1 ${conf.text}`}>{conf.label}</p>
                                     <p className="text-2xl font-black text-slate-900">{count}</p>
-                                    {vencidos > 0 && <p className="text-[10px] font-black text-rose-600 mt-1">⚠ {vencidos} vencido{vencidos > 1 ? 's' : ''}</p>}
+                                    {vencidos > 0 && <p className="text-xs font-black text-rose-600 mt-1">⚠ {vencidos} vencido{vencidos > 1 ? 's' : ''}</p>}
                                 </button>
                             );
                         })}
@@ -685,11 +685,11 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${conf.bg} ${conf.text}`}>{conf.label}</span>
-                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${statusConf.bg} ${statusConf.text}`}>{statusConf.label}</span>
-                                                        {isExpired && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700">⚠ VENCIDO</span>}
-                                                        {isExpiringSoon && !isExpired && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-100 text-orange-700">⏰ Vence em breve</span>}
-                                                        {reviewSoon && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700">📋 Revisão em breve</span>}
+                                                        <span className={`px-2 py-0.5 rounded-lg text-xs font-black ${conf.bg} ${conf.text}`}>{conf.label}</span>
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-black ${statusConf.bg} ${statusConf.text}`}>{statusConf.label}</span>
+                                                        {isExpired && <span className="px-2 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-700">⚠ VENCIDO</span>}
+                                                        {isExpiringSoon && !isExpired && <span className="px-2 py-0.5 rounded-full text-xs font-black bg-orange-100 text-orange-700">⏰ Vence em breve</span>}
+                                                        {reviewSoon && <span className="px-2 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-700">📋 Revisão em breve</span>}
                                                     </div>
                                                     <p className="text-sm font-black text-slate-900 mt-1">{doc.titulo}</p>
                                                     <div className="flex items-center gap-4 mt-1 flex-wrap">
@@ -714,7 +714,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                                                         )}
                                                     </div>
                                                     {doc.observacoes && (
-                                                        <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-[400px]">{doc.observacoes}</p>
+                                                        <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[400px]">{doc.observacoes}</p>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">

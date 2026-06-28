@@ -106,7 +106,7 @@ const GeoPanel: React.FC = () => {
             >
               <div className="font-black">{s.code}</div>
               <div className="opacity-75">{s.name}</div>
-              <div className="text-[10px] opacity-60">{s.region}</div>
+              <div className="text-xs opacity-60">{s.region}</div>
             </button>
           ))}
         </div>
@@ -397,7 +397,7 @@ const UnitsPanel: React.FC = () => {
                 <div className="font-black text-indigo-700">{u.symbol}</div>
                 <div className="text-xs text-slate-600">{u.name}</div>
                 {u.base_factor != null && u.base_symbol && (
-                  <div className="text-[10px] text-slate-400 mt-1">
+                  <div className="text-xs text-slate-400 mt-1">
                     = {u.base_factor} {u.base_symbol}
                   </div>
                 )}

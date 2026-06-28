@@ -85,7 +85,7 @@ function fmtDate(d: string | null) {
 const StatusBadge: React.FC<{ status: WorkOrderStatus }> = ({ status }) => {
   const { label, color, icon: Icon } = STATUS_CONFIG[status] ?? STATUS_CONFIG.planned
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${color}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-widest ${color}`}>
       <Icon className="w-3 h-3" />
       {label}
     </span>
@@ -101,7 +101,7 @@ const ProgressBar: React.FC<{ pct: number }> = ({ pct }) => (
         style={{ width: `${Math.min(100, pct)}%` }}
       />
     </div>
-    <span className="text-[10px] font-black text-slate-500 w-8 text-right">{pct.toFixed(0)}%</span>
+    <span className="text-xs font-black text-slate-500 w-8 text-right">{pct.toFixed(0)}%</span>
   </div>
 )
 
@@ -228,22 +228,22 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Em Execução</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Em Execução</p>
           <p className="text-3xl font-black text-indigo-600 mt-1">{kpis.inProgress}</p>
           <p className="text-xs text-slate-400 mt-1">{kpis.total} total</p>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Atrasadas</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Atrasadas</p>
           <p className={`text-3xl font-black mt-1 ${kpis.overdue > 0 ? 'text-red-600' : 'text-slate-400'}`}>{kpis.overdue}</p>
           <p className="text-xs text-slate-400 mt-1">{kpis.blocked} bloqueadas</p>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Avanço Médio</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Avanço Médio</p>
           <p className="text-3xl font-black text-blue-600 mt-1">{kpis.avgPct.toFixed(0)}%</p>
           <div className="mt-2"><ProgressBar pct={kpis.avgPct} /></div>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Custo Realizado</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Custo Realizado</p>
           <p className="text-2xl font-black text-emerald-600 mt-1">{fmtCurrency(kpis.totalActual)}</p>
           <p className="text-xs text-slate-400 mt-1">de {fmtCurrency(kpis.totalPlanned)}</p>
         </div>
@@ -386,12 +386,12 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {wo.code && (
-                      <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                      <span className="text-xs font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
                         {wo.code}
                       </span>
                     )}
                     {openNcs > 0 && (
-                      <span className="text-[10px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                      <span className="text-xs font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
                         {openNcs} NC
                       </span>
                     )}
@@ -403,7 +403,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                 <div>
                   <p className="text-sm font-bold text-slate-900 leading-snug line-clamp-2">{wo.title}</p>
                   {wo.phase && (
-                    <p className="text-[10px] font-medium text-slate-400 mt-0.5">{wo.phase}</p>
+                    <p className="text-xs font-medium text-slate-400 mt-0.5">{wo.phase}</p>
                   )}
                 </div>
 
@@ -413,7 +413,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                 {/* Footer */}
                 <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-50">
                   <StatusBadge status={wo.status} />
-                  <div className={`flex items-center gap-1 text-[10px] font-bold ${overdue ? 'text-red-600' : 'text-slate-400'}`}>
+                  <div className={`flex items-center gap-1 text-xs font-bold ${overdue ? 'text-red-600' : 'text-slate-400'}`}>
                     {overdue && <AlertTriangle className="w-3 h-3" />}
                     <Clock className="w-3 h-3" />
                     {fmtDate(wo.planned_end_date)}
@@ -421,7 +421,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                 </div>
 
                 {(wo.team || wo.actual_total_cost > 0) && (
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium -mt-1">
+                  <div className="flex items-center justify-between text-xs text-slate-400 font-medium -mt-1">
                     <span>{wo.team ? (wo.team as { name: string }).name : ''}</span>
                     <span className="font-bold text-slate-600">{fmtCurrency(wo.actual_total_cost)}</span>
                   </div>
@@ -479,19 +479,19 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                             <div>
                               <div className="flex items-center gap-1.5">
                                 {wo.code && (
-                                  <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                  <span className="text-xs font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
                                     {wo.code}
                                   </span>
                                 )}
                                 {openNcs > 0 && (
-                                  <span className="text-[10px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                                  <span className="text-xs font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
                                     {openNcs} NC
                                   </span>
                                 )}
                               </div>
                               <p className="text-sm font-bold text-slate-900 mt-0.5 leading-snug line-clamp-1">{wo.title}</p>
                               {wo.team && (
-                                <p className="text-[10px] text-slate-400 font-medium">{(wo.team as { name: string }).name}</p>
+                                <p className="text-xs text-slate-400 font-medium">{(wo.team as { name: string }).name}</p>
                               )}
                             </div>
                           </div>

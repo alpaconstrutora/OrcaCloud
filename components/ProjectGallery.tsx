@@ -167,7 +167,7 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                         <button
                             onClick={() => fileInputRef.current?.click()}
                             disabled={isUploading}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-50"
+                            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-50"
                         >
                             {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                             Adicionar Foto
@@ -253,7 +253,7 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                                 {isAdmin && (
                                     <button
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="mt-4 px-6 py-3 bg-white border border-gray-200 text-indigo-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:border-indigo-600 transition-all"
+                                        className="mt-4 px-6 py-3 bg-white border border-gray-200 text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-indigo-600 transition-all"
                                     >
                                         Começar Galeria
                                     </button>
@@ -265,7 +265,7 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                     <div className="aspect-video bg-slate-900 rounded-2xl flex flex-col items-center justify-center text-white relative group overflow-hidden">
                         {/* Simulated Live Feed */}
                         <div className="absolute inset-0 bg-black opacity-40 group-hover:opacity-60 transition-opacity" />
-                        <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1 bg-red-600 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse">
+                        <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1 bg-red-600 rounded-full text-xs font-black uppercase tracking-widest animate-pulse">
                             Live
                         </div>
 
@@ -277,7 +277,7 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                         </div>
 
                         {/* Simulated UI Overlay */}
-                        <div className="absolute bottom-4 left-4 text-[10px] font-mono opacity-50">
+                        <div className="absolute bottom-4 left-4 text-xs font-mono opacity-50">
                             CAM_01 // LAT: -27.595 // LON: -48.548 // {new Date().toLocaleTimeString()}
                         </div>
                     </div>

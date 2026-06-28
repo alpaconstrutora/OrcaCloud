@@ -151,7 +151,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     />
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
@@ -206,7 +206,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] border-b border-gray-100">
+                                <tr className="bg-gray-50 text-gray-400 text-xs font-black uppercase tracking-[0.2em] border-b border-gray-100">
                                     {tableColumns.visibleColumns.includes('name') && (
                                         <SortableHeader label="Fornecedor" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
                                     )}
@@ -241,7 +241,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                         </div>
                                                         <div>
                                                             <p className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{supplier.name}</p>
-                                                            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">{supplier.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}</p>
+                                                            <p className="text-xs font-medium text-gray-400 uppercase tracking-tight">{supplier.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}</p>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -345,18 +345,18 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         </div>
                                         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 text-gray-600 rounded-lg border border-gray-100 group-hover:bg-white transition-all">
                                             <Tag className="w-3.5 h-3.5 text-gray-400" />
-                                            <span className="text-[10px] font-bold uppercase tracking-wider">{supplier.category}</span>
+                                            <span className="text-xs font-bold uppercase tracking-wider">{supplier.category}</span>
                                         </div>
                                     </div>
                                     <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors mb-1 line-clamp-1">
                                         {supplier.name}
                                     </h3>
-                                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-6">
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">
                                         {supplier.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}
                                     </p>
 
                                     <div className="space-y-3 pt-4 border-t border-gray-50">
-                                        <div className="flex items-center justify-between text-[11px]">
+                                        <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-400 font-bold uppercase tracking-widest">Organização</span>
                                             <span className="text-gray-900 font-semibold">{supplier.organization_name}</span>
                                         </div>
@@ -372,7 +372,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                 <span>{supplier.phone}</span>
                                             </div>
                                         )}
-                                        <div className="flex items-center justify-between text-[11px] pt-2">
+                                        <div className="flex items-center justify-between text-xs pt-2">
                                             <span className="text-gray-400 font-bold uppercase tracking-widest">Documento</span>
                                             <span className="text-gray-900 font-mono font-bold bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
                                                 {supplier.document || '---'}

@@ -405,7 +405,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                                 <FileText className="w-6 h-6" />
                             </div>
-                            <div className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
+                            <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
                                 {initialData?.id ? 'EDIT' : 'NOVO'}
                             </div>
                         </div>
@@ -416,7 +416,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </h2>
                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Módulo:</span>
-                                    <span className="text-[10px] font-bold text-gray-600 uppercase">
+                                    <span className="text-xs font-bold text-gray-600 uppercase">
                                         {moduleLabel ?? (isOutgoing ? 'Contratos de Serviço ao Cliente' : 'Gestão Estratégica de Suprimentos')}
                                     </span>
                                 </div>
@@ -509,18 +509,18 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         <div className="flex items-center justify-between ml-1">
                                             <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Cliente / Contratante</label>
                                             {!showClientCreate && (
-                                                <button type="button" onClick={() => setShowClientCreate(true)} className="text-[11px] font-medium text-blue-600 hover:text-blue-800 uppercase tracking-wider">
+                                                <button type="button" onClick={() => setShowClientCreate(true)} className="text-xs font-medium text-blue-600 hover:text-blue-800 uppercase tracking-wider">
                                                     + Novo Cliente
                                                 </button>
                                             )}
                                         </div>
                                         {showClientCreate ? (
                                             <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider">Cadastrar novo cliente</p>
+                                                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Cadastrar novo cliente</p>
                                                 <div className="flex bg-white rounded-xl border border-blue-200 p-1 gap-1">
                                                     {(['PJ', 'PF'] as const).map(t => (
                                                         <button key={t} type="button" onClick={() => setNewClientType(t)}
-                                                            className={`flex-1 py-2 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-all ${newClientType === t ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                                                            className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${newClientType === t ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
                                                             {t === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}
                                                         </button>
                                                     ))}
@@ -681,12 +681,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Escopo / Objeto do Contrato</label>
                                             <div className="flex gap-2">
                                                 <button type="button" onClick={() => setScopePickerOpen(true)}
-                                                    className="text-[11px] font-medium text-blue-600 hover:text-blue-800 uppercase tracking-wider">
+                                                    className="text-xs font-medium text-blue-600 hover:text-blue-800 uppercase tracking-wider">
                                                     Buscar Salvo
                                                 </button>
                                                 <span className="text-gray-200">|</span>
                                                 <button type="button" onClick={() => setScopeManagerOpen(true)}
-                                                    className="text-[11px] font-medium text-gray-400 hover:text-gray-700 uppercase tracking-wider">
+                                                    className="text-xs font-medium text-gray-400 hover:text-gray-700 uppercase tracking-wider">
                                                     Gerenciar
                                                 </button>
                                             </div>
@@ -1005,7 +1005,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                     {formData.billing_mode === 'MEDICAO' && (
                                         <div className="mt-3 p-4 bg-blue-50 border border-blue-100 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider">Exigências para liberar pagamento</p>
+                                            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Exigências para liberar pagamento</p>
                                             <div className="space-y-2">
                                                 {([
                                                     { key: 'require_invoice' as const, label: 'Nota Fiscal obrigatória' },
@@ -1131,13 +1131,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     <button
                                                         type="button"
                                                         onClick={() => setInstallmentSchedule(buildSchedule(formData.payment_installments ?? 1, formData.original_value ?? 0, formData.start_date ?? new Date().toISOString().split('T')[0]))}
-                                                        className="text-[11px] text-blue-600 hover:text-blue-800 font-medium uppercase tracking-wider"
+                                                        className="text-xs text-blue-600 hover:text-blue-800 font-medium uppercase tracking-wider"
                                                     >
                                                         Redistribuir igualmente
                                                     </button>
                                                 </div>
                                                 <div className="rounded-2xl border border-gray-100 overflow-hidden">
-                                                    <div className="grid grid-cols-[40px_1fr_1fr] bg-gray-50 border-b border-gray-100 px-4 py-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                                                    <div className="grid grid-cols-[40px_1fr_1fr] bg-gray-50 border-b border-gray-100 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                                                         <span>#</span>
                                                         <span>Vencimento</span>
                                                         <span className="text-right">Valor (R$)</span>
@@ -1172,14 +1172,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                         ))}
                                                     </div>
                                                     <div className="grid grid-cols-[40px_1fr_1fr] bg-gray-50 border-t border-gray-100 px-4 py-2">
-                                                        <span className="col-span-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total</span>
+                                                        <span className="col-span-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Total</span>
                                                         <span className={`text-right text-form-label font-black ${Math.abs(installmentSchedule.reduce((s, i) => s + i.value, 0) - (formData.original_value ?? 0)) > 0.01 ? 'text-red-600' : 'text-green-600'}`}>
                                                             R$ {installmentSchedule.reduce((s, i) => s + i.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </div>
                                                 </div>
                                                 {Math.abs(installmentSchedule.reduce((s, i) => s + i.value, 0) - (formData.original_value ?? 0)) > 0.01 && (
-                                                    <p className="text-[11px] text-red-500 ml-1">
+                                                    <p className="text-xs text-red-500 ml-1">
                                                         Soma das parcelas difere do valor do contrato (R$ {(formData.original_value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
                                                     </p>
                                                 )}

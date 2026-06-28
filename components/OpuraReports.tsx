@@ -334,7 +334,7 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                             Ano × anterior
                         </button>
                     </div>
-                    <p className="text-[11px] text-gray-400 w-full">Período A (atual) = filtros acima · Período B (base) = datas aqui. Variação = (A − B) ÷ |B|.</p>
+                    <p className="text-xs text-gray-400 w-full">Período A (atual) = filtros acima · Período B (base) = datas aqui. Variação = (A − B) ÷ |B|.</p>
                 </div>
             )}
 
@@ -488,7 +488,7 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                     ) : (
                         <table className="w-full text-sm">
                             <thead className="sticky top-0 bg-white">
-                                <tr className="text-[11px] font-black text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                                <tr className="text-xs font-black text-gray-400 uppercase tracking-wider border-b border-gray-100">
                                     <th className="text-left px-4 py-2.5">Data</th>
                                     <th className="text-left px-2 py-2.5">Descrição</th>
                                     <th className="text-right px-4 py-2.5 w-32">Valor</th>
@@ -504,7 +504,7 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                                             <p className="text-gray-700 font-medium truncate max-w-[260px]">
                                                 {e.description || e.category_name || '—'}
                                             </p>
-                                            <p className="text-[11px] text-gray-400 truncate">
+                                            <p className="text-xs text-gray-400 truncate">
                                                 {[e.category_name, e.supplier_name || e.client_name, e.project_name]
                                                     .filter(Boolean).join(' · ')}
                                                 {e.status === 'PENDING' ? ' · previsto' : ''}

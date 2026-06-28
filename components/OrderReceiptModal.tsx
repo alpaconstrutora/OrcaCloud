@@ -110,13 +110,13 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                         </div>
                         <div>
                             <h3 className="text-xl font-black text-gray-900 tracking-tight">Checkout de Obra</h3>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">
                                 Confirmação de Recebimento — {order.number}
                             </p>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <div className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
+                        <div className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest border ${
                             statusBadge === 'Recebido' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                             statusBadge === 'Parcial'  ? 'bg-blue-50 text-blue-700 border-blue-200' :
                                                          'bg-amber-50 text-amber-700 border-amber-200'
@@ -137,7 +137,7 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                         <div className="px-6 py-4 bg-gray-50/50 border-b border-gray-100 flex items-center gap-3">
                             <Package className="w-4 h-4 text-indigo-500" />
                             <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Itens do Pedido</h4>
-                            <span className="ml-auto text-[10px] font-bold text-gray-400">
+                            <span className="ml-auto text-xs font-bold text-gray-400">
                                 Informe a quantidade efetivamente recebida por item
                             </span>
                         </div>
@@ -145,10 +145,10 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                             <table className="w-full text-left text-sm">
                                 <thead className="bg-gray-50/30">
                                     <tr>
-                                        <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Item</th>
-                                        <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Qtd Pedida</th>
-                                        <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Qtd Recebida</th>
-                                        <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Problema</th>
+                                        <th className="px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Item</th>
+                                        <th className="px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest text-right">Qtd Pedida</th>
+                                        <th className="px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest text-right">Qtd Recebida</th>
+                                        <th className="px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Problema</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
@@ -158,10 +158,10 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                                             <tr key={row.code} className={`transition-colors ${isShort ? 'bg-amber-50/40' : 'hover:bg-gray-50/40'}`}>
                                                 <td className="px-5 py-4">
                                                     <p className="font-bold text-gray-900 text-sm">{row.description}</p>
-                                                    <p className="font-mono text-[10px] text-gray-400 mt-0.5">{row.code} · {row.unit}</p>
+                                                    <p className="font-mono text-xs text-gray-400 mt-0.5">{row.code} · {row.unit}</p>
                                                 </td>
                                                 <td className="px-5 py-4 text-right font-black text-gray-500">
-                                                    {row.quantityOrdered} <span className="text-[10px] font-bold text-gray-400">{row.unit}</span>
+                                                    {row.quantityOrdered} <span className="text-xs font-bold text-gray-400">{row.unit}</span>
                                                 </td>
                                                 <td className="px-5 py-4 text-right">
                                                     <input

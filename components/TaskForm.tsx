@@ -281,7 +281,7 @@ const TaskForm: React.FC<Props> = ({
         <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
           {orgs.length > 1 && !parentTaskId && (
             <div>
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Organização</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Organização</label>
               <select
                 value={selectedOrgId}
                 onChange={(e) => {
@@ -302,25 +302,25 @@ const TaskForm: React.FC<Props> = ({
           )}
 
           <div>
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Título *</label>
+            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Título *</label>
             <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} className={inp} placeholder="O que precisa ser feito?" />
           </div>
 
           <div>
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Descrição</label>
+            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Descrição</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={'mt-1 ' + sel + ' resize-none'} placeholder="Opcional" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Responsável</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Responsável</label>
               <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={inp}>
                 <option value="">Nenhum</option>
                 {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}{emp.role ? ` — ${emp.role}` : ''}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Obra / Projeto</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Obra / Projeto</label>
               <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={inp}>
                 <option value="">Nenhuma</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -331,7 +331,7 @@ const TaskForm: React.FC<Props> = ({
           {/* Envolvidos — multi-select */}
           {employees.length > 0 && (
             <div ref={collabRef}>
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Envolvidos</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Envolvidos</label>
               <div className="mt-1 relative">
                 {collaboratorIds.length > 0 && (
                   <div className="flex flex-wrap gap-1 mb-1.5">
@@ -397,7 +397,7 @@ const TaskForm: React.FC<Props> = ({
           {!parentTaskId && spaces.length > 0 && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Espaço</label>
+                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Espaço</label>
                 <div className="relative mt-1">
                   {/* ponto colorido do espaço selecionado */}
                   {spaceId && (
@@ -417,7 +417,7 @@ const TaskForm: React.FC<Props> = ({
                 </div>
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pasta</label>
+                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Pasta</label>
                 <select
                   value={folderId}
                   onChange={(e) => setFolderId(e.target.value)}
@@ -433,17 +433,17 @@ const TaskForm: React.FC<Props> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Data início</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Data início</label>
               <input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inp} />
             </div>
             <div>
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Término</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Término</label>
               <input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} className={inp} />
             </div>
           </div>
 
           <div>
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+            <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
               <Bell className="w-3 h-3" /> Alerta / Lembrete
             </label>
             <div className="relative mt-1">
@@ -465,7 +465,7 @@ const TaskForm: React.FC<Props> = ({
               )}
             </div>
             {alertAt && (
-              <p className="text-[10px] text-amber-600 font-medium mt-1 flex items-center gap-1">
+              <p className="text-xs text-amber-600 font-medium mt-1 flex items-center gap-1">
                 <Bell className="w-3 h-3" />
                 Alerta agendado para {new Date(alertAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </p>
@@ -473,11 +473,11 @@ const TaskForm: React.FC<Props> = ({
           </div>
 
           <div>
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Prioridade</label>
+            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Prioridade</label>
             <div className="mt-1 flex gap-1.5">
               {PRIORITIES.map(p => (
                 <button key={p.value} onClick={() => setPriority(p.value)}
-                  className={`flex-1 px-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all
+                  className={`flex-1 px-2 py-2 rounded-lg text-xs font-black uppercase tracking-wider border transition-all
                     ${priority === p.value ? p.cls + ' ring-2 ring-offset-1 ring-slate-300' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'}`}>
                   {p.label}
                 </button>
@@ -487,7 +487,7 @@ const TaskForm: React.FC<Props> = ({
 
           {orgStatuses.length > 0 && (
             <div>
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Status</label>
               <div className="mt-1 flex gap-1.5 flex-wrap">
                 {orgStatuses.map(s => (
                   <button

@@ -562,7 +562,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
               <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                 <Building2 className="w-6 h-6" />
               </div>
-              <div className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
+              <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
                 {formData.classification === 'OBRA' ? 'OBRA' : (formData.classification === 'PLANEJAMENTO' ? 'PLAN' : (formData.classification === 'DIARIO' ? 'DIAR' : 'BUDG'))}
               </div>
             </div>
@@ -576,7 +576,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                 </h2>
                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
                   <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Tipo:</span>
-                  <span className="text-[10px] font-bold text-gray-600 uppercase">
+                  <span className="text-xs font-bold text-gray-600 uppercase">
                     {(formData.classification as string) === 'OBRA' ? 'Modelo / Obra Base' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Escopo Temporal' : (formData.classification as string) === 'DIARIO' ? 'Controle de Campo' : 'Quantitativo'}
                   </span>
                 </div>
@@ -680,7 +680,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         maxLength={6}
                       />
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-1">
+                    <p className="text-xs text-gray-400 mt-1">
                       {mode === 'create' ? 'Sugerido automaticamente. Você pode alterar antes de salvar.' : 'Você pode corrigir o código desta obra.'}
                     </p>
                   </div>
@@ -724,7 +724,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           </option>
                         ))}
                       </select>
-                      <p className="text-[10px] text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
+                      <p className="text-xs text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
                     </div>
                   )}
 
@@ -832,7 +832,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                                   }}
                                 >
                                   <span className="font-bold text-gray-900">{client.name}</span>
-                                  {client.email && <span className="text-[10px] text-gray-400">{client.email}</span>}
+                                  {client.email && <span className="text-xs text-gray-400">{client.email}</span>}
                                 </button>
                               ))
                           ) : (
@@ -928,7 +928,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                                   }}
                                 >
                                   <span className="font-bold text-gray-900">{investor.name}</span>
-                                  {investor.email && <span className="text-[10px] text-gray-400">{investor.email}</span>}
+                                  {investor.email && <span className="text-xs text-gray-400">{investor.email}</span>}
                                 </button>
                               ))
                           ) : (
@@ -1472,12 +1472,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               {doc.name}
                             </span>
                             {!doc.required && (
-                              <span className="text-[10px] text-gray-400 font-medium">(se aplicável)</span>
+                              <span className="text-xs text-gray-400 font-medium">(se aplicável)</span>
                             )}
                           </div>
                         ))}
                       </div>
-                      <p className="text-[10px] text-amber-600 mt-3">
+                      <p className="text-xs text-amber-600 mt-3">
                         Ponto vermelho = obrigatório · Cinza = condicional
                       </p>
                     </div>
@@ -1522,7 +1522,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         </div>
                       ) : (
                         <table className="w-full text-left">
-                          <thead className="bg-gray-50 text-[10px] font-bold uppercase text-gray-400">
+                          <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-400">
                             <tr>
                               <th className="px-4 py-2">Projeto / Recurso</th>
                               <th className="px-4 py-2">Tipo</th>
@@ -1718,7 +1718,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                             onChange={(e) => setProjectCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                             maxLength={6}
                           />
-                          <p className="text-[10px] text-gray-400 mt-1">
+                          <p className="text-xs text-gray-400 mt-1">
                             {mode === 'create' ? 'Gerado automaticamente. Você pode alterar antes de salvar.' : 'Você pode corrigir o código deste planejamento.'}
                           </p>
                         </div>
@@ -1762,7 +1762,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               </option>
                             ))}
                           </select>
-                          <p className="text-[10px] text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
+                          <p className="text-xs text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
                         </div>
                       )}
                       {formData.obraPropria ? (
@@ -1775,7 +1775,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Cliente / Proprietário
                           {(formData.classification === 'ORCAMENTO' || formData.classification === 'PLANEJAMENTO' || formData.classification === 'DIARIO') && (
-                            <span className="ml-2 text-[10px] text-amber-600 font-bold uppercase tracking-tight bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                            <span className="ml-2 text-xs text-amber-600 font-bold uppercase tracking-tight bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
                               Herdado da Obra
                             </span>
                           )}
@@ -1838,7 +1838,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                                       }}
                                     >
                                       <span className="font-bold text-gray-900">{client.name}</span>
-                                      {client.email && <span className="text-[10px] text-gray-400">{client.email}</span>}
+                                      {client.email && <span className="text-xs text-gray-400">{client.email}</span>}
                                     </button>
                                   ))
                               ) : (

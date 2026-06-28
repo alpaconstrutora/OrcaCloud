@@ -216,7 +216,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
                                 <Variable size={13} /> Variáveis disponíveis
                             </p>
-                            <p className="text-[11px] text-gray-400">Clique para inserir no editor.</p>
+                            <p className="text-xs text-gray-400">Clique para inserir no editor.</p>
                             <div className="space-y-1 max-h-64 overflow-y-auto">
                                 {TEMPLATE_VARIABLES.map(v => (
                                     <button key={v.key} onClick={() => insertVar(v.key)}
@@ -226,7 +226,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                                 : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'
                                         }`}>
                                         <span className="font-mono">{`{{${v.key}}}`}</span>
-                                        <span className="text-gray-400 group-hover:text-gray-600 text-[10px] truncate max-w-[80px]">{v.label}</span>
+                                        <span className="text-gray-400 group-hover:text-gray-600 text-xs truncate max-w-[80px]">{v.label}</span>
                                     </button>
                                 ))}
                             </div>
@@ -234,11 +234,11 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
 
                         {detectedVars.length > 0 && (
                             <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-800 p-4">
-                                <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-2">
+                                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-2">
                                     {detectedVars.length} variável(is) no template
                                 </p>
                                 {detectedVars.map(v => (
-                                    <p key={v.key} className="text-[11px] text-emerald-600 dark:text-emerald-300">✓ {v.label}</p>
+                                    <p key={v.key} className="text-xs text-emerald-600 dark:text-emerald-300">✓ {v.label}</p>
                                 ))}
                             </div>
                         )}
@@ -310,7 +310,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                     {tableColumns.visibleColumns.includes('name') && (
                                         <td className="px-4 py-3">
                                             <p className="font-medium text-gray-900 dark:text-white">{t.name}</p>
-                                            {t.description && <p className="text-[11px] text-gray-400 mt-0.5">{t.description}</p>}
+                                            {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('type') && (
@@ -320,12 +320,12 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                         <td className="px-4 py-3">
                                             <div className="flex flex-wrap gap-1">
                                                 {(t.variables ?? []).slice(0, 4).map(v => (
-                                                    <span key={v} className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded font-mono">
+                                                    <span key={v} className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded font-mono">
                                                         {`{{${v}}}`}
                                                     </span>
                                                 ))}
                                                 {(t.variables ?? []).length > 4 && (
-                                                    <span className="text-[10px] text-gray-400">+{(t.variables ?? []).length - 4}</span>
+                                                    <span className="text-xs text-gray-400">+{(t.variables ?? []).length - 4}</span>
                                                 )}
                                             </div>
                                         </td>

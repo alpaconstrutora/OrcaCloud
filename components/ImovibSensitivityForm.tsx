@@ -100,7 +100,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                 </div>
                 <div className="flex gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 items-center">
                     <div>
-                        <span className="block text-[10px] font-black tracking-widest uppercase text-indigo-400">TIR Base (Ao Ano)</span>
+                        <span className="block text-xs font-black tracking-widest uppercase text-indigo-400">TIR Base (Ao Ano)</span>
                         <span className="block text-2xl font-black text-indigo-700">{formatPct(baseIrr)}</span>
                     </div>
                 </div>
@@ -177,7 +177,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                                 onChange={(e) => setScenarioVgvDelta(Number(e.target.value))}
                                 className="w-full accent-indigo-600"
                             />
-                            <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-1">
+                            <div className="flex justify-between text-xs font-bold text-slate-400 mt-1">
                                 <span>-30%</span>
                                 <span>0</span>
                                 <span>+30%</span>
@@ -198,7 +198,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                                 onChange={(e) => setScenarioCostDelta(Number(e.target.value))}
                                 className="w-full accent-rose-500"
                             />
-                            <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-1">
+                            <div className="flex justify-between text-xs font-bold text-slate-400 mt-1">
                                 <span>-30%</span>
                                 <span>0</span>
                                 <span>+30%</span>

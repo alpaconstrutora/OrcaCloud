@@ -91,10 +91,10 @@ const LaborEmployeeSharing: React.FC<LaborEmployeeSharingProps> = ({
                     <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
                         <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
                         <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Organização de origem</p>
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Organização de origem</p>
                             <p className="text-sm font-bold text-slate-700 truncate">{ownerOrg?.name || employee.org_id}</p>
                         </div>
-                        <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-black rounded-full">DONA</span>
+                        <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-black rounded-full">DONA</span>
                     </div>
 
                     {loading ? (
@@ -110,7 +110,7 @@ const LaborEmployeeSharing: React.FC<LaborEmployeeSharingProps> = ({
                         </div>
                     ) : (
                         <div className="space-y-2">
-                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider px-1">
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-wider px-1">
                                 Disponibilizar também para:
                             </p>
                             {targetOrgs.map(org => {
@@ -147,7 +147,7 @@ const LaborEmployeeSharing: React.FC<LaborEmployeeSharingProps> = ({
                 {/* Footer */}
                 {!loading && targetOrgs.length > 0 && (
                     <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-                        <p className="text-[11px] text-slate-400 font-medium">
+                        <p className="text-xs text-slate-400 font-medium">
                             {selectedOrgIds.size === 0
                                 ? 'Colaborador disponível apenas na org de origem'
                                 : `Disponível em mais ${selectedOrgIds.size} organização${selectedOrgIds.size > 1 ? 'ões' : ''}`}

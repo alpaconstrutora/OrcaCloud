@@ -173,7 +173,7 @@ const SinapiRebaseModal: React.FC<SinapiRebaseProps> = ({
               ) : (
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
-                    <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    <tr className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                       <th className="px-4 py-2 text-left">Código</th>
                       <th className="px-4 py-2 text-left">Descrição</th>
                       <th className="px-4 py-2 text-right">Qtd</th>

@@ -126,7 +126,7 @@ const BrokerEvents: React.FC<BrokerEventsProps> = ({ brokerEmail }) => {
                                         <div className="flex items-center gap-2">
                                             <Users className="w-3.5 h-3.5 text-gray-400" />
                                             <div className="flex-1">
-                                                <div className="flex justify-between text-[10px] font-bold mb-1">
+                                                <div className="flex justify-between text-xs font-bold mb-1">
                                                     <span className="text-gray-500">{event.registered_count}/{event.max_capacity} vagas</span>
                                                     <span className={capacityPct >= 90 ? 'text-red-500' : 'text-gray-400'}>{Math.round(capacityPct)}%</span>
                                                 </div>

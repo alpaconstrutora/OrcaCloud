@@ -617,7 +617,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
               <div className="border border-gray-100 rounded-3xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto max-h-[40vh] no-scrollbar">
                   <table className="min-w-full divide-y divide-gray-100 text-left text-xs font-medium">
-                    <thead className="bg-gray-50 text-gray-400 font-bold uppercase tracking-wider text-[10px]">
+                    <thead className="bg-gray-50 text-gray-400 font-bold uppercase tracking-wider text-xs">
                       <tr>
                         <th className="px-6 py-3.5">Linha</th>
                         <th className="px-6 py-3.5">Código</th>
@@ -640,12 +640,12 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
                             </td>
                             <td className="px-6 py-3.5">
                               {row.isValid ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-wider">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-black uppercase tracking-wider">
                                   <CheckCircle className="w-3.5 h-3.5" />
                                   Ok
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 rounded-lg text-[10px] font-black uppercase tracking-wider">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 rounded-lg text-xs font-black uppercase tracking-wider">
                                   <AlertTriangle className="w-3.5 h-3.5" />
                                   Erro
                                 </span>
@@ -654,7 +654,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
                           </tr>
                           {!row.isValid && (
                             <tr className="bg-rose-50/20">
-                              <td colSpan={6} className="px-8 py-2 text-rose-600 font-semibold border-b border-gray-100 text-[11px]">
+                              <td colSpan={6} className="px-8 py-2 text-rose-600 font-semibold border-b border-gray-100 text-xs">
                                 <div className="flex items-center gap-1.5">
                                   <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                                   <span>{row.errors.join(' | ')}</span>

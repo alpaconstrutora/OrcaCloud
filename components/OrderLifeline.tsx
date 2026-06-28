@@ -75,7 +75,7 @@ const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery
                             </button>
 
                             <div className="mt-4 flex flex-col items-center">
-                                <span className={`text-[10px] font-black uppercase tracking-widest transition-colors
+                                <span className={`text-xs font-black uppercase tracking-widest transition-colors
                   ${isCurrent ? 'text-indigo-600' : isActive ? 'text-gray-900' : 'text-gray-400'}
                 `}>
                                     {step.label}
@@ -89,7 +89,7 @@ const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery
                                     <div className="absolute -bottom-10 whitespace-nowrap bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 animate-in fade-in slide-in-from-top-2 duration-700">
                                         <div className="flex items-center gap-2">
                                             <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                                            <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-tight">Prev: {estimatedDelivery}</span>
+                                            <span className="text-xs font-bold text-indigo-700 uppercase tracking-tight">Prev: {estimatedDelivery}</span>
                                         </div>
                                     </div>
                                 )}

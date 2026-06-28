@@ -124,7 +124,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                             <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                                 <FileDown className="w-6 h-6" />
                             </div>
-                            <div className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
+                            <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
                                 EMITIR
                             </div>
                         </div>
@@ -133,7 +133,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                                 <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Emitir Documento</h2>
                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Contrato:</span>
-                                    <span className="text-[10px] font-bold text-gray-600 uppercase">{contract.number}</span>
+                                    <span className="text-xs font-bold text-gray-600 uppercase">{contract.number}</span>
                                 </div>
                             </div>
                             <p className="text-sm text-gray-500 font-medium leading-tight">
@@ -230,7 +230,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                                             <div key={tk} className="grid grid-cols-[64px_1fr] gap-2 px-3 py-2 text-sm">
                                                 <span className="font-mono text-xs font-semibold text-blue-700 dark:text-blue-400">{`{${tk}}`}</span>
                                                 <div className="min-w-0">
-                                                    <p className="text-[11px] text-gray-400 truncate">{describeMapping(template.token_map?.[tk])}</p>
+                                                    <p className="text-xs text-gray-400 truncate">{describeMapping(template.token_map?.[tk])}</p>
                                                     <p className={`truncate ${resolved[tk] ? 'text-gray-900 dark:text-white' : 'text-red-400 italic'}`}>
                                                         {resolved[tk] || '(vazio — não mapeado ou sem dados)'}
                                                     </p>

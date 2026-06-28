@@ -71,7 +71,7 @@ function fmtDateTime(d: string | null) {
 // ── Info item ────────────────────────────────────────────────────────────────
 const InfoItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
   <div>
-    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{label}</p>
+    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">{label}</p>
     <p className="text-sm font-bold text-slate-900">{value || '—'}</p>
   </div>
 )
@@ -298,24 +298,24 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
       {/* Custo Previsto x Realizado */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Custo Previsto</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Custo Previsto</p>
           <p className="text-xl font-black text-slate-900 mt-1">{fmtCurrency(wo.planned_cost as number)}</p>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Custo Realizado</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Custo Realizado</p>
           <p className={`text-xl font-black mt-1 ${
             (wo.actual_total_cost as number) > (wo.planned_cost as number) ? 'text-red-600' : 'text-emerald-600'
           }`}>{fmtCurrency(wo.actual_total_cost as number)}</p>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Avanço</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Avanço</p>
           <p className="text-xl font-black text-blue-600 mt-1">{(wo.completion_pct as number).toFixed(0)}%</p>
           <div className="mt-1.5 h-1 bg-slate-100 rounded-full overflow-hidden">
             <div className="h-full bg-blue-500 rounded-full" style={{ width: `${wo.completion_pct as number}%` }} />
           </div>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prazo Final</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Prazo Final</p>
           <p className={`text-xl font-black mt-1 ${
             wo.planned_end_date && new Date(wo.planned_end_date as string) < new Date() && !['measured','closed'].includes(status)
               ? 'text-red-600' : 'text-slate-900'
@@ -339,7 +339,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
               <p className="text-xs text-amber-700 mt-0.5">
                 <span className="font-bold">{pred.code ?? '—'}</span> — {pred.title}
               </p>
-              <span className={`inline-block mt-2 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${STATUS_CONFIG[pred.status]?.bg} ${STATUS_CONFIG[pred.status]?.color}`}>
+              <span className={`inline-block mt-2 text-xs font-black px-2 py-0.5 rounded uppercase tracking-widest ${STATUS_CONFIG[pred.status]?.bg} ${STATUS_CONFIG[pred.status]?.color}`}>
                 {STATUS_CONFIG[pred.status]?.label}
               </span>
             </div>
@@ -359,7 +359,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
       {/* Workflow buttons */}
       {(allowedNext.length > 0 || status === 'blocked') && (
         <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Ações Disponíveis</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Ações Disponíveis</p>
           <div className="flex flex-wrap gap-2">
             {status === 'blocked' && (
               <button
@@ -430,19 +430,19 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                   <div className="col-span-2 md:col-span-3 border-t border-slate-100 pt-4 mt-2">
                     <div className="flex items-center gap-2 mb-3">
                       <Link2 className="w-3.5 h-3.5 text-slate-400" />
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dependências</p>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Dependências</p>
                     </div>
                     <div className="space-y-2">
                       {pred && (
                         <div className="flex items-center justify-between gap-3 bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100">
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex-shrink-0">Predecessora</span>
+                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest flex-shrink-0">Predecessora</span>
                             <span className="text-xs font-bold text-slate-600 truncate">
                               {pred.code ? `${pred.code} — ` : ''}{pred.title}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${STATUS_CONFIG[pred.status]?.bg} ${STATUS_CONFIG[pred.status]?.color}`}>
+                            <span className={`text-xs font-black px-2 py-0.5 rounded uppercase tracking-widest ${STATUS_CONFIG[pred.status]?.bg} ${STATUS_CONFIG[pred.status]?.color}`}>
                               {STATUS_CONFIG[pred.status]?.label}
                             </span>
                             {onViewOther && (
@@ -460,13 +460,13 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                       {successors.map(s => (
                         <div key={s.id} className="flex items-center justify-between gap-3 bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100">
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex-shrink-0">Dependente</span>
+                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest flex-shrink-0">Dependente</span>
                             <span className="text-xs font-bold text-slate-600 truncate">
                               {s.code ? `${s.code} — ` : ''}{s.title}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${STATUS_CONFIG[s.status]?.bg} ${STATUS_CONFIG[s.status]?.color}`}>
+                            <span className={`text-xs font-black px-2 py-0.5 rounded uppercase tracking-widest ${STATUS_CONFIG[s.status]?.bg} ${STATUS_CONFIG[s.status]?.color}`}>
                               {STATUS_CONFIG[s.status]?.label}
                             </span>
                             {onViewOther && (
@@ -504,25 +504,25 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                 const endSlip = planEnd && realEnd ? Math.round((realEnd.getTime() - planEnd.getTime()) / 86400000) : null
                 return (
                   <div className="col-span-2 md:col-span-3 border-t border-slate-100 pt-4 mt-2">
-                    <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-3">Vínculo com Planejamento</p>
+                    <p className="text-xs font-black text-violet-400 uppercase tracking-widest mb-3">Vínculo com Planejamento</p>
                     <div className="bg-violet-50 border border-violet-100 rounded-xl p-4 space-y-3">
                       <div>
-                        <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Atividade</p>
+                        <p className="text-xs font-black text-violet-400 uppercase tracking-wide">Atividade</p>
                         <p className="text-sm font-black text-violet-900">{p.itemDescription}</p>
                         <p className="text-xs text-violet-500">{p.planningProjectName}</p>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
-                          <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Início Planejado (Crono)</p>
+                          <p className="text-xs font-black text-violet-400 uppercase tracking-wide">Início Planejado (Crono)</p>
                           <p className="text-sm font-bold text-violet-800">{fmtDate(p.plannedStart ?? null)}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Fim Planejado (Crono)</p>
+                          <p className="text-xs font-black text-violet-400 uppercase tracking-wide">Fim Planejado (Crono)</p>
                           <p className="text-sm font-bold text-violet-800">{fmtDate(p.plannedEnd ?? null)}</p>
                         </div>
                         {startSlip !== null && (
                           <div>
-                            <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Desvio Início</p>
+                            <p className="text-xs font-black text-violet-400 uppercase tracking-wide">Desvio Início</p>
                             <p className={`text-sm font-black ${startSlip > 0 ? 'text-red-600' : startSlip < 0 ? 'text-emerald-600' : 'text-slate-600'}`}>
                               {startSlip > 0 ? `+${startSlip}d` : startSlip < 0 ? `${startSlip}d` : 'Em dia'}
                             </p>
@@ -530,7 +530,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                         )}
                         {endSlip !== null && (
                           <div>
-                            <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Desvio Fim</p>
+                            <p className="text-xs font-black text-violet-400 uppercase tracking-wide">Desvio Fim</p>
                             <p className={`text-sm font-black ${endSlip > 0 ? 'text-red-600' : endSlip < 0 ? 'text-emerald-600' : 'text-slate-600'}`}>
                               {endSlip > 0 ? `+${endSlip}d` : endSlip < 0 ? `${endSlip}d` : 'Em dia'}
                             </p>
@@ -538,7 +538,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                         )}
                         {p.budgetedValue != null && (
                           <div>
-                            <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide">Valor Orçado (Crono)</p>
+                            <p className="text-xs font-black text-violet-400 uppercase tracking-wide">Valor Orçado (Crono)</p>
                             <p className="text-sm font-black text-violet-800">
                               {p.budgetedValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
                             </p>
@@ -609,7 +609,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                         </div>
                         {h.reason && <p className="text-xs text-slate-500 mt-0.5">{h.reason}</p>}
                       </div>
-                      <span className="text-[10px] text-slate-400 whitespace-nowrap">{fmtDateTime(h.created_at)}</span>
+                      <span className="text-xs text-slate-400 whitespace-nowrap">{fmtDateTime(h.created_at)}</span>
                     </div>
                   )
                 })}

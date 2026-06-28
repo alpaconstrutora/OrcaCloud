@@ -100,9 +100,9 @@ const KpiCard: React.FC<{
         <div className={`absolute top-0 right-0 w-32 h-32 ${bgColor} -mr-16 -mt-16 rounded-full opacity-40 group-hover:scale-110 transition-transform duration-500`} />
         <div className="relative z-10 flex items-center justify-between">
             <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{label}</p>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">{label}</p>
                 <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{value}</h3>
-                {sub && <p className={`text-[10px] font-bold mt-2 ${color} bg-opacity-10 px-2 py-1 rounded-lg inline-block`} style={{ backgroundColor: `${color}15` }}>{sub}</p>}
+                {sub && <p className={`text-xs font-bold mt-2 ${color} bg-opacity-10 px-2 py-1 rounded-lg inline-block`} style={{ backgroundColor: `${color}15` }}>{sub}</p>}
             </div>
             <div className={`p-4 ${bgColor.replace('50','600').replace('bg-','bg-')} rounded-2xl shadow-lg`}>
                 <Icon className="w-8 h-8 text-white" />
@@ -179,7 +179,7 @@ const LaborDashboardTab: React.FC<{
                                     <span className="px-2 py-0.5 bg-red-500 text-white text-[9px] font-black rounded-full">{badge}</span>
                                 )}
                             </div>
-                            <p className="text-[11px] text-slate-500 mt-0.5 truncate">{desc}</p>
+                            <p className="text-xs text-slate-500 mt-0.5 truncate">{desc}</p>
                         </div>
                         <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors self-center" />
                     </button>
@@ -198,7 +198,7 @@ const LaborDashboardTab: React.FC<{
                             const pct = maxCost > 0 ? (emp.cost / maxCost * 100) : 0;
                             return (
                                 <div key={emp.employee_id} className="flex items-center gap-4">
-                                    <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] font-black text-indigo-600">{i + 1}</div>
+                                    <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center text-xs font-black text-indigo-600">{i + 1}</div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between mb-1">
                                             <span className="text-xs font-bold text-slate-700 truncate">{emp.name}</span>
@@ -208,7 +208,7 @@ const LaborDashboardTab: React.FC<{
                                             <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                                         </div>
                                     </div>
-                                    <span className="text-[10px] text-slate-400 w-12 text-right">{emp.hours.toFixed(0)}h</span>
+                                    <span className="text-xs text-slate-400 w-12 text-right">{emp.hours.toFixed(0)}h</span>
                                 </div>
                             );
                         })}
@@ -283,7 +283,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         </div>
                         Gestão de Mão de Obra
                         {isAllOrgsMode && (
-                            <span className="ml-2 px-3 py-1 bg-amber-100 text-amber-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-amber-200 shadow-sm animate-pulse">
+                            <span className="ml-2 px-3 py-1 bg-amber-100 text-amber-600 text-xs font-black rounded-full uppercase tracking-widest border border-amber-200 shadow-sm animate-pulse">
                                 Modo Consolidado
                             </span>
                         )}
@@ -356,7 +356,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         </div>
                         <div>
                             <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">Migração de Dados Disponível</h4>
-                            <p className="text-[11px] text-slate-500">Encontramos {legacyCount} colaboradores no sistema legatário. Deseja importá-los para o novo módulo?</p>
+                            <p className="text-xs text-slate-500">Encontramos {legacyCount} colaboradores no sistema legatário. Deseja importá-los para o novo módulo?</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -369,7 +369,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             </button>
                         ) : (
                             <div className="flex items-center gap-2 bg-white/50 p-1.5 rounded-xl border border-indigo-200">
-                                <span className="text-[11px] font-bold text-indigo-900 mx-2">Confirmar?</span>
+                                <span className="text-xs font-bold text-indigo-900 mx-2">Confirmar?</span>
                                 <button
                                     onClick={async () => {
                                         setIsMigrating(true);
@@ -385,14 +385,14 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                                         }
                                     }}
                                     disabled={isMigrating}
-                                    className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] hover:bg-emerald-700 transition-all flex items-center gap-1"
+                                    className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-emerald-700 transition-all flex items-center gap-1"
                                 >
                                     {isMigrating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                                     Sim
                                 </button>
                                 <button
                                     onClick={() => setShowConfirmMigrate(false)}
-                                    className="bg-white text-slate-500 px-3 py-1.5 rounded-lg font-bold text-[10px] hover:bg-slate-100 transition-all border border-slate-200"
+                                    className="bg-white text-slate-500 px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-slate-100 transition-all border border-slate-200"
                                 >
                                     Não
                                 </button>

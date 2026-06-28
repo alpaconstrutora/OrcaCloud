@@ -138,7 +138,7 @@ const ImovibRegulatoryMapTab: React.FC<Props> = ({ studyId }) => {
                 <div className="overflow-x-auto">
                     <table className="w-full text-left min-w-max">
                         <thead>
-                            <tr className="bg-slate-50 text-[10px] font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">
+                            <tr className="bg-slate-50 text-xs font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">
                                 {COLUMNS.map(col => (
                                     <th key={col.key} className={`px-4 py-3 ${col.width}`}>{col.label}</th>
                                 ))}

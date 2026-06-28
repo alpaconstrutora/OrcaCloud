@@ -274,21 +274,21 @@ const CompanyPartnersTab: React.FC<Props> = ({ companyId, companies }) => {
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-black text-gray-900 text-sm">{p.nome}</span>
-                                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                                    <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                                         {p.tipo_pessoa === 'pf' ? 'PF' : 'PJ'}
                                     </span>
                                     {p.is_administrador && (
-                                        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
                                             <Crown className="w-3 h-3" /> Admin
                                         </span>
                                     )}
                                     {p.is_assinante_legal && (
-                                        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
                                             <PenLine className="w-3 h-3" /> Assinante
                                         </span>
                                     )}
                                     {p.data_saida && (
-                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-500">
+                                        <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-500">
                                             Saiu
                                         </span>
                                     )}

@@ -206,7 +206,7 @@ export const CommandCenterPanel: React.FC<Props> = ({
             <div className="flex items-center gap-2">
                 <Activity className="w-4 h-4 text-blue-600" />
                 <h2 className="text-sm font-bold text-gray-800">Centro de Comando</h2>
-                <span className="text-[10px] text-gray-400">{fmtDate(today())}</span>
+                <span className="text-xs text-gray-400">{fmtDate(today())}</span>
             </div>
 
             {/* ── KPI cards row 1 ── */}
@@ -258,9 +258,9 @@ export const CommandCenterPanel: React.FC<Props> = ({
             {/* ── Curva S (reusa dados já calculados) ── */}
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
                 <h3 className="text-xs font-bold text-gray-700 mb-1">Curva S — Desembolso Financeiro</h3>
-                <p className="text-[10px] text-gray-400 mb-4">Previsto × realizado por período (acumulado)</p>
+                <p className="text-xs text-gray-400 mb-4">Previsto × realizado por período (acumulado)</p>
                 {chartSlice.length === 0 ? (
-                    <div className="flex items-center justify-center py-10 text-[11px] text-gray-400">
+                    <div className="flex items-center justify-center py-10 text-xs text-gray-400">
                         Configure datas e distribuições nas atividades para gerar a curva S.
                     </div>
                 ) : (
@@ -293,7 +293,7 @@ export const CommandCenterPanel: React.FC<Props> = ({
                     <span className="text-xs font-bold text-gray-700">Caminho Crítico ({kpis.criticalCount} atividades)</span>
                 </div>
                 {kpis.criticalItems.length === 0 ? (
-                    <div className="px-5 py-8 text-center text-[11px] text-gray-400">
+                    <div className="px-5 py-8 text-center text-xs text-gray-400">
                         Execute o Auto Programar para calcular o caminho crítico.
                     </div>
                 ) : (
@@ -307,7 +307,7 @@ export const CommandCenterPanel: React.FC<Props> = ({
                                 <div key={item.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50/50">
                                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${overdue ? 'bg-red-500' : 'bg-orange-400'}`} />
                                     <span className="text-xs font-medium text-gray-800 flex-1 truncate">{item.name}</span>
-                                    <span className="text-[10px] text-gray-400 shrink-0">{fmtDate(end)}</span>
+                                    <span className="text-xs text-gray-400 shrink-0">{fmtDate(end)}</span>
                                     <div className="w-16 shrink-0">
                                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                             <div
@@ -321,7 +321,7 @@ export const CommandCenterPanel: React.FC<Props> = ({
                             );
                         })}
                         {kpis.criticalItems.length > 20 && (
-                            <div className="px-5 py-2 text-center text-[10px] text-gray-400">
+                            <div className="px-5 py-2 text-center text-xs text-gray-400">
                                 +{kpis.criticalItems.length - 20} atividades críticas não exibidas
                             </div>
                         )}
@@ -360,11 +360,11 @@ const KpiCard: React.FC<{
     return (
         <div className={`${c.bg} border ${c.border} rounded-xl px-4 py-3`} title={tooltip}>
             <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">{label}</span>
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</span>
                 {icon && <span className={c.icon}>{icon}</span>}
             </div>
             <div className={`text-2xl font-black ${c.text}`}>{value}</div>
-            {sub && <div className="text-[10px] text-gray-400 mt-0.5 truncate">{sub}</div>}
+            {sub && <div className="text-xs text-gray-400 mt-0.5 truncate">{sub}</div>}
         </div>
     );
 };
@@ -394,7 +394,7 @@ const DelaySimulator: React.FC<{
                 <div className="flex items-center gap-2">
                     <Zap className="w-4 h-4 text-purple-500" />
                     <span className="text-xs font-bold text-gray-700">Simulador de Impacto de Atraso</span>
-                    <span className="text-[10px] text-gray-400">— "Se atrasar N dias, o término muda?"</span>
+                    <span className="text-xs text-gray-400">— "Se atrasar N dias, o término muda?"</span>
                 </div>
                 {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
             </button>
@@ -402,14 +402,14 @@ const DelaySimulator: React.FC<{
             {open && (
                 <div className="px-5 py-4 space-y-4">
                     {criticalItems.length === 0 ? (
-                        <p className="text-[11px] text-gray-400 text-center py-4">
+                        <p className="text-xs text-gray-400 text-center py-4">
                             Execute o Auto Programar para calcular o caminho crítico.
                         </p>
                     ) : (
                         <>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Atividade</label>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Atividade</label>
                                     <select
                                         value={selectedId}
                                         onChange={e => setSelectedId(e.target.value)}
@@ -428,7 +428,7 @@ const DelaySimulator: React.FC<{
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Atraso (dias)</label>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Atraso (dias)</label>
                                     <input
                                         type="number" min={1} max={365} value={delayDays}
                                         onChange={e => setDelayDays(Math.max(1, parseInt(e.target.value) || 1))}
@@ -441,12 +441,12 @@ const DelaySimulator: React.FC<{
                                 <div className={`rounded-xl px-5 py-4 border ${netImpact > 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}`}>
                                     <div className="flex items-center gap-6 text-sm">
                                         <div>
-                                            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Término atual</div>
+                                            <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">Término atual</div>
                                             <div className="font-black text-gray-800 mt-0.5">{fmtDate(projectEnd)}</div>
                                         </div>
                                         <div className="text-gray-300 text-lg">→</div>
                                         <div>
-                                            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Novo término</div>
+                                            <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">Novo término</div>
                                             <div className={`font-black mt-0.5 ${netImpact > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
                                                 {fmtDate(newEnd)}
                                             </div>
@@ -455,13 +455,13 @@ const DelaySimulator: React.FC<{
                                             {netImpact > 0 ? (
                                                 <div className="text-red-700">
                                                     <div className="text-2xl font-black">+{netImpact}d</div>
-                                                    <div className="text-[10px]">impacto no projeto</div>
-                                                    {float > 0 && <div className="text-[10px] text-gray-500">absorveu {float}d de folga</div>}
+                                                    <div className="text-xs">impacto no projeto</div>
+                                                    {float > 0 && <div className="text-xs text-gray-500">absorveu {float}d de folga</div>}
                                                 </div>
                                             ) : (
                                                 <div className="text-emerald-700">
                                                     <div className="text-2xl font-black">Sem impacto</div>
-                                                    <div className="text-[10px]">folga de {float}d absorve o atraso</div>
+                                                    <div className="text-xs">folga de {float}d absorve o atraso</div>
                                                 </div>
                                             )}
                                         </div>

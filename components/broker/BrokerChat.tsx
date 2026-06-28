@@ -68,7 +68,7 @@ const BrokerChat: React.FC<BrokerChatProps> = ({ brokerEmail, brokerName }) => {
                         </div>
                         <div>
                             <h3 className="text-sm font-black text-gray-900">Canal Residencial Parque Verde</h3>
-                            <p className="text-[10px] text-gray-400 font-medium">{messages.length} mensagens • Incorporadora + Corretores</p>
+                            <p className="text-xs text-gray-400 font-medium">{messages.length} mensagens • Incorporadora + Corretores</p>
                         </div>
                     </div>
                 </div>
@@ -78,7 +78,7 @@ const BrokerChat: React.FC<BrokerChatProps> = ({ brokerEmail, brokerName }) => {
             {pinnedMessages.length > 0 && showPinned && (
                 <div className="border-b border-amber-100 bg-amber-50/50">
                     <button onClick={() => setShowPinned(!showPinned)} className="w-full px-4 py-2 flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 text-[10px] font-black text-amber-600 uppercase tracking-wider">
+                        <span className="flex items-center gap-1.5 text-xs font-black text-amber-600 uppercase tracking-wider">
                             <Pin className="w-3 h-3" /> Fixadas ({pinnedMessages.length})
                         </span>
                         <ChevronDown className={`w-3 h-3 text-amber-400 transition-transform ${showPinned ? 'rotate-180' : ''}`} />
@@ -87,7 +87,7 @@ const BrokerChat: React.FC<BrokerChatProps> = ({ brokerEmail, brokerName }) => {
                         {pinnedMessages.map(msg => (
                             <div key={msg.id} className="bg-white rounded-xl p-3 border border-amber-100">
                                 <p className="text-xs text-gray-700">{msg.message}</p>
-                                <p className="text-[10px] text-gray-400 mt-1">{formatTime(msg.created_at)}</p>
+                                <p className="text-xs text-gray-400 mt-1">{formatTime(msg.created_at)}</p>
                             </div>
                         ))}
                     </div>
@@ -104,7 +104,7 @@ const BrokerChat: React.FC<BrokerChatProps> = ({ brokerEmail, brokerName }) => {
                         <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                             <div className={`max-w-[75%] ${isMe ? 'order-1' : 'order-2'}`}>
                                 {!isMe && (
-                                    <p className={`text-[10px] font-bold mb-1 ml-1 ${isIncorporadora ? 'text-indigo-500' : 'text-gray-400'}`}>
+                                    <p className={`text-xs font-bold mb-1 ml-1 ${isIncorporadora ? 'text-indigo-500' : 'text-gray-400'}`}>
                                         {msg.sender_name} {isIncorporadora && '(Incorporadora)'}
                                     </p>
                                 )}

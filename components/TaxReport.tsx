@@ -55,7 +55,7 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
                 </div>
                 <div className="relative z-10 max-w-2xl">
                     <div className="flex items-center gap-2 mb-4">
-                        <span className="px-3 py-1 bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">
+                        <span className="px-3 py-1 bg-white/20 rounded-full text-xs font-black uppercase tracking-widest border border-white/10">
                             Consultor IR {year}
                         </span>
                     </div>
@@ -84,11 +84,11 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
                             <Info className="w-4 h-4" /> Resumo Consolidado
                         </h4>
                         <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Custo de Aquisição Total</p>
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-1">Custo de Aquisição Total</p>
                             <p className="text-xl font-black text-gray-900">{formatCurrency(totalInvested)}</p>
                         </div>
                         <div className="pt-4 border-t border-gray-50">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Rendimentos Distribuídos</p>
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-1">Rendimentos Distribuídos</p>
                             <div className="flex items-center gap-2">
                                 <p className="text-xl font-black text-emerald-600">{formatCurrency(totalEarnings)}</p>
                                 {totalEarnings > 0 && <TrendingUp className="w-4 h-4 text-emerald-500" />}
@@ -96,7 +96,7 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
                         </div>
                         {totalEarnings > 0 && (
                             <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                                <p className="text-[10px] font-black text-blue-400 uppercase mb-2">Dica Fiscal</p>
+                                <p className="text-xs font-black text-blue-400 uppercase mb-2">Dica Fiscal</p>
                                 <p className="text-xs text-blue-700 leading-relaxed">
                                     Informe os rendimentos na ficha "Rendimentos Isentos e Não Tributáveis", código 26.
                                 </p>
@@ -122,16 +122,16 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
                                                 </div>
                                                 <div>
                                                     <h4 className="font-black text-gray-900">{asset.name}</h4>
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase">Empreendimento</p>
+                                                    <p className="text-xs font-bold text-gray-400 uppercase">Empreendimento</p>
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-8 md:gap-12">
                                                 <div>
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Total Aportado</p>
+                                                    <p className="text-xs font-black text-gray-400 uppercase mb-1">Total Aportado</p>
                                                     <p className="text-sm font-black text-gray-900">{formatCurrency(asset.costBasis)}</p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Rend. Distribuídos</p>
+                                                    <p className="text-xs font-black text-gray-400 uppercase mb-1">Rend. Distribuídos</p>
                                                     <p className={`text-sm font-black ${asset.dividends > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
                                                         {asset.dividends > 0 ? formatCurrency(asset.dividends) : '—'}
                                                     </p>
@@ -143,7 +143,7 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
                             </div>
                         )}
                         <div className="p-6 bg-gray-50/50 border-t border-gray-50 text-center">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                                 Dados baseados em movimentações liquidadas registradas no sistema.
                             </p>
                         </div>

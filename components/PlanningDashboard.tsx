@@ -40,7 +40,7 @@ interface StatCardProps {
 const StatCard = ({ title, value, subtext, icon: Icon, color }: StatCardProps) => (
     <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex items-start justify-between hover:shadow-md transition-all">
         <div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{title}</p>
+            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{title}</p>
             <h3 className="text-2xl font-black text-gray-900">{value}</h3>
             {subtext && <p className="text-xs mt-1.5 text-gray-500 font-medium">{subtext}</p>}
         </div>

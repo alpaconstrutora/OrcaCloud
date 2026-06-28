@@ -214,8 +214,8 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                         </div>
                         <div>
                             <p className="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">{loading ? '…' : k.value}</p>
-                            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mt-0.5">{k.label}</p>
-                            <p className="text-[11px] text-gray-400 mt-1">{k.sub}</p>
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mt-0.5">{k.label}</p>
+                            <p className="text-xs text-gray-400 mt-1">{k.sub}</p>
                         </div>
                     </div>
                 ))}
@@ -258,13 +258,13 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
-                                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Número</th>
-                                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Título</th>
-                                    {showsClient && <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Contratante</th>}
-                                    <th className="text-right px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Valor</th>
-                                    <th className="text-center px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Vencimento</th>
-                                    {tab === 'alerts' && <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Alerta</th>}
+                                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Número</th>
+                                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Título</th>
+                                    {showsClient && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Contratante</th>}
+                                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor</th>
+                                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Vencimento</th>
+                                    {tab === 'alerts' && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Alerta</th>}
                                     <th className="w-8" />
                                 </tr>
                             </thead>
@@ -305,7 +305,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                                             {tab === 'alerts' && (
                                                 <td className="px-4 py-3">
                                                     {topAlert && (
-                                                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                                                        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
                                                             topAlert.level === 'critical' ? 'bg-red-100 text-red-700' :
                                                             topAlert.level === 'warning'  ? 'bg-amber-100 text-amber-700' :
                                                                                              'bg-blue-100 text-blue-700'

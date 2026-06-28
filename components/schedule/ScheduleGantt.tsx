@@ -276,7 +276,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             )}
                         </div>
 
-                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-[11px] font-medium text-gray-500" style={getGanttColStyle('gWbs')}>
+                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gWbs')}>
                             {node.wbsCode || ''}
                         </div>
 
@@ -347,7 +347,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                             setCrewPopoverItem(item.id);
                                         }
                                     }}
-                                    className={`absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-[10px] px-1 py-0 rounded-b border border-t-0 border-gray-200 z-20 transition-colors ${crewPopoverItem === item.id ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-500'}`}
+                                    className={`absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-xs px-1 py-0 rounded-b border border-t-0 border-gray-200 z-20 transition-colors ${crewPopoverItem === item.id ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-500'}`}
                                 >
                                     ▾
                                 </button>
@@ -652,7 +652,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                             <div
                                                 className="absolute inset-y-0 left-0 right-0 flex items-center px-2 pointer-events-none z-[5] overflow-hidden"
                                             >
-                                                <span className="text-[11px] font-semibold text-gray-700 truncate">
+                                                <span className="text-xs font-semibold text-gray-700 truncate">
                                                     {node.name}
                                                 </span>
                                             </div>
@@ -672,7 +672,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                 e.stopPropagation();
                                                 handleUpdateItemSchedule(item.id, 'endDate', projectEndDate);
                                             }}
-                                            className="opacity-0 group-hover/task-container:opacity-100 transition-opacity ml-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold text-blue-400 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 shrink-0"
+                                            className="opacity-0 group-hover/task-container:opacity-100 transition-opacity ml-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-xs font-bold text-blue-400 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 shrink-0"
                                         >
                                             <ArrowRightToLine className="w-3 h-3" />
                                         </button>
@@ -718,7 +718,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 </div>
                             )}
                         </div>
-                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-medium text-gray-500" style={getGanttColStyle('gWbs')}>{node.wbsCode || ''}</div>
+                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gWbs')}>{node.wbsCode || ''}</div>
                         <div data-gantt-col="gId" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gId')}>{node.uid}</div>
                         <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-200 flex items-center px-0.5" style={getGanttColStyle('gPred')}>
                             {(() => {
@@ -957,13 +957,13 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     <div className="relative" ref={colMenuRef}>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); setShowColsDropdown(!showColsDropdown); }}
-                                            className={`relative flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-bold transition-all ${showColsDropdown ? 'bg-indigo-600 border-indigo-700 text-white shadow-lg' : collapsedCols.size > 0 ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'}`}
+                                            className={`relative flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-bold transition-all ${showColsDropdown ? 'bg-indigo-600 border-indigo-700 text-white shadow-lg' : collapsedCols.size > 0 ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'}`}
                                             title="Gerenciar colunas visíveis"
                                         >
                                             <Columns3 className="w-3 h-3" />
                                             <span>COLUNAS</span>
                                             {collapsedCols.size > 0 && (
-                                                <span className={`text-[10px] font-black px-1 rounded-full ${showColsDropdown ? 'bg-white/20 text-white' : 'bg-amber-500 text-white'}`}>
+                                                <span className={`text-xs font-black px-1 rounded-full ${showColsDropdown ? 'bg-white/20 text-white' : 'bg-amber-500 text-white'}`}>
                                                     {collapsedCols.size}
                                                 </span>
                                             )}
@@ -971,20 +971,20 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         {showColsDropdown && (
                                             <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 z-[200] animate-in fade-in slide-in-from-top-2 duration-150 normal-case tracking-normal">
                                                 <div className="px-3 py-1.5 border-b border-gray-100 mb-1">
-                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Colunas Visíveis</span>
+                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Colunas Visíveis</span>
                                                 </div>
                                                 {/* Presets rápidos */}
                                                 <div className="px-3 py-2 flex gap-2 border-b border-gray-100 mb-1">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); onCollapseAll(); setShowColsDropdown(false); }}
-                                                        className="flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors"
+                                                        className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors"
                                                         title="Oculta todas as colunas para focar nas barras do Gantt"
                                                     >
                                                         📊 Focar Gantt
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleSplitterDblClick(); setShowColsDropdown(false); }}
-                                                        className="flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100 transition-colors"
+                                                        className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100 transition-colors"
                                                     >
                                                         📋 Ver Tudo
                                                     </button>

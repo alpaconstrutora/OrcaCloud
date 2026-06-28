@@ -738,7 +738,7 @@ const SavePlanningVersionModal: React.FC<{ onCancel: () => void; onSave: (descri
                     </button>
                 </div>
                 <div className="px-6 py-4">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Descrição</label>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Descrição</label>
                     <input
                         autoFocus
                         value={description}
@@ -3822,7 +3822,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                 </div>
                                 <div>
                                     <h2 className="text-sm font-bold text-gray-900">Sincronizar Planejamento</h2>
-                                    <p className="text-[11px] text-gray-400">Alterações detectadas no orçamento</p>
+                                    <p className="text-xs text-gray-400">Alterações detectadas no orçamento</p>
                                 </div>
                             </div>
                             <button onClick={() => setSyncModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-all text-gray-400 hover:text-gray-600">
@@ -3849,7 +3849,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
                                                     {syncDiff.newItems.length} item(s) novo(s) no orçamento
                                                 </h3>
-                                                <span className="text-[10px] text-gray-400">serão adicionados sem data/duração</span>
+                                                <span className="text-xs text-gray-400">serão adicionados sem data/duração</span>
                                             </div>
                                             <div className="space-y-1 max-h-40 overflow-y-auto">
                                                 {syncDiff.newItems.map(item => (
@@ -3870,7 +3870,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
                                                     {syncDiff.changedItems.length} item(s) com duração a recalcular
                                                 </h3>
-                                                <span className="text-[10px] text-gray-400">quantidade alterada</span>
+                                                <span className="text-xs text-gray-400">quantidade alterada</span>
                                             </div>
                                             <div className="space-y-1 max-h-40 overflow-y-auto">
                                                 {syncDiff.changedItems.map(item => (
@@ -3924,7 +3924,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                 </div>
                                 <div>
                                     <h2 className="text-sm font-bold text-gray-900">Versões do Planejamento</h2>
-                                    <p className="text-[11px] text-gray-400">
+                                    <p className="text-xs text-gray-400">
                                         Baseado no orçamento v{budgetVersionStatus.pinnedItem ?? '—'}
                                         {budgetVersionStatus.hasNewerVersion && budgetVersionStatus.linkedActive
                                             ? ` · orçamento atual: v${budgetVersionStatus.linkedActive.item}` : ''}
@@ -3940,7 +3940,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                         <div className="px-6 py-3 border-b border-gray-50 flex items-center gap-2">
                             <button
                                 onClick={() => { setVersionPanelOpen(false); setSavePlanningVersionOpen(true); }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-gray-900 text-white hover:bg-gray-800 transition-all shadow-sm"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-900 text-white hover:bg-gray-800 transition-all shadow-sm"
                             >
                                 <Camera className="w-3.5 h-3.5" />
                                 Salvar versão atual
@@ -3948,7 +3948,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             {budgetVersionStatus.hasNewerVersion && budgetVersionStatus.linkedActive && (
                                 <button
                                     onClick={() => { const t = budgetVersionStatus.linkedActive!; setVersionPanelOpen(false); handleRebaseToBudgetVersion(t); }}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600 transition-all shadow-sm"
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-500 text-white hover:bg-indigo-600 transition-all shadow-sm"
                                 >
                                     <GitBranch className="w-3.5 h-3.5" />
                                     Migrar p/ orçamento v{budgetVersionStatus.linkedActive.item}
@@ -3962,7 +3962,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             {/* ── Versões do Orçamento (fixar pin) ── */}
                             {budgetVersionStatus.linkedVersions.length > 0 && (
                                 <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Versões do Orçamento</p>
+                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Versões do Orçamento</p>
                                     <div className="space-y-1.5">
                                         {[...budgetVersionStatus.linkedVersions].sort((a, b) => b.item - a.item).map(bv => {
                                             const isPinned = bv.id === budgetVersionStatus.pinnedId;
@@ -3970,18 +3970,18 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 <div key={bv.id} className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border transition-all ${isPinned ? 'border-indigo-300 bg-indigo-50' : 'border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30'}`}>
                                                     <div className="min-w-0">
                                                         <div className="flex items-center gap-2">
-                                                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${isPinned ? 'text-indigo-700 bg-indigo-200' : 'text-gray-500 bg-gray-100'}`}>v{bv.item}</span>
+                                                            <span className={`text-xs font-black px-1.5 py-0.5 rounded-full ${isPinned ? 'text-indigo-700 bg-indigo-200' : 'text-gray-500 bg-gray-100'}`}>v{bv.item}</span>
                                                             <span className="text-xs font-bold text-gray-800 truncate">{bv.description}</span>
                                                             {isPinned && <span className="text-[9px] font-black text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded-full uppercase tracking-wide">atual</span>}
                                                         </div>
-                                                        <p className="text-[10px] text-gray-400 mt-0.5">
+                                                        <p className="text-xs text-gray-400 mt-0.5">
                                                             {new Date(bv.date).toLocaleDateString('pt-BR')} · {bv.budget?.length ?? 0} itens
                                                         </p>
                                                     </div>
                                                     {!isPinned && (
                                                         <button
                                                             onClick={() => { handleRebaseToBudgetVersion(bv); setVersionPanelOpen(false); }}
-                                                            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white text-indigo-700 border border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 transition-all"
+                                                            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-indigo-700 border border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 transition-all"
                                                         >
                                                             <GitBranch className="w-3 h-3" />
                                                             Fixar nesta versão
@@ -3996,14 +3996,14 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
                             {/* ── Histórico do Planejamento ── */}
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Histórico do Planejamento</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Histórico do Planejamento</p>
                                 {(settings.planningVersions || []).length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-8 gap-2">
                                         <div className="w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center">
                                             <History className="w-5 h-5 text-gray-400" />
                                         </div>
                                         <p className="text-xs font-semibold text-gray-600">Nenhuma versão arquivada</p>
-                                        <p className="text-[11px] text-gray-400 text-center">Salve uma versão para criar um histórico do cronograma.</p>
+                                        <p className="text-xs text-gray-400 text-center">Salve uma versão para criar um histórico do cronograma.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-1.5">
@@ -4011,17 +4011,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                             <div key={v.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-gray-100 hover:border-gray-200 hover:bg-gray-50/50 transition-all">
                                                 <div className="min-w-0">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] font-black text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">p{v.item}</span>
+                                                        <span className="text-xs font-black text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">p{v.item}</span>
                                                         <span className="text-xs font-bold text-gray-800 truncate">{v.description}</span>
                                                     </div>
-                                                    <p className="text-[10px] text-gray-400 mt-0.5">
+                                                    <p className="text-xs text-gray-400 mt-0.5">
                                                         {new Date(v.date).toLocaleDateString('pt-BR')} {new Date(v.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                                         {v.budgetVersionItem != null ? ` · orçamento v${v.budgetVersionItem}` : ' · orçamento ao vivo'}
                                                     </p>
                                                 </div>
                                                 <button
                                                     onClick={() => handleRestorePlanningVersion(v)}
-                                                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                                                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:text-gray-900 transition-all"
                                                 >
                                                     <RefreshCw className="w-3 h-3" />
                                                     Restaurar
@@ -4058,7 +4058,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     </div>
                     <button
                         onClick={() => budgetVersionStatus.linkedActive && handleRebaseToBudgetVersion(budgetVersionStatus.linkedActive)}
-                        className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600 transition-all shadow-sm whitespace-nowrap"
+                        className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-500 text-white hover:bg-indigo-600 transition-all shadow-sm whitespace-nowrap"
                     >
                         <GitBranch className="w-3 h-3" />
                         {budgetVersionStatus.newVersionId ? 'Criar nova versão do planejamento' : 'Sincronizar com orçamento atual'}
@@ -4083,7 +4083,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     </div>
                     <button
                         onClick={() => setSyncModalOpen(true)}
-                        className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-500 text-white hover:bg-amber-600 transition-all shadow-sm whitespace-nowrap"
+                        className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 transition-all shadow-sm whitespace-nowrap"
                     >
                         <RefreshCw className="w-3 h-3" />
                         Sincronizar com Orçamento
@@ -4122,7 +4122,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-medium text-red-500 uppercase tracking-wider">{isRiskPanelExpanded ? 'Ocultar' : 'Ver detalhes'}</span>
+                            <span className="text-xs font-medium text-red-500 uppercase tracking-wider">{isRiskPanelExpanded ? 'Ocultar' : 'Ver detalhes'}</span>
                             <ChevronDown className={`w - 4 h - 4 text - red - 400 transition - transform duration - 200 ${isRiskPanelExpanded ? 'rotate-180' : ''} `} />
                         </div>
                     </button>
@@ -4147,7 +4147,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                             <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                                             <div className="min-w-0">
                                                 <p className="text-xs font-semibold text-gray-800 truncate" title={name}>{name}</p>
-                                                <p className="text-[10px] text-gray-500 mt-0.5">
+                                                <p className="text-xs text-gray-500 mt-0.5">
                                                     {insight.missingItems} {insight.missingItems === 1 ? 'insumo' : 'insumos'} sem pedido — R$ {insight.missingCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </p>
                                             </div>
@@ -4478,7 +4478,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 <FileDown className="w-5 h-5" />
                                             </button>
                                             <div className="text-right">
-                                                <span className="block text-[10px] font-black text-white/60 uppercase tracking-widest">Foto #{idx + 1}</span>
+                                                <span className="block text-xs font-black text-white/60 uppercase tracking-widest">Foto #{idx + 1}</span>
                                                 <span className="text-xs font-bold text-white">Ver em detalhes</span>
                                             </div>
                                         </div>

@@ -270,7 +270,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             {/* Header info */}
             <div className="flex items-center justify-between border-b border-gray-100 pb-5">
               <div>
-                <span className="text-[10px] uppercase font-bold text-orange-500 tracking-wider">Workspace Selecionado</span>
+                <span className="text-xs uppercase font-bold text-orange-500 tracking-wider">Workspace Selecionado</span>
                 <h1 className="text-xl font-bold text-gray-900 mt-1">{selectedWorkspace.supplier_name}</h1>
               </div>
               <div className="flex gap-2">
@@ -338,7 +338,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-sm bg-white">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
                         <th className="px-5 py-3">Nome</th>
                         <th className="px-5 py-3">E-mail</th>
                         <th className="px-5 py-3">Telefone</th>
@@ -354,14 +354,14 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                           <td className="px-5 py-4 text-gray-500">{user.email}</td>
                           <td className="px-5 py-4 text-gray-500">{user.phone || '-'}</td>
                           <td className="px-5 py-4">
-                            <span className="px-2 py-0.5 bg-gray-100 border border-gray-200 text-gray-500 text-[10px] font-bold rounded-md uppercase">
+                            <span className="px-2 py-0.5 bg-gray-100 border border-gray-200 text-gray-500 text-xs font-bold rounded-md uppercase">
                               {user.role}
                             </span>
                           </td>
                           <td className="px-5 py-4 text-center">
                             <button
                               onClick={() => handleToggleUserActive(user)}
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block
+                              className={`text-xs font-bold px-2 py-0.5 rounded-full inline-block
                                 ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
                             >
                               {user.is_active ? 'ATIVO' : 'INATIVO'}
@@ -422,9 +422,9 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="text-xs font-bold text-gray-900 truncate">{sd.document?.nome}</h4>
-                        <p className="text-[10px] text-gray-500 mt-1 truncate">{sd.document?.descricao || 'Sem descrição'}</p>
+                        <p className="text-xs text-gray-500 mt-1 truncate">{sd.document?.descricao || 'Sem descrição'}</p>
                       </div>
-                      <div className="flex items-center justify-between text-[10px] text-gray-400 border-t border-gray-100 pt-3 mt-1">
+                      <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-3 mt-1">
                         <span>Compartilhado: {new Date(sd.shared_at).toLocaleDateString()}</span>
                         {sd.document?.active_version?.storage_path && (
                           <a
@@ -463,16 +463,16 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                             ${req.priority === 'ALTA' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
                             {req.priority}
                           </span>
-                          <span className="text-[10px] text-gray-500 font-bold uppercase">{req.type}</span>
+                          <span className="text-xs text-gray-500 font-bold uppercase">{req.type}</span>
                         </div>
                         <h4 className="text-xs font-bold text-gray-900 truncate">{req.title}</h4>
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">{req.description}</p>
+                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">{req.description}</p>
                       </div>
                       
                       <div className="flex items-center gap-4 shrink-0 border-t md:border-t-0 border-gray-100 pt-3 md:pt-0">
                         <div className="flex flex-col text-left md:text-right">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold">Status Atual</span>
-                          <span className={`text-[10px] font-bold mt-1 px-2.5 py-0.5 rounded-full inline-block
+                          <span className="text-xs text-gray-400 uppercase font-semibold">Status Atual</span>
+                          <span className={`text-xs font-bold mt-1 px-2.5 py-0.5 rounded-full inline-block
                             ${req.status === 'CONCLUIDO' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
                             {req.status}
                           </span>
@@ -483,7 +483,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                           {req.status === 'ABERTO' && (
                             <button
                               onClick={() => handleUpdateRequestStatus(req, 'EM_ANALISE')}
-                              className="px-2.5 py-1.5 bg-yellow-50 text-yellow-600 hover:bg-yellow-100 rounded-lg text-[10px] font-bold border border-yellow-200 active:scale-95 transition-all"
+                              className="px-2.5 py-1.5 bg-yellow-50 text-yellow-600 hover:bg-yellow-100 rounded-lg text-xs font-bold border border-yellow-200 active:scale-95 transition-all"
                             >
                               Analisar
                             </button>
@@ -491,7 +491,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                           {(req.status === 'ABERTO' || req.status === 'EM_ANALISE') && (
                             <button
                               onClick={() => handleUpdateRequestStatus(req, 'CONCLUIDO')}
-                              className="px-2.5 py-1.5 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg text-[10px] font-bold border border-green-200 active:scale-95 transition-all"
+                              className="px-2.5 py-1.5 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg text-xs font-bold border border-green-200 active:scale-95 transition-all"
                             >
                               Concluir
                             </button>
@@ -528,7 +528,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             
             <form onSubmit={handleCreateWorkspace} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400 uppercase font-bold">Fornecedor / Prestador de Serviço</label>
+                <label className="text-xs text-gray-400 uppercase font-bold">Fornecedor / Prestador de Serviço</label>
                 <select
                   required
                   value={newWorkspaceSupplierId}
@@ -570,7 +570,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             
             <form onSubmit={handleInviteUser} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400 uppercase font-bold">Nome Completo</label>
+                <label className="text-xs text-gray-400 uppercase font-bold">Nome Completo</label>
                 <input
                   required
                   value={inviteUser.name}
@@ -581,7 +581,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400 uppercase font-bold">E-mail de Login</label>
+                <label className="text-xs text-gray-400 uppercase font-bold">E-mail de Login</label>
                 <input
                   required
                   type="email"
@@ -594,7 +594,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400 uppercase font-bold">Celular / Telefone</label>
+                  <label className="text-xs text-gray-400 uppercase font-bold">Celular / Telefone</label>
                   <input
                     value={inviteUser.phone}
                     onChange={(e) => setInviteUser({ ...inviteUser, phone: e.target.value })}
@@ -604,7 +604,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400 uppercase font-bold">Perfil / Permissão</label>
+                  <label className="text-xs text-gray-400 uppercase font-bold">Perfil / Permissão</label>
                   <select
                     value={inviteUser.role}
                     onChange={(e) => setInviteUser({ ...inviteUser, role: e.target.value as any })}
@@ -646,7 +646,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             
             <form onSubmit={handleShareDoc} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400 uppercase font-bold">Documento / Projeto</label>
+                <label className="text-xs text-gray-400 uppercase font-bold">Documento / Projeto</label>
                 <select
                   required
                   value={docToShareId}

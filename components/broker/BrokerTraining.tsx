@@ -104,8 +104,8 @@ const BrokerTraining: React.FC<BrokerTrainingProps> = ({ brokerEmail }) => {
                                         </div>
                                         <p className="text-xs text-gray-400 mt-0.5">{mod.description}</p>
                                         <div className="flex items-center gap-3 mt-1.5">
-                                            <span className="text-[10px] text-gray-400 font-bold flex items-center gap-1"><Clock className="w-3 h-3" />{mod.duration_minutes} min</span>
-                                            <span className={`text-[10px] font-bold flex items-center gap-1 ${cfg.color}`}><Icon className="w-3 h-3" />{cfg.label}</span>
+                                            <span className="text-xs text-gray-400 font-bold flex items-center gap-1"><Clock className="w-3 h-3" />{mod.duration_minutes} min</span>
+                                            <span className={`text-xs font-bold flex items-center gap-1 ${cfg.color}`}><Icon className="w-3 h-3" />{cfg.label}</span>
                                         </div>
                                     </div>
                                 </div>

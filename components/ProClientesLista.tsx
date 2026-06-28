@@ -148,7 +148,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
       {/* Formulário Novo Cliente */}
       {mostrarForm && (
         <div className="bg-white border border-slate-200/50 p-4 rounded-[24px] space-y-3 animate-in slide-in-from-top-3 duration-250 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-          <span className="block text-[10px] font-black uppercase tracking-widest text-teal-600">
+          <span className="block text-xs font-black uppercase tracking-widest text-teal-600">
             {editingClienteId ? '✏️ Editar Cadastro' : '✨ Novo Cadastro'}
           </span>
           <div className="space-y-2.5">
@@ -217,7 +217,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
                 >
                   <div className="space-y-1">
                     <span className="block font-black text-sm text-slate-800">{c.nome}</span>
-                    <span className="block text-[10px] text-slate-400">{c.telefone}</span>
+                    <span className="block text-xs text-slate-400">{c.telefone}</span>
                   </div>
                   <div className="text-right space-y-1">
                     <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Total Acumulado</span>
@@ -248,7 +248,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
                     <div className="space-y-2">
                       <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Histórico de Orçamentos</span>
                       {orcamentosDoCliente.length === 0 ? (
-                        <span className="block text-[10px] text-slate-400 italic">Nenhum orçamento para este cliente.</span>
+                        <span className="block text-xs text-slate-400 italic">Nenhum orçamento para este cliente.</span>
                       ) : (
                         <div className="space-y-1.5">
                           {orcamentosDoCliente.map(o => (
@@ -280,7 +280,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
                           const targetPhone = cleanPhone.length === 10 || cleanPhone.length === 11 ? `55${cleanPhone}` : cleanPhone;
                           window.open(`https://wa.me/${targetPhone}`, '_blank');
                         }}
-                        className="w-full py-2 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200/50 text-emerald-600 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all text-center shadow-sm flex items-center justify-center gap-1.5"
+                        className="w-full py-2 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200/50 text-emerald-600 font-black text-xs uppercase tracking-widest rounded-xl transition-all text-center shadow-sm flex items-center justify-center gap-1.5"
                       >
                         💬 Chamar no WhatsApp
                       </button>
@@ -297,7 +297,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
                             setMostrarForm(true);
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
-                          className="py-2 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all text-center flex items-center justify-center gap-1"
+                          className="py-2 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-700 font-black text-xs uppercase tracking-widest rounded-xl transition-all text-center flex items-center justify-center gap-1"
                         >
                           ✏️ Editar
                         </button>
@@ -306,7 +306,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
                             e.stopPropagation();
                             handleDelete(c.id, c.nome);
                           }}
-                          className="py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-650 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all text-center flex items-center justify-center gap-1"
+                          className="py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-650 font-black text-xs uppercase tracking-widest rounded-xl transition-all text-center flex items-center justify-center gap-1"
                         >
                           🗑️ Excluir
                         </button>

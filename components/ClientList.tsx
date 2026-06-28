@@ -250,7 +250,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                     />
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Filtrar:</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Filtrar:</span>
                     <select
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value)}
@@ -263,7 +263,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                     </select>
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
@@ -360,7 +360,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         />
                                     )}
                                     {tableColumns.visibleColumns.includes('contact') && (
-                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Contato</th>
+                                        <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Contato</th>
                                     )}
                                     {tableColumns.visibleColumns.includes('document') && (
                                         <SortableHeader
@@ -374,9 +374,9 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         />
                                     )}
                                     {tableColumns.visibleColumns.includes('projects') && (
-                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Obra Vinculada</th>
+                                        <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Obra Vinculada</th>
                                     )}
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
+                                    <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -396,7 +396,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         )}
                                         {tableColumns.visibleColumns.includes('category') && (
                                             <td className="px-6 py-4">
-                                                <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${client.category === 'Vendas' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                <span className={`text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${client.category === 'Vendas' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                                                     client.category === 'Locação' ? 'bg-blue-50 text-blue-600 border-blue-100' :
                                                         client.category === 'Serviços' ? 'bg-amber-50 text-amber-600 border-amber-100' :
                                                             'bg-gray-50 text-gray-400 border-gray-100'
@@ -540,11 +540,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                 {client.name}
                                             </h3>
                                             <div className="flex gap-2">
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                                <span className="text-xs font-black uppercase tracking-widest text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
                                                     {client.type === 'PF' ? 'PF' : 'PJ'}
                                                 </span>
                                                 {client.category && (
-                                                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${client.category === 'Vendas' ? 'bg-emerald-100 text-emerald-700' :
+                                                    <span className={`text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${client.category === 'Vendas' ? 'bg-emerald-100 text-emerald-700' :
                                                         client.category === 'Locação' ? 'bg-blue-100 text-blue-700' :
                                                             'bg-amber-100 text-amber-700'
                                                         }`}>
@@ -568,11 +568,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                 <span>{client.phone}</span>
                                             </div>
                                         )}
-                                        <div className="flex items-center justify-between text-[11px] pt-2">
+                                        <div className="flex items-center justify-between text-xs pt-2">
                                             <span className="text-gray-400 uppercase tracking-widest font-bold">Organização</span>
                                             <span className="text-gray-900 font-semibold">{client.organization_name || '-'}</span>
                                         </div>
-                                        <div className="flex items-center justify-between text-[11px]">
+                                        <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-400 uppercase tracking-widest font-bold">Documento</span>
                                             <span className="text-gray-900 font-bold bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{client.document || '-'}</span>
                                         </div>
@@ -587,7 +587,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                             if (clientProjects.length > 0) {
                                                 return (
                                                     <div className="pt-3 mt-3 border-t border-gray-100">
-                                                        <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold block mb-2">Obra Vinculada</span>
+                                                        <span className="text-xs text-gray-400 uppercase tracking-widest font-bold block mb-2">Obra Vinculada</span>
                                                         <div className="space-y-1">
                                                             {clientProjects.slice(0, 2).map(p => (
                                                                 <div key={p.id} className="flex items-center gap-1.5 text-xs text-gray-700 bg-blue-50/50 p-1.5 rounded-md border border-blue-100/50">
@@ -596,7 +596,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                                 </div>
                                                             ))}
                                                             {clientProjects.length > 2 && (
-                                                                <span className="text-[10px] text-gray-400 pl-1">
+                                                                <span className="text-xs text-gray-400 pl-1">
                                                                     + {clientProjects.length - 2} outras obras
                                                                 </span>
                                                             )}
@@ -693,11 +693,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                         ) : tokenModal.token && tokenModal.token.is_active ? (
                             <div className="space-y-4">
                                 <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
-                                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Link ativo</p>
+                                    <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">Link ativo</p>
                                     <p className="text-xs text-gray-700 font-mono break-all leading-relaxed">
                                         {clientPortalService.buildPortalUrl(tokenModal.token.token)}
                                     </p>
-                                    <p className="text-[10px] text-gray-400 mt-2">
+                                    <p className="text-xs text-gray-400 mt-2">
                                         Expira em: {new Date(tokenModal.token.expires_at).toLocaleDateString('pt-BR')}
                                         {tokenModal.token.last_used_at && ` · Último acesso: ${new Date(tokenModal.token.last_used_at).toLocaleDateString('pt-BR')}`}
                                     </p>

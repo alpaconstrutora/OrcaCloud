@@ -240,7 +240,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
         {tab === 'settings' && (
           <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
             <div>
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nome</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Nome</label>
               <input
                 autoFocus
                 value={name}
@@ -251,7 +251,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
             </div>
 
             <div>
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Cor</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Cor</label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {COLOR_PALETTE.map(c => (
                   <button
@@ -372,14 +372,14 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
                 <div className="space-y-1">
                   {enriched.map(m => (
                     <div key={m.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 group">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white flex-shrink-0 ${avatarCls(m.display_name ?? '')}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white flex-shrink-0 ${avatarCls(m.display_name ?? '')}`}>
                         {initials(m.display_name ?? '?')}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-slate-800 truncate">{m.display_name}</p>
-                        {m.email && <p className="text-[10px] text-slate-400 truncate">{m.email}</p>}
+                        {m.email && <p className="text-xs text-slate-400 truncate">{m.email}</p>}
                       </div>
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full flex-shrink-0
+                      <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-full flex-shrink-0
                         ${m.role === 'owner' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
                         {m.role === 'owner' ? 'Owner' : 'Membro'}
                       </span>
@@ -399,7 +399,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
                 {/* Adicionar membro */}
                 {eligible.length > 0 && (
                   <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Adicionar membro</label>
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Adicionar membro</label>
                     <div className="mt-1.5 flex gap-2">
                       <select
                         value={addingId}

@@ -222,7 +222,7 @@ const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string 
                         <div className="flex items-start justify-between mb-3">
                             <div>
                                 <h4 className="text-sm font-black text-slate-900">{r.nome}</h4>
-                                <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full capitalize">{r.tipo === 'refeicao' ? 'Refeição' : r.tipo === 'alimentacao' ? 'Alimentação' : 'Ambos'}</span>
+                                <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full capitalize">{r.tipo === 'refeicao' ? 'Refeição' : r.tipo === 'alimentacao' ? 'Alimentação' : 'Ambos'}</span>
                             </div>
                             <div className={`w-2.5 h-2.5 rounded-full mt-1 ${r.ativo ? 'bg-emerald-500' : 'bg-slate-300'}`} title={r.ativo ? 'Ativa' : 'Inativa'} />
                         </div>
@@ -236,9 +236,9 @@ const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string 
                         )}
 
                         <div className="flex flex-wrap gap-1 mb-4">
-                            {r.gera_sabado && <span className="text-[10px] bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-full">Sábado</span>}
-                            {r.gera_feriado && <span className="text-[10px] bg-purple-50 text-purple-600 font-bold px-2 py-0.5 rounded-full">Feriado</span>}
-                            {!r.desconta_falta && <span className="text-[10px] bg-amber-50 text-amber-600 font-bold px-2 py-0.5 rounded-full">Falta OK</span>}
+                            {r.gera_sabado && <span className="text-xs bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-full">Sábado</span>}
+                            {r.gera_feriado && <span className="text-xs bg-purple-50 text-purple-600 font-bold px-2 py-0.5 rounded-full">Feriado</span>}
+                            {!r.desconta_falta && <span className="text-xs bg-amber-50 text-amber-600 font-bold px-2 py-0.5 rounded-full">Falta OK</span>}
                         </div>
 
                         <div className="flex gap-2">
@@ -339,7 +339,7 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
 
             {/* Form add feriado */}
             <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4">
-                <p className="text-[10px] font-black text-orange-700 uppercase tracking-widest mb-3">Adicionar Feriado</p>
+                <p className="text-xs font-black text-orange-700 uppercase tracking-widest mb-3">Adicionar Feriado</p>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div className="space-y-1">
                         <label className={labelCls}>Data</label>
@@ -403,7 +403,7 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
                                                 <p className="text-sm font-bold text-slate-800">{f.descricao}</p>
                                                 {f.project_id && <p className="text-xs text-slate-400">{projects.find(p => p.id === f.project_id)?.name}</p>}
                                             </div>
-                                            <span className={`text-[10px] font-black px-2 py-1 rounded-full ${ec.bg} ${ec.color}`}>{ec.label}</span>
+                                            <span className={`text-xs font-black px-2 py-1 rounded-full ${ec.bg} ${ec.color}`}>{ec.label}</span>
                                             <button onClick={() => del.mutate(f.id)} className="ml-3 p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </button>
@@ -566,7 +566,7 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                         { label: 'Total líquido', value: `R$ ${totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-emerald-700' },
                     ].map(k => (
                         <div key={k.label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{k.label}</p>
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{k.label}</p>
                             <p className={`text-xl font-black mt-1 ${k.color}`}>{k.value}</p>
                         </div>
                     ))}
@@ -603,7 +603,7 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                                         <input type="checkbox" onChange={toggleAll} checked={rascunhos.length > 0 && selectedIds.size === rascunhos.length} className="rounded" />
                                     </th>
                                     {['Colaborador','Obra','Dias Úteis','Faltas','Férias','Afastan.','Elegíveis','Valor/Dia','Bruto','Desconto','Líquido','Status',''].map(h => (
-                                        <th key={h} className="px-3 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                                        <th key={h} className="px-3 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -642,7 +642,7 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                                             <td className="px-3 py-3 text-right text-rose-600 font-bold whitespace-nowrap">{c.desconto_folha > 0 ? `- R$ ${c.desconto_folha.toFixed(2)}` : '—'}</td>
                                             <td className="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap">R$ {c.valor_liquido.toFixed(2)}</td>
                                             <td className="px-3 py-3">
-                                                <span className={`text-[10px] font-black px-2 py-1 rounded-full whitespace-nowrap ${st.bg} ${st.color}`}>{st.label}</span>
+                                                <span className={`text-xs font-black px-2 py-1 rounded-full whitespace-nowrap ${st.bg} ${st.color}`}>{st.label}</span>
                                             </td>
                                             <td className="px-3 py-3">
                                                 {c.status === 'rascunho' && !isEdit && (
@@ -748,7 +748,7 @@ const AbaHistorico: React.FC<{ orgId: string }> = ({ orgId }) => {
                                         <span className="flex-1 font-bold text-slate-800">{c.employee_name}</span>
                                         <span className="text-slate-400 text-xs mr-4">{c.dias_elegiveis} dias elegíveis</span>
                                         <span className="font-black text-emerald-700 mr-4">R$ {c.valor_liquido.toFixed(2)}</span>
-                                        <span className={`text-[10px] font-black px-2 py-1 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
+                                        <span className={`text-xs font-black px-2 py-1 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
                                     </div>
                                 );
                             })}

@@ -554,7 +554,7 @@ const App: React.FC = () => {
       >
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Sincronizando Opura...</p>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Sincronizando Opura...</p>
         </div>
       </div>
 

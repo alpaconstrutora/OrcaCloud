@@ -56,7 +56,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                         </p>
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
-                        <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest leading-none ${run.status === 'FECHADO' ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}>
+                        <span className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest leading-none ${run.status === 'FECHADO' ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}>
                             {run.status}
                         </span>
 
@@ -65,7 +65,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                                 <button
                                     disabled={executing}
                                     onClick={onResyncFinance}
-                                    className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl hover:bg-emerald-100 transition-colors font-bold text-[10px] uppercase tracking-widest disabled:opacity-50"
+                                    className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl hover:bg-emerald-100 transition-colors font-bold text-xs uppercase tracking-widest disabled:opacity-50"
                                     title="Re-executa a sincronização com o módulo financeiro sem reabrir a folha"
                                 >
                                     {executing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
@@ -74,7 +74,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                                 <button
                                     disabled={executing}
                                     onClick={onReopenRun}
-                                    className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors font-bold text-[10px] uppercase tracking-widest disabled:opacity-50"
+                                    className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors font-bold text-xs uppercase tracking-widest disabled:opacity-50"
                                 >
                                     <History className="w-3 h-3" /> Reabrir Folha
                                 </button>
@@ -84,7 +84,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                                 <button
                                     disabled={executing}
                                     onClick={onReprocessRun}
-                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors font-bold text-[10px] uppercase tracking-widest disabled:opacity-50"
+                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors font-bold text-xs uppercase tracking-widest disabled:opacity-50"
                                 >
                                     {executing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
                                     Reprocessar
@@ -92,7 +92,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                                 <button
                                     disabled={executing}
                                     onClick={onCloseRun}
-                                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors font-bold text-[10px] uppercase tracking-widest disabled:opacity-50"
+                                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors font-bold text-xs uppercase tracking-widest disabled:opacity-50"
                                 >
                                     <CheckCircle2 className="w-3 h-3" /> Fechar Folha
                                 </button>
@@ -102,7 +102,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                         {run.validation_logs && run.validation_logs.length > 0 && (
                             <button
                                 onClick={() => setShowAuditModal(true)}
-                                className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-colors font-bold text-[10px] uppercase tracking-widest border border-rose-100"
+                                className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-colors font-bold text-xs uppercase tracking-widest border border-rose-100"
                             >
                                 <ShieldAlert size={14} /> Auditoria ({run.validation_logs.length})
                             </button>
@@ -164,11 +164,11 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                                     <div key={idx} className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                         <div className="flex items-center justify-between">
                                             <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{log.employee_name}</p>
-                                            <span className="px-2 py-0.5 bg-rose-100 text-rose-600 text-[10px] font-bold rounded-lg uppercase tracking-tight">Erro Fiscal</span>
+                                            <span className="px-2 py-0.5 bg-rose-100 text-rose-600 text-xs font-bold rounded-lg uppercase tracking-tight">Erro Fiscal</span>
                                         </div>
                                         <div className="space-y-2">
                                             {log.differences.map((diff: any, dIdx: number) => (
-                                                <div key={dIdx} className="grid grid-cols-4 gap-2 items-center text-[11px] p-2 bg-white rounded-xl shadow-sm">
+                                                <div key={dIdx} className="grid grid-cols-4 gap-2 items-center text-xs p-2 bg-white rounded-xl shadow-sm">
                                                     <div className="font-bold text-slate-400 uppercase tracking-widest">{diff.field}</div>
                                                     <div className="text-slate-600">Sis: <span className="font-bold text-slate-800">R$ {diff.system.toLocaleString()}</span></div>
                                                     <div className="text-slate-600">Ref: <span className="font-bold text-indigo-600">R$ {diff.reference.toLocaleString()}</span></div>
@@ -191,14 +191,14 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                     <table className="w-full">
                         <thead>
                             <tr className="border-b border-slate-50">
-                                {!orgId && <th className="text-left py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Org</th>}
-                                <th className="text-left py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaborador</th>
-                                <th className="text-right py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Salário Base</th>
-                                <th className="text-right py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Proventos</th>
-                                <th className="text-right py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Descontos</th>
-                                <th className="text-right py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Líquido</th>
-                                <th className="text-right py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Custo Empresa</th>
-                                <th className="text-right py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest pr-4">Ações</th>
+                                {!orgId && <th className="text-left py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Org</th>}
+                                <th className="text-left py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Colaborador</th>
+                                <th className="text-right py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Salário Base</th>
+                                <th className="text-right py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Proventos</th>
+                                <th className="text-right py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Descontos</th>
+                                <th className="text-right py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Líquido</th>
+                                <th className="text-right py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Custo Empresa</th>
+                                <th className="text-right py-4 text-xs font-black text-slate-400 uppercase tracking-widest pr-4">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -215,7 +215,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                                         <AlertCircle className="w-8 h-8 text-slate-200 mx-auto mb-2" />
                                         <p className="text-xs font-bold text-slate-400 uppercase">Nenhum resultado processado</p>
                                         {run.status === 'RASCUNHO' && (
-                                            <button onClick={onReprocessRun} className="mt-2 text-indigo-500 font-black text-[10px] uppercase hover:underline">Processar agora</button>
+                                            <button onClick={onReprocessRun} className="mt-2 text-indigo-500 font-black text-xs uppercase hover:underline">Processar agora</button>
                                         )}
                                     </td>
                                 </tr>
@@ -231,7 +231,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                                         )}
                                         <td className="py-4">
                                             <p className="text-sm font-black text-slate-900">{res.employee?.name}</p>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase">{res.employee?.role}</p>
+                                            <p className="text-xs font-bold text-slate-400 uppercase">{res.employee?.role}</p>
                                         </td>
                                         <td className="py-4 text-right text-sm font-bold text-slate-600">
                                             R$ {res.employee?.base_salary?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -280,7 +280,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                             <tfoot>
                                 <tr className="border-t-2 border-slate-200 bg-slate-50">
                                     {!orgId && <td />}
-                                    <td className="py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Total ({results.length})</td>
+                                    <td className="py-4 text-xs font-black text-slate-500 uppercase tracking-widest">Total ({results.length})</td>
                                     <td className="py-4 text-right text-sm font-black text-slate-700">
                                         R$ {fmt(results.reduce((s, r) => s + (r.employee?.base_salary || 0), 0))}
                                     </td>

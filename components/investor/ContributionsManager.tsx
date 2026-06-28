@@ -115,7 +115,7 @@ const ContributionsManager: React.FC<Props> = ({ organizationId, projectId, proj
                 <div className="px-8 py-5 bg-gray-50/50 border-b border-gray-100">
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
                         <label className="flex flex-col gap-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tipo</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tipo</span>
                             <select
                                 value={form.type}
                                 onChange={e => setForm(f => ({ ...f, type: e.target.value as ContributionType }))}
@@ -125,7 +125,7 @@ const ContributionsManager: React.FC<Props> = ({ organizationId, projectId, proj
                             </select>
                         </label>
                         <label className="flex flex-col gap-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Valor (R$)</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Valor (R$)</span>
                             <input
                                 type="number" min="0" step="0.01"
                                 value={form.amount || ''}
@@ -135,7 +135,7 @@ const ContributionsManager: React.FC<Props> = ({ organizationId, projectId, proj
                             />
                         </label>
                         <label className="flex flex-col gap-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Vencimento</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Vencimento</span>
                             <input
                                 type="date"
                                 value={form.due_date || ''}
@@ -144,7 +144,7 @@ const ContributionsManager: React.FC<Props> = ({ organizationId, projectId, proj
                             />
                         </label>
                         <label className="flex flex-col gap-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Status</span>
                             <select
                                 value={form.status}
                                 onChange={e => setForm(f => ({ ...f, status: e.target.value as ContributionStatus }))}
@@ -179,7 +179,7 @@ const ContributionsManager: React.FC<Props> = ({ organizationId, projectId, proj
                     ) : (
                         <table className="w-full text-left">
                             <thead className="bg-gray-50/50 sticky top-0">
-                                <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                                     <th className="px-6 py-3">Descrição</th>
                                     <th className="px-6 py-3">Tipo</th>
                                     <th className="px-6 py-3">Vencimento</th>

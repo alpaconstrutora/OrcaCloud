@@ -134,7 +134,7 @@ const BudgetPickerModal: React.FC<BudgetPickerModalProps> = ({
                         </div>
                         <div>
                             <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight leading-none">Importar do Orçamento</h3>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">
                                 Selecione grupo, etapa, subetapa ou item individual
                             </p>
                         </div>
@@ -222,7 +222,7 @@ const BudgetPickerModal: React.FC<BudgetPickerModalProps> = ({
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <span className="text-xs font-black text-gray-900 uppercase tracking-tight truncate block">{group.name}</span>
-                                                    <span className="text-[10px] font-bold text-gray-400">{groupItems.length} itens · {fmtMoney(sumItems(groupItems))}</span>
+                                                    <span className="text-xs font-bold text-gray-400">{groupItems.length} itens · {fmtMoney(sumItems(groupItems))}</span>
                                                 </div>
                                                 {isGroupOpen
                                                     ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -259,8 +259,8 @@ const BudgetPickerModal: React.FC<BudgetPickerModalProps> = ({
                                                                 }
                                                             </div>
                                                             <div className="flex-1 min-w-0">
-                                                                <span className="text-[11px] font-black text-gray-800 uppercase tracking-tight truncate block">{phase.name}</span>
-                                                                <span className="text-[10px] font-bold text-gray-400">{phaseItems.length} itens · {fmtMoney(sumItems(phaseItems))}</span>
+                                                                <span className="text-xs font-black text-gray-800 uppercase tracking-tight truncate block">{phase.name}</span>
+                                                                <span className="text-xs font-bold text-gray-400">{phaseItems.length} itens · {fmtMoney(sumItems(phaseItems))}</span>
                                                             </div>
                                                         </button>
                                                         <ImportBtn
@@ -291,7 +291,7 @@ const BudgetPickerModal: React.FC<BudgetPickerModalProps> = ({
                                                                             }
                                                                         </div>
                                                                         <div className="flex-1 min-w-0">
-                                                                            <span className="text-[10px] font-black text-gray-700 uppercase tracking-tight truncate block">{sp}</span>
+                                                                            <span className="text-xs font-black text-gray-700 uppercase tracking-tight truncate block">{sp}</span>
                                                                             <span className="text-[9px] font-bold text-gray-400">{spItems.length} itens · {fmtMoney(sumItems(spItems))}</span>
                                                                         </div>
                                                                     </button>
@@ -357,7 +357,7 @@ const BudgetPickerModal: React.FC<BudgetPickerModalProps> = ({
                                 if (orphans.length === 0) return null;
                                 return (
                                     <div className="border-t border-gray-50">
-                                        <div className="px-4 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                        <div className="px-4 py-2 text-xs font-black text-gray-400 uppercase tracking-widest">
                                             Outros itens
                                         </div>
                                         {orphans.map((item, idx) => (
@@ -439,7 +439,7 @@ const ItemRow: React.FC<ItemRowProps> = ({ item, onSelect, indent, showPath }) =
                 w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
                 hover:bg-blue-50 hover:border-blue-200 border border-transparent
                 transition-all group text-left
-                ${indent ? 'text-[11px]' : 'text-sm'}
+                ${indent ? 'text-xs' : 'text-sm'}
             `}
         >
             <div className={`
@@ -461,7 +461,7 @@ const ItemRow: React.FC<ItemRowProps> = ({ item, onSelect, indent, showPath }) =
                     {code && <span className="w-0.5 h-0.5 bg-gray-300 rounded-full" />}
                     <span className="text-[9px] font-bold text-gray-400 uppercase">{unit}</span>
                 </div>
-                <p className="font-black text-gray-900 uppercase tracking-tight truncate leading-tight text-[11px]">
+                <p className="font-black text-gray-900 uppercase tracking-tight truncate leading-tight text-xs">
                     {desc}
                 </p>
             </div>

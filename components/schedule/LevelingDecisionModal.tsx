@@ -42,7 +42,7 @@ export const LevelingDecisionModal: React.FC<LevelingDecisionModalProps> = ({ is
                                             <div className="text-sm font-medium text-gray-600 mt-1">Recurso: <span className="text-orange-600 font-bold">{issue.resourceName}</span></div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="text-[10px] font-black text-gray-400 uppercase">Necessário vs Limite</div>
+                                            <div className="text-xs font-black text-gray-400 uppercase">Necessário vs Limite</div>
                                             <div className="text-sm font-black text-gray-900">{issue.required} &gt; {issue.capacity}</div>
                                         </div>
                                     </div>
@@ -60,7 +60,7 @@ export const LevelingDecisionModal: React.FC<LevelingDecisionModalProps> = ({ is
                         <Clock className="w-8 h-8 text-blue-500 group-hover:scale-110 transition-transform" />
                         <div className="text-center">
                             <div className="text-sm font-black text-gray-900">Alongar Prazo</div>
-                            <div className="text-[10px] text-gray-500 font-medium mt-1">Reduz a equipe para caber na capacidade</div>
+                            <div className="text-xs text-gray-500 font-medium mt-1">Reduz a equipe para caber na capacidade</div>
                         </div>
                     </button>
 
@@ -71,7 +71,7 @@ export const LevelingDecisionModal: React.FC<LevelingDecisionModalProps> = ({ is
                         <Users className="w-8 h-8 text-orange-500 group-hover:scale-110 transition-transform" />
                         <div className="text-center">
                             <div className="text-sm font-black text-gray-900">Aumentar Equipe</div>
-                            <div className="text-[10px] text-gray-500 font-medium mt-1">Adiciona trabalhadores para manter o prazo</div>
+                            <div className="text-xs text-gray-500 font-medium mt-1">Adiciona trabalhadores para manter o prazo</div>
                         </div>
                     </button>
 

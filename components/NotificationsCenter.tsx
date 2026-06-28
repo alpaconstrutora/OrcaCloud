@@ -55,7 +55,7 @@ function NotifTypeBadge({ type }: { type?: string }) {
         fiscal: 'bg-yellow-100 text-yellow-700',
     };
     return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest ${colorMap[type] ?? 'bg-gray-100 text-gray-600'}`}>
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest ${colorMap[type] ?? 'bg-gray-100 text-gray-600'}`}>
             <Icon className="w-3 h-3" />
             {TYPE_LABELS[type] ?? type}
         </span>
@@ -70,7 +70,7 @@ function LogStatusBadge({ status }: { status: string }) {
     };
     const { cls, icon: Icon, label } = map[status] ?? { cls: 'bg-gray-100 text-gray-600', icon: Info, label: status };
     return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest ${cls}`}>
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest ${cls}`}>
             <Icon className="w-3 h-3" />
             {label}
         </span>
@@ -129,12 +129,12 @@ function PreferencesTab() {
 
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
                 <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: '1fr repeat(3, 120px)' }}>
-                    <div className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Categoria</div>
+                    <div className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Categoria</div>
                     {PREF_CHANNELS.map(ch => (
                         <div key={ch.id} className="p-4 text-center">
                             <div className="flex flex-col items-center gap-1">
                                 <ch.icon className="w-4 h-4 text-gray-400" />
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{ch.label}</span>
+                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">{ch.label}</span>
                             </div>
                         </div>
                     ))}
@@ -347,7 +347,7 @@ const NotificationsCenter: React.FC<NotificationsCenterProps> = ({ profile, onNa
                     </div>
                     <div>
                         <h1 className="text-sm font-black text-gray-900 uppercase tracking-widest">Central de Notificações</h1>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Alertas, envios e preferências</p>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Alertas, envios e preferências</p>
                     </div>
                 </div>
 
@@ -450,7 +450,7 @@ function KPICard({ label, value, icon: Icon, color }: { label: string; value: nu
             </div>
             <div>
                 <div className="text-xl font-black text-gray-900">{value}</div>
-                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</div>
+                <div className="text-xs font-black text-gray-400 uppercase tracking-widest">{label}</div>
             </div>
         </div>
     );
@@ -558,14 +558,14 @@ function AlertsTab({
             ) : (
                 <div className="flex items-center justify-between">
                     <div className="flex gap-2">
-                        <button onClick={onSelectAll} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors">
+                        <button onClick={onSelectAll} className="text-xs font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors">
                             Selecionar tudo ({filteredAlerts.length})
                         </button>
                     </div>
                     {filteredAlerts.some(n => !n.isRead) && (
                         <button
                             onClick={onMarkAllRead}
-                            className="flex items-center gap-1.5 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 bg-indigo-50 px-2.5 py-1.5 rounded-lg transition-colors"
+                            className="flex items-center gap-1.5 text-xs font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 bg-indigo-50 px-2.5 py-1.5 rounded-lg transition-colors"
                         >
                             <Check className="w-3 h-3" /> Marcar todas como lidas
                         </button>
@@ -611,17 +611,17 @@ function AlertsTab({
                                 </div>
                                 <p className="text-sm text-gray-600 font-medium leading-relaxed mb-2">{n.message}</p>
                                 <div className="flex items-center gap-4 flex-wrap">
-                                    <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
+                                    <span className="flex items-center gap-1 text-xs font-bold text-gray-400">
                                         <Clock className="w-3 h-3" />
                                         {new Date(n.createdAt).toLocaleString('pt-BR')}
                                     </span>
                                     {isAdmin && n.recipientEmail && (
-                                        <span className="text-[10px] font-bold text-indigo-400">{n.recipientEmail}</span>
+                                        <span className="text-xs font-bold text-indigo-400">{n.recipientEmail}</span>
                                     )}
                                     {n.link && (
                                         <button
                                             onClick={() => onNavigate ? onNavigate(n.link!) : void 0}
-                                            className="flex items-center gap-1 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                                            className="flex items-center gap-1 text-xs font-black text-indigo-600 uppercase tracking-widest hover:underline"
                                         >
                                             Ver detalhes <ExternalLink className="w-3 h-3" />
                                         </button>
@@ -736,12 +736,12 @@ function LogsTab({ filteredLogs, loading, error, search, setSearch, channelFilte
                                             <span className="text-xs font-black text-gray-800 uppercase tracking-tight">{log.channel.toUpperCase()}</span>
                                             <LogStatusBadge status={log.status} />
                                             {log.orderId && (
-                                                <span className="text-[10px] font-bold text-gray-400">Pedido #{log.orderId.slice(0, 8)}</span>
+                                                <span className="text-xs font-bold text-gray-400">Pedido #{log.orderId.slice(0, 8)}</span>
                                             )}
                                         </div>
                                         {log.subject && <p className="text-sm font-bold text-gray-700 mb-0.5">{log.subject}</p>}
                                         {log.recipient && <p className="text-xs text-gray-500 mb-1">{log.recipient}</p>}
-                                        <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
+                                        <span className="flex items-center gap-1 text-xs font-bold text-gray-400">
                                             <Clock className="w-3 h-3" />
                                             {new Date(log.createdAt).toLocaleString('pt-BR')}
                                         </span>
@@ -765,13 +765,13 @@ function LogsTab({ filteredLogs, loading, error, search, setSearch, channelFilte
                                     <div className="mt-3 ml-14 space-y-2">
                                         {log.body && (
                                             <div>
-                                                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Corpo</div>
+                                                <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Corpo</div>
                                                 <pre className="text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-lg p-3 whitespace-pre-wrap font-mono max-h-40 overflow-y-auto">{log.body}</pre>
                                             </div>
                                         )}
                                         {log.metadata && (
                                             <div>
-                                                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Metadata</div>
+                                                <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Metadata</div>
                                                 <pre className="text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-lg p-3 whitespace-pre-wrap font-mono max-h-40 overflow-y-auto">{JSON.stringify(log.metadata, null, 2)}</pre>
                                             </div>
                                         )}
@@ -807,7 +807,7 @@ function CenteredSpinner({ label }: { label: string }) {
     return (
         <div className="p-16 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4" />
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse">{label}</p>
+            <p className="text-xs font-black text-gray-400 uppercase tracking-widest animate-pulse">{label}</p>
         </div>
     );
 }

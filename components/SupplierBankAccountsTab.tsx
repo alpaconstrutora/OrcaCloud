@@ -210,7 +210,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                         {acc.bank_name || `Banco ${acc.bank_code || '—'}`}
                     </span>
                     {acc.bank_code && (
-                        <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md shrink-0">
+                        <span className="text-xs font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md shrink-0">
                             {acc.bank_code}
                         </span>
                     )}
@@ -404,7 +404,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
 
             {/* Divisor: Favorecido */}
             <div className="flex items-center gap-2 pt-1">
-                <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Favorecido</span>
+                <span className="text-xs font-black text-gray-300 uppercase tracking-widest">Favorecido</span>
                 <div className="flex-1 h-px bg-gray-100" />
             </div>
 
@@ -433,7 +433,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
             {/* Divisor: PIX */}
             <div className="flex items-center gap-2 pt-1">
                 <Smartphone className="w-3.5 h-3.5 text-green-400" />
-                <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">PIX</span>
+                <span className="text-xs font-black text-gray-300 uppercase tracking-widest">PIX</span>
                 <div className="flex-1 h-px bg-gray-100" />
             </div>
 
@@ -477,7 +477,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                     <span className="text-sm font-semibold text-gray-700 group-hover:text-gray-900 transition-colors">
                         ⭐ Conta principal
                     </span>
-                    <span className="text-[10px] text-gray-400">(usada por padrão em pagamentos)</span>
+                    <span className="text-xs text-gray-400">(usada por padrão em pagamentos)</span>
                 </label>
 
                 {form.pix_key_type && (
@@ -491,7 +491,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                         <span className="text-sm font-semibold text-gray-700 group-hover:text-gray-900 transition-colors">
                             🔑 PIX principal
                         </span>
-                        <span className="text-[10px] text-gray-400">(sugerido antes de TED/DOC)</span>
+                        <span className="text-xs text-gray-400">(sugerido antes de TED/DOC)</span>
                     </label>
                 )}
             </div>
@@ -566,7 +566,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setShowInactive(v => !v)}
-                        className="text-[10px] font-bold text-gray-400 hover:text-gray-600 transition-all uppercase tracking-wider"
+                        className="text-xs font-bold text-gray-400 hover:text-gray-600 transition-all uppercase tracking-wider"
                     >
                         {showInactive ? 'Ocultar inativas' : 'Ver inativas'}
                     </button>

@@ -303,7 +303,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                         <div className="md:col-span-8 space-y-4">
                             <div className="flex items-center gap-2 text-blue-600">
                                 <Info className="w-4 h-4" />
-                                <h3 className="font-black uppercase tracking-widest text-[10px]">Identificação e Endereço</h3>
+                                <h3 className="font-black uppercase tracking-widest text-xs">Identificação e Endereço</h3>
                             </div>
                             <div className="grid grid-cols-12 gap-x-4 gap-y-3">
                                 <div className="space-y-1 col-span-12">
@@ -374,7 +374,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                         <div className="md:col-span-4 space-y-4">
                             <div className="flex items-center gap-2 text-blue-600">
                                 <Package className="w-4 h-4" />
-                                <h3 className="font-black uppercase tracking-widest text-[10px]">Tipo e Finalidade</h3>
+                                <h3 className="font-black uppercase tracking-widest text-xs">Tipo e Finalidade</h3>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5 col-span-2">
@@ -470,8 +470,8 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                             <Layers className="w-5 h-5 text-blue-600" />
                                         </div>
                                         <div>
-                                            <h3 className="font-black uppercase tracking-widest text-[11px]">Gerador de Matriz Desativado</h3>
-                                            <p className="text-[10px] text-gray-500 font-bold max-w-sm mt-0.5">Ative para gerar (ou injetar) novas unidades em massa neste edifício usando a matriz técnica.</p>
+                                            <h3 className="font-black uppercase tracking-widest text-xs">Gerador de Matriz Desativado</h3>
+                                            <p className="text-xs text-gray-500 font-bold max-w-sm mt-0.5">Ative para gerar (ou injetar) novas unidades em massa neste edifício usando a matriz técnica.</p>
                                         </div>
                                     </div>
                                     <button
@@ -491,7 +491,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                             <button
                                                 type="button"
                                                 onClick={() => setEnableMatrix(false)}
-                                                className="text-[10px] font-bold text-red-500 hover:text-red-700 underline underline-offset-2 flex items-center gap-1 leading-none"
+                                                className="text-xs font-bold text-red-500 hover:text-red-700 underline underline-offset-2 flex items-center gap-1 leading-none"
                                             >
                                                 Desativar Gerador (Manter Edifício Intacto)
                                             </button>
@@ -501,12 +501,12 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <div className="flex items-center justify-between mb-6 relative z-10">
                                         <div className="flex items-center gap-2 text-blue-600">
                                             <Layers className="w-5 h-5" />
-                                            <h3 className="font-black uppercase tracking-widest text-[11px]">Matriz Geradora de Unidades</h3>
+                                            <h3 className="font-black uppercase tracking-widest text-xs">Matriz Geradora de Unidades</h3>
                                         </div>
                                     <div className="flex items-center gap-4">
                                         {towerMatrix.length >= 2 && (
                                             <div className="flex items-center gap-2">
-                                                <label className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-600 tracking-widest cursor-pointer px-4 py-2 hover:bg-blue-100/50 rounded-xl transition-all border border-blue-200/50">
+                                                <label className="flex items-center gap-2 text-xs font-black uppercase text-blue-600 tracking-widest cursor-pointer px-4 py-2 hover:bg-blue-100/50 rounded-xl transition-all border border-blue-200/50">
                                                     <input 
                                                         type="checkbox" 
                                                         checked={connectedTowers}
@@ -527,7 +527,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                             setConnectionDirection(newDir);
                                                             setTowerMatrix(prev => updateTowersGridCells(prev, true, newDir));
                                                         }}
-                                                        className="text-[10px] bg-blue-50/50 border border-blue-200/50 rounded-xl px-3 py-2 outline-none text-blue-800 font-black uppercase tracking-widest focus:border-blue-400 cursor-pointer"
+                                                        className="text-xs bg-blue-50/50 border border-blue-200/50 rounded-xl px-3 py-2 outline-none text-blue-800 font-black uppercase tracking-widest focus:border-blue-400 cursor-pointer"
                                                     >
                                                         <option value="HORIZONTAL">Lado a Lado (Eixo Horiz.)</option>
                                                         <option value="VERTICAL">Frente a Fundos (Eixo Vert.)</option>
@@ -596,7 +596,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                                 };
                                                                 setTowerMatrix(newTM);
                                                             }}
-                                                            className="px-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-[10px]"
+                                                            className="px-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-xs"
                                                         >
                                                             <option value="FLOOR_BASED">Por Pavimento</option>
                                                             <option value="SEQUENTIAL">Seq.</option>
@@ -613,7 +613,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                                 };
                                                                 setTowerMatrix(newTM);
                                                             }}
-                                                            className="px-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-[10px]"
+                                                            className="px-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-xs"
                                                             title="Início"
                                                         />
                                                         <input
@@ -628,7 +628,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                                 };
                                                                 setTowerMatrix(newTM);
                                                             }}
-                                                            className="px-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-[10px]"
+                                                            className="px-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-xs"
                                                             title="Prefixo"
                                                         />
                                                         <input
@@ -643,7 +643,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                                 };
                                                                 setTowerMatrix(newTM);
                                                             }}
-                                                            className="px-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-[10px]"
+                                                            className="px-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-xs"
                                                             title="Sufixo"
                                                         />
                                                     </div>
@@ -748,7 +748,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                             {/* Planta Baixa Visual */}
                                             {tower.unitsWidth > 0 && tower.unitsDepth > 0 && !connectedTowers && (
                                                 <div className="mt-4 pt-4 border-t border-gray-100">
-                                                    <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 px-1 flex items-center justify-between">
+                                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 px-1 flex items-center justify-between">
                                                         <div className="flex items-center gap-2 flex-1">
                                                             <span>Planta Baixa (Grade Visual)</span>
                                                             <div className="flex gap-2 ml-4">
@@ -825,7 +825,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                                             })()}
                                                                         </div>
                                                                         
-                                                                        <div className="text-[10px] font-black mt-2 mb-1 flex items-center gap-1 uppercase tracking-widest whitespace-nowrap">
+                                                                        <div className="text-xs font-black mt-2 mb-1 flex items-center gap-1 uppercase tracking-widest whitespace-nowrap">
                                                                             {cell.position_type === 'FRONT' ? <span className="text-blue-600">Frente</span> :
                                                                             cell.position_type === 'BACK' ? <span className="text-orange-600">Fundos</span> :
                                                                             <span className="text-slate-600">Lateral</span>}
@@ -891,7 +891,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                             ></div>
                                                         )}
                                                         <div className="flex flex-col relative z-0 items-center bg-white p-4 rounded-xl border border-dashed border-gray-200 shadow-sm mx-1 my-1">
-                                                            <div className="text-[11px] font-black text-center text-blue-900 mb-3 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-widest border border-blue-100/50">TORRE {t.name}</div>
+                                                            <div className="text-xs font-black text-center text-blue-900 mb-3 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-widest border border-blue-100/50">TORRE {t.name}</div>
                                                             <div 
                                                                 className="grid gap-2 sm:gap-4"
                                                                 style={{ gridTemplateColumns: `repeat(${t.unitsWidth}, minmax(100px, 1fr))` }}
@@ -919,7 +919,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                                             })()}
                                                                         </div>
                                                                         
-                                                                        <div className="text-[10px] font-black mt-2 mb-1 flex items-center gap-1 uppercase tracking-widest whitespace-nowrap">
+                                                                        <div className="text-xs font-black mt-2 mb-1 flex items-center gap-1 uppercase tracking-widest whitespace-nowrap">
                                                                             {cell.position_type === 'FRONT' ? <span className="text-blue-600">Frente</span> :
                                                                             cell.position_type === 'BACK' ? <span className="text-orange-600">Fundos</span> :
                                                                             <span className="text-slate-600">Lateral</span>}
@@ -967,7 +967,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
 
                                 {/* Resumo */}
                                 <div className="mt-6 pt-4 border-t border-blue-200/50 flex justify-between items-center relative z-10 font-mono">
-                                    <div className="text-[10px] font-bold text-blue-800 tracking-wider">
+                                    <div className="text-xs font-bold text-blue-800 tracking-wider">
                                         TOTAL A SER GERADO
                                     </div>
                                     <div className="text-xl font-black text-blue-600">
@@ -984,7 +984,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                         <div className="md:col-span-8 space-y-4">
                             <div className="flex items-center gap-2 text-blue-600">
                                 <Maximize2 className="w-4 h-4" />
-                                <h3 className="font-black uppercase tracking-widest text-[10px]">Áreas e Dimensões Técnicas</h3>
+                                <h3 className="font-black uppercase tracking-widest text-xs">Áreas e Dimensões Técnicas</h3>
                             </div>
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="p-3 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col gap-1">
@@ -999,7 +999,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                             }}
                                             className="bg-transparent text-lg font-black text-gray-700 outline-none w-full font-mono"
                                         />
-                                        <span className="text-[10px] font-bold text-gray-300">m²</span>
+                                        <span className="text-xs font-bold text-gray-300">m²</span>
                                     </div>
                                 </div>
                                 <div className="p-3 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col gap-1">
@@ -1014,7 +1014,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                             }}
                                             className="bg-transparent text-lg font-black text-gray-700 outline-none w-full font-mono"
                                         />
-                                        <span className="text-[10px] font-bold text-gray-300">m²</span>
+                                        <span className="text-xs font-bold text-gray-300">m²</span>
                                     </div>
                                 </div>
                                 <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-100 flex flex-col gap-1 ring-2 ring-blue-50">
@@ -1026,7 +1026,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                             value={formData.total_area || 0}
                                             className="bg-transparent text-xl font-black text-white outline-none w-full font-mono"
                                         />
-                                        <span className="text-[10px] font-bold text-blue-300">m²</span>
+                                        <span className="text-xs font-bold text-blue-300">m²</span>
                                     </div>
                                 </div>
                             </div>
@@ -1035,7 +1035,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                         <div className="md:col-span-4 space-y-4">
                             <div className="flex items-center gap-2 text-blue-600">
                                 <Layers className="w-4 h-4" />
-                                <h3 className="font-black uppercase tracking-widest text-[10px]">Atributos Internos</h3>
+                                <h3 className="font-black uppercase tracking-widest text-xs">Atributos Internos</h3>
                             </div>
                             <div className="grid grid-cols-3 gap-2">
                                 <div className="bg-gray-50 p-2.5 rounded-xl flex flex-col items-center gap-0.5 border border-transparent hover:border-blue-200 transition-colors">
@@ -1073,7 +1073,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                     <div className={`space-y-4 ${activeTab !== 'dados' ? 'hidden' : ''}`}>
                         <div className="flex items-center gap-2 text-blue-600">
                             <DollarSign className="w-4 h-4" />
-                            <h3 className="font-black uppercase tracking-widest text-[10px]">Propriedade e Status</h3>
+                            <h3 className="font-black uppercase tracking-widest text-xs">Propriedade e Status</h3>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="space-y-1.5 font-mono">
@@ -1227,7 +1227,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <Camera className="w-10 h-10 text-gray-300 group-hover:text-blue-500 transition-colors" />
                                 </div>
                                 <p className="text-gray-400 font-bold group-hover:text-blue-600 transition-colors">Arraste fotos ou clique para fazer upload</p>
-                                <span className="text-[10px] font-black text-gray-200 uppercase mt-2 tracking-widest">Suporte a alta resolução e WebP</span>
+                                <span className="text-xs font-black text-gray-200 uppercase mt-2 tracking-widest">Suporte a alta resolução e WebP</span>
                             </div>
                         </div>
                     </div>

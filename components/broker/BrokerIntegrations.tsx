@@ -148,11 +148,11 @@ const WebhookForm: React.FC<{ orgId: string; onClose: () => void; onSaved: () =>
                 </div>
                 <div className="p-6 space-y-4">
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nome</label>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Nome</label>
                         <input className={inputCls} placeholder="Ex: Notificar CRM no lead" value={form.name} onChange={e => set('name', e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Evento</label>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Evento</label>
                         <select className={inputCls} value={form.event_type} onChange={e => set('event_type', e.target.value as WebhookEventType)}>
                             {(Object.entries(EVENT_LABELS) as [WebhookEventType, string][]).map(([k, v]) => (
                                 <option key={k} value={k}>{v}</option>
@@ -160,11 +160,11 @@ const WebhookForm: React.FC<{ orgId: string; onClose: () => void; onSaved: () =>
                         </select>
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">URL do Endpoint</label>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">URL do Endpoint</label>
                         <input className={inputCls} placeholder="https://meu-sistema.com/webhook" value={form.endpoint_url} onChange={e => set('endpoint_url', e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Secret (opcional)</label>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Secret (opcional)</label>
                         <div className="relative">
                             <input className={`${inputCls} pr-10`} type={showSecret ? 'text' : 'password'}
                                 placeholder="Chave para validar a assinatura HMAC"
@@ -174,7 +174,7 @@ const WebhookForm: React.FC<{ orgId: string; onClose: () => void; onSaved: () =>
                                 {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                         </div>
-                        <p className="text-[10px] text-slate-400">Apenas os últimos 4 caracteres são armazenados como referência.</p>
+                        <p className="text-xs text-slate-400">Apenas os últimos 4 caracteres são armazenados como referência.</p>
                     </div>
                 </div>
                 <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-100">
@@ -224,7 +224,7 @@ const BrokerIntegrations: React.FC<BrokerIntegrationsProps> = ({ organizationId 
                 <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Integrações no catálogo</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Integrações no catálogo</p>
                             <p className="text-3xl font-black text-gray-900 mt-1">{CATALOG_INTEGRATIONS.length}</p>
                         </div>
                         <div className="p-3 bg-indigo-50 rounded-xl"><Link2 className="w-5 h-5 text-indigo-600" /></div>
@@ -233,7 +233,7 @@ const BrokerIntegrations: React.FC<BrokerIntegrationsProps> = ({ organizationId 
                 <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Webhooks Ativos</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Webhooks Ativos</p>
                             <p className="text-3xl font-black text-emerald-600 mt-1">{activeWebhooks}</p>
                         </div>
                         <div className="p-3 bg-emerald-50 rounded-xl"><Zap className="w-5 h-5 text-emerald-600" /></div>
@@ -242,7 +242,7 @@ const BrokerIntegrations: React.FC<BrokerIntegrationsProps> = ({ organizationId 
                 <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Eventos disparados</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Eventos disparados</p>
                             <p className="text-3xl font-black text-gray-900 mt-1">
                                 {webhooks.reduce((s, w) => s + (w.events_count || 0), 0)}
                             </p>
@@ -256,7 +256,7 @@ const BrokerIntegrations: React.FC<BrokerIntegrationsProps> = ({ organizationId 
             <div>
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-black text-gray-900">Integrações Disponíveis</h3>
-                    <span className="text-[10px] text-gray-400 font-bold">Requer configuração de backend</span>
+                    <span className="text-xs text-gray-400 font-bold">Requer configuração de backend</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {CATALOG_INTEGRATIONS.map(integration => {
@@ -279,7 +279,7 @@ const BrokerIntegrations: React.FC<BrokerIntegrationsProps> = ({ organizationId 
                                             </span>
                                         </div>
                                     </div>
-                                    <div className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-black ${statusCfg.bg} ${statusCfg.color}`}>
+                                    <div className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-black ${statusCfg.bg} ${statusCfg.color}`}>
                                         <StatusIcon className="w-3.5 h-3.5" />
                                         {statusCfg.label}
                                     </div>
@@ -320,7 +320,7 @@ const BrokerIntegrations: React.FC<BrokerIntegrationsProps> = ({ organizationId 
                             <thead>
                                 <tr className="border-b border-gray-100">
                                     {['Nome', 'Evento', 'Endpoint', 'Último disparo', 'Disparos', 'Status', ''].map(h => (
-                                        <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="px-4 py-3 text-left text-xs font-black text-gray-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -329,7 +329,7 @@ const BrokerIntegrations: React.FC<BrokerIntegrationsProps> = ({ organizationId 
                                     <tr key={wh.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                                         <td className="px-4 py-3 font-bold text-gray-800">{wh.name}</td>
                                         <td className="px-4 py-3">
-                                            <span className="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-black rounded-lg">
+                                            <span className="px-2 py-1 bg-amber-50 text-amber-700 text-xs font-black rounded-lg">
                                                 {EVENT_LABELS[wh.event_type]}
                                             </span>
                                         </td>
@@ -341,7 +341,7 @@ const BrokerIntegrations: React.FC<BrokerIntegrationsProps> = ({ organizationId 
                                         <td className="px-4 py-3">
                                             <button
                                                 onClick={() => toggleMut.mutate({ id: wh.id, status: wh.status === 'ATIVO' ? 'INATIVO' : 'ATIVO' })}
-                                                className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-colors cursor-pointer ${wh.status === 'ATIVO' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                                                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-colors cursor-pointer ${wh.status === 'ATIVO' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
                                                 {wh.status === 'ATIVO' ? 'Ativo' : 'Inativo'}
                                             </button>
                                         </td>

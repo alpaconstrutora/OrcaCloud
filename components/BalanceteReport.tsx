@@ -121,7 +121,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
             {/* Filtros */}
             <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm">
                 <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">De</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">De</label>
                     <input
                         type="date"
                         value={dateFrom}
@@ -130,7 +130,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                     />
                 </div>
                 <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Até</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Até</label>
                     <input
                         type="date"
                         value={dateTo}
@@ -139,7 +139,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                     />
                 </div>
                 <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Regime</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Regime</label>
                     <select
                         value={regime}
                         onChange={e => setRegime(e.target.value as RegimeContabil)}
@@ -176,7 +176,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                 <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                     <table className="w-full text-left">
                         <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            <tr className="bg-slate-50 border-b border-slate-200 text-xs font-black text-slate-400 uppercase tracking-widest">
                                 <th className="px-5 py-3">Conta / Categoria</th>
                                 <th className="px-4 py-3 text-right">Créditos</th>
                                 <th className="px-4 py-3 text-right">Débitos</th>

@@ -38,7 +38,7 @@ function isOverdue(inv: InvoiceRow) {
 function StatusBadge({ inv }: { inv: InvoiceRow }) {
     if (isOverdue(inv)) {
         return (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-red-50 text-red-700 border border-red-100">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest bg-red-50 text-red-700 border border-red-100">
                 <AlertCircle className="w-2.5 h-2.5" /> Atrasado
             </span>
         );
@@ -50,7 +50,7 @@ function StatusBadge({ inv }: { inv: InvoiceRow }) {
         rejected: 'bg-gray-50 text-gray-500 border-gray-100',
     };
     return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${map[inv.status] ?? 'bg-gray-50 text-gray-500 border-gray-100'}`}>
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest border ${map[inv.status] ?? 'bg-gray-50 text-gray-500 border-gray-100'}`}>
             {STATUS_PT[inv.status] ?? inv.status}
         </span>
     );
@@ -426,11 +426,11 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 {tableColumns.visibleColumns.includes('origem') && (
                                                     <td className="px-4 py-3">
                                                         {fromBoleto ? (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest bg-indigo-50 text-indigo-700 border border-indigo-100">
                                                                 <FileText className="w-2.5 h-2.5" /> Boleto
                                                             </span>
                                                         ) : (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-50 text-gray-500 border border-gray-100">
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest bg-gray-50 text-gray-500 border border-gray-100">
                                                                 Manual
                                                             </span>
                                                         )}
@@ -445,7 +445,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                     <td className={`px-4 py-3 text-center text-table-body font-medium ${overdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
                                                         {fmtDate(inv.dueDate)}
                                                         {overdue && dueDate && (
-                                                            <div className="text-[10px] text-red-500">
+                                                            <div className="text-xs text-red-500">
                                                                 {Math.floor((today().getTime() - dueDate.getTime()) / 86400000)}d atraso
                                                             </div>
                                                         )}

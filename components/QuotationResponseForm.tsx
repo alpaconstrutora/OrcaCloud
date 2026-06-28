@@ -169,7 +169,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                         </button>
                         <div className="flex flex-col">
                             <h1 className="text-3xl font-black text-gray-900 tracking-tight">Enviar <span className="text-indigo-600">Proposta</span></h1>
-                            <p className="text-gray-400 text-[11px] font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
+                            <p className="text-gray-400 text-xs font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
                                 <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
                                 Cotação #{request.number} • {request.title}
                             </p>
@@ -183,7 +183,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                 type="button"
                                 onClick={handleSendSupplierCounter}
                                 disabled={loading}
-                                className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-indigo-900/20 hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-3"
+                                className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-indigo-900/20 hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-3"
                             >
                                 <TrendingDown className="w-4 h-4" />
                                 Enviar Contraproposta ao Comprador
@@ -193,7 +193,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                 type="submit"
                                 form="quotation-form"
                                 disabled={loading}
-                                className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-indigo-900/20 hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-3"
+                                className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-indigo-900/20 hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-3"
                             >
                                 <Send className="w-4 h-4" />
                                 {existingResponse ? 'Atualizar Proposta' : 'Enviar Proposta Agora'}
@@ -220,7 +220,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                                 onClick={() => handleNegotiationResponse(true)}
                                                 disabled={loading}
                                                 type="button"
-                                                className="px-8 py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-700 shadow-lg shadow-orange-900/10 active:scale-95 transition-all flex items-center gap-2"
+                                                className="px-8 py-4 bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-orange-700 shadow-lg shadow-orange-900/10 active:scale-95 transition-all flex items-center gap-2"
                                             >
                                                 <CheckCircle2 className="w-4 h-4" />
                                                 Aceitar Contraproposta
@@ -229,7 +229,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                                 onClick={() => handleNegotiationResponse(false)}
                                                 disabled={loading}
                                                 type="button"
-                                                className="px-8 py-4 bg-white text-orange-600 border border-orange-200 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-100 active:scale-95 transition-all flex items-center gap-2"
+                                                className="px-8 py-4 bg-white text-orange-600 border border-orange-200 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-orange-100 active:scale-95 transition-all flex items-center gap-2"
                                             >
                                                 <XCircle className="w-4 h-4" />
                                                 Recusar e Manter Original
@@ -238,7 +238,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                                 onClick={handleSendSupplierCounter}
                                                 disabled={loading}
                                                 type="button"
-                                                className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-900/10 active:scale-95 transition-all flex items-center gap-2"
+                                                className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-900/10 active:scale-95 transition-all flex items-center gap-2"
                                             >
                                                 <Send className="w-4 h-4" />
                                                 Enviar Contraproposta
@@ -251,7 +251,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
 
                         {existingResponse?.negotiationHistory && existingResponse.negotiationHistory.length > 0 && (
                             <div className="mb-8 space-y-4">
-                                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 ml-4">
+                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 ml-4">
                                     <Clock className="w-4 h-4 text-indigo-500" />
                                     Histórico da Negociação
                                 </h3>
@@ -262,7 +262,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                                 <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-tight ${event.author === 'Fornecedor' ? 'bg-indigo-100 text-indigo-700' : 'bg-orange-100 text-orange-700'}`}>
                                                     {event.author}
                                                 </span>
-                                                <span className="text-[10px] font-medium text-gray-400">{new Date(event.timestamp).toLocaleDateString('pt-BR')}</span>
+                                                <span className="text-xs font-medium text-gray-400">{new Date(event.timestamp).toLocaleDateString('pt-BR')}</span>
                                             </div>
                                             <div className="text-xs font-black text-gray-900 uppercase tracking-tight mb-2">{event.action}</div>
 
@@ -273,7 +273,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                             )}
 
                                             {event.notes && (
-                                                <p className="text-[10px] text-gray-500 italic line-clamp-2">"{event.notes}"</p>
+                                                <p className="text-xs text-gray-500 italic line-clamp-2">"{event.notes}"</p>
                                             )}
                                         </div>
                                     ))}
@@ -286,10 +286,10 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-gray-50/50">
-                                            <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">Descrição</th>
-                                            <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Qtd</th>
-                                            <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Unitário (R$)</th>
-                                            <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Subtotal</th>
+                                            <th className="px-8 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">Descrição</th>
+                                            <th className="px-8 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Qtd</th>
+                                            <th className="px-8 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Unitário (R$)</th>
+                                            <th className="px-8 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Subtotal</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
@@ -297,7 +297,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                             <tr key={idx}>
                                                 <td className="px-8 py-5">
                                                     <p className="text-sm font-bold text-gray-900">{item.description}</p>
-                                                    <p className="text-[10px] font-mono text-gray-400">#{item.code}</p>
+                                                    <p className="text-xs font-mono text-gray-400">#{item.code}</p>
                                                 </td>
                                                 <td className="px-8 py-5 text-right font-black text-indigo-600">{item.quantity} {item.unit}</td>
                                                 <td className="px-8 py-5 text-right">
@@ -327,7 +327,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                     </tbody>
                                     <tfoot className="bg-gray-900 text-white">
                                         <tr>
-                                            <td colSpan={3} className="px-8 py-6 text-right text-[10px] font-black uppercase tracking-widest opacity-60">Total da sua Proposta</td>
+                                            <td colSpan={3} className="px-8 py-6 text-right text-xs font-black uppercase tracking-widest opacity-60">Total da sua Proposta</td>
                                             <td className="px-8 py-6 text-right font-black text-xl">
                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalProprosal)}
                                             </td>
@@ -338,7 +338,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
 
                             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="space-y-6">
-                                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                         <Calendar className="w-4 h-4 text-indigo-500" />
                                         Condições de Entrega
                                     </h3>
@@ -399,7 +399,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                 </div>
 
                                 <div className="space-y-6">
-                                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                         <HandCoins className="w-4 h-4 text-indigo-500" />
                                         Condições de Pagamento
                                     </h3>

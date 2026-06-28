@@ -377,7 +377,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     {/* A Pagar */}
                     <div className="bg-white rounded-2xl border border-gray-100 p-5">
                         <div className="flex items-center justify-between mb-3">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">A Pagar</span>
+                            <span className="text-xs font-bold uppercase tracking-widest text-gray-400">A Pagar</span>
                             <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
                                 <Wallet className="w-4 h-4 text-blue-500" />
                             </div>
@@ -389,7 +389,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     {/* Vencem em 7 dias */}
                     <div className={`rounded-2xl border p-5 transition-colors ${summary.countAVencer7 > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100'}`}>
                         <div className="flex items-center justify-between mb-3">
-                            <span className={`text-[10px] font-bold uppercase tracking-widest ${summary.countAVencer7 > 0 ? 'text-amber-500' : 'text-gray-400'}`}>Vencem em 7 dias</span>
+                            <span className={`text-xs font-bold uppercase tracking-widest ${summary.countAVencer7 > 0 ? 'text-amber-500' : 'text-gray-400'}`}>Vencem em 7 dias</span>
                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${summary.countAVencer7 > 0 ? 'bg-amber-100' : 'bg-gray-50'}`}>
                                 <Clock className={`w-4 h-4 ${summary.countAVencer7 > 0 ? 'text-amber-500' : 'text-gray-400'}`} />
                             </div>
@@ -401,7 +401,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     {/* Em atraso */}
                     <div className={`rounded-2xl border p-5 transition-colors ${summary.countAtrasado > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100'}`}>
                         <div className="flex items-center justify-between mb-3">
-                            <span className={`text-[10px] font-bold uppercase tracking-widest ${summary.countAtrasado > 0 ? 'text-red-500' : 'text-gray-400'}`}>Em Atraso</span>
+                            <span className={`text-xs font-bold uppercase tracking-widest ${summary.countAtrasado > 0 ? 'text-red-500' : 'text-gray-400'}`}>Em Atraso</span>
                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${summary.countAtrasado > 0 ? 'bg-red-100' : 'bg-gray-50'}`}>
                                 <AlertTriangle className={`w-4 h-4 ${summary.countAtrasado > 0 ? 'text-red-500' : 'text-gray-400'}`} />
                             </div>
@@ -413,7 +413,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     {/* Pagos no mês */}
                     <div className="bg-white rounded-2xl border border-gray-100 p-5">
                         <div className="flex items-center justify-between mb-3">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Pagos no Mês</span>
+                            <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Pagos no Mês</span>
                             <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
                                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                             </div>
@@ -512,7 +512,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {/* Vencimento de */}
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Vencimento de</label>
+                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Vencimento de</label>
                             <input
                                 type="date"
                                 value={vencDe}
@@ -522,7 +522,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </div>
                         {/* Vencimento até */}
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Vencimento até</label>
+                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Vencimento até</label>
                             <input
                                 type="date"
                                 value={vencAte}
@@ -532,7 +532,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </div>
                         {/* Valor mínimo */}
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Valor mínimo (R$)</label>
+                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Valor mínimo (R$)</label>
                             <input
                                 type="number"
                                 min="0"
@@ -545,7 +545,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </div>
                         {/* Valor máximo */}
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Valor máximo (R$)</label>
+                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Valor máximo (R$)</label>
                             <input
                                 type="number"
                                 min="0"
@@ -561,7 +561,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     {/* Ordenação */}
                     <div className="flex items-center gap-3 pt-1 border-t border-gray-200">
                         <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Ordenar por</span>
+                        <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Ordenar por</span>
                         <select
                             value={ordenarPor}
                             onChange={(e) => setOrdenarPor(e.target.value as typeof ordenarPor)}
@@ -670,11 +670,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         </div>
                                         <div className="flex items-center gap-1.5 flex-shrink-0">
                                             {b.numero != null && (
-                                                <span className="text-[10px] font-black text-gray-400 tracking-widest">
+                                                <span className="text-xs font-black text-gray-400 tracking-widest">
                                                     #{String(b.numero).padStart(4, '0')}
                                                 </span>
                                             )}
-                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
                                                 {STATUS_LABELS[b.status]}
                                             </span>
                                         </div>
@@ -700,7 +700,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                     </div>
 
                                     {b.confidence_score !== undefined && b.confidence_score < 80 && (
-                                        <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
+                                        <div className="mt-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700">
                                             <AlertTriangle className="w-3 h-3" />
                                             Baixa confiança ({b.confidence_score}%)
                                         </div>
@@ -715,7 +715,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                            <tr className="bg-gray-50 border-b border-gray-100 text-xs font-bold uppercase tracking-widest text-gray-400">
                                 <th className="px-4 py-3 w-10">
                                     <input
                                         type="checkbox"
@@ -840,7 +840,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                                         : (b.beneficiario_nome ?? b.documento_nome)}
                                                 </p>
                                                 {b.beneficiario_cnpj && !b.supplier_id && (
-                                                    <p className="text-[11px] text-gray-400 font-mono truncate">{b.beneficiario_cnpj}</p>
+                                                    <p className="text-xs text-gray-400 font-mono truncate">{b.beneficiario_cnpj}</p>
                                                 )}
                                             </td>
                                         )}
@@ -862,12 +862,12 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         {tableColumns.visibleColumns.includes('vencimento') && (
                                             <td className={`px-4 py-3 text-center text-sm font-semibold whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
                                                 {b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
-                                                {atrasado && <div className="text-[10px] text-red-400 font-bold">ATRASADO</div>}
+                                                {atrasado && <div className="text-xs text-red-400 font-bold">ATRASADO</div>}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('status') && (
                                             <td className="px-4 py-3 text-center">
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
                                                     {STATUS_LABELS[b.status]}
                                                 </span>
                                                 {b.confidence_score !== undefined && b.confidence_score < 80 && (

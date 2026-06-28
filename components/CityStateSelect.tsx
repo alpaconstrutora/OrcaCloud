@@ -138,7 +138,7 @@ const CityStateSelect: React.FC<Props> = ({
         <label className={labelCls}>
           Cidade{required && <span className="text-red-500 ml-1">*</span>}
           {selectedState && !loadingCities && (
-            <span className="ml-2 text-[10px] font-normal text-slate-400">
+            <span className="ml-2 text-xs font-normal text-slate-400">
               <MapPin className="inline w-3 h-3" /> {cities.length} disponíveis
             </span>
           )}

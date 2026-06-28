@@ -202,7 +202,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
                 <div className="border border-blue-200 bg-blue-50 rounded-2xl p-5 space-y-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${getMimeColor(pendingFile.type)}`}>
+                            <div className={`px-2.5 py-1 rounded-lg text-xs font-black ${getMimeColor(pendingFile.type)}`}>
                                 {getMimeLabel(pendingFile.type)}
                             </div>
                             <div>
@@ -254,7 +254,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
                             <div className="h-1.5 bg-blue-100 rounded-full overflow-hidden">
                                 <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${uploadPct}%` }} />
                             </div>
-                            <p className="text-[10px] text-blue-500 text-right">Enviando...</p>
+                            <p className="text-xs text-blue-500 text-right">Enviando...</p>
                         </div>
                     )}
 
@@ -294,7 +294,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
                                 <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
                                     {DOCUMENT_CATEGORY_LABELS[cat]}
                                 </span>
-                                <span className="text-[10px] text-gray-400 font-bold">({byCategory[cat].length})</span>
+                                <span className="text-xs text-gray-400 font-bold">({byCategory[cat].length})</span>
                             </div>
                             <div className="space-y-2">
                                 {byCategory[cat].map(doc => (
@@ -303,7 +303,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
                                         className="flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-2xl hover:border-blue-200 hover:bg-blue-50/30 transition-all group"
                                     >
                                         {/* Tipo */}
-                                        <div className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black flex-shrink-0 ${getMimeColor(doc.mime_type)}`}>
+                                        <div className={`px-2.5 py-1.5 rounded-xl text-xs font-black flex-shrink-0 ${getMimeColor(doc.mime_type)}`}>
                                             {getMimeLabel(doc.mime_type)}
                                         </div>
 
@@ -315,10 +315,10 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
                                                     <span className="text-xs text-gray-500 truncate">{doc.description}</span>
                                                 )}
                                                 {doc.file_size && (
-                                                    <span className="text-[10px] text-gray-400 flex-shrink-0">{fmtFileSize(doc.file_size)}</span>
+                                                    <span className="text-xs text-gray-400 flex-shrink-0">{fmtFileSize(doc.file_size)}</span>
                                                 )}
                                                 {doc.created_at && (
-                                                    <span className="text-[10px] text-gray-400 flex-shrink-0">
+                                                    <span className="text-xs text-gray-400 flex-shrink-0">
                                                         {new Date(doc.created_at).toLocaleDateString('pt-BR')}
                                                     </span>
                                                 )}

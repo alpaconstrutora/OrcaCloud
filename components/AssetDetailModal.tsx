@@ -92,7 +92,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
                                 <p className="text-xs font-bold text-gray-400 mb-1">Investimento Inicial</p>
                                 <p className="text-xl font-black text-gray-900">{formatCurrency(purchasePrice)}</p>
                                 {purchaseDate && (
-                                    <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                                    <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                                         <Calendar className="w-3 h-3" /> {purchaseDate}
                                     </p>
                                 )}
@@ -100,7 +100,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
                             <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
                                 <p className="text-xs font-bold text-blue-400 mb-1">Valor Atual</p>
                                 <p className="text-xl font-black text-blue-700">{formatCurrency(currentValue)}</p>
-                                <p className="text-[10px] text-blue-400 mt-1">Atualizado hoje</p>
+                                <p className="text-xs text-blue-400 mt-1">Atualizado hoje</p>
                             </div>
                             <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
                                 <p className="text-xs font-bold text-emerald-500 mb-1">Valorização Total</p>
@@ -108,14 +108,14 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
                                     <p className="text-xl font-black text-emerald-700">{formatCurrency(totalAppreciation)}</p>
                                     <span className="text-sm font-bold text-emerald-600">({appreciationPercent.toFixed(1)}%)</span>
                                 </div>
-                                <p className="text-[10px] text-emerald-500 mt-1 flex items-center gap-1">
+                                <p className="text-xs text-emerald-500 mt-1 flex items-center gap-1">
                                     <TrendingUp className="w-3 h-3" /> Desde o início
                                 </p>
                             </div>
                             <div className="bg-indigo-50 p-5 rounded-2xl border border-indigo-100">
                                 <p className="text-xs font-bold text-indigo-400 mb-1">Yield on Cost (Proj.)</p>
                                 <p className="text-xl font-black text-indigo-700">{yoc}</p>
-                                <p className="text-[10px] text-indigo-400 mt-1">Retorno anual est.</p>
+                                <p className="text-xs text-indigo-400 mt-1">Retorno anual est.</p>
                             </div>
                         </div>
 
@@ -215,7 +215,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="text-sm font-bold text-gray-900">{doc.name}</span>
-                                                {doc.size && <span className="text-[10px] text-gray-400">{doc.size}</span>}
+                                                {doc.size && <span className="text-xs text-gray-400">{doc.size}</span>}
                                             </div>
                                         </div>
                                     </div>
@@ -231,7 +231,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
                                         <div>
-                                            <p className="text-[10px] font-bold text-indigo-400 uppercase">Status de Pagamento</p>
+                                            <p className="text-xs font-bold text-indigo-400 uppercase">Status de Pagamento</p>
                                             <p className="text-sm font-bold text-indigo-900 italic font-serif">
                                                 {project.paymentStatus || '—'}
                                             </p>
@@ -246,7 +246,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
                                                 </div>
                                                 <div>
                                                     <p className="text-xs font-bold text-amber-900">Assinatura Pendente</p>
-                                                    <p className="text-[10px] text-amber-700">{project.pendingSignature}</p>
+                                                    <p className="text-xs text-amber-700">{project.pendingSignature}</p>
                                                 </div>
                                             </div>
                                             {project.signatureUrl && (

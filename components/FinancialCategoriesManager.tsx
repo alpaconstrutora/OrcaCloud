@@ -239,7 +239,7 @@ const FinancialCategoriesManager: React.FC = () => {
                 ) : (
                     <>
                         <div className="px-4 py-2.5 border-b border-slate-50 flex items-center justify-between">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
                                 {filtered.length} categoria{filtered.length !== 1 ? 's' : ''}
                                 {search && ` • filtradas de ${categories.length}`}
                             </span>

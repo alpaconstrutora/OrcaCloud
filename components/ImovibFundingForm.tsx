@@ -101,7 +101,7 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100">
-                            <label className="block text-[10px] font-black tracking-widest uppercase text-rose-500 mb-2">Inadimplência (Default)</label>
+                            <label className="block text-xs font-black tracking-widest uppercase text-rose-500 mb-2">Inadimplência (Default)</label>
                             <div className="relative">
                                 <input
                                     type="number"
@@ -115,7 +115,7 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
                             </div>
                         </div>
                         <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100">
-                            <label className="block text-[10px] font-black tracking-widest uppercase text-amber-600 mb-2">Distratos Projetados</label>
+                            <label className="block text-xs font-black tracking-widest uppercase text-amber-600 mb-2">Distratos Projetados</label>
                             <div className="relative">
                                 <input
                                     type="number"

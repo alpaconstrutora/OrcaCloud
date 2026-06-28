@@ -1106,10 +1106,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <TrendingUp className="w-5 h-5 text-amber-500" />
                                         <div>
                                             <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest text-amber-600">Divergência de Escopo (Obra vs Contrato)</h3>
-                                            <p className="text-[11px] text-gray-400 font-medium">O orçamento atual da obra diverge das premissas originais do contrato.</p>
+                                            <p className="text-xs text-gray-400 font-medium">O orçamento atual da obra diverge das premissas originais do contrato.</p>
                                         </div>
                                     </div>
-                                    <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                    <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold uppercase tracking-wider">
                                         {budgetDifferences.length} alteração(ões)
                                     </span>
                                 </div>
@@ -1118,10 +1118,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     <table className="w-full text-left text-xs border-collapse">
                                         <thead className="bg-gray-50 text-gray-400 font-normal uppercase border-b border-gray-100">
                                             <tr>
-                                                <th className="px-4 py-2 text-[10px]">Item</th>
-                                                <th className="px-4 py-2 text-[10px] text-right">Orçado Original</th>
-                                                <th className="px-4 py-2 text-[10px] text-right">Atual na Obra</th>
-                                                <th className="px-4 py-2 text-[10px] text-center">Tipo de Alteração</th>
+                                                <th className="px-4 py-2 text-xs">Item</th>
+                                                <th className="px-4 py-2 text-xs text-right">Orçado Original</th>
+                                                <th className="px-4 py-2 text-xs text-right">Atual na Obra</th>
+                                                <th className="px-4 py-2 text-xs text-center">Tipo de Alteração</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50 text-gray-600">
@@ -1129,13 +1129,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                 <tr key={i} className="hover:bg-gray-50/50">
                                                     <td className="px-4 py-3">
                                                         <p className="font-semibold text-gray-800">{diff.description}</p>
-                                                        <p className="text-[10px] text-gray-400 font-mono">{diff.code || 'AVULSO'} · {diff.unit}</p>
+                                                        <p className="text-xs text-gray-400 font-mono">{diff.code || 'AVULSO'} · {diff.unit}</p>
                                                     </td>
                                                     <td className="px-4 py-3 text-right tabular-nums">
                                                         {diff.type === 'added' ? '—' : (
                                                             <>
                                                                 <p className="font-medium text-gray-700">{diff.snapshotQty.toLocaleString()} {diff.unit}</p>
-                                                                <p className="text-[10px] text-gray-400">R$ {diff.snapshotPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                                <p className="text-xs text-gray-400">R$ {diff.snapshotPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                                             </>
                                                         )}
                                                     </td>
@@ -1143,7 +1143,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                         {diff.type === 'removed' ? '—' : (
                                                             <>
                                                                 <p className="font-medium text-gray-700">{diff.currentQty.toLocaleString()} {diff.unit}</p>
-                                                                <p className="text-[10px] text-gray-400">R$ {diff.currentPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                                <p className="text-xs text-gray-400">R$ {diff.currentPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                                             </>
                                                         )}
                                                     </td>
@@ -1307,7 +1307,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </h4>
                             <div className="p-4 bg-gray-50 rounded-2xl">
                                 <p className="text-sm font-semibold text-gray-800">{counterpartyName ?? '—'}</p>
-                                <p className="text-[11px] text-gray-400 mt-0.5 uppercase tracking-wider">
+                                <p className="text-xs text-gray-400 mt-0.5 uppercase tracking-wider">
                                     {(contract as any).direction === 'OUTGOING' ? 'Contratante' : 'Contratado'}
                                 </p>
                             </div>
@@ -1323,7 +1323,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             <LockIcon className="w-5 h-5 text-emerald-500" />
                                             <span className="text-xs font-medium text-gray-700">Orçamento contratado</span>
                                         </div>
-                                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wide">Congelado</span>
+                                        <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wide">Congelado</span>
                                     </div>
                                 )}
                                 <div className="p-4 bg-gray-50 rounded-2xl flex items-center justify-between">
@@ -1355,7 +1355,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                         }
                                                     } catch { /* sugestão é opcional */ }
                                                 }}
-                                                className="text-[10px] font-semibold text-white bg-blue-600 hover:bg-blue-700 px-2 py-0.5 rounded-full transition-colors"
+                                                className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 px-2 py-0.5 rounded-full transition-colors"
                                             >
                                                 Aplicar
                                             </button>
@@ -1363,7 +1363,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     </div>
                                 </div>
                                 {(contract.reajuste_data_base || contract.reajuste_proximo) && (
-                                    <div className="p-3 bg-blue-50 rounded-2xl text-[11px] text-blue-700 space-y-0.5">
+                                    <div className="p-3 bg-blue-50 rounded-2xl text-xs text-blue-700 space-y-0.5">
                                         {contract.reajuste_data_base && (
                                             <p>Base: {new Date(contract.reajuste_data_base).toLocaleDateString('pt-BR')}</p>
                                         )}
@@ -1420,7 +1420,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     <div className="p-3 bg-gray-50 rounded-2xl">
                                         <div className="flex items-center gap-1.5 mb-1">
                                             <MapPin className="w-3 h-3 text-gray-400" />
-                                            <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Endereço</span>
+                                            <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Endereço</span>
                                         </div>
                                         <p className="text-xs font-medium text-gray-800">{(contract as any).execution_address}</p>
                                     </div>
@@ -1918,12 +1918,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     {m.status}
                                                 </span>
                                                 {m.rejection_reason && (
-                                                    <span className="text-[11px] text-red-500 font-medium max-w-[160px] truncate" title={m.rejection_reason}>
+                                                    <span className="text-xs text-red-500 font-medium max-w-[160px] truncate" title={m.rejection_reason}>
                                                         ↩ {m.rejection_reason}
                                                     </span>
                                                 )}
                                                 {m.approved_by && m.status === 'Processada' && (
-                                                    <span className="text-[11px] text-blue-500 font-medium">
+                                                    <span className="text-xs text-blue-500 font-medium">
                                                         ✓ {m.approved_by}
                                                     </span>
                                                 )}
@@ -1945,7 +1945,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     <button
                                                         onClick={e => { e.stopPropagation(); handleSubmitMeasurementForReview(m.id); }}
                                                         disabled={measurementActionBusy === m.id}
-                                                        className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-[11px] font-medium uppercase tracking-wider hover:bg-purple-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                                                        className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium uppercase tracking-wider hover:bg-purple-700 disabled:opacity-50 transition-colors whitespace-nowrap"
                                                         title="Enviar para conferência/aprovação"
                                                     >
                                                         <Send className="w-3 h-3" /> Enviar
@@ -1956,7 +1956,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                         <button
                                                             onClick={e => { e.stopPropagation(); handleApproveMeasurement(m.id); }}
                                                             disabled={measurementActionBusy === m.id}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-medium uppercase tracking-wider hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium uppercase tracking-wider hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap"
                                                             title="Aprovar medição e liberar financeiro"
                                                         >
                                                             <CheckCircle2 className="w-3 h-3" /> Aprovar
@@ -1964,7 +1964,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                         <button
                                                             onClick={e => { e.stopPropagation(); setRejectModal({ measurementId: m.id }); setRejectReason(''); }}
                                                             disabled={measurementActionBusy === m.id}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-[11px] font-medium uppercase tracking-wider hover:bg-red-600 hover:text-white disabled:opacity-50 transition-colors whitespace-nowrap"
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-medium uppercase tracking-wider hover:bg-red-600 hover:text-white disabled:opacity-50 transition-colors whitespace-nowrap"
                                                             title="Rejeitar e devolver para correção"
                                                         >
                                                             <XCircleIcon className="w-3 h-3" /> Rejeitar
@@ -2363,7 +2363,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 >
                                     <div>
                                         <p className="text-sm font-medium text-gray-900">{t.name}</p>
-                                        {t.description && <p className="text-[11px] text-gray-400 mt-0.5">{t.description}</p>}
+                                        {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
                                     </div>
                                     <FileDown size={15} className="text-blue-600 shrink-0" />
                                 </button>
@@ -2419,7 +2419,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                                         <TrendingUp className="w-6 h-6" />
                                     </div>
-                                    <div className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
+                                    <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
                                         AJUSTE
                                     </div>
                                 </div>
@@ -2428,7 +2428,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Aplicar Reajuste</h2>
                                         <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
                                             <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Índice:</span>
-                                            <span className="text-[10px] font-bold text-blue-600 uppercase">{contract.reajuste_index}</span>
+                                            <span className="text-xs font-bold text-blue-600 uppercase">{contract.reajuste_index}</span>
                                         </div>
                                     </div>
                                     <p className="text-sm text-gray-500 font-medium leading-tight">
@@ -2446,7 +2446,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         {/* Body */}
                         <div className="px-8 py-6 space-y-4">
                             {reajusteSuggestion && (
-                                <div className="p-3 bg-blue-50 rounded-xl text-[11px] text-blue-700 space-y-0.5">
+                                <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-700 space-y-0.5">
                                     <p className="font-semibold">Valores preenchidos automaticamente do banco:</p>
                                     <p>Base: {reajusteSuggestion.base.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({reajusteSuggestion.baseMonth.slice(0, 7)})</p>
                                     <p>Atual: {reajusteSuggestion.atual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({reajusteSuggestion.atualMonth.slice(0, 7)})</p>
@@ -2454,7 +2454,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             )}
                             <div className="space-y-3">
                                 <div>
-                                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Base (data de referência)</label>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Base (data de referência)</label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -2466,7 +2466,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Atual (hoje)</label>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Atual (hoje)</label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -2484,7 +2484,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     </div>
                                 )}
                                 <div>
-                                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Observação (opcional)</label>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Observação (opcional)</label>
                                     <input
                                         type="text"
                                         value={reajusteNotes}
@@ -2584,7 +2584,7 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                 <div className="px-6 py-5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-base font-black text-gray-900">Gerenciar Unidades</h2>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Unidades de medida</p>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Unidades de medida</p>
                     </div>
                     <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-xl transition-all text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
                 </div>
@@ -2703,7 +2703,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                 <div className="px-8 py-6 bg-orange-50 border-b border-orange-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-lg font-black text-gray-900">{isEditing ? 'Editar Item Avulso' : 'Adicionar Item Avulso'}</h2>
-                        <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mt-0.5">Item não vinculado ao orçamento</p>
+                        <p className="text-xs font-bold text-orange-500 uppercase tracking-widest mt-0.5">Item não vinculado ao orçamento</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-orange-100 rounded-xl transition-all text-gray-400 hover:text-gray-600">
                         <X className="w-5 h-5" />
@@ -2720,7 +2720,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                         <Search className="w-4 h-4" />
                         Buscar na base de dados (SINAPI / Própria)
                     </button>
-                    <p className="text-[10px] text-gray-400 -mt-3">Ou preencha os campos abaixo manualmente.</p>
+                    <p className="text-xs text-gray-400 -mt-3">Ou preencha os campos abaixo manualmente.</p>
 
                     <div className="h-px bg-gray-100" />
 
@@ -2811,7 +2811,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                         </label>
                         {saveToBase && (
                             <div>
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Base de dados *</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Base de dados *</label>
                                 {databases.length === 0 ? (
                                     <p className="text-xs text-gray-400 italic">Carregando bases...</p>
                                 ) : (
@@ -2989,7 +2989,7 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
 
             {/* Publicar nova versão */}
             <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 space-y-3">
-                <p className="text-[11px] font-bold text-purple-600 uppercase tracking-widest">Adicionar Versão {String(nextV).padStart(2, '0')}</p>
+                <p className="text-xs font-bold text-purple-600 uppercase tracking-widest">Adicionar Versão {String(nextV).padStart(2, '0')}</p>
                 <input
                     type="text"
                     value={docName}
@@ -3009,12 +3009,12 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
                     <button
                         onClick={() => fileRef.current?.click()}
                         disabled={uploading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest hover:bg-purple-700 disabled:opacity-50 transition-all active:scale-95 shadow-sm"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-purple-700 disabled:opacity-50 transition-all active:scale-95 shadow-sm"
                     >
                         <Plus className="w-3.5 h-3.5" />
                         {uploading ? 'Enviando…' : 'Subir Documento'}
                     </button>
-                    <span className="text-[10px] text-gray-400">PDF ou DOCX</span>
+                    <span className="text-xs text-gray-400">PDF ou DOCX</span>
                 </div>
             </div>
 
@@ -3056,7 +3056,7 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
                                                 {emitted ? 'Emitida' : 'Rascunho'}
                                             </span>
                                         </div>
-                                        <p className="text-[11px] font-medium text-gray-400 uppercase tracking-widest mt-0.5">
+                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-0.5">
                                             {new Date(ver.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                         </p>
                                         {ver.notes && <p className="text-sm text-gray-600 mt-0.5">{ver.notes}</p>}
@@ -3069,7 +3069,7 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
                                         <button
                                             onClick={() => handleEmit(ver.v)}
                                             disabled={busy}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-50 transition-all active:scale-95"
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-50 transition-all active:scale-95"
                                             title="Emitir ao cliente"
                                         >
                                             <Send className="w-3 h-3" />
@@ -3107,7 +3107,7 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
                     })}
                 </div>
             ) : (
-                <p className="text-[11px] text-gray-400 uppercase tracking-widest text-center py-2">Nenhuma versão publicada ainda</p>
+                <p className="text-xs text-gray-400 uppercase tracking-widest text-center py-2">Nenhuma versão publicada ainda</p>
             )}
         </div>
     );
@@ -3164,7 +3164,7 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
             <div className="flex-1">
                 <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Contrato Assinado Eletronicamente</p>
                 {contract.signature_completed_at && (
-                    <p className="text-[11px] text-emerald-600 mt-0.5">
+                    <p className="text-xs text-emerald-600 mt-0.5">
                         {new Date(contract.signature_completed_at).toLocaleString('pt-BR')}
                     </p>
                 )}
@@ -3178,14 +3178,14 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Assinatura Eletrônica</p>
                 {hasSig && (
                     <button onClick={() => { setBusy(true); onRefreshStatus().finally(() => setBusy(false)); }} disabled={busy}
-                        className="text-[11px] text-blue-600 hover:underline disabled:opacity-50">
+                        className="text-xs text-blue-600 hover:underline disabled:opacity-50">
                         {busy ? 'Atualizando…' : '↻ Atualizar status'}
                     </button>
                 )}
             </div>
 
             {hasSig && contract.signature_status && (
-                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${SIGNATURE_STATUS_COLOR[contract.signature_status] ?? ''}`}>
+                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${SIGNATURE_STATUS_COLOR[contract.signature_status] ?? ''}`}>
                     {SIGNATURE_STATUS_LABEL[contract.signature_status] ?? contract.signature_status}
                 </div>
             )}
@@ -3206,7 +3206,7 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
 
             {showForm && (
                 <div className="space-y-3 p-4 bg-gray-50 rounded-2xl">
-                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Signatários</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Signatários</p>
                     {signers.map((s, i) => (
                         <div key={i} className="grid grid-cols-3 gap-2 items-end">
                             <input value={s.name} onChange={e => updateSigner(i, 'name', e.target.value)}
@@ -3275,7 +3275,7 @@ const ApprovalWorkflowCard: React.FC<ApprovalWorkflowCardProps> = ({ contract, o
                 <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" /> Workflow de Aprovação
                 </h4>
-                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLOR[status] ?? STATUS_COLOR.RASCUNHO}`}>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLOR[status] ?? STATUS_COLOR.RASCUNHO}`}>
                     {status}
                 </span>
             </div>
@@ -3292,8 +3292,8 @@ const ApprovalWorkflowCard: React.FC<ApprovalWorkflowCardProps> = ({ contract, o
                                 <p className="font-medium text-gray-800 text-xs">
                                     {step.role} — <span className={step.action === 'APROVADO' ? 'text-emerald-700' : 'text-red-700'}>{step.action}</span>
                                 </p>
-                                <p className="text-[11px] text-gray-400">{step.approved_by} · {new Date(step.approved_at).toLocaleDateString('pt-BR')}</p>
-                                {step.notes && <p className="text-[11px] text-gray-500 italic mt-0.5">"{step.notes}"</p>}
+                                <p className="text-xs text-gray-400">{step.approved_by} · {new Date(step.approved_at).toLocaleDateString('pt-BR')}</p>
+                                {step.notes && <p className="text-xs text-gray-500 italic mt-0.5">"{step.notes}"</p>}
                             </div>
                         </div>
                     ))}

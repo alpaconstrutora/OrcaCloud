@@ -187,7 +187,7 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                             </div>
                             Análise de Mão de Obra
                         </h1>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
                             Insights consolidados de todos os diários de obra
                         </p>
                     </div>
@@ -210,7 +210,7 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                         />
                     </div>
                     
-                    <button className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10">
+                    <button className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10">
                         <Download className="w-4 h-4" />
                         Exportar Relatório
                     </button>
@@ -223,9 +223,9 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                     <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 -mr-16 -mt-16 rounded-full opacity-50 group-hover:scale-110 transition-transform duration-500"></div>
                     <div className="relative z-10 flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Total de Horas</p>
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Total de Horas</p>
                             <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{totals.hours.toLocaleString('pt-BR')}h</h3>
-                            <p className="text-[10px] font-bold text-indigo-600 mt-2 bg-indigo-50 px-2 py-1 rounded-lg inline-block">PERÍODO SELECIONADO</p>
+                            <p className="text-xs font-bold text-indigo-600 mt-2 bg-indigo-50 px-2 py-1 rounded-lg inline-block">PERÍODO SELECIONADO</p>
                         </div>
                         <div className="p-4 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-100">
                             <Clock className="w-8 h-8 text-white" />
@@ -237,9 +237,9 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 -mr-16 -mt-16 rounded-full opacity-50 group-hover:scale-110 transition-transform duration-500"></div>
                     <div className="relative z-10 flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Mão de Obra Ativa</p>
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Mão de Obra Ativa</p>
                             <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{totals.workers} Colaboradores</h3>
-                            <p className="text-[10px] font-bold text-emerald-600 mt-2 bg-emerald-50 px-2 py-1 rounded-lg inline-block">TALENTOS ENGAJADOS</p>
+                            <p className="text-xs font-bold text-emerald-600 mt-2 bg-emerald-50 px-2 py-1 rounded-lg inline-block">TALENTOS ENGAJADOS</p>
                         </div>
                         <div className="p-4 bg-emerald-600 rounded-2xl shadow-lg shadow-emerald-100">
                             <Users className="w-8 h-8 text-white" />
@@ -251,9 +251,9 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                     <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50 -mr-16 -mt-16 rounded-full opacity-50 group-hover:scale-110 transition-transform duration-500"></div>
                     <div className="relative z-10 flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Obras Cobertas</p>
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Obras Cobertas</p>
                             <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{totals.projectsCount} Projetos</h3>
-                            <p className="text-[10px] font-bold text-rose-600 mt-2 bg-rose-50 px-2 py-1 rounded-lg inline-block">COM REGISTROS DIÁRIOS</p>
+                            <p className="text-xs font-bold text-rose-600 mt-2 bg-rose-50 px-2 py-1 rounded-lg inline-block">COM REGISTROS DIÁRIOS</p>
                         </div>
                         <div className="p-4 bg-rose-600 rounded-2xl shadow-lg shadow-rose-100">
                             <Building2 className="w-8 h-8 text-white" />
@@ -339,7 +339,7 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                         </div>
                         <div className="w-full md:w-48 space-y-2">
                             {statsByProject.map((item, i) => (
-                                <div key={i} className="flex items-center justify-between text-[10px]">
+                                <div key={i} className="flex items-center justify-between text-xs">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
                                         <span className="font-bold text-slate-600 uppercase truncate max-w-[100px]">{item.name}</span>
@@ -361,7 +361,7 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                                 placeholder="Filtrar..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none focus:ring-2 focus:ring-indigo-100 transition-all w-48"
+                                className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-100 transition-all w-48"
                             />
                         </div>
                     </div>
@@ -378,11 +378,11 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                             <tbody className="divide-y divide-slate-50">
                                 {filteredData.slice(0, 50).map((item, i) => (
                                     <tr key={i} className="group hover:bg-slate-50/50 transition-all">
-                                        <td className="py-3 text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                                        <td className="py-3 text-xs font-bold text-slate-500 whitespace-nowrap">
                                             {new Date(item.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                                         </td>
                                         <td className="py-3 pr-4 min-w-[200px]">
-                                            <div className="text-[10px] font-black text-slate-900 uppercase">{item.worker}</div>
+                                            <div className="text-xs font-black text-slate-900 uppercase">{item.worker}</div>
                                             {item.subLabel && <div className="text-[8px] font-bold text-slate-400 uppercase leading-none mt-0.5">{item.subLabel}</div>}
                                             {item.activities && (
                                                 <div className="text-[8px] text-slate-400 italic mt-1.5 truncate max-w-[250px]">
@@ -391,10 +391,10 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                                             )}
                                         </td>
                                         <td className="py-3 pr-4">
-                                            <div className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md inline-block whitespace-nowrap">{item.project}</div>
+                                            <div className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md inline-block whitespace-nowrap">{item.project}</div>
                                         </td>
                                         <td className="py-3 text-right">
-                                             <span className="text-[11px] font-black text-slate-900">{item.hours}h</span>
+                                             <span className="text-xs font-black text-slate-900">{item.hours}h</span>
                                         </td>
                                     </tr>
                                 ))}

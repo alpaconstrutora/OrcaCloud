@@ -214,16 +214,16 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
           {/* Resumo por bitola */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-blue-50 rounded-2xl p-4">
-              <p className="text-[11px] font-black uppercase tracking-widest text-blue-400">Peso total</p>
+              <p className="text-xs font-black uppercase tracking-widest text-blue-400">Peso total</p>
               <p className="text-2xl font-black text-blue-900 mt-1">{summary.totalPesoKg.toFixed(1)} <span className="text-sm font-bold">kg</span></p>
             </div>
             <div className="bg-amber-50 rounded-2xl p-4">
-              <p className="text-[11px] font-black uppercase tracking-widest text-amber-500">Com perdas</p>
+              <p className="text-xs font-black uppercase tracking-widest text-amber-500">Com perdas</p>
               <p className="text-2xl font-black text-amber-900 mt-1">{summary.totalComPerdaKg.toFixed(1)} <span className="text-sm font-bold">kg</span></p>
             </div>
             {summary.byBitola.slice(0, 2).map(b => (
               <div key={b.bitolaMm} className="bg-slate-50 rounded-2xl p-4">
-                <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Ø{b.bitolaMm} mm ({b.tipo})</p>
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Ø{b.bitolaMm} mm ({b.tipo})</p>
                 <p className="text-2xl font-black text-slate-900 mt-1">{b.pesoKg.toFixed(1)} <span className="text-sm font-bold">kg</span></p>
               </div>
             ))}
@@ -233,7 +233,7 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
           <div className="bg-white rounded-2xl border border-slate-100 overflow-auto shadow-sm">
             <table className="w-full text-sm min-w-[900px]">
               <thead>
-                <tr className="text-left text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 bg-slate-50">
+                <tr className="text-left text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 bg-slate-50">
                   <th className="px-3 py-3">Pos.</th>
                   <th className="px-3 py-3">Estrutura</th>
                   <th className="px-3 py-3">Elemento</th>
@@ -258,7 +258,7 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
                       <td className="px-3 py-2.5 text-slate-500 text-table-body">{row.assemblyNome}</td>
                       <td className="px-3 py-2.5 font-bold">{row.elementNome}</td>
                       <td className="px-3 py-2.5">
-                        <span className="text-[11px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500">
+                        <span className="text-xs font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500">
                           {row.elementTipo}
                         </span>
                       </td>

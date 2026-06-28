@@ -62,7 +62,7 @@ const BrokerAnalytics: React.FC<BrokerAnalyticsProps> = ({ organizationId }) => 
                 <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Vendas no Mês</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Vendas no Mês</p>
                             <p className="text-3xl font-black text-gray-900 mt-1">{data.monthly_sales[data.monthly_sales.length - 1].count}</p>
                         </div>
                         <div className="p-3 bg-emerald-50 rounded-xl">
@@ -79,7 +79,7 @@ const BrokerAnalytics: React.FC<BrokerAnalyticsProps> = ({ organizationId }) => 
                 <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Volume (VGV)</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Volume (VGV)</p>
                             <p className="text-3xl font-black text-gray-900 mt-1">{formatCurrency(data.monthly_sales[data.monthly_sales.length - 1].volume)}</p>
                         </div>
                         <div className="p-3 bg-blue-50 rounded-xl">
@@ -91,7 +91,7 @@ const BrokerAnalytics: React.FC<BrokerAnalyticsProps> = ({ organizationId }) => 
                 <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Tempo Médio de Venda</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Tempo Médio de Venda</p>
                             <p className="text-3xl font-black text-gray-900 mt-1">{data.avg_sale_time_days}<span className="text-lg text-gray-400"> dias</span></p>
                         </div>
                         <div className="p-3 bg-amber-50 rounded-xl">
@@ -103,7 +103,7 @@ const BrokerAnalytics: React.FC<BrokerAnalyticsProps> = ({ organizationId }) => 
                 <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Taxa de Aprovação</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Taxa de Aprovação</p>
                             <p className="text-3xl font-black text-gray-900 mt-1">{data.approval_rate}<span className="text-lg text-gray-400">%</span></p>
                         </div>
                         <div className="p-3 bg-purple-50 rounded-xl">
@@ -120,12 +120,12 @@ const BrokerAnalytics: React.FC<BrokerAnalyticsProps> = ({ organizationId }) => 
                     <div className="flex items-end gap-3 h-48">
                         {data.monthly_sales.map((m, i) => (
                             <div key={m.month} className="flex-1 flex flex-col items-center gap-2">
-                                <span className="text-[10px] font-bold text-gray-500">{m.count}</span>
+                                <span className="text-xs font-bold text-gray-500">{m.count}</span>
                                 <div className="w-full bg-gray-100 rounded-t-lg relative" style={{ height: '100%' }}>
                                     <div className={`absolute bottom-0 w-full rounded-t-lg transition-all ${i === data.monthly_sales.length - 1 ? 'bg-indigo-500' : 'bg-indigo-200'}`}
                                         style={{ height: `${(m.count / maxMonthlySales) * 100}%` }} />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-400">{m.month}</span>
+                                <span className="text-xs font-bold text-gray-400">{m.month}</span>
                             </div>
                         ))}
                     </div>
@@ -148,7 +148,7 @@ const BrokerAnalytics: React.FC<BrokerAnalyticsProps> = ({ organizationId }) => 
                                     <div className="bg-gray-100 rounded-full h-8 overflow-hidden">
                                         <div className={`${colors[i]} h-full rounded-full flex items-center justify-end pr-3 transition-all`}
                                             style={{ width: `${Math.max(10, pct)}%` }}>
-                                            <span className="text-[10px] font-black text-white">{Math.round(pct)}%</span>
+                                            <span className="text-xs font-black text-white">{Math.round(pct)}%</span>
                                         </div>
                                     </div>
                                 </div>
@@ -183,8 +183,8 @@ const BrokerAnalytics: React.FC<BrokerAnalyticsProps> = ({ organizationId }) => 
                         ))}
                     </div>
                     <div className="flex gap-4 mt-4 pt-3 border-t border-gray-100">
-                        <span className="flex items-center gap-1 text-[10px] text-gray-400"><span className="w-3 h-3 rounded bg-indigo-400 inline-block" />Leads</span>
-                        <span className="flex items-center gap-1 text-[10px] text-gray-400"><span className="w-3 h-3 rounded bg-emerald-500 inline-block" />Vendas</span>
+                        <span className="flex items-center gap-1 text-xs text-gray-400"><span className="w-3 h-3 rounded bg-indigo-400 inline-block" />Leads</span>
+                        <span className="flex items-center gap-1 text-xs text-gray-400"><span className="w-3 h-3 rounded bg-emerald-500 inline-block" />Vendas</span>
                     </div>
                 </div>
 
@@ -194,12 +194,12 @@ const BrokerAnalytics: React.FC<BrokerAnalyticsProps> = ({ organizationId }) => 
                     <div className="space-y-3">
                         {data.rankings.map((r, i) => (
                             <div key={r.broker_name} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
-                                <span className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-[11px] ${i < 3 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                <span className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-xs ${i < 3 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
                                     {i + 1}
                                 </span>
                                 <div className="flex-1">
                                     <p className="text-sm font-bold text-gray-900">{r.broker_name}</p>
-                                    <p className="text-[10px] text-gray-400">{formatCurrency(r.volume)} • {r.conversion_rate}% conversão</p>
+                                    <p className="text-xs text-gray-400">{formatCurrency(r.volume)} • {r.conversion_rate}% conversão</p>
                                 </div>
                                 <span className="text-sm font-black text-indigo-600">{r.sales} vendas</span>
                             </div>
@@ -214,13 +214,13 @@ const BrokerAnalytics: React.FC<BrokerAnalyticsProps> = ({ organizationId }) => 
                         {data.top_units.map((u, i) => (
                             <div key={`${u.unit}-${u.block}`} className="bg-gray-50 rounded-xl p-4 text-center hover:bg-indigo-50 transition-colors">
                                 <p className="text-xs font-black text-indigo-600">Unidade {u.unit}</p>
-                                <p className="text-[10px] text-gray-400 mb-2">{u.block}</p>
+                                <p className="text-xs text-gray-400 mb-2">{u.block}</p>
                                 <div className="space-y-1">
-                                    <div className="flex justify-between text-[10px]">
+                                    <div className="flex justify-between text-xs">
                                         <span className="text-gray-400">Views</span>
                                         <span className="font-bold text-gray-700">{u.views}</span>
                                     </div>
-                                    <div className="flex justify-between text-[10px]">
+                                    <div className="flex justify-between text-xs">
                                         <span className="text-gray-400">Propostas</span>
                                         <span className="font-bold text-indigo-600">{u.proposals}</span>
                                     </div>

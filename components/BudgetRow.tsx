@@ -33,7 +33,7 @@ const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void)
             <button
                 onClick={onClick}
                 type="button"
-                className={`flex items-center gap-1 bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded font-semibold border border-blue-200 transition-all ${onClick ? 'hover:bg-blue-200 hover:border-blue-300 active:scale-95 cursor-pointer' : ''}`}
+                className={`flex items-center gap-1 bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded font-semibold border border-blue-200 transition-all ${onClick ? 'hover:bg-blue-200 hover:border-blue-300 active:scale-95 cursor-pointer' : ''}`}
                 title={onClick ? "Ver detalhes da composição" : undefined}
             >
                 <Layers className="w-3 h-3" />
@@ -43,14 +43,14 @@ const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void)
     }
     if (type === SinapiType.SERVICE) {
         return (
-            <span className="flex items-center gap-1 bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0.5 rounded font-semibold border border-purple-200">
+            <span className="flex items-center gap-1 bg-purple-100 text-purple-700 text-xs px-1.5 py-0.5 rounded font-semibold border border-purple-200">
                 <Loader2 className="w-3 h-3" />
                 SERVIÇO
             </span>
         );
     }
     return (
-        <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0.5 rounded font-semibold border border-amber-200">
+        <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded font-semibold border border-amber-200">
             <Box className="w-3 h-3" />
             INSUMO
         </span>
@@ -110,7 +110,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     return (
         <div className="border-t border-gray-50 hover:bg-blue-50/20 group">
             <div className={`group relative grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 px-4 py-2 hover:bg-gray-50/80 transition-all items-center border-b border-gray-100 ${isExpanded ? 'bg-blue-50/20' : ''}`}>
-                <div className="text-[10px] font-mono font-black text-gray-400 flex items-center gap-1.5">
+                <div className="text-xs font-mono font-black text-gray-400 flex items-center gap-1.5">
                     {canOpenCPU && (
                         <button
                             onClick={(e) => {
@@ -165,9 +165,9 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 </div>
                 <div className="text-center text-form-input text-gray-500">{item.sinapiItem?.unit || '---'}</div>
 
-                <div className="text-center text-[13px] text-gray-600">
+                <div className="text-center text-form-label text-gray-600">
                     <div className={`flex items-center justify-center gap-1 bg-white border rounded px-1 transition-colors ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
-                        <span className="text-[10px] text-gray-400">R$</span>
+                        <span className="text-xs text-gray-400">R$</span>
                         <input
                             type="number"
                             step="0.01"
@@ -188,7 +188,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                     R$ {(item.quantity * (item.sinapiItem?.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
 
-                <div className="text-center text-[13px] text-gray-600">
+                <div className="text-center text-form-label text-gray-600">
                     <div className={`flex items-center justify-center gap-1 bg-white border rounded px-1 transition-colors ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
                         <input
                             type="number"
@@ -202,7 +202,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             disabled={isLocked}
                             className={`w-full text-center outline-none bg-transparent py-0.5 placeholder:text-gray-300 ${isLocked ? 'text-gray-400 cursor-not-allowed' : ''}`}
                         />
-                        <span className="text-[10px] text-gray-400 font-bold">%</span>
+                        <span className="text-xs text-gray-400 font-bold">%</span>
                     </div>
                 </div>
 
@@ -267,9 +267,9 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
 
                 {showNatureBreakdown && natureBreakdown && (
                     <>
-                        <div className="text-right text-[11px] text-blue-700 font-mono italic bg-blue-50/30 rounded px-1 border-y border-r border-l-2 border-blue-100/60 font-bold ml-2 shadow-sm">{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-[11px] text-blue-700 font-mono italic bg-blue-50/30 rounded px-1 border border-blue-100/60 font-bold shadow-sm">{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-[11px] text-blue-700 font-mono italic bg-blue-50/30 rounded px-1 border border-blue-100/60 font-bold shadow-sm">{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded px-1 border-y border-r border-l-2 border-blue-100/60 font-bold ml-2 shadow-sm">{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded px-1 border border-blue-100/60 font-bold shadow-sm">{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded px-1 border border-blue-100/60 font-bold shadow-sm">{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                     </>
                 )}
             </div>
@@ -301,12 +301,12 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             return (
                                 <div key={`${item.id}-comp-${idx}`} className="grid grid-cols-12 gap-2 items-center text-xs text-gray-600 hover:bg-gray-100 py-1.5 px-4 rounded">
                                     <div className="col-span-1"></div>
-                                    <div className="col-span-1 text-center font-mono text-[10px] text-gray-500 text-center">{comp.code}</div>
+                                    <div className="col-span-1 text-center font-mono text-xs text-gray-500 text-center">{comp.code}</div>
                                     <div className="col-span-4 flex items-center gap-2">
                                         <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${comp.type === SinapiType.COMPOSITION ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                                             {comp.type === SinapiType.COMPOSITION ? 'COMP' : 'INS'}
                                         </span>
-                                        <span className="leading-tight text-[11px]" title={comp.description || ''}>{comp.description || 'Pendente de carga...'}</span>
+                                        <span className="leading-tight text-xs" title={comp.description || ''}>{comp.description || 'Pendente de carga...'}</span>
                                     </div>
                                     <div className="col-span-1 text-center">
                                         <input
@@ -314,10 +314,10 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                             step="0.0001"
                                             value={comp.quantity || 0}
                                             onChange={(e) => onUpdateComposition(item.id, idx, { quantity: Number(e.target.value) })}
-                                            className="w-full text-center outline-none bg-white border border-gray-200 rounded py-0.5 text-[11px] focus:ring-1 focus:ring-blue-400"
+                                            className="w-full text-center outline-none bg-white border border-gray-200 rounded py-0.5 text-xs focus:ring-1 focus:ring-blue-400"
                                         />
                                     </div>
-                                    <div className="col-span-1 text-center text-gray-400 text-[11px]">{comp.unit || '-'}</div>
+                                    <div className="col-span-1 text-center text-gray-400 text-xs">{comp.unit || '-'}</div>
                                     <div className="col-span-1 text-center">
                                         <div className="flex items-center justify-center gap-0.5 bg-white border border-gray-200 rounded px-1 focus-within:ring-1 focus-within:ring-blue-400">
                                             <span className="text-[9px] text-gray-400">R$</span>
@@ -326,12 +326,12 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                                 step="0.01"
                                                 value={displayPrice}
                                                 onChange={(e) => onUpdateComposition(item.id, idx, { price: Number(e.target.value) })}
-                                                className="w-full text-center outline-none bg-transparent py-0.5 text-[11px]"
+                                                className="w-full text-center outline-none bg-transparent py-0.5 text-xs"
                                             />
                                         </div>
                                     </div>
                                     <div className="col-span-1"></div>
-                                    <div className="col-span-2 text-right font-medium text-gray-800 text-[11px]">
+                                    <div className="col-span-2 text-right font-medium text-gray-800 text-xs">
                                         R$ {displaySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </div>
                                 </div>

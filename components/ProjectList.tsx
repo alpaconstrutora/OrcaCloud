@@ -202,7 +202,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const SortableHeader = ({ col, label }: { col: ColumnKey; label: string }) => (
         <th
             onClick={() => handleColumnSort(col)}
-            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+            className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
         >
             <div className="flex items-center gap-1.5">
                 {label}
@@ -498,7 +498,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     />
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
@@ -613,7 +613,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     {visibleColumns.includes('code') && (
                                         <th
                                             onClick={() => handleColumnSort('code')}
-                                            className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-20 text-center cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                            className="px-4 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] w-20 text-center cursor-pointer hover:text-gray-600 transition-colors select-none group"
                                         >
                                             <div className="flex items-center justify-center gap-1.5">
                                                 {COLUMN_LABELS.code}
@@ -628,7 +628,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     {visibleColumns.includes('name') && (
                                         <th
                                             onClick={() => handleColumnSort('name')}
-                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                            className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
                                         >
                                             <div className="flex items-center gap-1.5">
                                                 {isDiaryContext ? 'Diário' : (isObraContext ? 'Obra' : (isPlanejamentoContext ? 'Planejamento' : 'Orçamento'))}
@@ -643,7 +643,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     {visibleColumns.includes('organization') && (
                                         <th
                                             onClick={() => handleColumnSort('organization')}
-                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                            className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
                                         >
                                             <div className="flex items-center gap-1.5">
                                                 {COLUMN_LABELS.organization}
@@ -656,18 +656,18 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         </th>
                                     )}
                                     {visibleColumns.includes('linked') && (
-                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Último Diário' : (isObraContext ? 'Orçamentos Vinculados' : 'Obra Vinculada')}</th>
+                                        <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Último Diário' : (isObraContext ? 'Orçamentos Vinculados' : 'Obra Vinculada')}</th>
                                     )}
                                     {isDiaryContext && (
                                         <>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Obra Vinculada</th>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Planejamento Vinculado</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Obra Vinculada</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Planejamento Vinculado</th>
                                         </>
                                     )}
                                     {visibleColumns.includes('client') && (
                                         <th
                                             onClick={() => handleColumnSort('client')}
-                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                            className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
                                         >
                                             <div className="flex items-center gap-1.5">
                                                 {COLUMN_LABELS.client}
@@ -682,7 +682,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     {visibleColumns.includes('updated') && (
                                         <th
                                             onClick={() => handleColumnSort('updated')}
-                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                            className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
                                         >
                                             <div className="flex items-center gap-1.5">
                                                 {isDiaryContext ? 'Clima' : 'Atualização'}
@@ -697,7 +697,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     {visibleColumns.includes('status-budget') && (
                                         <th
                                             onClick={() => handleColumnSort('status-budget')}
-                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                            className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
                                         >
                                             <div className="flex items-center gap-1.5">
                                                 {isDiaryContext ? 'Status Diário' : 'Status Orç.'}
@@ -712,7 +712,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     {visibleColumns.includes('status-obra') && (
                                         <th
                                             onClick={() => handleColumnSort('status-obra')}
-                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                            className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
                                         >
                                             <div className="flex items-center gap-1.5">
                                                 {isDiaryContext ? 'Total Registros' : 'Status Obra'}
@@ -725,9 +725,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         </th>
                                     )}
                                     {visibleColumns.includes('lock') && (
-                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">{COLUMN_LABELS.lock}</th>
+                                        <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-center">{COLUMN_LABELS.lock}</th>
                                     )}
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">{COLUMN_LABELS.actions}</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-right">{COLUMN_LABELS.actions}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -790,7 +790,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                                 ? new Date(project.settings.diaryEntries[project.settings.diaryEntries.length - 1].date).toLocaleDateString()
                                                                 : '-'}
                                                         </div>
-                                                        <span className="text-[10px] text-gray-400 font-medium lowercase italic">Visto por último</span>
+                                                        <span className="text-xs text-gray-400 font-medium lowercase italic">Visto por último</span>
                                                     </div>
                                                 ) : (
                                                     isObraContext ? (() => {
@@ -799,7 +799,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     if (linked.length > 0) return (
                                                         <div className="flex flex-wrap gap-1">
                                                             {linked.map(budget => (
-                                                                <span key={budget.id} className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
+                                                                <span key={budget.id} className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
                                                                     {budget.name}
                                                                 </span>
                                                             ))}
@@ -810,7 +810,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                             {suggested.map(s => (
                                                                 <div key={s.id} className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-700 rounded-md border border-amber-200" title={`Orçamento "${s.name}" tem o mesmo cliente e pode ser vinculado a esta Obra`}>
                                                                     <Link2 className="w-3 h-3 shrink-0" />
-                                                                    <span className="text-[10px] font-black uppercase tracking-tight">{s.name}</span>
+                                                                    <span className="text-xs font-black uppercase tracking-tight">{s.name}</span>
                                                                     <span className="text-[9px] font-bold text-amber-500 ml-0.5">Sugerido</span>
                                                                 </div>
                                                             ))}
@@ -839,7 +839,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     if (suggested) return (
                                                         <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-700 rounded-md border border-amber-200" title={`Obra "${suggested.name}" tem o mesmo cliente e pode ser vinculada a este Orçamento`}>
                                                             <Link2 className="w-3 h-3 shrink-0" />
-                                                            <span className="text-[10px] font-black uppercase tracking-tight">{suggested.name}</span>
+                                                            <span className="text-xs font-black uppercase tracking-tight">{suggested.name}</span>
                                                             <span className="text-[9px] font-bold text-amber-500 ml-0.5">Sugerido</span>
                                                         </div>
                                                     );
@@ -854,7 +854,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     {getLinkedProjectData(project) ? (
                                                         <div className="flex items-center gap-1.5">
                                                             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
-                                                            <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-md border border-blue-100 uppercase tracking-tighter">
+                                                            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-md border border-blue-100 uppercase tracking-tighter">
                                                                 OBRA: {getLinkedProjectData(project)?.name}
                                                             </span>
                                                         </div>
@@ -868,7 +868,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                         return (
                                                             <div className="flex items-center gap-1.5">
                                                                 <div className={`w-1.5 h-1.5 rounded-full ${linked.type === 'manual' ? 'bg-emerald-500' : 'bg-blue-500'} animate-pulse`}></div>
-                                                                <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase tracking-tighter ${linked.type === 'manual'
+                                                                <span className={`text-xs font-bold px-2 py-1 rounded border uppercase tracking-tighter ${linked.type === 'manual'
                                                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                                                     : 'bg-blue-50 text-blue-700 border-blue-100'
                                                                     }`}>
@@ -883,7 +883,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         {visibleColumns.includes('client') && (
                                             <td className="px-6 py-4">
                                                 {project.settings?.obraPropria ? (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-tight bg-indigo-100 text-indigo-700 border border-indigo-200">
                                                         Obra Própria
                                                     </span>
                                                 ) : (activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)) ? (
@@ -902,11 +902,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     {(project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (
                                                         <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-100/50 text-xs font-bold">
                                                             {project.settings.diaryEntries[project.settings.diaryEntries.length - 1].weatherMorning === 'sunny' ? (
-                                                                <>☀ <span className="text-[10px] font-black uppercase">Sol</span></>
+                                                                <>☀ <span className="text-xs font-black uppercase">Sol</span></>
                                                             ) : project.settings.diaryEntries[project.settings.diaryEntries.length - 1].weatherMorning === 'cloudy' ? (
-                                                                <>☁ <span className="text-[10px] font-black uppercase">Nublado</span></>
+                                                                <>☁ <span className="text-xs font-black uppercase">Nublado</span></>
                                                             ) : (
-                                                                <>🌧 <span className="text-[10px] font-black uppercase">Chuva</span></>
+                                                                <>🌧 <span className="text-xs font-black uppercase">Chuva</span></>
                                                             )}
                                                         </div>
                                                     ) : '-'}
@@ -928,17 +928,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             <td className="px-6 py-4">
                                                 {isDiaryContext ? (
                                                     (project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (
-                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700">
+                                                        <span className="px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-700">
                                                             Atualizado
                                                         </span>
                                                     ) : (
-                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gray-100 text-gray-500">
+                                                        <span className="px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-gray-100 text-gray-500">
                                                             Sem Registros
                                                         </span>
                                                     )
                                                 ) : (
                                                     project.settings?.budgetStatus ? (
-                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider
                                                     ${project.settings.budgetStatus === 'Fechado' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
                                                             {project.settings.budgetStatus}
                                                         </span>
@@ -953,11 +953,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 {isDiaryContext ? (
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="text-sm font-bold text-gray-900">{project.settings?.diaryEntries?.length || 0}</span>
-                                                    <span className="text-[10px] text-gray-400 font-medium uppercase">Dias</span>
+                                                    <span className="text-xs text-gray-400 font-medium uppercase">Dias</span>
                                                 </div>
                                             ) : (
                                                 project.settings?.obraStatus ? (
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider
                                                 ${project.settings.obraStatus === 'Concluída' ? 'bg-indigo-100 text-indigo-700' :
                                                             project.settings.obraStatus === 'Não Iniciado' ? 'bg-gray-100 text-gray-600' :
                                                                 'bg-sky-100 text-sky-700'}`}>
@@ -975,12 +975,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 {getEffectiveOrderCount(project.id) > 0 ? (
                                                     <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-700 rounded-md border border-amber-100" title={`${getEffectiveOrderCount(project.id)} orçamento(s)/pedido(s) vinculados - Exclusão Bloqueada`}>
                                                         <Lock className="w-3.5 h-3.5" />
-                                                        <span className="text-[10px] font-black uppercase tracking-tight">Bloqueado</span>
+                                                        <span className="text-xs font-black uppercase tracking-tight">Bloqueado</span>
                                                     </div>
                                                 ) : (
                                                     <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-100" title="Sem pedidos vinculados - Exclusão Permitida">
                                                         <Unlock className="w-3.5 h-3.5" />
-                                                        <span className="text-[10px] font-black uppercase tracking-tight">Livre</span>
+                                                        <span className="text-xs font-black uppercase tracking-tight">Livre</span>
                                                     </div>
                                                 )}
                                                 </div>
@@ -994,7 +994,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     title="Curva ABC"
                                                 >
                                                     <LayoutDashboard className="w-4 h-4" />
-                                                    <span className="text-[10px] font-bold uppercase hidden lg:inline">Curva ABC</span>
+                                                    <span className="text-xs font-bold uppercase hidden lg:inline">Curva ABC</span>
                                                 </button>
                                             </td>
                                         )}
@@ -1006,7 +1006,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     title="Cronograma"
                                                 >
                                                     <Calendar className="w-4 h-4" />
-                                                    <span className="text-[10px] font-bold uppercase hidden lg:inline">Cronograma</span>
+                                                    <span className="text-xs font-bold uppercase hidden lg:inline">Cronograma</span>
                                                 </button>
                                             </td>
                                         )}
@@ -1018,7 +1018,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     title="Abrir Diário"
                                                 >
                                                     <BookOpen className="w-4 h-4 group-hover/act:scale-110 transition-transform" />
-                                                    <span className="text-[10px] font-bold uppercase hidden lg:inline">Abrir Diário</span>
+                                                    <span className="text-xs font-bold uppercase hidden lg:inline">Abrir Diário</span>
                                                 </button>
                                             </td>
                                         )}
@@ -1030,7 +1030,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     title={project.settings?.budgetType === 'PARAMETRIC' ? "Paramétrico" : "Analítico"}
                                                 >
                                                     <Table2 className="w-4 h-4" />
-                                                    <span className="text-[10px] font-bold uppercase hidden lg:inline">
+                                                    <span className="text-xs font-bold uppercase hidden lg:inline">
                                                         {project.settings?.budgetType === 'PARAMETRIC' ? 'Paramétrico' : 'Analítico'}
                                                     </span>
                                                 </button>
@@ -1085,13 +1085,13 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         </div>
                                         <div className="flex flex-col items-end gap-2">
                                             {!isObraContext && project.settings?.budgetStatus && (
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider
                                                 ${project.settings.budgetStatus === 'Fechado' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
                                                     {project.settings.budgetStatus}
                                                 </span>
                                             )}
                                             {project.settings?.obraStatus && (
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider
                                                 ${project.settings.obraStatus === 'Concluída' ? 'bg-indigo-100 text-indigo-700' :
                                                         project.settings.obraStatus === 'Não Iniciado' ? 'bg-gray-100 text-gray-600' :
                                                             'bg-sky-100 text-sky-700'}`}>
@@ -1099,12 +1099,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </span>
                                             )}
                                             {getEffectiveOrderCount(project.id) > 0 ? (
-                                                <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-wider">
+                                                <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-black uppercase tracking-wider">
                                                     <Lock className="w-2.5 h-2.5" />
                                                     Bloqueado
                                                 </span>
                                             ) : (
-                                                <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-wider">
+                                                <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-black uppercase tracking-wider">
                                                     <Unlock className="w-2.5 h-2.5" />
                                                     Livre
                                                 </span>
@@ -1120,7 +1120,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     )}
                                     <div className="flex items-start gap-2">
                                         {(project.code || project.settings?.code) && (
-                                            <span className="text-[11px] font-black font-mono text-blue-700 shrink-0 mt-1">
+                                            <span className="text-xs font-black font-mono text-blue-700 shrink-0 mt-1">
                                                 {project.code || project.settings?.code}
                                             </span>
                                         )}
@@ -1131,7 +1131,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     {!isObraContext && (
                                         <p className="text-sm text-gray-500 mt-1 mb-4 flex items-center gap-1.5 font-medium">
                                             {project.settings?.obraPropria ? (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight bg-indigo-100 text-indigo-700 border border-indigo-200">Obra Própria</span>
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-tight bg-indigo-100 text-indigo-700 border border-indigo-200">Obra Própria</span>
                                             ) : (project.settings?.client || 'Cliente não definido')}
                                         </p>
                                     )}
@@ -1145,7 +1145,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             <span className="text-gray-400">Atualizado em:</span>
                                             <div className="text-right">
                                                 <div className="text-gray-600 font-medium">{new Date(project.updated_at || project.created_at || 0).toLocaleDateString()}</div>
-                                                <div className="text-[10px] text-gray-400">{new Date(project.updated_at || project.created_at || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                <div className="text-xs text-gray-400">{new Date(project.updated_at || project.created_at || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                                             </div>
                                         </div>
                                     </div>

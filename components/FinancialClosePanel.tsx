@@ -167,7 +167,7 @@ const FinancialClosePanel: React.FC<FinancialClosePanelProps> = ({ organizationI
             {checklist && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
-                        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">Checklist de Fechamento</p>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Checklist de Fechamento</p>
                         <ChecklistItem label="Movimentos do extrato pendentes de conciliação" count={checklist.pending_bank_count} />
                         <ChecklistItem label="Movimentos sem classificação" count={checklist.unclassified_count} />
                         <ChecklistItem label="Tarifas bancárias não contabilizadas" count={checklist.fees_uncategorized_count} />
@@ -177,14 +177,14 @@ const FinancialClosePanel: React.FC<FinancialClosePanelProps> = ({ organizationI
                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                             <div className="flex items-center gap-2 mb-1">
                                 <ArrowDownLeft className="w-4 h-4 text-emerald-500" />
-                                <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Entradas</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Entradas</p>
                             </div>
                             <p className="text-xl font-black text-emerald-600 tabular-nums">{formatBRL(checklist.total_entradas)}</p>
                         </div>
                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                             <div className="flex items-center gap-2 mb-1">
                                 <ArrowUpRight className="w-4 h-4 text-red-500" />
-                                <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Saídas</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Saídas</p>
                             </div>
                             <p className="text-xl font-black text-red-600 tabular-nums">{formatBRL(checklist.total_saidas)}</p>
                         </div>
@@ -196,7 +196,7 @@ const FinancialClosePanel: React.FC<FinancialClosePanelProps> = ({ organizationI
             {periods.length > 0 && (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="px-5 py-3 border-b border-gray-50">
-                        <h5 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Histórico de Períodos</h5>
+                        <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Histórico de Períodos</h5>
                     </div>
                     <div className="divide-y divide-gray-50">
                         {periods.map(p => (

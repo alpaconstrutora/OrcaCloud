@@ -383,7 +383,7 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
                                 <div className="space-y-3">
                                     {topSuppliers.map((s, i) => (
                                         <div key={i} className="flex items-center gap-3">
-                                            <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-black text-gray-500 flex-shrink-0">
+                                            <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-xs font-black text-gray-500 flex-shrink-0">
                                                 {i + 1}
                                             </span>
                                             <div className="flex-1 min-w-0">
@@ -398,7 +398,7 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
                                                     />
                                                 </div>
                                             </div>
-                                            <span className="text-[10px] font-black text-gray-400 w-10 text-right flex-shrink-0">
+                                            <span className="text-xs font-black text-gray-400 w-10 text-right flex-shrink-0">
                                                 {s.pct.toFixed(0)}%
                                             </span>
                                         </div>

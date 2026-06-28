@@ -235,7 +235,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
                   {!isEditing && (
                     <div className="flex items-center gap-2 shrink-0">
                       {linkedObra ? (
-                        <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 flex items-center gap-1.5">
+                        <span className="text-xs font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 flex items-center gap-1.5">
                           <HardHat className="w-3.5 h-3.5" /> {linkedObra.name}
                         </span>
                       ) : (
@@ -243,14 +243,14 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
                           <select
                             defaultValue=""
                             onChange={e => handleLinkObra(tower, e.target.value)}
-                            className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 bg-white outline-none"
+                            className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 bg-white outline-none"
                           >
                             <option value="">Vincular obra…</option>
                             {orgProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                           <button
                             onClick={() => handleCreateObra(tower)}
-                            className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5"
+                            className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
                           >
                             <Link2 className="w-3.5 h-3.5" /> Criar Obra
                           </button>
@@ -303,7 +303,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
           <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-wrap gap-6 items-center">
             <div className="flex items-center gap-2 text-gray-500">
               <BarChart2 className="w-4 h-4 text-gray-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Total Geral</span>
+              <span className="text-xs font-black uppercase tracking-widest">Total Geral</span>
             </div>
             <Metric label="Unidades" value={String(allUnits.length)} />
             <Metric label="Área Privativa" value={totalPriv > 0 ? `${fmt(totalPriv)} m²` : '—'} color="text-blue-600" />

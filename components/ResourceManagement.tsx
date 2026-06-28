@@ -768,7 +768,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                     )}
                                 </div>
                                 {group.items.length > 1 && (
-                                    <div className="mt-auto pt-4 border-t border-gray-50 flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                    <div className="mt-auto pt-4 border-t border-gray-50 flex justify-between items-center text-xs font-bold text-gray-400 uppercase tracking-widest">
                                         <span>{group.items.length} variações SINAPI</span>
                                         <button onClick={() => { setActiveTab('roles'); /* Futuro: Abrir modal de detalhamento */ }} className="text-blue-600 hover:underline">Ver Todos</button>
                                     </div>
@@ -785,7 +785,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                 <div>
                                     <h4 className="font-bold">{w.name}</h4>
                                     <p className="text-xs text-blue-600 font-medium">{resources.roles.find(r => r.id === w.roleId)?.name}</p>
-                                    <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase mt-2 inline-block">{w.source || 'Local'}</span>
+                                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase mt-2 inline-block">{w.source || 'Local'}</span>
                                 </div>
                                 <div className="flex gap-2">
                                     <button onClick={() => handleEditWorker(w)}><Edit2 className="w-4 h-4 text-gray-400" /></button>
@@ -805,7 +805,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                     <p className="text-xs text-gray-500 font-medium">
                                         {team.memberIds.length} {team.memberIds.length === 1 ? 'membro' : 'membros'}
                                     </p>
-                                    <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase mt-2 inline-block">{team.source || 'Local'}</span>
+                                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase mt-2 inline-block">{team.source || 'Local'}</span>
                                 </div>
                                 <div className="flex gap-2">
                                     <button onClick={() => handleEditTeam(team)} className="p-1 hover:bg-gray-100 rounded-lg transition-all"><Edit2 className="w-4 h-4 text-gray-400" /></button>
@@ -826,14 +826,14 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="bg-white p-6 rounded-3xl border shadow-sm">
-                                <span className="text-[10px] font-black uppercase text-gray-400 block mb-1">Ocupação Média</span>
+                                <span className="text-xs font-black uppercase text-gray-400 block mb-1">Ocupação Média</span>
                                 <div className="flex items-end gap-2">
                                     <span className="text-3xl font-black text-gray-900 font-outfit">{capacityStats.averageOccupancy}%</span>
                                     <span className="text-xs text-gray-500 mb-1.5 font-bold">do total</span>
                                 </div>
                             </div>
                             <div className="bg-white p-6 rounded-3xl border shadow-sm">
-                                <span className="text-[10px] font-black uppercase text-gray-400 block mb-1">Gargalos</span>
+                                <span className="text-xs font-black uppercase text-gray-400 block mb-1">Gargalos</span>
                                 <div className="flex items-end gap-2">
                                     <span className={`text-3xl font-black font-outfit ${capacityStats.bottleneckCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
                                         {capacityStats.bottleneckCount}
@@ -842,7 +842,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                 </div>
                             </div>
                             <div className="bg-white p-6 rounded-3xl border shadow-sm">
-                                <span className="text-[10px] font-black uppercase text-gray-400 block mb-1">Escala</span>
+                                <span className="text-xs font-black uppercase text-gray-400 block mb-1">Escala</span>
                                 <select 
                                     value={capacityScale} 
                                     onChange={(e) => setCapacityScale(e.target.value as 'day' | 'week' | 'month')}
@@ -936,7 +936,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                             </div>
                                             <div className="text-right">
                                                 <span className="block text-lg font-black text-blue-600">{Math.ceil(h.totalHours)}h</span>
-                                                <span className="text-[10px] font-bold text-gray-400">DEMANDA TOTAL</span>
+                                                <span className="text-xs font-bold text-gray-400">DEMANDA TOTAL</span>
                                             </div>
                                         </div>
                                     ))}
@@ -963,7 +963,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                              <select 
                                 value={allocationFilter}
                                 onChange={(e) => setAllocationFilter(e.target.value as 'all' | 'thisWeek' | 'next15Days' | 'thisMonth')}
-                                className="text-[10px] font-black uppercase text-gray-600 bg-white border border-gray-200 px-4 py-2.5 rounded-2xl outline-none focus:border-blue-300 transition-all hover:bg-gray-50"
+                                className="text-xs font-black uppercase text-gray-600 bg-white border border-gray-200 px-4 py-2.5 rounded-2xl outline-none focus:border-blue-300 transition-all hover:bg-gray-50"
                              >
                                 <option value="all">Todo o Cronograma</option>
                                 <option value="thisWeek">Esta Semana</option>
@@ -972,13 +972,13 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                              </select>
                              <button 
                                 onClick={() => toggleAllAssignments(true)}
-                                className="text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-5 py-2.5 rounded-2xl border border-blue-100/50 hover:bg-blue-100 transition-all flex items-center gap-2"
+                                className="text-xs font-black uppercase text-blue-600 bg-blue-50 px-5 py-2.5 rounded-2xl border border-blue-100/50 hover:bg-blue-100 transition-all flex items-center gap-2"
                              >
                                 <ChevronDown className="w-3.5 h-3.5" /> Expandir Tudo
                              </button>
                              <button 
                                 onClick={() => toggleAllAssignments(false)}
-                                className="text-[10px] font-black uppercase text-gray-500 bg-gray-50 px-5 py-2.5 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-all flex items-center gap-2"
+                                className="text-xs font-black uppercase text-gray-500 bg-gray-50 px-5 py-2.5 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-all flex items-center gap-2"
                              >
                                 <ChevronRight className="w-3.5 h-3.5" /> Recolher Tudo
                              </button>
@@ -1026,7 +1026,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                                                 {item?.status === 'CONFIRMED' ? (
                                                                     <div className="flex items-center gap-4 px-6 py-2 bg-emerald-50 rounded-2xl border border-emerald-100/50">
                                                                         <div className="text-right">
-                                                                            <span className="block text-[10px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-1">Alocado</span>
+                                                                            <span className="block text-xs font-black text-emerald-600 uppercase tracking-widest leading-none mb-1">Alocado</span>
                                                                             <div className="flex flex-col items-end">
                                                                                 <span className="text-sm font-bold text-emerald-900 underline decoration-emerald-200">{item?.worker?.name || '---'}</span>
                                                                                 {workerConflicts[item.taskId] && (
@@ -1061,12 +1061,12 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                                                 ) : item?.status === 'SUGGESTION' ? (
                                                                     <div className="flex items-center gap-4">
                                                                         <div className="text-right">
-                                                                            <span className="block text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none mb-1">Dica do Sistema</span>
+                                                                            <span className="block text-xs font-black text-blue-600 uppercase tracking-widest leading-none mb-1">Dica do Sistema</span>
                                                                             <span className="text-sm font-bold text-gray-900">{item?.suggestion?.name || '---'}</span>
                                                                         </div>
                                                                         <button 
                                                                             onClick={() => handleConfirmSuggestion(item)}
-                                                                            className="flex items-center gap-3 px-8 py-3 bg-emerald-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all hover:-translate-y-0.5 shadow-xl shadow-emerald-600/20 active:translate-y-0"
+                                                                            className="flex items-center gap-3 px-8 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all hover:-translate-y-0.5 shadow-xl shadow-emerald-600/20 active:translate-y-0"
                                                                         >
                                                                             Confirmar
                                                                         </button>
@@ -1074,10 +1074,10 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                                                 ) : (
                                                                     <div className="flex items-center gap-4">
                                                                         <div className="text-right px-5 bg-red-50 py-2.5 rounded-2xl border border-red-100/50">
-                                                                            <span className="block text-[10px] font-black text-red-600 uppercase tracking-widest">Equipe Incompleta</span>
-                                                                            <span className="text-[10px] font-bold text-red-400">Cargo não preenchido</span>
+                                                                            <span className="block text-xs font-black text-red-600 uppercase tracking-widest">Equipe Incompleta</span>
+                                                                            <span className="text-xs font-bold text-red-400">Cargo não preenchido</span>
                                                                         </div>
-                                                                        <button className="px-8 py-3 border-2 border-dashed border-gray-200 text-gray-400 rounded-2xl text-[11px] font-black uppercase tracking-widest hover:border-blue-300 hover:text-blue-500 transition-all">
+                                                                        <button className="px-8 py-3 border-2 border-dashed border-gray-200 text-gray-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-blue-300 hover:text-blue-500 transition-all">
                                                                             Escolher / Contratar
                                                                         </button>
                                                                     </div>
@@ -1188,7 +1188,7 @@ const ResourceImportModal: React.FC<{
                             )}
                             {showWorkers && filteredWorkers.length > 0 && (
                                 <div className="mb-6">
-                                    <h4 className="text-[10px] font-black uppercase mb-3 text-gray-400 tracking-widest">Trabalhadores ({filteredWorkers.length})</h4>
+                                    <h4 className="text-xs font-black uppercase mb-3 text-gray-400 tracking-widest">Trabalhadores ({filteredWorkers.length})</h4>
                                     <div className="grid grid-cols-2 gap-3">
                                         {filteredWorkers.map(w => {
                                             const roleName = selectedOrg?.resources?.roles.find(r => r.id === w.roleId)?.name || 'Sem cargo';
@@ -1201,7 +1201,7 @@ const ResourceImportModal: React.FC<{
                                                             <span className="text-sm font-bold text-gray-800">{w.name}</span>
                                                             {exists && <span className="text-[8px] text-blue-500 font-bold uppercase">No Projeto</span>}
                                                         </div>
-                                                        <span className="text-[10px] text-gray-400 font-bold uppercase">{roleName}</span>
+                                                        <span className="text-xs text-gray-400 font-bold uppercase">{roleName}</span>
                                                     </div>
                                                 </label>
                                             );
@@ -1211,7 +1211,7 @@ const ResourceImportModal: React.FC<{
                             )}
                             {showTeams && filteredTeams.length > 0 && (
                                 <div className="mb-6">
-                                    <h4 className="text-[10px] font-black uppercase mb-3 text-gray-400 tracking-widest">Equipes ({filteredTeams.length})</h4>
+                                    <h4 className="text-xs font-black uppercase mb-3 text-gray-400 tracking-widest">Equipes ({filteredTeams.length})</h4>
                                     <div className="grid grid-cols-2 gap-3">
                                         {filteredTeams.map(t => (
                                             <label key={t.id} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-all">

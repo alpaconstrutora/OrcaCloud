@@ -230,7 +230,7 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
 
                                 <div>
                                     <div className="flex flex-wrap items-center gap-2 mb-1">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{CATEGORY_LABELS[doc.category]}</span>
+                                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">{CATEGORY_LABELS[doc.category]}</span>
                                         {getExpiryBadge(doc)}
                                     </div>
                                     <h4 className="text-base font-black text-slate-900 leading-tight group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{doc.title}</h4>
@@ -253,7 +253,7 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                                 </div>
 
                                 {doc.notes && (
-                                    <p className="text-[11px] text-slate-400 font-medium italic border-t border-slate-50 pt-3">{doc.notes}</p>
+                                    <p className="text-xs text-slate-400 font-medium italic border-t border-slate-50 pt-3">{doc.notes}</p>
                                 )}
                             </div>
                         );
@@ -265,12 +265,12 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-slate-100 bg-slate-50">
-                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Colaborador</th>
-                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Título</th>
-                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Categoria</th>
-                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Criação</th>
-                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Vencimento</th>
-                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                                <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Colaborador</th>
+                                <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Título</th>
+                                <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Categoria</th>
+                                <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Criação</th>
+                                <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Vencimento</th>
+                                <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Status</th>
                                 <th className="px-4 py-3"></th>
                             </tr>
                         </thead>

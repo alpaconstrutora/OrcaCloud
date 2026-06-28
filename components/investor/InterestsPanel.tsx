@@ -96,10 +96,10 @@ const InterestsPanel: React.FC<Props> = ({ organizationId, opportunities }) => {
                         return (
                             <div key={stage} className={`rounded-2xl border p-4 space-y-3 ${colors.bg} ${colors.border}`}>
                                 <div className="flex items-center justify-between">
-                                    <span className={`text-[10px] font-black uppercase tracking-widest ${colors.text}`}>
+                                    <span className={`text-xs font-black uppercase tracking-widest ${colors.text}`}>
                                         {INTEREST_STAGE_LABELS[stage]}
                                     </span>
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${colors.text} bg-white/60`}>
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-black ${colors.text} bg-white/60`}>
                                         {items.length}
                                     </span>
                                 </div>
@@ -108,13 +108,13 @@ const InterestsPanel: React.FC<Props> = ({ organizationId, opportunities }) => {
                                     <div key={item.id} className="bg-white rounded-xl p-4 shadow-sm space-y-3">
                                         <div>
                                             <p className="font-bold text-gray-900 text-sm">{item.contact_name}</p>
-                                            <span className="inline-flex px-2 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-bold rounded-full mt-1">
+                                            <span className="inline-flex px-2 py-0.5 bg-gray-100 text-gray-500 text-xs font-bold rounded-full mt-1">
                                                 {INTEREST_ROLE_LABELS[item.role]}
                                             </span>
                                         </div>
 
                                         {filterOpp === 'all' && (
-                                            <p className="text-[10px] text-gray-400 font-medium truncate">
+                                            <p className="text-xs text-gray-400 font-medium truncate">
                                                 {oppTitle(item.opportunity_id)}
                                             </p>
                                         )}
@@ -152,7 +152,7 @@ const InterestsPanel: React.FC<Props> = ({ organizationId, opportunities }) => {
                                                 value={item.stage ?? 'lead'}
                                                 disabled={updating === item.id}
                                                 onChange={e => handleStageChange(item.id!, e.target.value as InterestStage)}
-                                                className="w-full appearance-none pl-3 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-[10px] font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 cursor-pointer disabled:opacity-50"
+                                                className="w-full appearance-none pl-3 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 cursor-pointer disabled:opacity-50"
                                             >
                                                 {STAGES.map(s => (
                                                     <option key={s} value={s}>{INTEREST_STAGE_LABELS[s]}</option>

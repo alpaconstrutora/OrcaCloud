@@ -285,7 +285,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                                 <div className="text-xs text-gray-500 flex items-center gap-1">
                                                     <span className="truncate max-w-[200px]">{project.settings?.location || 'Local não informado'}</span>
                                                     {(project.investor_id ?? project.settings?.investorId) && (project.investor_id ?? project.settings?.investorId) !== initialData?.id && (
-                                                        <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded text-[10px] ml-1">
+                                                        <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded text-xs ml-1">
                                                             Já vinculado a outro
                                                         </span>
                                                     )}
@@ -293,7 +293,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                                 {selectedProjectIds.has(project.id) && (
                                                     <div className="flex gap-3 mt-2" onClick={(e) => e.preventDefault()}>
                                                         <label className="flex flex-col gap-1">
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Participação (%)</span>
+                                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Participação (%)</span>
                                                             <input
                                                                 type="number" min="0" max="100" step="0.01"
                                                                 value={participations[project.id]?.ownership_pct ?? ''}
@@ -303,7 +303,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                                             />
                                                         </label>
                                                         <label className="flex flex-col gap-1">
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Capital Comprometido (R$)</span>
+                                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Capital Comprometido (R$)</span>
                                                             <input
                                                                 type="number" min="0" step="0.01"
                                                                 value={participations[project.id]?.committed_amount ?? ''}
@@ -316,7 +316,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setManagingProject({ id: project.id, name: project.name, orgId: project.settings.organizationId })}
-                                                                className="self-end px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-purple-100 transition-colors"
+                                                                className="self-end px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-purple-100 transition-colors"
                                                             >
                                                                 Gerir Aportes
                                                             </button>

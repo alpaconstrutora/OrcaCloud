@@ -48,7 +48,7 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                                         <div key={alloc.id} className="flex items-center justify-between p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
                                             <div>
                                                 <div className="text-sm font-black text-gray-900">{name}</div>
-                                                <div className="text-[10px] text-gray-500 mt-0.5">
+                                                <div className="text-xs text-gray-500 mt-0.5">
                                                     {alloc.resourceType === 'TEAM' ? 'Equipe' : alloc.resourceType === 'WORKER' ? 'Trabalhador' : 'Função'} • {alloc.quantity} unid. • {alloc.hoursPerDay}h/dia
                                                 </div>
                                             </div>
@@ -94,14 +94,14 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                             >
                                 <div className="space-y-4">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Tipo de Recurso</label>
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Tipo de Recurso</label>
                                         <div className="flex bg-gray-100 p-1 rounded-xl">
                                             {(['ROLE', 'WORKER', 'TEAM'] as const).map(type => (
                                                 <button
                                                     key={type}
                                                     type="button"
                                                     onClick={() => setAllocationType(type)}
-                                                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${allocationType === type ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${allocationType === type ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                                 >
                                                     {type === 'ROLE' ? 'Função' : type === 'WORKER' ? 'Trabalhador' : 'Equipe'}
                                                 </button>
@@ -110,7 +110,7 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">
                                             {allocationType === 'ROLE' ? 'Função/Recurso' : allocationType === 'WORKER' ? 'Trabalhador' : 'Equipe'}
                                         </label>
                                         <select name="resourceId" required className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none bg-white text-sm">
@@ -129,11 +129,11 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Quantidade</label>
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Quantidade</label>
                                         <input name="quantity" type="number" step="0.1" defaultValue="1" required className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Horas/Dia</label>
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Horas/Dia</label>
                                         <input name="hoursPerDay" type="number" step="0.5" defaultValue="8" required className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
                                     </div>
                                 </div>

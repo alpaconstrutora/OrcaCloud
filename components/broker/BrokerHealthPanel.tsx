@@ -91,24 +91,24 @@ const BrokerHealthPanel: React.FC<BrokerHealthPanelProps> = ({ organizationId })
                 {/* Stock Donut (CSS) */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-white/5 rounded-xl p-4 backdrop-blur-sm">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">Total</p>
+                        <p className="text-xs text-slate-400 font-bold uppercase">Total</p>
                         <p className="text-3xl font-black">{health.total_units}</p>
-                        <p className="text-[10px] text-slate-500 mt-1">unidades</p>
+                        <p className="text-xs text-slate-500 mt-1">unidades</p>
                     </div>
                     <div className="bg-emerald-500/10 rounded-xl p-4 backdrop-blur-sm border border-emerald-500/20">
-                        <p className="text-[10px] text-emerald-300 font-bold uppercase">Vendidas</p>
+                        <p className="text-xs text-emerald-300 font-bold uppercase">Vendidas</p>
                         <p className="text-3xl font-black text-emerald-400">{health.sold_units}</p>
-                        <p className="text-[10px] text-emerald-400/60 mt-1">{soldPct.toFixed(0)}%</p>
+                        <p className="text-xs text-emerald-400/60 mt-1">{soldPct.toFixed(0)}%</p>
                     </div>
                     <div className="bg-amber-500/10 rounded-xl p-4 backdrop-blur-sm border border-amber-500/20">
-                        <p className="text-[10px] text-amber-300 font-bold uppercase">Reservadas</p>
+                        <p className="text-xs text-amber-300 font-bold uppercase">Reservadas</p>
                         <p className="text-3xl font-black text-amber-400">{health.reserved_units}</p>
-                        <p className="text-[10px] text-amber-400/60 mt-1">{reservedPct.toFixed(0)}%</p>
+                        <p className="text-xs text-amber-400/60 mt-1">{reservedPct.toFixed(0)}%</p>
                     </div>
                     <div className="bg-blue-500/10 rounded-xl p-4 backdrop-blur-sm border border-blue-500/20">
-                        <p className="text-[10px] text-blue-300 font-bold uppercase">Disponíveis</p>
+                        <p className="text-xs text-blue-300 font-bold uppercase">Disponíveis</p>
                         <p className="text-3xl font-black text-blue-400">{health.available_units}</p>
-                        <p className="text-[10px] text-blue-400/60 mt-1">{availablePct.toFixed(0)}%</p>
+                        <p className="text-xs text-blue-400/60 mt-1">{availablePct.toFixed(0)}%</p>
                     </div>
                 </div>
 
@@ -119,9 +119,9 @@ const BrokerHealthPanel: React.FC<BrokerHealthPanelProps> = ({ organizationId })
                     <div className="bg-blue-500 h-full transition-all" style={{ width: `${availablePct}%` }} title="Disponíveis" />
                 </div>
                 <div className="flex gap-4 mt-2">
-                    <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2 h-2 rounded-full bg-emerald-500" />Vendidas</span>
-                    <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2 h-2 rounded-full bg-amber-500" />Reservadas</span>
-                    <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2 h-2 rounded-full bg-blue-500" />Disponíveis</span>
+                    <span className="flex items-center gap-1 text-xs text-slate-400"><span className="w-2 h-2 rounded-full bg-emerald-500" />Vendidas</span>
+                    <span className="flex items-center gap-1 text-xs text-slate-400"><span className="w-2 h-2 rounded-full bg-amber-500" />Reservadas</span>
+                    <span className="flex items-center gap-1 text-xs text-slate-400"><span className="w-2 h-2 rounded-full bg-blue-500" />Disponíveis</span>
                 </div>
             </div>
 
@@ -130,9 +130,9 @@ const BrokerHealthPanel: React.FC<BrokerHealthPanelProps> = ({ organizationId })
                 <div className={`rounded-2xl p-5 border shadow-sm ${ivvBg}`}>
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">IVV</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">IVV</p>
                             <p className={`text-3xl font-black ${ivvColor} mt-1`}>{health.ivv}%</p>
-                            <p className="text-[10px] text-gray-400 mt-0.5">Índ. Veloc. de Vendas/mês</p>
+                            <p className="text-xs text-gray-400 mt-0.5">Índ. Veloc. de Vendas/mês</p>
                         </div>
                         <Gauge className={`w-6 h-6 ${ivvColor}`} />
                     </div>
@@ -141,7 +141,7 @@ const BrokerHealthPanel: React.FC<BrokerHealthPanelProps> = ({ organizationId })
                 <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Estoque Esgota Em</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Estoque Esgota Em</p>
                             <p className="text-3xl font-black text-gray-900 mt-1">{health.months_to_sell}<span className="text-lg text-gray-400"> meses</span></p>
                         </div>
                         <Calendar className="w-6 h-6 text-gray-400" />
@@ -151,7 +151,7 @@ const BrokerHealthPanel: React.FC<BrokerHealthPanelProps> = ({ organizationId })
                 <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Canal Dominante</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Canal Dominante</p>
                             <p className="text-xl font-black text-gray-900 mt-1">{health.top_channel}</p>
                         </div>
                         <Target className="w-6 h-6 text-gray-400" />
@@ -161,7 +161,7 @@ const BrokerHealthPanel: React.FC<BrokerHealthPanelProps> = ({ organizationId })
                 <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Ticket Médio</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Ticket Médio</p>
                             <p className="text-xl font-black text-gray-900 mt-1">{formatCurrency(health.avg_ticket)}</p>
                         </div>
                         <TrendingUp className="w-6 h-6 text-gray-400" />
@@ -252,8 +252,8 @@ const BrokerHealthPanel: React.FC<BrokerHealthPanelProps> = ({ organizationId })
                         })}
                     </div>
                     <div className="flex gap-4 mt-3 pt-3 border-t border-gray-100">
-                        <span className="flex items-center gap-1 text-[10px] text-gray-400"><span className="w-3 h-3 rounded bg-emerald-500 inline-block" />Real</span>
-                        <span className="flex items-center gap-1 text-[10px] text-gray-400"><span className="w-3 h-3 rounded bg-indigo-100 inline-block" />Projetado</span>
+                        <span className="flex items-center gap-1 text-xs text-gray-400"><span className="w-3 h-3 rounded bg-emerald-500 inline-block" />Real</span>
+                        <span className="flex items-center gap-1 text-xs text-gray-400"><span className="w-3 h-3 rounded bg-indigo-100 inline-block" />Projetado</span>
                     </div>
                 </div>
             </div>

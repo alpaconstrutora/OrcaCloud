@@ -368,7 +368,7 @@ const TasksList: React.FC<Props> = ({
               )}
             </button>
             {children.length > 0 && (
-              <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
+              <span className="text-xs font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
                 {children.length}
               </span>
             )}
@@ -381,7 +381,7 @@ const TasksList: React.FC<Props> = ({
         <td key="assignee" className={COL}>
           {assignee ? (
             <div className="flex items-center gap-2">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black text-white flex-shrink-0 ${avatarBg(assignee.name)}`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white flex-shrink-0 ${avatarBg(assignee.name)}`}>
                 {initials(assignee.name)}
               </div>
               <span className="truncate max-w-[110px] text-slate-700">{assignee.name}</span>
@@ -445,7 +445,7 @@ const TasksList: React.FC<Props> = ({
       // ── Origem ────────────────────────────────────────────────────────────
       source: (
         <td key="source" className={COL}>
-          <span className={`text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-full ${mod.cls}`}>
+          <span className={`text-xs font-black uppercase tracking-wide px-2 py-1 rounded-full ${mod.cls}`}>
             {mod.label}
           </span>
         </td>
@@ -501,7 +501,7 @@ const TasksList: React.FC<Props> = ({
             <button
               onClick={() => onAddSubtask(t)}
               title="Adicionar subtarefa"
-              className="flex items-center gap-1 px-2 py-1 rounded border border-slate-200 bg-white text-slate-400 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors text-[11px] font-bold"
+              className="flex items-center gap-1 px-2 py-1 rounded border border-slate-200 bg-white text-slate-400 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors text-xs font-bold"
             >
               <Plus className="w-3 h-3" />subtarefa
             </button>
@@ -634,24 +634,24 @@ const TasksList: React.FC<Props> = ({
               {/* chips de metadados */}
               <div className="flex items-center gap-1.5 flex-wrap mt-2">
                 {t.due_date && (
-                  <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg ${isOverdue(t.due_date) ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg ${isOverdue(t.due_date) ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
                     {isOverdue(t.due_date) ? <AlertTriangle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
                     {fmt(t.due_date)}
                   </span>
                 )}
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-600">
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-600">
                   <Flag className={`w-3 h-3 fill-current ${prio.flag}`} /> {prio.label}
                 </span>
                 {taskStatus && (
                   <span
-                    className="inline-flex items-center text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-lg"
+                    className="inline-flex items-center text-xs font-black uppercase tracking-wide px-2 py-1 rounded-lg"
                     style={{ backgroundColor: taskStatus.color, color: '#fff' }}
                   >
                     {taskStatus.name}
                   </span>
                 )}
                 {proj && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-500">
+                  <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-500">
                     <Building2 className="w-3 h-3 flex-shrink-0" /> <span className="truncate max-w-[110px]">{proj.name}</span>
                   </span>
                 )}
@@ -678,12 +678,12 @@ const TasksList: React.FC<Props> = ({
           {/* rodapé — subtarefas */}
           <div className="flex items-center gap-4 mt-2.5 pl-9">
             {children.length > 0 && (
-              <button onClick={() => toggleExpand(t.id)} className="flex items-center gap-1 text-[11px] font-bold text-slate-400">
+              <button onClick={() => toggleExpand(t.id)} className="flex items-center gap-1 text-xs font-bold text-slate-400">
                 {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                 {children.length} subtarefa{children.length > 1 ? 's' : ''}
               </button>
             )}
-            <button onClick={() => onAddSubtask(t)} className="flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-blue-600">
+            <button onClick={() => onAddSubtask(t)} className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-blue-600">
               <Plus className="w-3.5 h-3.5" /> Subtarefa
             </button>
           </div>
@@ -735,7 +735,7 @@ const TasksList: React.FC<Props> = ({
 
             <span className="font-bold text-sm text-slate-800">{group.label}</span>
 
-            <span className="text-[11px] font-bold text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+            <span className="text-xs font-bold text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
               {group.tasks.length}
             </span>
 
@@ -744,7 +744,7 @@ const TasksList: React.FC<Props> = ({
             {onAddTask && (
               <button
                 onClick={e => { e.stopPropagation(); onAddTask(buildDefaults(group.key)) }}
-                className="opacity-0 group-hover/gh:opacity-100 flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-blue-600 transition-all px-2 py-1 rounded hover:bg-blue-50 flex-shrink-0"
+                className="opacity-0 group-hover/gh:opacity-100 flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-blue-600 transition-all px-2 py-1 rounded hover:bg-blue-50 flex-shrink-0"
               >
                 <Plus className="w-3 h-3" /> Tarefa
               </button>
@@ -826,7 +826,7 @@ const TasksList: React.FC<Props> = ({
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
           Filtros
-          {activeFilters && <span className="bg-white/20 text-white text-[10px] font-black px-1.5 rounded-md">●</span>}
+          {activeFilters && <span className="bg-white/20 text-white text-xs font-black px-1.5 rounded-md">●</span>}
         </button>
         {(expandableIds.length > 0 || groupBy !== 'none') && (
           <button
@@ -843,7 +843,7 @@ const TasksList: React.FC<Props> = ({
             <X className="w-3 h-3" /> Limpar
           </button>
         )}
-        <span className="ml-auto text-[11px] font-bold text-slate-400">{filtered.length} tarefa{filtered.length !== 1 ? 's' : ''}</span>
+        <span className="ml-auto text-xs font-bold text-slate-400">{filtered.length} tarefa{filtered.length !== 1 ? 's' : ''}</span>
         <ColumnConfigButton
           columns={TASKS_LIST_COLUMNS}
           visibleColumns={taskVisibility.visibleColumns}
@@ -988,7 +988,7 @@ const TasksList: React.FC<Props> = ({
                     </span>
                     {group.color && <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: group.color }} />}
                     <span className="font-black text-sm text-slate-800">{group.label}</span>
-                    <span className="text-[11px] font-bold text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                    <span className="text-xs font-bold text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
                       {group.tasks.length}
                     </span>
                   </button>

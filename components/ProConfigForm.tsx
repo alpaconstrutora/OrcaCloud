@@ -176,7 +176,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
         </button>
         <div>
           <h1 className="text-base font-black text-slate-800">Configurações do Perfil</h1>
-          <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">ÒPURA Pro</p>
+          <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">ÒPURA Pro</p>
         </div>
       </div>
 
@@ -185,7 +185,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
         
         {/* Bloco: Identidade Fantasia */}
         <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-          <span className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
+          <span className="text-xs font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
             <User className="w-3.5 h-3.5" />
             Dados do Profissional
           </span>
@@ -221,7 +221,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
 
         {/* Bloco: Dados de Faturamento PIX */}
         <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-          <span className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
+          <span className="text-xs font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
             <Landmark className="w-3.5 h-3.5" />
             Faturamento & Pix
           </span>
@@ -258,7 +258,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
 
         {/* Bloco: Layout de Documentos */}
         <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-          <span className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
+          <span className="text-xs font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
             <FileText className="w-3.5 h-3.5" />
             Textos do Documento
           </span>
@@ -277,7 +277,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
 
         {/* Bloco: Modelos Customizados */}
         <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-          <span className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
+          <span className="text-xs font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" />
             Modelos de Orçamentos Customizados
           </span>
@@ -334,7 +334,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
 
             {/* Cálculo do Total Estimado */}
             {tempValor && tempQuantidade && (
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200/50 flex justify-between items-center text-[10px] font-bold text-slate-500">
+              <div className="bg-white p-2.5 rounded-xl border border-slate-200/50 flex justify-between items-center text-xs font-bold text-slate-500">
                 <span>Cálculo do Total Estimado:</span>
                 <span className="text-teal-600 font-black">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
@@ -358,7 +358,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               {tempId && (
                 <button
                   onClick={handleCancelEdit}
-                  className="px-3 py-1.5 border border-slate-200 text-slate-500 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-1"
+                  className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-1"
                 >
                   <X className="w-3 h-3" />
                   Cancelar
@@ -366,7 +366,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               )}
               <button
                 onClick={handleAddOrUpdateTemplate}
-                className="px-3 py-1.5 bg-teal-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-teal-600 transition-colors flex items-center gap-1"
+                className="px-3 py-1.5 bg-teal-500 text-white text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-teal-600 transition-colors flex items-center gap-1"
               >
                 {tempId ? <Sparkles className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
                 {tempId ? 'Salvar Modelo' : 'Adicionar'}
@@ -377,7 +377,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           {/* Lista de templates cadastrados */}
           {templatesCustom.length === 0 ? (
             <div className="text-center py-6 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-              <p className="text-[10px] font-medium text-slate-400">Nenhum modelo customizado cadastrado ainda.</p>
+              <p className="text-xs font-medium text-slate-400">Nenhum modelo customizado cadastrado ainda.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -401,7 +401,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                             </span>
                           )}
                         </div>
-                        <p className="text-[10px] text-slate-500 font-medium line-clamp-2">{t.descricao}</p>
+                        <p className="text-xs text-slate-500 font-medium line-clamp-2">{t.descricao}</p>
                       </div>
                       <div className="flex items-center gap-1">
                         <button

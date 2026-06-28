@@ -35,7 +35,7 @@ const ADMISSION_CHECKLIST_ITEMS = [
 
 const InputGroup: React.FC<{ label: string; children: React.ReactNode; icon?: React.ElementType }> = ({ label, children, icon: Icon }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
             {Icon && <Icon className="w-3 h-3" />}
             {label}
         </label>
@@ -279,7 +279,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 ${
+                            className={`flex items-center gap-2 px-4 py-3 text-xs font-black uppercase tracking-widest transition-all border-b-2 ${
                                 activeTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'
                             }`}
                         >
@@ -392,7 +392,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                             if (!hasSalary) return null;
                                             const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 });
                                             return (
-                                                <p className="text-[11px] text-violet-600 font-medium px-1">
+                                                <p className="text-xs text-violet-600 font-medium px-1">
                                                     Faixa salarial: {sel.salario_minimo != null ? fmt(sel.salario_minimo) : '—'} – {sel.salario_maximo != null ? fmt(sel.salario_maximo) : '—'}
                                                 </p>
                                             );
@@ -605,14 +605,14 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                 <Wallet className="text-indigo-600 mt-1" size={20} />
                                 <div>
                                     <h4 className="text-sm font-black text-indigo-900 tracking-tight">Rubricas Recorrentes Individuais</h4>
-                                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-1">Selecione rubricas extras que serão incluídas automaticamente para este colaborador todas as folhas.</p>
+                                    <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-1">Selecione rubricas extras que serão incluídas automaticamente para este colaborador todas as folhas.</p>
                                 </div>
                             </div>
 
                             {loadingRubrics ? (
                                 <div className="flex flex-col items-center justify-center py-12 space-y-3">
                                     <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Carregando rubricas...</span>
+                                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando rubricas...</span>
                                 </div>
                             ) : (
                                 <div className="space-y-4">
@@ -637,7 +637,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                                                 : 'bg-white border-slate-100 text-slate-600 hover:border-slate-300 shadow-sm'}`}
                                                     >
                                                         <div className="flex items-center gap-3">
-                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black ${isSelected ? 'bg-white/20' : 'bg-slate-100 text-slate-400'}`}>
+                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black ${isSelected ? 'bg-white/20' : 'bg-slate-100 text-slate-400'}`}>
                                                                 {rubric.code.substring(0, 3)}
                                                             </div>
                                                             <div>
@@ -656,7 +656,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                         ) : (
                                             <div className="text-center py-10 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
                                                 <Info className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nenhuma rubrica automática customizada disponível.</p>
+                                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Nenhuma rubrica automática customizada disponível.</p>
                                                 <p className="text-[9px] text-slate-400 mt-1 italic">Vá em Rubricas e certifique-se de que há rubricas marcadas como "Automática" mas não como "Padrão CLT".</p>
                                             </div>
                                         )}
@@ -823,7 +823,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                 <CreditCard className="text-emerald-600 mt-0.5 shrink-0" size={18} />
                                 <div>
                                     <p className="text-xs font-black text-emerald-900">Dados Bancários para Pagamento</p>
-                                    <p className="text-[10px] text-emerald-700 mt-0.5">Informações utilizadas para transferência de salário e benefícios.</p>
+                                    <p className="text-xs text-emerald-700 mt-0.5">Informações utilizadas para transferência de salário e benefícios.</p>
                                 </div>
                             </div>
                             <div>

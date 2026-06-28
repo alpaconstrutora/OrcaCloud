@@ -170,7 +170,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                 {/* Dynamic Rating Card */}
                 <div className={`px-8 py-4 rounded-2xl border ${ratingBg} flex items-center gap-6 shadow-sm`}>
                     <div>
-                        <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Rating Opura</span>
+                        <span className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-1">Rating Opura</span>
                         <span className={`block text-4xl font-black tracking-tighter ${ratingColor}`}>{rating}</span>
                     </div>
                 </div>
@@ -310,7 +310,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
 
                                     {/* Small label for ESG category */}
                                     <div className="absolute top-4 right-4">
-                                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${ini.category === 'E' ? 'text-emerald-700 bg-emerald-100' :
+                                        <span className={`text-xs font-black px-1.5 py-0.5 rounded ${ini.category === 'E' ? 'text-emerald-700 bg-emerald-100' :
                                             ini.category === 'S' ? 'text-blue-700 bg-blue-100' :
                                                 'text-indigo-700 bg-indigo-100'
                                             }`}>

@@ -185,7 +185,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={(e) => handleDelete(e, item)} className="p-1.5 hover:bg-rose-50 text-rose-400 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>
-                  <span className="flex items-center gap-1.5 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
+                  <span className="flex items-center gap-1.5 text-blue-500 font-bold text-xs uppercase tracking-wider">
                     Abrir <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                   </span>
                 </div>

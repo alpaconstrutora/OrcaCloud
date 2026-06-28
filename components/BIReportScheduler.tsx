@@ -144,13 +144,13 @@ const BIReportScheduler: React.FC<Props> = ({
                 <div className="flex items-center gap-2">
                     {summary && (
                         <button onClick={handleDownload}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600">
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600">
                             <Download size={12} /> Baixar HTML
                         </button>
                     )}
                     <button
                         onClick={() => setEditing(emptySchedule(orgId))}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-blue-700 transition-colors">
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-blue-700 transition-colors">
                         <Plus size={12} /> Novo Agendamento
                     </button>
                 </div>
@@ -179,7 +179,7 @@ const BIReportScheduler: React.FC<Props> = ({
                             <div className={`w-2 h-2 rounded-full shrink-0 ${s.active ? 'bg-emerald-500' : 'bg-gray-300'}`} />
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-bold text-gray-800 dark:text-gray-100 truncate">{s.name}</p>
-                                <p className="text-[11px] text-gray-400 mt-0.5">
+                                <p className="text-xs text-gray-400 mt-0.5">
                                     {FREQ_LABEL[s.frequency]}
                                     {s.frequency === 'weekly' && s.day_of_week != null ? ` — ${DOW_LABEL[s.day_of_week]}s` : ''}
                                     {s.frequency === 'monthly' && s.day_of_month ? ` — dia ${s.day_of_month}` : ''}
@@ -187,7 +187,7 @@ const BIReportScheduler: React.FC<Props> = ({
                                     {' · '}{s.recipients.length} destinatário(s)
                                 </p>
                                 {s.last_sent_at && (
-                                    <p className="text-[10px] text-gray-300 flex items-center gap-1 mt-0.5">
+                                    <p className="text-xs text-gray-300 flex items-center gap-1 mt-0.5">
                                         <Clock size={10} /> Último envio: {new Date(s.last_sent_at).toLocaleDateString('pt-BR')}
                                     </p>
                                 )}
@@ -278,7 +278,7 @@ const BIReportScheduler: React.FC<Props> = ({
                                 <input type="number" min={0} max={23} className={inputCls}
                                     value={editing.hour_utc}
                                     onChange={e => setEditing({ ...editing, hour_utc: Number(e.target.value) })} />
-                                <p className="text-[10px] text-gray-400 mt-1">7 UTC = ~4h–8h BRT</p>
+                                <p className="text-xs text-gray-400 mt-1">7 UTC = ~4h–8h BRT</p>
                             </div>
                         </div>
 

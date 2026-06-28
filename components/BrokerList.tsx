@@ -215,7 +215,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                     />
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Filtrar:</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Filtrar:</span>
                     <select
                         value={statusFilter}
                         onChange={e => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
@@ -227,7 +227,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                     </select>
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
                     <select
                         value={sortBy}
                         onChange={e => setSortBy(e.target.value)}
@@ -299,7 +299,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                 {tableColumns.visibleColumns.includes('agency') && (
                                     <SortableHeader label="Imobiliária" colKey="agency" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
                                 )}
-                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
+                                <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -319,7 +319,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
                                         <td className="px-6 py-4">
-                                            <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${broker.is_active
+                                            <span className={`text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${broker.is_active
                                                 ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
                                                 : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
                                                 {broker.is_active ? 'Ativo' : 'Inativo'}
@@ -377,7 +377,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                         </div>
                                         <div>
                                             <h3 className="text-base font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{broker.name}</h3>
-                                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${broker.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
+                                            <span className={`text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${broker.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
                                                 {broker.is_active ? 'Ativo' : 'Inativo'}
                                             </span>
                                         </div>
@@ -397,18 +397,18 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                             {broker.phone}
                                         </div>
                                     )}
-                                    <div className="flex items-center justify-between text-[11px] pt-1">
+                                    <div className="flex items-center justify-between text-xs pt-1">
                                         <span className="text-gray-400 uppercase tracking-widest font-bold">CRECI</span>
                                         <span className="text-gray-900 font-bold bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{broker.creci || '-'}</span>
                                     </div>
                                     {broker.agency_name && (
-                                        <div className="flex items-center justify-between text-[11px]">
+                                        <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-400 uppercase tracking-widest font-bold">Imobiliária</span>
                                             <span className="text-gray-900 font-semibold truncate ml-2">{broker.agency_name}</span>
                                         </div>
                                     )}
                                     {broker.commission_rate !== undefined && (
-                                        <div className="flex items-center justify-between text-[11px]">
+                                        <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-400 uppercase tracking-widest font-bold">Comissão</span>
                                             <span className="text-gray-900 font-bold">{broker.commission_rate}%</span>
                                         </div>
@@ -454,11 +454,11 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                         ) : tokenModal.token?.is_active ? (
                             <div className="space-y-4">
                                 <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
-                                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Link ativo</p>
+                                    <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">Link ativo</p>
                                     <p className="text-xs text-gray-700 font-mono break-all leading-relaxed">
                                         {brokerPortalService.buildPortalUrl(tokenModal.token.token)}
                                     </p>
-                                    <p className="text-[10px] text-gray-400 mt-2">
+                                    <p className="text-xs text-gray-400 mt-2">
                                         Expira em: {new Date(tokenModal.token.expires_at).toLocaleDateString('pt-BR')}
                                         {tokenModal.token.last_used_at && ` · Último acesso: ${new Date(tokenModal.token.last_used_at).toLocaleDateString('pt-BR')}`}
                                     </p>

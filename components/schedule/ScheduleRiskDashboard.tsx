@@ -250,7 +250,7 @@ export const ScheduleRiskDashboard: React.FC<ScheduleRiskDashboardProps> = ({
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="text-right">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Saúde da Obra</p>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Saúde da Obra</p>
                             <p className={`text-2xl font-black ${healthColor}`}>{healthScore}<span className="text-sm font-bold text-gray-300">/100</span></p>
                         </div>
                         <div className={`w-12 h-12 rounded-full border-4 ${healthScore >= 75 ? 'border-emerald-200' : healthScore >= 50 ? 'border-amber-200' : 'border-red-200'} flex items-center justify-center`}>
@@ -287,7 +287,7 @@ export const ScheduleRiskDashboard: React.FC<ScheduleRiskDashboardProps> = ({
                                     <Icon className="w-5 h-5" />
                                 </div>
                                 {highInCategory > 0 && (
-                                    <span className="px-2 py-0.5 text-[10px] font-black bg-red-100 text-red-600 rounded-full animate-pulse">
+                                    <span className="px-2 py-0.5 text-xs font-black bg-red-100 text-red-600 rounded-full animate-pulse">
                                         {highInCategory} crítico{highInCategory > 1 ? 's' : ''}
                                     </span>
                                 )}
@@ -315,7 +315,7 @@ export const ScheduleRiskDashboard: React.FC<ScheduleRiskDashboardProps> = ({
                             <h3 className="text-sm font-black text-gray-800">
                                 Riscos de {CATEGORY_CONFIG[expandedCategory as keyof typeof CATEGORY_CONFIG]?.label}
                             </h3>
-                            <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                            <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                                 {kpis.byCategory[expandedCategory as keyof typeof kpis.byCategory]?.length || 0} encontrados
                             </span>
                         </div>
@@ -324,7 +324,7 @@ export const ScheduleRiskDashboard: React.FC<ScheduleRiskDashboardProps> = ({
                             <div className="flex flex-col items-center justify-center py-12 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
                                 <CheckCircle2 className="w-10 h-10 text-emerald-300 mb-3" />
                                 <p className="text-sm font-bold text-gray-400">Nenhum risco identificado</p>
-                                <p className="text-[10px] text-gray-300 mt-1">Tudo sob controle nesta categoria</p>
+                                <p className="text-xs text-gray-300 mt-1">Tudo sob controle nesta categoria</p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -343,10 +343,10 @@ export const ScheduleRiskDashboard: React.FC<ScheduleRiskDashboardProps> = ({
                                                     {severityConf.label}
                                                 </span>
                                             </div>
-                                            <p className="text-[11px] text-gray-600 leading-relaxed mb-2">{risk.description}</p>
+                                            <p className="text-xs text-gray-600 leading-relaxed mb-2">{risk.description}</p>
                                             <div className="flex items-start gap-1.5 bg-white/60 rounded-lg px-2.5 py-1.5">
                                                 <TrendingUp className="w-3 h-3 text-blue-500 mt-0.5 shrink-0" />
-                                                <p className="text-[10px] font-medium text-blue-700">{risk.action}</p>
+                                                <p className="text-xs font-medium text-blue-700">{risk.action}</p>
                                             </div>
                                         </div>
                                     );
@@ -360,7 +360,7 @@ export const ScheduleRiskDashboard: React.FC<ScheduleRiskDashboardProps> = ({
                     <div className="flex flex-col items-center justify-center py-12 bg-gray-50/30 rounded-2xl border border-dashed border-gray-200">
                         <ShieldAlert className="w-10 h-10 text-gray-200 mb-3" />
                         <p className="text-sm font-bold text-gray-400">Selecione uma categoria acima</p>
-                        <p className="text-[10px] text-gray-300 mt-1">Clique em um dos cards para ver os riscos detalhados</p>
+                        <p className="text-xs text-gray-300 mt-1">Clique em um dos cards para ver os riscos detalhados</p>
                     </div>
                 )}
 
@@ -370,20 +370,20 @@ export const ScheduleRiskDashboard: React.FC<ScheduleRiskDashboardProps> = ({
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-1.5">
                                 <div className="w-2 h-2 rounded-full bg-red-500" />
-                                <span className="text-[10px] font-bold text-gray-500">{risks.filter(r => r.severity === 'high').length} Alto</span>
+                                <span className="text-xs font-bold text-gray-500">{risks.filter(r => r.severity === 'high').length} Alto</span>
                             </div>
                             <div className="flex items-center gap-1.5">
                                 <div className="w-2 h-2 rounded-full bg-amber-500" />
-                                <span className="text-[10px] font-bold text-gray-500">{risks.filter(r => r.severity === 'medium').length} Médio</span>
+                                <span className="text-xs font-bold text-gray-500">{risks.filter(r => r.severity === 'medium').length} Médio</span>
                             </div>
                             <div className="flex items-center gap-1.5">
                                 <div className="w-2 h-2 rounded-full bg-blue-500" />
-                                <span className="text-[10px] font-bold text-gray-500">{risks.filter(r => r.severity === 'low').length} Baixo</span>
+                                <span className="text-xs font-bold text-gray-500">{risks.filter(r => r.severity === 'low').length} Baixo</span>
                             </div>
                         </div>
                         {kpis.totalCostExposure > 0 && (
                             <div className="text-right">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase">Exposição Total</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase">Exposição Total</p>
                                 <p className="text-sm font-black text-red-600">R$ {kpis.totalCostExposure.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                             </div>
                         )}

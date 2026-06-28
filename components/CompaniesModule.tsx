@@ -290,7 +290,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                     <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight italic border-l-4 border-blue-600 pl-4">
                         Empresas do Grupo
                     </h2>
-                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-1">
+                    <p className="text-gray-400 text-xs font-black uppercase tracking-widest mt-1">
                         CNPJs, tipos e configurações de cada empresa do grupo econômico.
                     </p>
                 </div>
@@ -342,7 +342,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
 
                     {/* Seção 1 — Identificação */}
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">Identificação</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">Identificação</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <Field label="Razão Social" required>
                                 <input className={inputCls} value={form.razao_social}
@@ -411,7 +411,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
 
                     {/* Seção 2 — Endereço Fiscal */}
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">Endereço Fiscal</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">Endereço Fiscal</p>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <Field label="CEP">
                                 <input className={inputCls} placeholder="00000-000" value={form.cep_fiscal}
@@ -448,7 +448,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
 
                     {/* Seção 3 — Contatos */}
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">Contatos</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">Contatos</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <Field label="Telefone">
                                 <input className={inputCls} value={form.telefone}
@@ -475,7 +475,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
 
                     {/* Seção 4 — Tributário */}
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">Tributário</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">Tributário</p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <Field label="CRT">
                                 <select className={selectCls} value={form.crt}
@@ -510,7 +510,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                     {/* Seção 5 — Grupo Econômico */}
                     {holdingOptions.length > 0 && (
                         <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">Grupo Econômico</p>
+                            <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">Grupo Econômico</p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Field label="Empresa Controladora (Holding)">
                                     <select className={selectCls} value={form.holding_id}
@@ -575,11 +575,11 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className="font-black text-gray-900 text-sm truncate">{c.razao_social}</span>
                                         {c.is_headquarters && (
-                                            <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-wide">
+                                            <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-black uppercase tracking-wide">
                                                 <Star className="w-3 h-3" /> Sede
                                             </span>
                                         )}
-                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide ${
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wide ${
                                             c.status === 'ativa' ? 'bg-green-100 text-green-700' :
                                             c.status === 'encerrada' ? 'bg-red-100 text-red-700' :
                                             c.status === 'em_implantacao' ? 'bg-blue-100 text-blue-700' :
@@ -623,7 +623,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                                 <div className="border-t border-gray-100 px-5 py-4 bg-gray-50 grid grid-cols-2 md:grid-cols-4 gap-4">
                                     {c.endereco_fiscal?.logradouro && (
                                         <div className="col-span-2">
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Endereço Fiscal</p>
+                                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">Endereço Fiscal</p>
                                             <p className="text-xs text-gray-700">
                                                 {c.endereco_fiscal.logradouro}, {c.endereco_fiscal.numero}
                                                 {c.endereco_fiscal.complemento && ` — ${c.endereco_fiscal.complemento}`}
@@ -634,26 +634,26 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                                     )}
                                     {c.email_financeiro && (
                                         <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">E-mail Financeiro</p>
+                                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">E-mail Financeiro</p>
                                             <p className="text-xs text-gray-700">{c.email_financeiro}</p>
                                         </div>
                                     )}
                                     {c.email_fiscal && (
                                         <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">E-mail Fiscal</p>
+                                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">E-mail Fiscal</p>
                                             <p className="text-xs text-gray-700">{c.email_fiscal}</p>
                                         </div>
                                     )}
                                     {c.capital_social != null && (
                                         <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Capital Social</p>
+                                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">Capital Social</p>
                                             <p className="text-xs text-gray-700">
                                                 {c.capital_social.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                             </p>
                                         </div>
                                     )}
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Módulos Ativos</p>
+                                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">Módulos Ativos</p>
                                         <p className="text-xs text-gray-700">
                                             {Object.entries(c.modulos_habilitados)
                                                 .filter(([, v]) => v)
@@ -662,9 +662,9 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                                         </p>
                                     </div>
                                     <div className="flex gap-4">
-                                        {c.retencao_iss && <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Ret. ISS</span>}
-                                        {c.retencao_inss && <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Ret. INSS</span>}
-                                        {c.retencao_irrf && <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Ret. IRRF</span>}
+                                        {c.retencao_iss && <span className="text-xs font-black uppercase text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Ret. ISS</span>}
+                                        {c.retencao_inss && <span className="text-xs font-black uppercase text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Ret. INSS</span>}
+                                        {c.retencao_irrf && <span className="text-xs font-black uppercase text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Ret. IRRF</span>}
                                     </div>
                                 </div>
                             )}

@@ -96,7 +96,7 @@ export default function DiarioReport({ organizationId }: Props) {
           { label: 'Total Créditos', val: fmt(totalCredit),      color: 'text-emerald-700' },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-5">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{s.label}</p>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-1">{s.label}</p>
             <p className={`text-2xl font-black ${s.color}`}>{s.val}</p>
           </div>
         ))}
@@ -120,7 +120,7 @@ export default function DiarioReport({ organizationId }: Props) {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 {['Data', 'Descrição', 'Origem', 'Conta Débito', 'Conta Crédito', 'Valor', 'Status'].map(h => (
-                  <th key={h} className="px-4 py-2.5 font-black uppercase tracking-wider text-[10px] text-slate-400 whitespace-nowrap">
+                  <th key={h} className="px-4 py-2.5 font-black uppercase tracking-wider text-xs text-slate-400 whitespace-nowrap">
                     {h}
                   </th>
                 ))}
@@ -136,7 +136,7 @@ export default function DiarioReport({ organizationId }: Props) {
                     {e.description}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[10px] uppercase">
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-xs uppercase">
                       {SOURCE_LABEL[e.sourceSystem ?? ''] ?? (e.sourceSystem ?? '—')}
                     </span>
                   </td>
@@ -146,7 +146,7 @@ export default function DiarioReport({ organizationId }: Props) {
                     {fmt(e.debitAmount)}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-black uppercase ${
                       e.status === 'CONCILIATED'
                         ? 'bg-emerald-50 text-emerald-700'
                         : 'bg-amber-50 text-amber-700'

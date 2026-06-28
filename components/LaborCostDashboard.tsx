@@ -75,7 +75,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                 <div className="max-w-md mx-auto p-6 bg-amber-50 rounded-2xl border border-amber-100">
                     <Users className="w-8 h-8 text-amber-600 mx-auto mb-3" />
                     <h4 className="text-sm font-black text-slate-900 uppercase">Migração Recomendada</h4>
-                    <p className="text-[11px] text-slate-500 mt-2 mb-4">
+                    <p className="text-xs text-slate-500 mt-2 mb-4">
                         Temos {legacyCount} colaboradores no sistema legado que ainda não foram importados para o novo módulo de folha de pagamento.
                     </p>
                     <button 
@@ -97,7 +97,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
                         <TrendingUp className="w-4 h-4 text-emerald-500" /> Analítico de Custos por Obra
                     </h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Baseado nos resultados da folha real</p>
+                    <p className="text-xs text-slate-400 font-bold uppercase mt-1">Baseado nos resultados da folha real</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Calendar className="w-4 h-4 text-slate-400" />
@@ -124,16 +124,16 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-slate-900 p-8 rounded-3xl text-white relative overflow-hidden group">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 -mr-16 -mt-16 rounded-full group-hover:scale-125 transition-transform duration-700" />
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Custo Total (Obra + Encargos)</p>
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Custo Total (Obra + Encargos)</p>
                             <h2 className="text-4xl font-black tracking-tighter text-white">
                                 R$ {summary.total.toLocaleString()}
                             </h2>
-                            <p className="text-[11px] text-indigo-400 font-bold mt-4 flex items-center gap-1">
+                            <p className="text-xs text-indigo-400 font-bold mt-4 flex items-center gap-1">
                                 <ArrowUpRight className="w-3 h-3" /> Folha Consolidada
                             </p>
                         </div>
                         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Alocado em Obras</p>
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Alocado em Obras</p>
                             <h2 className="text-4xl font-black tracking-tighter text-slate-900">
                                 R$ {summary.byWorksite.reduce((s: number, w: any) => s + w.cost, 0).toLocaleString()}
                             </h2>
@@ -145,11 +145,11 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                             </div>
                         </div>
                         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Administrativo / Não Alocado</p>
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Administrativo / Não Alocado</p>
                             <h2 className="text-4xl font-black tracking-tighter text-slate-900">
                                 R$ {summary.unallocated.toLocaleString()}
                             </h2>
-                            <p className="text-[11px] text-amber-500 font-bold mt-4">
+                            <p className="text-xs text-amber-500 font-bold mt-4">
                                 {((summary.unallocated / summary.total) * 100).toFixed(1)}% do total
                             </p>
                         </div>
@@ -170,7 +170,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                                             <div className="flex justify-between items-end">
                                                 <div>
                                                     <span className="text-xs font-black text-slate-900 uppercase truncate block max-w-xs">{w.name}</span>
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">{pct.toFixed(1)}% da folha</span>
+                                                    <span className="text-xs font-bold text-slate-400 uppercase">{pct.toFixed(1)}% da folha</span>
                                                 </div>
                                                 <span className="text-sm font-black text-slate-900">R$ {w.cost.toLocaleString()}</span>
                                             </div>
@@ -209,9 +209,9 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-slate-100">
-                                            <th className="text-left py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Obra</th>
-                                            <th className="text-right py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Custo Real</th>
-                                            <th className="text-right py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso</th>
+                                            <th className="text-left py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Obra</th>
+                                            <th className="text-right py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Custo Real</th>
+                                            <th className="text-right py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Peso</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
@@ -245,7 +245,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                                 </div>
                                 <div className="flex-1">
                                     <h4 className="text-xs font-black text-slate-900 uppercase">Eficiência de Rateio</h4>
-                                    <p className="text-[10px] text-slate-500 font-medium">
+                                    <p className="text-xs text-slate-500 font-medium">
                                         A alocação cobre {((summary.total - summary.unallocated) / summary.total * 100).toFixed(0)}% do custo total da empresa hoje.
                                     </p>
                                 </div>

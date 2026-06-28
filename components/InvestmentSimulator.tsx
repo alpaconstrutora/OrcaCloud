@@ -294,28 +294,28 @@ const InvestmentSimulator: React.FC = () => {
                             <p className={`text-2xl font-black ${results.metrics.irr > 0 ? 'text-emerald-500' : 'text-gray-400'}`}>
                                 {isFinite(results.metrics.irr) ? results.metrics.irr.toFixed(2) + '%' : 'N/A'}
                             </p>
-                            <p className="text-[10px] text-gray-400">ao ano projetado</p>
+                            <p className="text-xs text-gray-400">ao ano projetado</p>
                         </div>
                         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                             <p className="text-xs font-bold text-gray-400 mb-1">{mode === 'rent' ? 'Cap Rate' : 'Lucro Líquido'}</p>
                             <p className="text-2xl font-black text-blue-600">
                                 {mode === 'rent' ? results.metrics.capRate.toFixed(2) + '%' : formatCurrency(results.metrics.totalProfit)}
                             </p>
-                            <p className="text-[10px] text-gray-400">{mode === 'rent' ? 'Rentabilidade aluguel' : 'Ganho de Capital'}</p>
+                            <p className="text-xs text-gray-400">{mode === 'rent' ? 'Rentabilidade aluguel' : 'Ganho de Capital'}</p>
                         </div>
                         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                             <p className="text-xs font-bold text-gray-400 mb-1">ROI Total</p>
                             <p className="text-2xl font-black text-indigo-600">
                                 {results.metrics.roi.toFixed(1)}%
                             </p>
-                            <p className="text-[10px] text-gray-400">Retorno sobre Investimento</p>
+                            <p className="text-xs text-gray-400">Retorno sobre Investimento</p>
                         </div>
                         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                             <p className="text-xs font-bold text-gray-400 mb-1">Valor Final Proj.</p>
                             <p className="text-xl font-black text-gray-900">
                                 {formatCurrency(results.metrics.finalValue)}
                             </p>
-                            <p className="text-[10px] text-gray-400">{mode === 'rent' ? 'Patrimônio Líquido' : 'Valor de Resgate'}</p>
+                            <p className="text-xs text-gray-400">{mode === 'rent' ? 'Patrimônio Líquido' : 'Valor de Resgate'}</p>
                         </div>
                     </div>
 

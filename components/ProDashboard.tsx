@@ -172,14 +172,14 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
       {/* Resumo Financeiro - Stripe Light Style */}
       <div className="grid grid-cols-2 gap-4 bg-white border border-slate-200/50 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
         <div className="space-y-1">
-          <span className="block text-[10px] font-black uppercase tracking-widest text-teal-600">Faturamento</span>
+          <span className="block text-xs font-black uppercase tracking-widest text-teal-600">Faturamento</span>
           <span className="text-lg font-black text-slate-800">
             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(faturamento)}
           </span>
           <span className="block text-[9px] text-slate-500">Serviços concluídos</span>
         </div>
         <div className="space-y-1 border-l border-slate-100 pl-4">
-          <span className="block text-[10px] font-black uppercase tracking-widest text-cyan-600">A Receber</span>
+          <span className="block text-xs font-black uppercase tracking-widest text-cyan-600">A Receber</span>
           <span className="text-lg font-black text-slate-800">
             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pendente)}
           </span>
@@ -208,7 +208,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
                       {s.pro_orcamentos?.pro_clientes?.nome || 'Cliente sem nome'}
                     </span>
                     {s.data_agendamento && (
-                      <span className="block text-[10px] font-black uppercase text-teal-600 flex items-center gap-1">
+                      <span className="block text-xs font-black uppercase text-teal-600 flex items-center gap-1">
                         🕒 {new Date(s.data_agendamento).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                       </span>
                     )}
@@ -266,7 +266,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
                   <span className="block text-xs text-teal-600 font-semibold truncate">
                     Revisão em: {new Date(s.proximo_agendamento).toLocaleDateString('pt-BR')}
                   </span>
-                  <span className="block text-[10px] text-slate-400 truncate">
+                  <span className="block text-xs text-slate-400 truncate">
                     Serviço anterior: {s.pro_orcamentos?.descricao}
                   </span>
                 </div>
@@ -288,7 +288,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
           <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Orçamentos Enviados</h2>
           <button
             onClick={onNewOrcamento}
-            className="text-[10px] font-black uppercase tracking-widest text-teal-600 hover:text-teal-500"
+            className="text-xs font-black uppercase tracking-widest text-teal-600 hover:text-teal-500"
           >
             + Criar
           </button>
@@ -370,7 +370,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
                       {s.pro_orcamentos?.pro_clientes?.nome}
                     </span>
                     {s.data_agendamento && (
-                      <span className="block text-[10px] font-black uppercase text-teal-600 flex items-center gap-1">
+                      <span className="block text-xs font-black uppercase text-teal-600 flex items-center gap-1">
                         🕒 {new Date(s.data_agendamento).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                       </span>
                     )}

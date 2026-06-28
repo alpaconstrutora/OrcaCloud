@@ -193,7 +193,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
             ))}
           </select>
           {selectedProject?.endereco && (
-            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-2 font-medium">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-2 font-medium">
               <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0" />
               <span className="truncate">{selectedProject.endereco}</span>
             </div>
@@ -215,17 +215,17 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
             <span className="text-xs font-black text-white block truncate">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(kpis.orcamentoAtivo)}
             </span>
-            <span className="block text-[10px] text-slate-400">Verba total</span>
+            <span className="block text-xs text-slate-400">Verba total</span>
           </div>
           <div className="space-y-1 border-l border-white/5 pl-3">
             <span className="block text-[8px] font-black uppercase tracking-widest text-orange-400">Relatórios</span>
             <span className="text-xs font-black text-white block">{kpis.diariosRegistrados}</span>
-            <span className="block text-[10px] text-slate-400">Diários salvos</span>
+            <span className="block text-xs text-slate-400">Diários salvos</span>
           </div>
           <div className="space-y-1 border-l border-white/5 pl-3">
             <span className="block text-[8px] font-black uppercase tracking-widest text-blue-500">Pendente</span>
             <span className="text-xs font-black text-white block">{kpis.etapasPendentes}</span>
-            <span className="block text-[10px] text-slate-400">Etapas a fazer</span>
+            <span className="block text-xs text-slate-400">Etapas a fazer</span>
           </div>
         </div>
       )}

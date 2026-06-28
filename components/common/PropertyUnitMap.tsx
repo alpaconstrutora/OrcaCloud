@@ -124,14 +124,14 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                 
                 {/* Informações detalhadas do card (conforme imagem técnica) */}
                 <div className="flex flex-col items-center gap-0.5 mt-0.5">
-                    <span className="text-[10px] font-bold text-gray-500">
+                    <span className="text-xs font-bold text-gray-500">
                         {unit.bedrooms || unit.specs?.bedrooms || 0} dormitórios
                     </span>
-                    <span className={`text-[11px] font-black ${cfg.color}`}>{formatPrice(unitPrice)}</span>
+                    <span className={`text-xs font-black ${cfg.color}`}>{formatPrice(unitPrice)}</span>
                     <span className="text-[9px] font-bold text-gray-400">
                         {formatPrice(unitPrice / (unit.private_area || unit.area || 1))}/m²
                     </span>
-                    <span className="text-[10px] text-gray-400 font-bold">{unit.private_area || unit.area}m²</span>
+                    <span className="text-xs text-gray-400 font-bold">{unit.private_area || unit.area}m²</span>
 
                     {(() => {
                         let orientation: string | undefined = unit.sun_orientation || unit.sun_position;
@@ -169,7 +169,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
 
                         // Retorna como texto direto sem box, conforme imagem do usuário
                         return (
-                            <span className="text-[10px] font-black text-gray-500 uppercase mt-0.5 text-center leading-tight">
+                            <span className="text-xs font-black text-gray-500 uppercase mt-0.5 text-center leading-tight">
                                 {displayPosition} {displayLabel}
                             </span>
                         );
@@ -186,7 +186,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                     const dealCfg = DEAL_STATUS_CONFIG[d.status];
                     if (!dealCfg) return (
                         <div className="mt-1 flex items-center gap-1 bg-gray-100 text-gray-500 px-2 py-0.5 rounded-md w-full justify-center border border-black/5">
-                            <span className="text-[10px] font-black uppercase tracking-wider">{d.status}</span>
+                            <span className="text-xs font-black uppercase tracking-wider">{d.status}</span>
                         </div>
                     );
                     const DealIcon = dealCfg.icon;
@@ -247,17 +247,17 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
             <div className="flex items-center justify-between gap-4 p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Agrupar Por:</span>
+                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Agrupar Por:</span>
                         <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-200">
                             <button
                                 onClick={() => setGroupingMode('position')}
-                                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${groupingMode === 'position' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${groupingMode === 'position' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 Posição
                             </button>
                             <button
                                 onClick={() => setGroupingMode('orientation')}
-                                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${groupingMode === 'orientation' ? 'bg-amber-500 text-white shadow-md shadow-amber-200' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${groupingMode === 'orientation' ? 'bg-amber-500 text-white shadow-md shadow-amber-200' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 Sol
                             </button>
@@ -272,7 +272,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                         <div className="flex gap-1.5 bg-white p-1 rounded-xl shadow-sm border border-gray-200">
                             <button
                                 onClick={() => setSelectedBlock('all')}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${selectedBlock === 'all' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all ${selectedBlock === 'all' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
                             >
                                 Todas
                             </button>
@@ -280,7 +280,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                 <button
                                     key={b}
                                     onClick={() => setSelectedBlock(b)}
-                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${selectedBlock === b ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all ${selectedBlock === b ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
                                 >
                                     {b}
                                 </button>
@@ -296,7 +296,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                     {floors.map(([floor, floorUnits]) => (
                         <div key={floor} className="flex items-stretch">
                             <div className="w-20 shrink-0 flex items-center justify-center bg-gray-50 border-r border-gray-100">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-tight text-center px-1">
+                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest leading-tight text-center px-1">
                                     {floor}º<br/>Pavimento
                                 </span>
                             </div>
@@ -395,7 +395,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                                 <div key={realUnit.id || cIndex} className="w-full h-full relative">
                                                                                     {/* Indicação visual da frente rua se a torre NÃO estiver conectada e for a primeira do grid */}
                                                                                     {!connectedTowers && cell.y === 0 && cell.x === 0 && (
-                                                                                        <div className="absolute -top-3 -left-3 rotate-[-15deg] text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 z-10 shadow-sm">Rua</div>
+                                                                                        <div className="absolute -top-3 -left-3 rotate-[-15deg] text-xs font-black text-blue-400 uppercase tracking-widest bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 z-10 shadow-sm">Rua</div>
                                                                                     )}
                                                                                     {renderUnit(realUnit)}
                                                                                 </div>
@@ -557,7 +557,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                 return (
                                                                     <div key={String(key)} className="flex items-center gap-4">
                                                                         <div className="w-16 shrink-0 flex flex-col items-end">
-                                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter text-right leading-tight">
+                                                                            <span className="text-xs font-black text-gray-400 uppercase tracking-tighter text-right leading-tight">
                                                                                 {rowLabel}
                                                                                 {groupingMode === 'position' && orientationLabel && (
                                                                                     <span className="block text-[8px] font-bold text-blue-400 mt-0.5">
@@ -605,7 +605,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <div className="bg-gray-50 rounded-xl p-4">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Tipologia</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Tipologia</p>
                             <p className="text-lg font-black text-gray-900">
                                 {selectedUnit.bedrooms || selectedUnit.specs?.bedrooms 
                                     ? `${selectedUnit.bedrooms || selectedUnit.specs?.bedrooms} Dormitório${(selectedUnit.bedrooms || selectedUnit.specs?.bedrooms) !== 1 ? 's' : ''}` 
@@ -613,22 +613,22 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                             </p>
                         </div>
                         <div className="bg-gray-50 rounded-xl p-4">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Área Privativa</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Área Privativa</p>
                             <p className="text-lg font-black text-gray-900">{selectedUnit.private_area || selectedUnit.area}m²</p>
                         </div>
                         <div className="bg-gray-50 rounded-xl p-4">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Dormitórios</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Dormitórios</p>
                             <p className="text-lg font-black text-gray-900">{selectedUnit.bedrooms || selectedUnit.specs?.bedrooms || 0}</p>
                         </div>
                         <div className="bg-gray-50 rounded-xl p-4">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Vagas</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Vagas</p>
                             <p className="text-lg font-black text-gray-900">{selectedUnit.parking_spaces || selectedUnit.specs?.parkingSpaces || 0}</p>
                         </div>
                     </div>
 
                     <div className="flex items-center justify-between bg-indigo-50 rounded-xl p-4 mb-6">
                         <div>
-                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Valor Atual</p>
+                            <p className="text-xs font-black text-indigo-400 uppercase tracking-widest">Valor Atual</p>
                             <p className="text-2xl font-black text-indigo-700">{formatPrice(selectedUnit.current_price || selectedUnit.price)}</p>
                         </div>
                         {selectedUnit.sun_position && (

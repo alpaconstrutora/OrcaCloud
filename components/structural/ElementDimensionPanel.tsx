@@ -972,7 +972,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="font-black text-slate-800 text-sm">{diag.criterio}</span>
-                    <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                    <span className="text-xs font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
                       {diag.referenciaNormativa}
                     </span>
                   </div>
@@ -985,9 +985,9 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     <div className="text-slate-300">Limite: {diag.valorLimite}</div>
                   </div>
                   <div>
-                    {diag.status === 'OK' && <span className="inline-flex items-center px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[10px] font-black uppercase">OK</span>}
-                    {diag.status === 'ATENCAO' && <span className="inline-flex items-center px-2 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-black uppercase">ATENÇÃO</span>}
-                    {diag.status === 'REPROVADO' && <span className="inline-flex items-center px-2 py-1 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20 text-[10px] font-black uppercase">REPROVADO</span>}
+                    {diag.status === 'OK' && <span className="inline-flex items-center px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-xs font-black uppercase">OK</span>}
+                    {diag.status === 'ATENCAO' && <span className="inline-flex items-center px-2 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 text-xs font-black uppercase">ATENÇÃO</span>}
+                    {diag.status === 'REPROVADO' && <span className="inline-flex items-center px-2 py-1 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20 text-xs font-black uppercase">REPROVADO</span>}
                   </div>
                 </div>
               </div>
@@ -1000,29 +1000,29 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
               <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Quantitativos Extraídos do Cálculo</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-center">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Volume Concreto</div>
+                  <div className="text-xs font-black text-slate-400 uppercase tracking-wide">Volume Concreto</div>
                   <div className="text-sm font-black text-slate-800 mt-1">
                     {result.detalhesTecnicos.volumeConcretoM3?.toFixed(3)} m³
                   </div>
                 </div>
 
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-center">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Área de Fôrma</div>
+                  <div className="text-xs font-black text-slate-400 uppercase tracking-wide">Área de Fôrma</div>
                   <div className="text-sm font-black text-slate-800 mt-1">
                     {result.detalhesTecnicos.areaFormaM2?.toFixed(2)} m²
                   </div>
                 </div>
 
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-center">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Estimativa de Aço</div>
+                  <div className="text-xs font-black text-slate-400 uppercase tracking-wide">Estimativa de Aço</div>
                   <div className="text-sm font-black text-slate-800 mt-1">
                     {result.detalhesTecnicos.pesoAcoKg?.toFixed(1)} kg
                   </div>
                 </div>
 
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-center">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Armadura Sugerida</div>
-                  <div className="text-[11px] font-bold text-blue-600 mt-1.5 truncate">
+                  <div className="text-xs font-black text-slate-400 uppercase tracking-wide">Armadura Sugerida</div>
+                  <div className="text-xs font-bold text-blue-600 mt-1.5 truncate">
                     {element.tipo === 'VIGA' && (
                       isContinua ? (
                         <div className="text-[9px] text-left leading-normal font-semibold">
@@ -1064,7 +1064,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
 
               {element.tipo === 'PILAR' && result.detalhesTecnicos.esforcos && (
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mt-3 space-y-2">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Análise de Esbeltez e Segunda Ordem (NBR 6118)</div>
+                  <div className="text-xs font-black text-slate-400 uppercase tracking-wider">Análise de Esbeltez e Segunda Ordem (NBR 6118)</div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold text-slate-700">
                     <div>Índice de Esbeltez (λ): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.lambda.toFixed(1)}</span></div>
                     <div>Exc. 1ª Ordem (e1): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.e1Cm.toFixed(2)} cm</span></div>
@@ -1076,7 +1076,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
 
               {element.tipo === 'SAPATA' && result.detalhesTecnicos.esforcos && (
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mt-3 space-y-2">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Tensões de Contato e Excentricidade (NBR 6122)</div>
+                  <div className="text-xs font-black text-slate-400 uppercase tracking-wider">Tensões de Contato e Excentricidade (NBR 6122)</div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold text-slate-700">
                     <div>Tensão Máxima (σ_max): <span className="font-bold text-slate-900">{(result.detalhesTecnicos.esforcos.sigmaMaxKnc2 * 10).toFixed(2)} kgf/cm²</span></div>
                     <div>Tensão Mínima (σ_min): <span className="font-bold text-slate-900">{(result.detalhesTecnicos.esforcos.sigmaMinKnc2 * 10).toFixed(2)} kgf/cm²</span></div>
@@ -1088,7 +1088,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
 
               {element.tipo === 'LAJE' && geometria.tipoLaje === 'trelicada' && result.detalhesTecnicos.esforcos && (
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mt-3 space-y-2">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Detalhamento Técnico da Nervura (NBR 14859)</div>
+                  <div className="text-xs font-black text-slate-400 uppercase tracking-wider">Detalhamento Técnico da Nervura (NBR 14859)</div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold text-slate-700">
                     <div>Peso Próprio (g_pp): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.ppLajeKnm2.toFixed(2)} kN/m²</span></div>
                     <div>Carga de Projeto / vigota: <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.fdNervuraKnm.toFixed(2)} kN/m</span></div>

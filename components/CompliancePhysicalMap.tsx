@@ -191,7 +191,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
                     className={`w-32 h-32 rounded-2xl border-2 p-3 flex flex-col justify-between cursor-pointer active:scale-95 transition-all shadow-sm ${colorTheme}`}
                   >
                     <div className="flex items-start justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-wider bg-white/70 px-2 py-0.5 rounded-md">
+                      <span className="text-xs font-black uppercase tracking-wider bg-white/70 px-2 py-0.5 rounded-md">
                         {loc.coordinates?.grid || 'G'}
                       </span>
                       <span className="text-sm">
@@ -200,7 +200,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
                     </div>
 
                     <div className="space-y-0.5">
-                      <span className="block text-[10px] font-black truncate">{loc.name}</span>
+                      <span className="block text-xs font-black truncate">{loc.name}</span>
                       {associatedComp ? (
                         <span className="block text-[8px] font-bold truncate opacity-80 uppercase">
                           👤 {associatedComp.nome_fantasia || associatedComp.razao_social}
@@ -214,7 +214,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
               })}
             </div>
 
-            <div className="flex flex-wrap gap-4 text-[10px] font-bold text-slate-500 justify-center">
+            <div className="flex flex-wrap gap-4 text-xs font-bold text-slate-500 justify-center">
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-500" /> Disponível</span>
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-sky-500" /> Reservado / Ocupado</span>
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-rose-500" /> Bloqueado / Manutenção</span>
@@ -279,7 +279,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
 
             <form onSubmit={handleSave} className="space-y-4">
               <div className="space-y-1">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Identificação / Nome</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Identificação / Nome</label>
                 <input
                   type="text"
                   required
@@ -291,7 +291,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo de Posição</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Tipo de Posição</label>
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
@@ -305,7 +305,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Empresa Vinculada (Segregação)</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Empresa Vinculada (Segregação)</label>
                 <select
                   value={companyId}
                   onChange={(e) => setCompanyId(e.target.value)}
@@ -319,7 +319,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Status</label>
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}

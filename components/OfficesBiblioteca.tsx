@@ -129,7 +129,7 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
         </div>
         <button
           onClick={() => setMostrarForm(!mostrarForm)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg shadow-[#D47A55]/20 active:scale-[0.98] transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-[#D47A55]/20 active:scale-[0.98] transition-all"
         >
           {mostrarForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
           {mostrarForm ? 'Cancelar' : 'Add Referência'}
@@ -139,7 +139,7 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
       {/* ── Formulário Novo Item ──────────────────────────────────────────── */}
       {mostrarForm && (
         <form onSubmit={handleAddReferencia} className="bg-white border border-slate-200/50 p-5 rounded-[28px] space-y-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] max-w-2xl">
-          <span className="block text-[10px] font-black uppercase tracking-widest text-[#D47A55]">Nova Inspiração</span>
+          <span className="block text-xs font-black uppercase tracking-widest text-[#D47A55]">Nova Inspiração</span>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Título</label>
@@ -164,7 +164,7 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
             <textarea rows={2} placeholder="Descreva materiais, paleta de cores ou marcenaria..." value={novaDesc} onChange={e => setNovaDesc(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] resize-none" />
           </div>
-          <button type="submit" className="w-full py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">
+          <button type="submit" className="w-full py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">
             Salvar na Biblioteca
           </button>
         </form>
@@ -194,7 +194,7 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
           <input
             type="text" placeholder="Buscar referência..."
             value={busca} onChange={e => setBusca(e.target.value)}
-            className="bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-[11px] text-slate-700 outline-none focus:border-[#D47A55] w-48"
+            className="bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-700 outline-none focus:border-[#D47A55] w-48"
           />
         </div>
       </div>
@@ -231,13 +231,13 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
 
             <div className="p-4 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-black text-[11px] text-slate-800 truncate">{r.titulo}</h3>
+                <h3 className="font-black text-xs text-slate-800 truncate">{r.titulo}</h3>
                 <span className="text-[8px] font-black text-[#D47A55] bg-[#D47A55]/8 px-2 py-0.5 rounded-full shrink-0">
                   {CAT_LABELS[r.categoria] || r.categoria}
                 </span>
               </div>
               {r.descricao && (
-                <p className="text-[10px] text-slate-500 font-medium leading-relaxed">{r.descricao}</p>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">{r.descricao}</p>
               )}
             </div>
           </div>
@@ -245,7 +245,7 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
       </div>
 
       {imagensExibidas.length === 0 && (
-        <div className="text-center py-16 text-[11px] text-slate-400">
+        <div className="text-center py-16 text-xs text-slate-400">
           Nenhuma referência encontrada para este filtro.
         </div>
       )}
@@ -272,7 +272,7 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
             <div className="space-y-1.5">
               <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Selecione o Projeto</label>
               {projetos.length === 0 ? (
-                <span className="block text-[10px] text-slate-400 italic">Nenhum projeto cadastrado no banco.</span>
+                <span className="block text-xs text-slate-400 italic">Nenhum projeto cadastrado no banco.</span>
               ) : (
                 <select value={projetoVinculoId} onChange={e => setProjetoVinculoId(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55]">

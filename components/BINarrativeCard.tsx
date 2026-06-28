@@ -44,7 +44,7 @@ const BINarrativeCard: React.FC<Props> = ({ summary, dateFrom, dateTo, organizat
                     </div>
                     <div>
                         <h3 className="text-sm font-black text-gray-900">Resumo Executivo IA</h3>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-none mt-0.5">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider leading-none mt-0.5">
                             Gerado por Claude · {dateFrom} a {dateTo}
                         </p>
                     </div>
@@ -59,7 +59,7 @@ const BINarrativeCard: React.FC<Props> = ({ summary, dateFrom, dateTo, organizat
                     <button
                         onClick={generate}
                         disabled={loading}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
                             narrative
                                 ? 'text-violet-600 hover:bg-violet-50 border border-violet-100'
                                 : 'bg-violet-600 text-white hover:bg-violet-700 shadow-sm shadow-violet-200'

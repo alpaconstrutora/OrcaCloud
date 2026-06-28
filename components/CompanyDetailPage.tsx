@@ -263,7 +263,7 @@ const Field: React.FC<{ label: string; children: React.ReactNode; required?: boo
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <div>
-        <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">{title}</p>
+        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">{title}</p>
         {children}
     </div>
 );
@@ -796,7 +796,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                                         checked={form[field] as boolean}
                                         onChange={e => set(field, e.target.checked)} />
                                     <span className="text-sm font-black">{label}</span>
-                                    <span className="text-[10px] uppercase font-black">
+                                    <span className="text-xs uppercase font-black">
                                         {form[field] ? 'Retém' : 'Não retém'}
                                     </span>
                                 </label>
@@ -821,7 +821,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                                     <input type="checkbox" className="hidden"
                                         checked={form[field] as boolean}
                                         onChange={e => set(field, e.target.checked)} />
-                                    <span className="text-[10px] font-black uppercase tracking-wide">{badge}</span>
+                                    <span className="text-xs font-black uppercase tracking-wide">{badge}</span>
                                     <span className="text-xs text-current opacity-70">{title}</span>
                                 </label>
                             ))}

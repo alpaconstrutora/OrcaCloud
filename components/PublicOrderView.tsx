@@ -118,14 +118,14 @@ const PublicOrderView: React.FC<Props> = ({ token }) => {
                         <div className="flex items-start gap-3">
                             <Building2 className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                             <div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Fornecedor</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Fornecedor</p>
                                 <p className="text-sm font-semibold text-gray-800">{order.supplier_name}</p>
                             </div>
                         </div>
                         <div className="flex items-start gap-3">
                             <FileText className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                             <div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Obra</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Obra</p>
                                 <p className="text-sm font-semibold text-gray-800">{order.project_name}</p>
                             </div>
                         </div>
@@ -133,7 +133,7 @@ const PublicOrderView: React.FC<Props> = ({ token }) => {
                             <div className="flex items-start gap-3">
                                 <Calendar className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                                 <div>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Entrega prevista</p>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Entrega prevista</p>
                                     <p className="text-sm font-semibold text-gray-800">{fmtDate(order.delivery_date)}</p>
                                 </div>
                             </div>
@@ -142,7 +142,7 @@ const PublicOrderView: React.FC<Props> = ({ token }) => {
                             <div className="flex items-start gap-3">
                                 <Truck className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                                 <div>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Entrega</p>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Entrega</p>
                                     <p className="text-sm font-semibold text-gray-800">{order.delivery_method}{order.delivery_location ? ` — ${order.delivery_location}` : ''}</p>
                                 </div>
                             </div>
@@ -151,7 +151,7 @@ const PublicOrderView: React.FC<Props> = ({ token }) => {
                             <div className="flex items-start gap-3">
                                 <Clock className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                                 <div>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Condições de pagamento</p>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Condições de pagamento</p>
                                     <p className="text-sm font-semibold text-gray-800">
                                         {order.payment_term_type}
                                         {order.payment_days ? ` — ${order.payment_days} dias` : ''}

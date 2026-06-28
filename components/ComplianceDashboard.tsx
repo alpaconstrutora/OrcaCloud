@@ -161,7 +161,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
               style={{ width: `${score}%` }}
             />
           </div>
-          <span className="text-[10px] text-slate-500">Mapeamento atualizado em tempo real.</span>
+          <span className="text-xs text-slate-500">Mapeamento atualizado em tempo real.</span>
         </div>
 
         {/* TTS-MG Interestadual KPI Card */}
@@ -180,7 +180,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
             <span className="text-xs font-bold text-slate-400">acumulado</span>
           </div>
 
-          <div className="flex items-center justify-between text-[10px] text-slate-500">
+          <div className="flex items-center justify-between text-xs text-slate-500">
             <span>Ciclo: Restam <b>{diasRestantes} dias</b></span>
             <span className={interestadualPct >= 30.0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
               {interestadualPct >= 30.0 ? '✓ Elegível' : '⚠ Risco de perda'}
@@ -198,7 +198,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
         <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase tracking-widest text-slate-400">Status de Obrigações</span>
-            <span className="text-[10px] font-bold text-slate-500">Total: {totalChecks}</span>
+            <span className="text-xs font-bold text-slate-500">Total: {totalChecks}</span>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
@@ -246,11 +246,11 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">🗺️ Segregação Física de Estoque</h3>
-              <p className="text-[10px] text-slate-400">Verifique a demarcação das áreas exclusivas das filiais</p>
+              <p className="text-xs text-slate-400">Verifique a demarcação das áreas exclusivas das filiais</p>
             </div>
             <button
               onClick={() => onNavigate('compliance-physical-map')}
-              className="text-[10px] font-black uppercase tracking-wider text-slate-900 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl hover:bg-slate-100"
+              className="text-xs font-black uppercase tracking-wider text-slate-900 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl hover:bg-slate-100"
             >
               Abrir Mapa
             </button>
@@ -279,11 +279,11 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">📸 Trilha de Evidências</h3>
-              <p className="text-[10px] text-slate-400">Auditoria operacional e registro fotográfico de notas fiscais</p>
+              <p className="text-xs text-slate-400">Auditoria operacional e registro fotográfico de notas fiscais</p>
             </div>
             <button
               onClick={() => onNavigate('compliance-checklists')}
-              className="text-[10px] font-black uppercase tracking-wider text-slate-900 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl hover:bg-slate-100"
+              className="text-xs font-black uppercase tracking-wider text-slate-900 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl hover:bg-slate-100"
             >
               Nova Evidência
             </button>
@@ -292,20 +292,20 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
           <div className="space-y-2.5">
             <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
               <div className="space-y-0.5">
-                <span className="block text-[10px] font-black text-slate-700">Expedição - NF-e #4902</span>
+                <span className="block text-xs font-black text-slate-700">Expedição - NF-e #4902</span>
                 <span className="block text-[8px] text-slate-400">Canhoto assinado • Operador: carlos@opura.com</span>
               </div>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
                 Auditado
               </span>
             </div>
 
             <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
               <div className="space-y-0.5">
-                <span className="block text-[10px] font-black text-slate-700">Recebimento - NF-e #4889</span>
+                <span className="block text-xs font-black text-slate-700">Recebimento - NF-e #4889</span>
                 <span className="block text-[8px] text-slate-400">Foto do palete • Operador: carlos@opura.com</span>
               </div>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
                 Auditado
               </span>
             </div>

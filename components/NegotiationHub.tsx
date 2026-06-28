@@ -112,13 +112,13 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                     </div>
                     <div>
                         <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Sala de Negociação</h3>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pedido {order.number} • {order.projectName}</p>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pedido {order.number} • {order.projectName}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-full">
                         <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">{order.status}</span>
+                        <span className="text-xs font-black uppercase tracking-widest">{order.status}</span>
                     </div>
                     {onClose && (
                         <button
@@ -152,7 +152,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                     ? 'bg-black text-white border-black rounded-tr-none'
                                     : 'bg-white text-gray-900 border-gray-100 rounded-tl-none'
                                     } ${isAccepted ? 'ring-2 ring-emerald-500' : ''}`}>
-                                    <div className={`flex items-center gap-2 mb-3 text-[10px] font-black uppercase tracking-widest ${isMine ? 'text-gray-400' : 'text-indigo-600'}`}>
+                                    <div className={`flex items-center gap-2 mb-3 text-xs font-black uppercase tracking-widest ${isMine ? 'text-gray-400' : 'text-indigo-600'}`}>
                                         <User className="w-3 h-3" />
                                         {prop.senderRole === 'buyer' ? 'Comprador' : 'Fornecedor'} ({prop.senderEmail})
                                     </div>
@@ -164,13 +164,13 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                     )}
 
                                     <div className={`p-4 rounded-2xl mb-4 space-y-2 ${isMine ? 'bg-gray-900' : 'bg-gray-50'}`}>
-                                        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider opacity-70">
+                                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider opacity-70">
                                             <Calendar className="w-3 h-3" />
                                             Data Proposta: {new Date(prop.deliveryDate).toLocaleDateString('pt-BR')}
                                         </div>
                                         <div className="space-y-1">
                                             {prop.items.map((item, idx) => (
-                                                <div key={idx} className="flex justify-between text-[11px] font-bold">
+                                                <div key={idx} className="flex justify-between text-xs font-bold">
                                                     <span className="opacity-70 truncate max-w-[150px]">{item.description}</span>
                                                     <span>{fmt(item.unitPrice)}</span>
                                                 </div>
@@ -184,7 +184,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                         </div>
                                     </div>
 
-                                    <div className="pt-2 mt-2 border-t border-white/10 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-bold opacity-70 mb-4">
+                                    <div className="pt-2 mt-2 border-t border-white/10 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold opacity-70 mb-4">
                                         <div className="flex items-center gap-1">
                                             <Tag className="w-3 h-3" />
                                             {prop.paymentMethod || 'Não definido'}
@@ -202,14 +202,14 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                     </div>
 
                                     <div className="flex items-center justify-between">
-                                        <span className="text-[10px] opacity-40 font-bold">
+                                        <span className="text-xs opacity-40 font-bold">
                                             {new Date(prop.createdAt).toLocaleTimeString('pt-BR')}
                                         </span>
 
                                         {!isMine && prop.status === 'pending' && (
                                             <button
                                                 onClick={() => handleAccept(prop.id)}
-                                                className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20"
+                                                className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20"
                                             >
                                                 <CheckCircle2 className="w-3 h-3" />
                                                 Aceitar
@@ -217,7 +217,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                         )}
 
                                         {isAccepted && (
-                                            <span className="text-emerald-500 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                                            <span className="text-emerald-500 text-xs font-black uppercase tracking-widest flex items-center gap-1">
                                                 <CheckCircle2 className="w-3 h-3" />
                                                 Aceito
                                             </span>
@@ -232,7 +232,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
 
                 {/* Control Panel (Side) */}
                 <div className="w-80 border-l border-gray-100 p-6 bg-white space-y-6">
-                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
                         <Tag className="w-3 h-3 text-indigo-600" />
                         Sua Contraproposta
                     </h4>
@@ -240,7 +240,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 px-1">Nova Data</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 px-1">Nova Data</label>
                                 <input
                                     type="date"
                                     value={proposedDate}
@@ -249,7 +249,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                 />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 px-1">Método</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 px-1">Método</label>
                                 <select
                                     value={proposedPaymentMethod}
                                     onChange={(e) => setProposedPaymentMethod(e.target.value)}
@@ -265,7 +265,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
 
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 px-1">Condição</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 px-1">Condição</label>
                                 <select
                                     value={proposedTermType}
                                     onChange={(e) => setProposedTermType(e.target.value as any)}
@@ -276,7 +276,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 px-1">Prazo (Dias)</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 px-1">Prazo (Dias)</label>
                                 <input
                                     type="number"
                                     value={proposedDays}
@@ -288,7 +288,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
 
                         {proposedTermType === 'Parcelado' && (
                             <div>
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 px-1">Nr. Parcelas</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 px-1">Nr. Parcelas</label>
                                 <input
                                     type="number"
                                     value={proposedInstallments}
@@ -299,13 +299,13 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                         )}
 
                         <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-3 px-1">Preços dos Itens</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-3 px-1">Preços dos Itens</label>
                             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                                 {proposedItems.map((item, idx) => (
                                     <div key={idx} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                        <p className="text-[10px] font-bold text-gray-500 truncate mb-2">{item.description}</p>
+                                        <p className="text-xs font-bold text-gray-500 truncate mb-2">{item.description}</p>
                                         <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">R$</span>
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R$</span>
                                             <input
                                                 type="number"
                                                 value={item.unitPrice}
@@ -320,7 +320,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
 
                         <div className="pt-4 border-t border-gray-50">
                             <div className="flex justify-between items-center mb-4">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Novo Total</span>
+                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Novo Total</span>
                                 <span className="text-sm font-black text-indigo-600">
                                     {fmt(proposedItems.reduce((s, i) => s + (i.total || 0), 0))}
                                 </span>

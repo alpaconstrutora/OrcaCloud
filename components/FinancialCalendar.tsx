@@ -88,7 +88,7 @@ function StatusChip({ label }: { label?: string }) {
     if (!label) return null;
     const cls = STATUS_COLORS[label] ?? 'bg-gray-100 text-gray-600';
     return (
-        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${cls}`}>
+        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${cls}`}>
             {label}
         </span>
     );
@@ -137,11 +137,11 @@ function DayDrawer({
             {/* KPI row */}
             <div className="grid grid-cols-2 gap-3 p-4 border-b border-gray-100">
                 <div className="bg-green-50 rounded-lg p-2.5">
-                    <p className="text-[10px] text-green-600 font-medium uppercase tracking-wide">A Receber</p>
+                    <p className="text-xs text-green-600 font-medium uppercase tracking-wide">A Receber</p>
                     <p className="text-sm font-bold text-green-700 mt-0.5">{fmtFull(totalC)}</p>
                 </div>
                 <div className="bg-red-50 rounded-lg p-2.5">
-                    <p className="text-[10px] text-red-600 font-medium uppercase tracking-wide">A Pagar</p>
+                    <p className="text-xs text-red-600 font-medium uppercase tracking-wide">A Pagar</p>
                     <p className="text-sm font-bold text-red-700 mt-0.5">{fmtFull(totalD)}</p>
                 </div>
             </div>
@@ -255,7 +255,7 @@ function MonthGrid({
             </h3>
             <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden border border-gray-200">
                 {WEEKDAYS.map(w => (
-                    <div key={w} className="bg-gray-50 text-center text-[10px] font-medium text-gray-500 py-1">
+                    <div key={w} className="bg-gray-50 text-center text-xs font-medium text-gray-500 py-1">
                         {w}
                     </div>
                 ))}
@@ -389,7 +389,7 @@ function AgendaView({
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-[10px] text-gray-500 mt-0.5">
+                                <p className="text-xs text-gray-500 mt-0.5">
                                     {ev.n_titulos} título{ev.n_titulos !== 1 ? 's' : ''}
                                 </p>
                             </div>
@@ -585,7 +585,7 @@ export default function FinancialCalendar({ organizationId }: Props) {
                             <TrendingUp className="w-4 h-4 text-green-600" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-[10px] text-gray-500 uppercase tracking-wide font-medium">A Receber</p>
+                            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">A Receber</p>
                             <p className="text-sm font-bold text-green-700 truncate">{fmt(totalC)}</p>
                         </div>
                     </div>
@@ -594,7 +594,7 @@ export default function FinancialCalendar({ organizationId }: Props) {
                             <TrendingDown className="w-4 h-4 text-red-600" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-[10px] text-gray-500 uppercase tracking-wide font-medium">A Pagar</p>
+                            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">A Pagar</p>
                             <p className="text-sm font-bold text-red-700 truncate">{fmt(totalD)}</p>
                         </div>
                     </div>
@@ -604,7 +604,7 @@ export default function FinancialCalendar({ organizationId }: Props) {
                             <Wallet className={['w-4 h-4', saldoL >= 0 ? 'text-blue-600' : 'text-orange-600'].join(' ')} />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-[10px] text-gray-500 uppercase tracking-wide font-medium">Saldo Projetado</p>
+                            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Saldo Projetado</p>
                             <p className={['text-sm font-bold truncate', saldoL >= 0 ? 'text-blue-700' : 'text-orange-700'].join(' ')}>
                                 {saldoL >= 0 ? '+' : ''}{fmt(saldoL)}
                             </p>
@@ -650,7 +650,7 @@ export default function FinancialCalendar({ organizationId }: Props) {
                             onSelectDate={setSelectedDate}
                         />
                         {horizon > 31 && (
-                            <p className="text-[10px] text-gray-400 mt-3 text-center">
+                            <p className="text-xs text-gray-400 mt-3 text-center">
                                 Use as setas para navegar entre os meses do horizonte selecionado.
                             </p>
                         )}
@@ -671,7 +671,7 @@ export default function FinancialCalendar({ organizationId }: Props) {
 
                 {/* Legend */}
                 {!loading && (
-                    <div className="flex items-center gap-4 text-[10px] text-gray-400 justify-center pb-4">
+                    <div className="flex items-center gap-4 text-xs text-gray-400 justify-center pb-4">
                         <span className="flex items-center gap-1">
                             <span className="w-3 h-2 rounded bg-green-100 inline-block" /> Entradas (CR)
                         </span>

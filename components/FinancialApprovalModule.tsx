@@ -234,16 +234,16 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                             <div className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors">
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-0.5">
-                                        <span className="text-[10px] font-black text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
+                                        <span className="text-xs font-black text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
                                             {ENTITY_TAG[item.entity]}
                                         </span>
                                         <p className="text-sm font-bold text-gray-900 truncate">{item.title}</p>
                                         {isDraft ? (
-                                            <span className="text-[10px] font-black text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
+                                            <span className="text-xs font-black text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
                                                 Rascunho
                                             </span>
                                         ) : (
-                                            <span className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
+                                            <span className="text-xs font-black text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
                                                 Nível {approvedLevels.length + 1}/{item.approval_required_levels}
                                             </span>
                                         )}
@@ -260,7 +260,7 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                                         <button
                                             onClick={() => handleSubmit(item)}
                                             disabled={submittingId === item.id}
-                                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
+                                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
                                         >
                                             {submittingId === item.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} Enviar p/ aprovação
                                         </button>
@@ -268,13 +268,13 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                                         <>
                                             <button
                                                 onClick={() => setModal({ item, mode: 'approve' })}
-                                                className="px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                                className="px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
                                             >
                                                 <Check className="w-3 h-3" /> Aprovar
                                             </button>
                                             <button
                                                 onClick={() => setModal({ item, mode: 'reject' })}
-                                                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
                                             >
                                                 <X className="w-3 h-3" /> Rejeitar
                                             </button>
@@ -404,7 +404,7 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                                         {fmt(item.faixa_min)} — {item.faixa_max != null ? fmt(item.faixa_max) : 'Sem limite'}
                                     </span>
                                     {!item.is_active && (
-                                        <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Inativa</span>
+                                        <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Inativa</span>
                                     )}
                                 </div>
                                 <p className="text-xs text-gray-500">

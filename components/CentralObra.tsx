@@ -444,7 +444,7 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
                                     <Line type="monotone" dataKey="financeiro"      name="Financeiro"       stroke="#2563eb" strokeWidth={2} dot={false} connectNulls />
                                 </ComposedChart>
                             </ResponsiveContainer>
-                            <p className="text-[11px] text-gray-400 mt-2">
+                            <p className="text-xs text-gray-400 mt-2">
                                 Físico = avanço ponderado pelo orçamento (cronograma planejado · RDO realizado) · Financeiro = pago acumulado ÷ orçado.
                             </p>
                         </div>
@@ -503,7 +503,7 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
                                         <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 tabular-nums">{e.transaction_date.split('-').reverse().join('/')}</td>
                                         <td className="px-2 py-2.5">
                                             <p className="text-gray-700 font-medium truncate max-w-[260px]">{e.description || e.category_name || '—'}</p>
-                                            <p className="text-[11px] text-gray-400 truncate">
+                                            <p className="text-xs text-gray-400 truncate">
                                                 {[e.category_name, e.supplier_name || e.client_name].filter(Boolean).join(' · ')}
                                                 {e.status === 'PENDING' ? ' · previsto' : ''}
                                             </p>

@@ -124,7 +124,7 @@ const PropertyTypesManager: React.FC<PropertyTypesManagerProps> = ({
                                             <p className={`font-bold text-sm ${t.is_system ? 'text-gray-500' : 'text-gray-800'}`}>
                                                 {t.label}
                                             </p>
-                                            <p className="text-[10px] font-mono text-gray-400">{t.code}</p>
+                                            <p className="text-xs font-mono text-gray-400">{t.code}</p>
                                         </>
                                     )}
                                 </div>
@@ -163,7 +163,7 @@ const PropertyTypesManager: React.FC<PropertyTypesManagerProps> = ({
 
                     {/* Formulário de novo tipo */}
                     <div className="border-t border-gray-100 pt-4">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Novo Tipo</p>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Novo Tipo</p>
                         <div className="flex gap-2">
                             <input
                                 value={newCode}
@@ -187,7 +187,7 @@ const PropertyTypesManager: React.FC<PropertyTypesManagerProps> = ({
                                 <Plus className="w-4 h-4" />
                             </button>
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-2">
+                        <p className="text-xs text-gray-400 mt-2">
                             O código é imutável após criação (ex: STUDIO, PENTHOUSE, GALPAO)
                         </p>
                     </div>

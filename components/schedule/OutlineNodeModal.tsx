@@ -42,7 +42,7 @@ export const OutlineNodeModal: React.FC<OutlineNodeModalProps> = ({
                 </div>
                 <div className="px-6 py-4 space-y-4">
                     <div>
-                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Nome</label>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nome</label>
                         <input
                             autoFocus
                             value={name}
@@ -55,12 +55,12 @@ export const OutlineNodeModal: React.FC<OutlineNodeModalProps> = ({
 
                     {showNature && (
                         <div>
-                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Natureza</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Natureza</label>
                             <div className="mt-1.5 flex flex-wrap gap-1.5">
                                 <button
                                     type="button"
                                     onClick={() => setNature(undefined)}
-                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${!nature ? 'border-gray-400 bg-gray-100 text-gray-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${!nature ? 'border-gray-400 bg-gray-100 text-gray-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}
                                 >
                                     —
                                 </button>
@@ -72,7 +72,7 @@ export const OutlineNodeModal: React.FC<OutlineNodeModalProps> = ({
                                             key={n}
                                             type="button"
                                             onClick={() => setNature(n)}
-                                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${active ? meta.badge + ' border-transparent ring-1 ring-offset-1 ring-gray-300' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${active ? meta.badge + ' border-transparent ring-1 ring-offset-1 ring-gray-300' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                                         >
                                             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
                                             {meta.label}

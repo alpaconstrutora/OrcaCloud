@@ -1078,8 +1078,8 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                             <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest font-normal">Entradas vs Saídas Mensais</p>
                         </div>
                         <div className="flex gap-4">
-                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500" /><span className="text-[10px] font-normal uppercase tracking-widest text-gray-400">Receita</span></div>
-                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400" /><span className="text-[10px] font-normal uppercase tracking-widest text-gray-400">Despesa</span></div>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500" /><span className="text-xs font-normal uppercase tracking-widest text-gray-400">Receita</span></div>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400" /><span className="text-xs font-normal uppercase tracking-widest text-gray-400">Despesa</span></div>
                         </div>
                     </div>
                     <div className="flex-1 min-h-0">
@@ -1090,13 +1090,13 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col items-center justify-center relative overflow-hidden h-96">
                     <div className="absolute top-0 left-0 w-full p-8">
                         <h3 className="text-sm font-normal text-gray-400 uppercase tracking-[0.2em] mb-1">Status de Recebimento</h3>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-widest font-normal">Composição da Carteira</p>
+                        <p className="text-xs text-gray-400 uppercase tracking-widest font-normal">Composição da Carteira</p>
                     </div>
                     <div className="w-full h-full pt-12">
                         <ResponsiveContainer><PieChart><Pie data={pieData} innerRadius={70} outerRadius={90} paddingAngle={8} dataKey="value" stroke="none">{pieData.map((entry, index) => <Cell key={index} fill={entry.color} />)}</Pie><Tooltip formatter={fmt} /><Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', paddingTop: '20px' }} /></PieChart></ResponsiveContainer>
                     </div>
                     <div className="absolute top-[55%] left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-                        <p className="text-[10px] text-gray-400 font-normal uppercase tracking-widest mb-1">Em Aberto</p>
+                        <p className="text-xs text-gray-400 font-normal uppercase tracking-widest mb-1">Em Aberto</p>
                         <p className="text-2xl font-normal text-gray-900 tracking-tighter">{fmt(pendingTotal)}</p>
                     </div>
                 </div>
@@ -1143,7 +1143,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     <div className="flex gap-2">
                         {settings.name === 'Gestão Comercial' && (
                             <>
-                                <select value={incomeGroupBy} onChange={e => setIncomeGroupBy(e.target.value as 'none' | 'client' | 'property' | 'deal' | 'type')} className="text-[10px] font-black uppercase tracking-widest bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200">
+                                <select value={incomeGroupBy} onChange={e => setIncomeGroupBy(e.target.value as 'none' | 'client' | 'property' | 'deal' | 'type')} className="text-xs font-black uppercase tracking-widest bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200">
                                     <option value="none">Sem Grupo</option>
                                     <option value="client">Cliente</option>
                                     <option value="property">Imóvel</option>
@@ -1155,7 +1155,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         <select
                             value={localDealTypeFilter}
                             onChange={e => setLocalDealTypeFilter(e.target.value as 'ALL' | 'SALE' | 'RENTAL')}
-                            className="text-[10px] font-black uppercase tracking-widest bg-white px-3 py-1.5 rounded-xl border border-gray-200 text-gray-600 outline-none hover:bg-gray-50 transition-colors"
+                            className="text-xs font-black uppercase tracking-widest bg-white px-3 py-1.5 rounded-xl border border-gray-200 text-gray-600 outline-none hover:bg-gray-50 transition-colors"
                         >
                             <option value="ALL">Todas as Receitas</option>
                             <option value="SALE">Apenas Vendas (SALE)</option>
@@ -1164,12 +1164,12 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         <button 
                             onClick={() => handleGlobalSync((organizationId || settings.organizationId || ''), commercialDeals)} 
                             disabled={isSyncing}
-                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1 border transition-all ${isSyncing ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 shadow-sm'}`}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-1 border transition-all ${isSyncing ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 shadow-sm'}`}
                         >
                             <Clock className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} /> 
                             {isSyncing ? 'Sincronizando...' : 'Sincronizar Vendas'}
                         </button>
-                        <button onClick={() => setIsAdding(true)} className="bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> NOVO</button>
+                        <button onClick={() => setIsAdding(true)} className="bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> NOVO</button>
                     </div>
                 </div>
                 {isAdding && (
@@ -1213,7 +1213,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 uppercase tracking-tight">{i.clientName || '-'}</td>
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-mono font-normal text-gray-400 uppercase tracking-tighter">{(i.dealId || '').substring(0, 8)}</td>
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                            <span className={`px-1.5 py-0.5 rounded-[4px] text-[10px] font-normal uppercase ${i.dealType === 'SALE' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                                            <span className={`px-1.5 py-0.5 rounded-[4px] text-xs font-normal uppercase ${i.dealType === 'SALE' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
                                                 {i.dealType === 'SALE' ? 'Venda' : 'Aluguel'}
                                             </span>
                                         </td>
@@ -1257,7 +1257,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 uppercase tracking-tight">{i.clientName || '-'}</td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-mono font-normal text-gray-400 uppercase tracking-tighter">{(i.dealId || '').substring(0, 8)}</td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                    <span className={`px-1.5 py-0.5 rounded-[4px] text-[10px] font-normal uppercase ${i.dealType === 'SALE' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                                    <span className={`px-1.5 py-0.5 rounded-[4px] text-xs font-normal uppercase ${i.dealType === 'SALE' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
                                         {i.dealType === 'SALE' ? 'Venda' : 'Aluguel'}
                                     </span>
                                 </td>
@@ -1362,7 +1362,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 uppercase tracking-tight">{exp.supplier}</td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-mono font-normal text-gray-400">{exp.orderNumber || '-'}</td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-normal uppercase ${exp.isOrder ? 'bg-blue-50 text-blue-600' :
+                                    <span className={`px-1.5 py-0.5 rounded text-xs font-normal uppercase ${exp.isOrder ? 'bg-blue-50 text-blue-600' :
                                         (exp.measurementId || exp.description.toLowerCase().includes('medição') || exp.description.toLowerCase().includes('contrato:')) ? 'bg-purple-50 text-purple-600' :
                                             exp.dealType === 'SALE' ? 'bg-indigo-50 text-indigo-600' :
                                                 exp.dealType === 'RENTAL' ? 'bg-orange-50 text-orange-600' :
@@ -1376,7 +1376,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                     </span>
                                 </td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-normal uppercase ${exp.isOrder ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-500'}`}>
+                                    <span className={`px-1.5 py-0.5 rounded text-xs font-normal uppercase ${exp.isOrder ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-500'}`}>
                                         {exp.isOrder ? 'Pedido' : 'Geral'}
                                     </span>
                                 </td>
@@ -1384,7 +1384,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"><span className="px-2 py-0.5 rounded text-sm font-normal uppercase" style={{ backgroundColor: getCategoryColor(exp.category) + '18', color: getCategoryColor(exp.category) }}>{exp.category}</span></td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-normal text-red-600 text-sm">{fmt(exp.value)}</td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 self-center">
-                                    <button onClick={() => toggleExpenseStatus(exp)} className={`px-2 py-0.5 rounded text-[10px] font-normal uppercase ${exp.financialStatus === 'PAGO' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                                    <button onClick={() => toggleExpenseStatus(exp)} className={`px-2 py-0.5 rounded text-xs font-normal uppercase ${exp.financialStatus === 'PAGO' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
                                         {exp.financialStatus === 'PAGO' ? 'Pago' : 'Pendente'}
                                     </button>
                                 </td>
@@ -1505,12 +1505,12 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 <div className="p-8 border-b border-gray-50 flex justify-between items-center">
                     <div>
                         <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest">Movimentação Unificada</h4>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Todas as entradas e saídas do projeto</p>
+                        <p className="text-xs text-gray-400 font-bold uppercase mt-1">Todas as entradas e saídas do projeto</p>
                     </div>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-gray-50/50 text-gray-400 font-black uppercase text-[10px] tracking-[0.2em]">
+                        <thead className="bg-gray-50/50 text-gray-400 font-black uppercase text-xs tracking-[0.2em]">
                             <tr>
                                 <th className="px-8 py-5">Item</th>
                                 <th className="px-8 py-5">Data</th>
@@ -1528,7 +1528,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                             </div>
                                             <div>
                                                 <p className="text-xs font-bold text-gray-900">{item.description}</p>
-                                                <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-0.5">{item.supplier_client}</p>
+                                                <p className="text-xs text-gray-400 uppercase tracking-widest mt-0.5">{item.supplier_client}</p>
                                             </div>
                                         </div>
                                     </td>

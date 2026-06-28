@@ -29,16 +29,16 @@ const KpiCard: React.FC<{
             style={{ background: `var(--tw-${color}-50, #eff6ff)` }} />
         <div className="relative z-10">
             <div className="flex items-start justify-between mb-3">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
                 <div className={`p-2 rounded-xl bg-${color}-100`}>
                     <Icon className={`w-4 h-4 text-${color}-600`} />
                 </div>
             </div>
             <p className="text-3xl font-black text-slate-900 tracking-tighter">{value}</p>
             <div className="flex items-center gap-2 mt-2">
-                {sub && <p className="text-[11px] text-slate-400 font-medium">{sub}</p>}
+                {sub && <p className="text-xs text-slate-400 font-medium">{sub}</p>}
                 {trendLabel && trend && (
-                    <span className={`flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-lg ${
+                    <span className={`flex items-center gap-0.5 text-xs font-black px-1.5 py-0.5 rounded-lg ${
                         trend === 'up'   ? 'bg-rose-100 text-rose-700' :
                         trend === 'down' ? 'bg-emerald-100 text-emerald-700' :
                         'bg-slate-100 text-slate-500'
@@ -200,7 +200,7 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
 
             {/* Headcount KPIs */}
             <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Headcount</p>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Headcount</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <KpiCard label="Total de Colaboradores" value={kpis.headcount.total} icon={Users} color="indigo"
                         sub={`${kpis.headcount.ativos} ativos`} />
@@ -217,7 +217,7 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
             {/* Movimentação + Custos */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Movimentação no Mês</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Movimentação no Mês</p>
                     <div className="grid grid-cols-2 gap-4">
                         <KpiCard label="Admissões" value={kpis.periodo.admitidos} icon={UserCheck} color="emerald"
                             trendLabel={kpis.periodo.admitidos > 0 ? '+' + kpis.periodo.admitidos : undefined} trend="neutral" />
@@ -234,7 +234,7 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                 </div>
 
                 <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Custos e Horas</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Custos e Horas</p>
                     <div className="grid grid-cols-1 gap-4">
                         <KpiCard label="Custo MO Aprovado (mês)" icon={DollarSign} color="indigo"
                             value={`R$ ${kpis.custos.custo_mes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}

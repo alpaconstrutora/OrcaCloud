@@ -135,7 +135,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     const renderInput = (label: string, field: keyof ImovibStudy, type: 'text' | 'number' | 'date' = 'text', placeholder: string = "", isPercent: boolean = false) => {
         return (
             <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
                     {label} {isPercent && '(%)'}
                 </label>
                 <input
@@ -156,7 +156,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     const renderTextarea = (label: string, field: keyof ImovibStudy, placeholder: string = "", rows: number = 3) => {
         return (
             <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
                     {label}
                 </label>
                 <textarea
@@ -331,7 +331,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                             const isNA = display === 'N.A.' || display.startsWith('—');
                                             return (
                                                 <div key={label} className={`rounded-2xl p-4 border ${isNA ? 'bg-slate-50 border-slate-200' : 'bg-indigo-50 border-indigo-100'}`}>
-                                                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                                                    <p className="text-xs font-black uppercase tracking-wider text-slate-400 mb-1">
                                                         {label}{suffix}
                                                     </p>
                                                     <p className={`text-base font-black ${isNA ? 'text-slate-400' : 'text-indigo-700'}`}>
@@ -419,7 +419,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                             return (
                                         <table className="w-full text-left">
                                             <thead>
-                                                <tr className="bg-white border-b border-slate-100 text-[10px] font-black tracking-widest uppercase text-slate-400">
+                                                <tr className="bg-white border-b border-slate-100 text-xs font-black tracking-widest uppercase text-slate-400">
                                                     <th className="px-6 py-4">Tipologia da Unidade</th>
                                                     <th className="px-6 py-4 w-32 text-center">Unidades por Pavimento</th>
                                                     <th className="px-6 py-4 w-32 text-right">Área Priv. (m²)</th>
@@ -539,7 +539,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                 {toBase != null && block.units && block.units.length > 0 && (
                                                     <tr className="bg-indigo-50/60 border-t-2 border-indigo-100">
                                                         <td colSpan={8} className="px-6 py-3 text-right">
-                                                            <span className="text-[10px] font-black tracking-widest uppercase text-indigo-400">Total Área</span>
+                                                            <span className="text-xs font-black tracking-widest uppercase text-indigo-400">Total Área</span>
                                                         </td>
                                                         <td className="px-6 py-3 text-right">
                                                             <span className="text-sm font-black text-indigo-700">

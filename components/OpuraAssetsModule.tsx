@@ -857,7 +857,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                 <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-32 hover:shadow-lg transition-all">
                   <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-[10px] font-black uppercase tracking-widest">Patrimônio Total</span>
+                    <span className="text-xs font-black uppercase tracking-widest">Patrimônio Total</span>
                     <DollarSign className="w-4 h-4 text-blue-500" />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-800">
@@ -867,7 +867,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                 <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-32 hover:shadow-lg transition-all">
                   <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-[10px] font-black uppercase tracking-widest">Depreciação Acum.</span>
+                    <span className="text-xs font-black uppercase tracking-widest">Depreciação Acum.</span>
                     <TrendingUp className="w-4 h-4 text-rose-500" />
                   </div>
                   <h3 className="text-2xl font-bold text-rose-600">
@@ -877,7 +877,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                 <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-32 hover:shadow-lg transition-all">
                   <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-[10px] font-black uppercase tracking-widest">Bens Ativos</span>
+                    <span className="text-xs font-black uppercase tracking-widest">Bens Ativos</span>
                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-800">{activeCount}</h3>
@@ -885,7 +885,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                 <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-32 hover:shadow-lg transition-all">
                   <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-[10px] font-black uppercase tracking-widest">Em Manutenção</span>
+                    <span className="text-xs font-black uppercase tracking-widest">Em Manutenção</span>
                     <AlertTriangle className="w-4 h-4 text-amber-500" />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-800">{maintenanceCount}</h3>
@@ -893,7 +893,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                 <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-32 hover:shadow-lg transition-all">
                   <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-[10px] font-black uppercase tracking-widest">Bens Ociosos</span>
+                    <span className="text-xs font-black uppercase tracking-widest">Bens Ociosos</span>
                     <Package className="w-4 h-4 text-gray-400" />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-800">{ociosoCount}</h3>
@@ -956,7 +956,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         <div key={res.id} className="p-4 border border-gray-50 rounded-2xl text-xs space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-gray-800">{asset?.name || 'Ativo'}</span>
-                            <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Reserva</span>
+                            <span className="text-xs font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Reserva</span>
                           </div>
                           <div className="flex justify-between text-gray-500">
                             <span>Destino: <strong>{proj?.name || 'Obra'}</strong></span>
@@ -1082,7 +1082,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                               <span className="text-gray-400 block text-[9px] font-bold uppercase tracking-wider">Custo Residual / Atual</span>
                               <span className="font-bold text-gray-700">R$ {depreciation.current.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
                             </div>
-                            <div className="flex items-center gap-1.5 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
+                            <div className="flex items-center gap-1.5 text-blue-500 font-bold text-xs uppercase tracking-wider">
                               Ver Detalhes
                               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                             </div>
@@ -1136,7 +1136,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                     <span className="font-bold text-gray-800 text-xs">{asset.name}</span>
                                   </div>
                                 </td>
-                                <td className="py-4 px-6 uppercase text-gray-500 font-bold text-[10px] tracking-wider">{asset.category}</td>
+                                <td className="py-4 px-6 uppercase text-gray-500 font-bold text-xs tracking-wider">{asset.category}</td>
                                 <td className="py-4 px-6">
                                   <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded
                                     ${asset.status === 'disponivel' ? 'bg-emerald-500/10 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
@@ -1216,14 +1216,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       <div className="flex gap-2">
                         <button
                           onClick={() => setIsMoveAssetModalOpen(true)}
-                          className="flex-1 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                          className="flex-1 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl font-black text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
                         >
                           <MapPin className="w-3.5 h-3.5" />
                           Movimentar
                         </button>
                         <button
                           onClick={() => setIsReserveModalOpen(true)}
-                          className="flex-1 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                          className="flex-1 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl font-black text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
                         >
                           <Calendar className="w-3.5 h-3.5" />
                           Reservar
@@ -1242,7 +1242,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             });
                             setIsNewMaintModalOpen(true);
                           }}
-                          className="flex-1 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                          className="flex-1 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl font-black text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
                         >
                           <Wrench className="w-3.5 h-3.5" />
                           Manutenção
@@ -1272,7 +1272,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             });
                             setIsNewAssetModalOpen(true);
                           }}
-                          className="flex-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 border border-gray-100"
+                          className="flex-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 border border-gray-100"
                         >
                           <Edit className="w-3 h-3" />
                           Editar
@@ -1299,14 +1299,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             });
                             setIsNewAssetModalOpen(true);
                           }}
-                          className="flex-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 border border-gray-100"
+                          className="flex-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 border border-gray-100"
                         >
                           <Copy className="w-3 h-3" />
                           Duplicar
                         </button>
                         <button
                           onClick={() => handleDeleteAsset(selectedAsset)}
-                          className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
+                          className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
                         >
                           <Trash2 className="w-3 h-3" />
                           Excluir
@@ -1333,7 +1333,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                               )}
                               <div>
                                 <p className="font-bold text-gray-700">Enviado para {destProj?.name || 'Sede / Central'}</p>
-                                <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                                <p className="text-xs text-gray-400 font-medium mt-0.5">
                                   {new Date(mov.movement_date).toLocaleString('pt-BR')} {mov.notes ? `• ${mov.notes}` : ''}
                                 </p>
                               </div>
@@ -1364,7 +1364,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             });
                             setIsNewDocModalOpen(true);
                           }}
-                          className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold uppercase tracking-wider px-2.5 py-1 rounded-xl transition-all shadow-sm active:scale-95"
+                          className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold uppercase tracking-wider px-2.5 py-1 rounded-xl transition-all shadow-sm active:scale-95"
                         >
                           + Novo
                         </button>
@@ -1401,7 +1401,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                 </div>
                                 <div className="min-w-0">
                                   <h5 className="font-bold text-gray-700 truncate" title={doc.name}>{doc.name}</h5>
-                                  <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-gray-400 font-semibold">
+                                  <div className="flex items-center gap-1.5 mt-0.5 text-xs text-gray-400 font-semibold">
                                     {doc.document_number && <span>Nº {doc.document_number}</span>}
                                     {doc.document_number && doc.expiration_date && <span>•</span>}
                                     {doc.expiration_date && <span>Vence: {new Date(doc.expiration_date).toLocaleDateString('pt-BR')}</span>}
@@ -1496,7 +1496,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             <td className="py-3 px-4 text-gray-700 font-bold">{employees.find(e => e.id === res.responsible_employee_id)?.name || 'Central'}</td>
                             <td className="py-3 px-4 text-gray-400 font-semibold">{res.requested_by_email}</td>
                             <td className="py-3 px-4">
-                              <span className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase ${statusBadgeClass}`}>
+                              <span className={`px-2.5 py-0.5 rounded-md font-bold text-xs uppercase ${statusBadgeClass}`}>
                                 {res.status === 'ativa' ? 'Em Uso' : res.status}
                               </span>
                             </td>
@@ -1506,14 +1506,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                   <>
                                     <button
                                       onClick={() => handleStartReservation(res)}
-                                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md font-bold text-[10px] uppercase tracking-wider transition-colors"
+                                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md font-bold text-xs uppercase tracking-wider transition-colors"
                                       title="Entregar equipamento à obra"
                                     >
                                       Entregar
                                     </button>
                                     <button
                                       onClick={() => handleCancelReservation(res.id)}
-                                      className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-[10px] uppercase tracking-wider transition-colors"
+                                      className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-xs uppercase tracking-wider transition-colors"
                                       title="Cancelar reserva"
                                     >
                                       Cancelar
@@ -1523,7 +1523,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                 {res.status === 'ativa' && (
                                   <button
                                     onClick={() => handleFinalizeReservation(res)}
-                                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md font-bold text-[10px] uppercase tracking-wider transition-colors"
+                                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md font-bold text-xs uppercase tracking-wider transition-colors"
                                     title="Devolver equipamento para a sede"
                                   >
                                     Devolver
@@ -1556,7 +1556,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-28 hover:shadow-lg hover:border-blue-100 transition-all">
                   <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-[10px] font-black uppercase tracking-widest">Total Gasto em Oficina</span>
+                    <span className="text-xs font-black uppercase tracking-widest">Total Gasto em Oficina</span>
                     <DollarSign className="w-4 h-4 text-blue-500" />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-800">
@@ -1566,7 +1566,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                 <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-28 hover:shadow-lg hover:border-blue-100 transition-all">
                   <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-[10px] font-black uppercase tracking-widest">Em Oficina</span>
+                    <span className="text-xs font-black uppercase tracking-widest">Em Oficina</span>
                     <AlertTriangle className="w-4 h-4 text-amber-500" />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-800">
@@ -1576,7 +1576,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                 <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-28 hover:shadow-lg hover:border-blue-100 transition-all">
                   <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-[10px] font-black uppercase tracking-widest">Próximas Agendadas</span>
+                    <span className="text-xs font-black uppercase tracking-widest">Próximas Agendadas</span>
                     <Calendar className="w-4 h-4 text-blue-500" />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-800">
@@ -1691,15 +1691,15 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                 <td className="py-3 px-4 font-bold text-gray-800">
                                   <div>
                                     <p>{asset?.name || 'Ativo Desconhecido'}</p>
-                                    <p className="text-[10px] text-gray-400 font-semibold">{asset?.code || ''}</p>
+                                    <p className="text-xs text-gray-400 font-semibold">{asset?.code || ''}</p>
                                   </div>
                                 </td>
-                                <td className="py-3 px-4 font-semibold uppercase text-[10px] text-gray-600">{typeLabel}</td>
+                                <td className="py-3 px-4 font-semibold uppercase text-xs text-gray-600">{typeLabel}</td>
                                 <td className="py-3 px-4 text-gray-600 font-medium max-w-[240px] truncate" title={m.description}>{m.description}</td>
                                 <td className="py-3 px-4 text-gray-500">{new Date(m.scheduled_date).toLocaleDateString('pt-BR')}</td>
                                 <td className="py-3 px-4 font-bold text-gray-700">R$ {m.cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                 <td className="py-3 px-4">
-                                  <span className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase ${statusMaintBadgeClass}`}>
+                                  <span className={`px-2.5 py-0.5 rounded-md font-bold text-xs uppercase ${statusMaintBadgeClass}`}>
                                     {m.status === 'em_execucao' ? 'Em Oficina' : m.status}
                                   </span>
                                 </td>
@@ -1709,14 +1709,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                       <>
                                         <button
                                           onClick={() => handleStartMaintenance(m)}
-                                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-md font-bold text-[10px] uppercase transition-colors"
+                                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-md font-bold text-xs uppercase transition-colors"
                                           title="Iniciar execução da manutenção"
                                         >
                                           Iniciar
                                         </button>
                                         <button
                                           onClick={() => handleCancelMaintenance(m.id)}
-                                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-[10px] uppercase transition-colors"
+                                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-xs uppercase transition-colors"
                                           title="Cancelar manutenção agendada"
                                         >
                                           Cancelar
@@ -1727,14 +1727,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                       <>
                                         <button
                                           onClick={() => handleOpenFinishMaintModal(m)}
-                                          className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-md font-bold text-[10px] uppercase transition-colors"
+                                          className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-md font-bold text-xs uppercase transition-colors"
                                           title="Concluir manutenção e liberar ativo"
                                         >
                                           Concluir
                                         </button>
                                         <button
                                           onClick={() => handleCancelMaintenance(m.id)}
-                                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-[10px] uppercase transition-colors"
+                                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-xs uppercase transition-colors"
                                           title="Cancelar manutenção em andamento"
                                         >
                                           Cancelar
@@ -1777,7 +1777,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Período</span>
+                    <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Período</span>
                     <input
                       type="date"
                       value={rateioStartDate}
@@ -1812,7 +1812,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
                       <div>
-                        <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest block">Total Depreciado no Período</span>
+                        <span className="text-gray-400 text-xs font-black uppercase tracking-widest block">Total Depreciado no Período</span>
                         <h4 className="text-xl font-bold text-slate-800 mt-1">
                           R$ {deprRateio.reduce((acc, r) => acc + r.allocated_cost, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </h4>
@@ -1822,7 +1822,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                     <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
                       <div>
-                        <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest block">Obras com Alocações</span>
+                        <span className="text-gray-400 text-xs font-black uppercase tracking-widest block">Obras com Alocações</span>
                         <h4 className="text-xl font-bold text-slate-800 mt-1">
                           {deprRateio.filter(r => r.allocated_cost > 0).length} canteiros ativos
                         </h4>
@@ -2276,7 +2276,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   O
                 </div>
                 <span className="font-sans font-black text-gray-900 tracking-wider text-sm">ÒPURA</span>
-                <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Patrimônio</span>
+                <span className="text-xs text-gray-400 uppercase tracking-widest font-bold">Patrimônio</span>
               </div>
 
               {/* Desenho do QR Code Realista em SVG puro */}
@@ -2317,7 +2317,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               {/* Código Patrimonial Legível */}
               <div className="text-center">
-                <span className="text-gray-400 block text-[10px] font-bold uppercase tracking-widest">Código do Bem</span>
+                <span className="text-gray-400 block text-xs font-bold uppercase tracking-widest">Código do Bem</span>
                 <span className="font-mono text-gray-800 font-black text-sm tracking-widest">{selectedAsset.code}</span>
               </div>
             </div>
@@ -2399,14 +2399,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         <button
                           type="button"
                           onClick={() => handleUpdateBrand(b.id)}
-                          className="text-emerald-600 font-bold hover:text-emerald-700 uppercase text-[10px]"
+                          className="text-emerald-600 font-bold hover:text-emerald-700 uppercase text-xs"
                         >
                           Salvar
                         </button>
                         <button
                           type="button"
                           onClick={() => setEditingBrandId(null)}
-                          className="text-gray-400 font-bold hover:text-gray-600 uppercase text-[10px]"
+                          className="text-gray-400 font-bold hover:text-gray-600 uppercase text-xs"
                         >
                           Cancelar
                         </button>
@@ -2421,14 +2421,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                               setEditingBrandId(b.id);
                               setEditingBrandName(b.name);
                             }}
-                            className="text-blue-500 hover:text-blue-700 font-semibold transition-colors uppercase text-[10px]"
+                            className="text-blue-500 hover:text-blue-700 font-semibold transition-colors uppercase text-xs"
                           >
                             Editar
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteBrand(b.id)}
-                            className="text-red-500 hover:text-red-700 font-semibold transition-colors uppercase text-[10px]"
+                            className="text-red-500 hover:text-red-700 font-semibold transition-colors uppercase text-xs"
                           >
                             Excluir
                           </button>

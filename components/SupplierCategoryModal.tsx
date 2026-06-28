@@ -120,7 +120,7 @@ export const SupplierCategoryModal: React.FC<SupplierCategoryModalProps> = ({ is
                         </div>
                         <div>
                             <h2 className="text-xl font-black text-gray-900 leading-none">Categorias de Fornecedores</h2>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Gerencie as categorias disponíveis</p>
+                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Gerencie as categorias disponíveis</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-white hover:shadow-md border border-transparent hover:border-gray-100 rounded-full transition-all">

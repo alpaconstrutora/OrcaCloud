@@ -119,11 +119,11 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
     const getTypeBadge = (type: SinapiType) => {
         switch (type) {
             case SinapiType.COMPOSITION:
-                return <span className="flex items-center gap-1 bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-[10px] font-bold border border-blue-100"><Layers className="w-2.5 h-2.5" /> COMP</span>;
+                return <span className="flex items-center gap-1 bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-xs font-bold border border-blue-100"><Layers className="w-2.5 h-2.5" /> COMP</span>;
             case SinapiType.SERVICE:
-                return <span className="flex items-center gap-1 bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded text-[10px] font-bold border border-purple-100"><Package className="w-2.5 h-2.5" /> SERV</span>;
+                return <span className="flex items-center gap-1 bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded text-xs font-bold border border-purple-100"><Package className="w-2.5 h-2.5" /> SERV</span>;
             default:
-                return <span className="flex items-center gap-1 bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded text-[10px] font-bold border border-amber-100"><Box className="w-2.5 h-2.5" /> INS</span>;
+                return <span className="flex items-center gap-1 bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded text-xs font-bold border border-amber-100"><Box className="w-2.5 h-2.5" /> INS</span>;
         }
     };
 
@@ -146,7 +146,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                 <div className="p-4 border-b border-gray-100 bg-white">
                     <div className="grid grid-cols-12 gap-3 mb-4">
                         <div className="col-span-1">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Código</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Código</label>
                             <input
                                 type="text"
                                 placeholder="Ex: 98546"
@@ -156,7 +156,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                             />
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tipo</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo</label>
                             <select
                                 className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                                 value={searchType}
@@ -168,7 +168,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                             </select>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Natureza</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Natureza</label>
                             <select
                                 className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                                 value={searchNature}
@@ -181,7 +181,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                             </select>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Grupo</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Grupo</label>
                             <select
                                 className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                                 value={searchGroup}
@@ -194,7 +194,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                             </select>
                         </div>
                         <div className="col-span-5">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Descrição</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Descrição</label>
                             <div className="flex gap-2">
                                 <div className="relative flex-1">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />

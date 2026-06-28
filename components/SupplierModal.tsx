@@ -134,7 +134,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                             <h2 className="text-base font-black text-gray-900 leading-none">
                                 {initialData ? 'Editar Registro' : 'Novo Fornecedor'}
                             </h2>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Gestão de Parceiros</p>
+                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">Gestão de Parceiros</p>
                         </div>
                     </div>
                 </SheetHeader>
@@ -147,7 +147,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                                 key={tab}
                                 type="button"
                                 onClick={() => setModalTab(tab)}
-                                className={`px-4 py-3 text-[11px] font-black uppercase tracking-wider border-b-2 transition-all -mb-px ${
+                                className={`px-4 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all -mb-px ${
                                     modalTab === tab
                                         ? 'border-blue-500 text-blue-600'
                                         : 'border-transparent text-gray-400 hover:text-gray-600'
@@ -299,7 +299,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                     {/* Divisor endereço */}
                     <div className="flex items-center gap-2 pt-1">
                         <MapPin className="w-3.5 h-3.5 text-gray-300" />
-                        <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Endereço</span>
+                        <span className="text-xs font-black text-gray-300 uppercase tracking-widest">Endereço</span>
                         <div className="flex-1 h-px bg-gray-100" />
                     </div>
 

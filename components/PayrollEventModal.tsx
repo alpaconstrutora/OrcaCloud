@@ -283,9 +283,9 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                     <div className="mb-4 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-between animate-in slide-in-from-top-2">
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                            <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Editando Lançamento</span>
+                            <span className="text-xs font-black text-emerald-700 uppercase tracking-widest">Editando Lançamento</span>
                         </div>
-                        <button onClick={resetForm} className="text-[10px] font-black text-emerald-400 uppercase hover:text-emerald-600 underline">
+                        <button onClick={resetForm} className="text-xs font-black text-emerald-400 uppercase hover:text-emerald-600 underline">
                             Cancelar Edição
                         </button>
                     </div>
@@ -294,7 +294,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                 {/* Conteúdo: histórico ou lançamentos */}
                 {showEventHistory ? (
                     <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-hide">
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2 mb-4">Registro de Alterações</h4>
+                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2 mb-4">Registro de Alterações</h4>
                         {eventHistory.length === 0 ? (
                             <div className="p-12 text-center text-slate-300 italic text-xs uppercase font-bold">Nenhum histórico registrado</div>
                         ) : (
@@ -304,9 +304,9 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                         <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">{log.action}</span>
                                         <span className="text-[8px] font-bold text-slate-400">{new Date(log.created_at || 0).toLocaleString('pt-BR')}</span>
                                     </div>
-                                    <p className="text-[11px] font-bold text-slate-700">{log.description}</p>
+                                    <p className="text-xs font-bold text-slate-700">{log.description}</p>
                                     <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-black text-slate-500 uppercase">
+                                        <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-xs font-black text-slate-500 uppercase">
                                             {log.user_email?.substring(0, 1)}
                                         </div>
                                         <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{log.user_email}</span>
@@ -319,11 +319,11 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                     <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-hide">
                         {/* Verbas Automáticas */}
                         <div className="space-y-2">
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Memória de Cálculo (Automático)</h4>
+                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2">Memória de Cálculo (Automático)</h4>
                             {autoItems.map(item => (
                                 <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-2xl border border-slate-100 opacity-60">
                                     <div>
-                                        <p className="text-[11px] font-black text-slate-700 uppercase">{item.code} - {(item as unknown as { description?: string }).description || item.code}</p>
+                                        <p className="text-xs font-black text-slate-700 uppercase">{item.code} - {(item as unknown as { description?: string }).description || item.code}</p>
                                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
                                             {item.type === 'informativa' ? 'Apenas Informativo' : 'Cálculo Automático'}
                                         </p>
@@ -337,15 +337,15 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
 
                         {/* Lançamentos Manuais */}
                         <div className="space-y-2">
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Lançamentos Manuais</h4>
+                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2">Lançamentos Manuais</h4>
                             {myEvents.length === 0 ? (
-                                <p className="text-center py-4 text-[11px] font-bold text-slate-300 uppercase italic">Nenhum evento manual lançado</p>
+                                <p className="text-center py-4 text-xs font-bold text-slate-300 uppercase italic">Nenhum evento manual lançado</p>
                             ) : (
                                 myEvents.map(ev => (
                                     <div key={ev.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-indigo-200 transition-all group">
                                         <div className="flex-1 flex justify-between items-center pr-2">
                                             <div>
-                                                <p className="text-[11px] font-black text-slate-700 uppercase">{ev.rubric_code} - {ev.description || ev.rubric_code}</p>
+                                                <p className="text-xs font-black text-slate-700 uppercase">{ev.rubric_code} - {ev.description || ev.rubric_code}</p>
                                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
                                                     {ev.type === 'provento' ? 'Provento' : ev.type === 'desconto' ? 'Desconto' : 'Informativa'}
                                                     {(ev.quantity ?? 0) > 0 && ` • ${(ev.quantity ?? 0).toLocaleString('pt-BR')} ${ev.unit === 'days' ? 'dias' : 'hrs'}`}

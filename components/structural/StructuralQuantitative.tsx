@@ -205,14 +205,14 @@ const StructuralQuantitative: React.FC<Props> = ({ orgId, projectId, projectName
           {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-blue-50 rounded-2xl p-4">
-              <p className="text-[11px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-1">
+              <p className="text-xs font-black uppercase tracking-widest text-blue-400 flex items-center gap-1">
                 <Package className="w-3 h-3" /> Peso líquido
               </p>
               <p className="text-2xl font-black text-blue-900 mt-1">{totalPeso.toFixed(1)} <span className="text-sm font-bold">kg</span></p>
               <p className="text-xs text-blue-300 mt-1">sem perda de processo</p>
             </div>
             <div className="bg-amber-50 rounded-2xl p-4">
-              <p className="text-[11px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-1">
+              <p className="text-xs font-black uppercase tracking-widest text-amber-500 flex items-center gap-1">
                 <TrendingDown className="w-3 h-3" /> Com perdas
               </p>
               <p className="text-2xl font-black text-amber-900 mt-1">{totalComPerda.toFixed(1)} <span className="text-sm font-bold">kg</span></p>
@@ -220,7 +220,7 @@ const StructuralQuantitative: React.FC<Props> = ({ orgId, projectId, projectName
             </div>
             {totalCusto != null ? (
               <div className="bg-emerald-50 rounded-2xl p-4 sm:col-span-2">
-                <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1">
+                <p className="text-xs font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1">
                   <Calculator className="w-3 h-3" /> Custo estimado do aço
                 </p>
                 <p className="text-2xl font-black text-emerald-900 mt-1">
@@ -230,7 +230,7 @@ const StructuralQuantitative: React.FC<Props> = ({ orgId, projectId, projectName
               </div>
             ) : (
               <div className="bg-slate-50 rounded-2xl p-4 sm:col-span-2 border border-dashed border-slate-200">
-                <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
                   <Calculator className="w-3 h-3" /> Custo estimado
                 </p>
                 <p className="text-sm text-slate-400 mt-2 font-medium">
@@ -247,7 +247,7 @@ const StructuralQuantitative: React.FC<Props> = ({ orgId, projectId, projectName
             </div>
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                <tr className="text-left text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
                   <th className="px-4 py-3">Bitola</th>
                   <th className="px-4 py-3">Tipo</th>
                   <th className="px-4 py-3 text-right">Qtd peças</th>
@@ -263,7 +263,7 @@ const StructuralQuantitative: React.FC<Props> = ({ orgId, projectId, projectName
                   <tr key={row.bitolaMm} className="text-slate-700 hover:bg-slate-50/60">
                     <td className="px-4 py-3 font-black text-slate-900">Ø {row.bitolaMm} mm</td>
                     <td className="px-4 py-3">
-                      <span className="text-[11px] font-black px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700">{row.tipo}</span>
+                      <span className="text-xs font-black px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700">{row.tipo}</span>
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-bold">{row.qtdPecas}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{row.comprimentoTotalM.toFixed(2)}</td>

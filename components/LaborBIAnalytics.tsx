@@ -39,7 +39,7 @@ const TIPO_CONFIG: Record<TurnoverTipo, { label: string; color: string; bg: stri
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-300 transition-all';
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
         {children}
     </div>
 );
@@ -72,7 +72,7 @@ const TimelineBars: React.FC<{
                 <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
                     {/* Tooltip */}
                     <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-10 hidden group-hover:flex flex-col items-center">
-                        <div className="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded-lg whitespace-nowrap">
+                        <div className="bg-slate-800 text-white text-xs font-bold px-2 py-1 rounded-lg whitespace-nowrap">
                             {d.label}: {d.value}{unit}
                             {d.meta != null && ` | meta: ${d.meta}${unit}`}
                         </div>
@@ -104,16 +104,16 @@ const KpiCard: React.FC<{
     return (
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
             <div className="flex items-start justify-between mb-3">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
                 <div className={`p-2 rounded-xl bg-${color}-50`}>
                     <Icon className={`w-4 h-4 text-${color}-600`} />
                 </div>
             </div>
             <p className="text-3xl font-black text-slate-900 tracking-tighter">{value}</p>
             <div className="flex items-center gap-2 mt-2">
-                {sub && <p className="text-[11px] text-slate-400 font-medium">{sub}</p>}
+                {sub && <p className="text-xs text-slate-400 font-medium">{sub}</p>}
                 {delta != null && (
-                    <span className={`flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-lg ${
+                    <span className={`flex items-center gap-0.5 text-xs font-black px-1.5 py-0.5 rounded-lg ${
                         positive ? 'bg-emerald-100 text-emerald-700' :
                         negative ? 'bg-red-100 text-red-700' :
                         'bg-slate-100 text-slate-500'
@@ -528,7 +528,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Taxa de Turnover Mensal</h3>
-                                        <div className="flex items-center gap-3 text-[10px] text-slate-400 font-bold">
+                                        <div className="flex items-center gap-3 text-xs text-slate-400 font-bold">
                                             <span className="flex items-center gap-1"><span className="w-3 h-2 bg-amber-400 rounded-sm inline-block" />Real</span>
                                             {target?.turnover_max_pct && <span className="flex items-center gap-1"><span className="w-3 h-2 bg-red-300 rounded-sm inline-block" />Meta</span>}
                                         </div>
@@ -539,7 +539,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Absenteísmo Mensal</h3>
-                                        <div className="flex items-center gap-3 text-[10px] text-slate-400 font-bold">
+                                        <div className="flex items-center gap-3 text-xs text-slate-400 font-bold">
                                             <span className="flex items-center gap-1"><span className="w-3 h-2 bg-rose-400 rounded-sm inline-block" />Real</span>
                                             {target?.absenteismo_max_pct && <span className="flex items-center gap-1"><span className="w-3 h-2 bg-red-300 rounded-sm inline-block" />Meta</span>}
                                         </div>
@@ -558,7 +558,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                         <thead>
                                             <tr className="border-b border-slate-50">
                                                 {['Mês', 'HC início', 'HC fim', 'Adm.', 'Dem.', 'Turnover', 'Média 3m', 'Absenteísmo', 'Custo folha'].map(h => (
-                                                    <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                                                    <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                                                 ))}
                                             </tr>
                                         </thead>
@@ -618,7 +618,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                     ];
                                 })().map(({ label, value, icon: Icon, color }) => (
                                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
                                         <div className="flex items-center justify-between mt-2">
                                             <span className="text-2xl font-black text-slate-900">{value}</span>
                                             <div className={`p-2 bg-${color}-50 rounded-xl`}>
@@ -650,7 +650,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                     <thead>
                                         <tr className="border-b border-slate-100">
                                             {['Coorte', 'Admitidos', 'Ainda ativos', 'Retenção', 'Permanência média'].map(h => (
-                                                <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                                <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
@@ -713,7 +713,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                     <thead>
                                         <tr className="border-b border-slate-50">
                                             {['Obra', 'HH produtivo', 'Custo MO', 'Previsto', 'Realizado', 'Desvio', 'IDC'].map(h => (
-                                                <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                                <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
@@ -773,7 +773,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                 <thead>
                                     <tr className="border-b border-slate-100">
                                         {['Data', 'Colaborador', 'Tipo', 'Detalhe', 'Motivo', ''].map(h => (
-                                            <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                            <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -786,7 +786,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                                 <td className="px-4 py-3 text-slate-500 text-table-body whitespace-nowrap">{fmt.date(ev.data_evento)}</td>
                                                 <td className="px-4 py-3 font-bold text-slate-800">{ev.employee_nome || '–'}</td>
                                                 <td className="px-4 py-3">
-                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black ${cfg.color} ${cfg.bg}`}>
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black ${cfg.color} ${cfg.bg}`}>
                                                         <Icon className="w-3 h-3" />
                                                         {cfg.label}
                                                     </span>

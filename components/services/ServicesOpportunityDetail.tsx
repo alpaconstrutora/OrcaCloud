@@ -363,7 +363,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
                   {engineeringSummary.name}
                 </span>
                 {opp.engineering_request_status === 'pending' && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">
+                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">
                     Aguardando orçamentista
                   </span>
                 )}
@@ -511,7 +511,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
           <ClipboardList size={15} /> Tarefas
           {tasks.filter(t => t.status !== 'done').length > 0 && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+            <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
               {tasks.filter(t => t.status !== 'done').length} pendente{tasks.filter(t => t.status !== 'done').length !== 1 ? 's' : ''}
             </span>
           )}

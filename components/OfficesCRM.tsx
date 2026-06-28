@@ -69,7 +69,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onClick, onCriarProjeto, over
       </div>
 
       {lead.briefing && (
-        <p onClick={onClick} className="text-[11px] text-slate-500 line-clamp-2 font-medium leading-relaxed cursor-pointer pl-9">
+        <p onClick={onClick} className="text-xs text-slate-500 line-clamp-2 font-medium leading-relaxed cursor-pointer pl-9">
           {lead.briefing}
         </p>
       )}
@@ -120,7 +120,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ stage, leads, onCardClick, 
       <div className={`flex items-center justify-between px-3.5 py-2.5 rounded-[16px] border mb-3 ${stage.header}`}>
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full shrink-0" style={{ background: stage.dot }} />
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">{stage.label}</span>
+          <span className="text-xs font-black uppercase tracking-widest text-slate-600">{stage.label}</span>
           <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${stage.count_chip}`}>{leads.length}</span>
         </div>
         {total > 0 && (
@@ -267,7 +267,7 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
     return (
       <div className="flex flex-col items-center justify-center p-8 min-h-[400px] bg-[#F3F7F9]">
         <div className="w-8 h-8 border-4 border-[#D47A55] border-t-transparent rounded-full animate-spin mb-3" />
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Carregando CRM...</span>
+        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando CRM...</span>
       </div>
     );
   }
@@ -287,7 +287,7 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
         </div>
         <button
           onClick={handleOpenNew}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg shadow-[#D47A55]/20 active:scale-[0.98] transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-[#D47A55]/20 active:scale-[0.98] transition-all"
         >
           <Plus className="w-3.5 h-3.5" /> Novo Lead
         </button>

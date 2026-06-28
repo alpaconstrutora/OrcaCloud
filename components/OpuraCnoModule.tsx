@@ -360,7 +360,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <div className={`w-36 h-36 rounded-full border-8 flex flex-col items-center justify-center shadow-lg
                     ${score?.status_color === 'verde' ? 'border-emerald-500 bg-emerald-50/20' : score?.status_color === 'amarelo' ? 'border-amber-500 bg-amber-50/20' : 'border-red-500 bg-red-50/20'}`}>
                     <span className="text-4xl font-black text-gray-800">{score?.score ?? 'N/D'}</span>
-                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mt-1">Score</span>
+                    <span className="text-xs font-black uppercase text-gray-400 tracking-widest mt-1">Score</span>
                   </div>
                 </div>
 
@@ -580,7 +580,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
                 <div className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nome do Cenário</label>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Nome do Cenário</label>
                     <input
                       value={simForm.scenario_name}
                       onChange={(e) => setSimForm(prev => ({ ...prev, scenario_name: e.target.value }))}
@@ -590,7 +590,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Estado (UF)</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Estado (UF)</label>
                       <input
                         value={simForm.state}
                         onChange={(e) => setSimForm(prev => ({ ...prev, state: e.target.value.toUpperCase() }))}
@@ -598,7 +598,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ref. Date</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Ref. Date</label>
                       <input
                         value={simForm.reference_date}
                         onChange={(e) => setSimForm(prev => ({ ...prev, reference_date: e.target.value }))}
@@ -609,7 +609,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Desoneração (CPRB)</label>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Desoneração (CPRB)</label>
                     <select
                       value={simForm.social_charges}
                       onChange={(e) => setSimForm(prev => ({ ...prev, social_charges: e.target.value as any }))}
@@ -622,7 +622,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Área (m²)</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Área (m²)</label>
                       <input
                         type="number"
                         value={simForm.area_construida}
@@ -631,7 +631,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Padrão</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Padrão</label>
                       <select
                         value={simForm.padrao}
                         onChange={(e) => setSimForm(prev => ({ ...prev, padrao: e.target.value as any }))}
@@ -645,7 +645,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Método Construtivo</label>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Método Construtivo</label>
                     <select
                       value={simForm.metodo_construtivo || 'convencional'}
                       onChange={(e) => setSimForm(prev => ({ ...prev, metodo_construtivo: e.target.value as any }))}
@@ -661,7 +661,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Regime de Contratação</label>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Regime de Contratação</label>
                     <select
                       value={simForm.regime_contratacao || 'equipe_propria'}
                       onChange={(e) => setSimForm(prev => ({ ...prev, regime_contratacao: e.target.value as any }))}
@@ -708,26 +708,26 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <div className="my-6 space-y-6 flex-1 justify-center flex flex-col">
                     <div className="grid grid-cols-2 gap-6">
                       <div className="p-4 bg-gray-50 rounded-2xl">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Valor CUB (m²)</span>
+                        <span className="text-xs font-black uppercase tracking-wider text-gray-400">Valor CUB (m²)</span>
                         <h5 className="text-lg font-bold text-gray-800 mt-1">R$ {activeSimResult.cubValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h5>
                       </div>
                       <div className="p-4 bg-gray-50 rounded-2xl">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Custo Global Estimado</span>
+                        <span className="text-xs font-black uppercase tracking-wider text-gray-400">Custo Global Estimado</span>
                         <h5 className="text-lg font-bold text-gray-800 mt-1">R$ {activeSimResult.custoEstimadoObra.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h5>
                       </div>
                       <div className="p-4 bg-gray-50 rounded-2xl">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Mão de Obra Aferida</span>
+                        <span className="text-xs font-black uppercase tracking-wider text-gray-400">Mão de Obra Aferida</span>
                         <h5 className="text-lg font-bold text-gray-800 mt-1">R$ {activeSimResult.baseCalculoMaoObra.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h5>
                       </div>
                       <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/30">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600">INSS Final Estimado</span>
+                        <span className="text-xs font-black uppercase tracking-wider text-indigo-600">INSS Final Estimado</span>
                         <h5 className="text-lg font-bold text-indigo-900 mt-1">R$ {activeSimResult.inssFinalEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h5>
                       </div>
                     </div>
 
                     <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between text-emerald-800">
                       <div>
-                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Redução e Economia Previdenciária</span>
+                        <span className="text-xs font-black uppercase tracking-wider text-emerald-600">Redução e Economia Previdenciária</span>
                         <p className="text-xs font-semibold mt-0.5">Graças ao método construtivo industrializado ({simForm.metodo_construtivo})</p>
                       </div>
                       <h4 className="text-xl font-black">R$ {activeSimResult.economiaMetodoConstrutivo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h4>
@@ -842,7 +842,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     </div>
                     <div>
                       <h5 className="text-sm font-bold text-gray-800">Processo de CNO & Alvarás</h5>
-                      <p className="text-gray-400 text-[10px]">Alvará de Construção, ART/RRT e Matrícula vinculadas.</p>
+                      <p className="text-gray-400 text-xs">Alvará de Construção, ART/RRT e Matrícula vinculadas.</p>
                     </div>
                   </div>
                   <button className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors">
@@ -857,7 +857,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     </div>
                     <div>
                       <h5 className="text-sm font-bold text-gray-800">Eventos de eSocial (CLT próprio)</h5>
-                      <p className="text-gray-400 text-[10px]">Arquivos XML do evento S-2200 e fechamento S-1299.</p>
+                      <p className="text-gray-400 text-xs">Arquivos XML do evento S-2200 e fechamento S-1299.</p>
                     </div>
                   </div>
                   <button className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors">
@@ -872,7 +872,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     </div>
                     <div>
                       <h5 className="text-sm font-bold text-gray-800">Medições & Retenções (Empreiteiras)</h5>
-                      <p className="text-gray-400 text-[10px]">Notas fiscais de serviço e comprovantes de retenções do INSS.</p>
+                      <p className="text-gray-400 text-xs">Notas fiscais de serviço e comprovantes de retenções do INSS.</p>
                     </div>
                   </div>
                   <button className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors">
@@ -887,7 +887,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     </div>
                     <div>
                       <h5 className="text-sm font-bold text-gray-800">Notas Fiscais de Concreto (Deduções)</h5>
-                      <p className="text-gray-400 text-[10px]">XMLs das NF-es de concreto e massa usinadas abatidas.</p>
+                      <p className="text-gray-400 text-xs">XMLs das NF-es de concreto e massa usinadas abatidas.</p>
                     </div>
                   </div>
                   <button className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors">

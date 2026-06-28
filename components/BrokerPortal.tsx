@@ -40,7 +40,7 @@ interface StatCardProps { title: string; value: string | number; subtext?: strin
 const StatCard = ({ title, value, subtext, icon: Icon, color }: StatCardProps) => (
     <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex items-start justify-between hover:shadow-md transition-all">
         <div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{title}</p>
+            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{title}</p>
             <h3 className="text-2xl font-black text-gray-900">{value}</h3>
             {subtext && <p className="text-xs mt-1.5 text-gray-500 font-medium">{subtext}</p>}
         </div>
@@ -256,7 +256,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                     const broker = allBrokers.find(b => b.id === e.target.value);
                                     setSelectedAdminBroker(broker || null);
                                 }}
-                                className="bg-amber-50 border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-xl px-4 py-1.5 focus:ring-0 cursor-pointer shadow-sm hover:bg-amber-100 transition-colors"
+                                className="bg-amber-50 border-amber-200 text-amber-700 text-xs font-black uppercase tracking-widest rounded-xl px-4 py-1.5 focus:ring-0 cursor-pointer shadow-sm hover:bg-amber-100 transition-colors"
                                 value={selectedAdminBroker?.id || ''}
                             >
                                 <option value="">Impersonar Corretor</option>
@@ -296,7 +296,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                     {/* Seletor de organização — somente admin com múltiplas orgs */}
                     {isAdmin && organizations.length > 1 && (
                         <div className="flex flex-col gap-1.5 min-w-[300px]">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Selecione a Organização</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Selecione a Organização</label>
                             <select
                                 value={selectedOrgId}
                                 onChange={(e) => setSelectedOrgId(e.target.value)}
@@ -334,7 +334,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                 </div>
                                 <div>
                                     <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Portal do Corretor</h2>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para o corretor</p>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para o corretor</p>
                                 </div>
                             </div>
                             <button onClick={() => setShowTabConfig(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
@@ -358,7 +358,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                             <tab.icon className={`w-4 h-4 ${isVisible ? 'text-indigo-500' : 'text-gray-300'}`} />
                                             <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
                                         </div>
-                                        <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${isVisible ? 'text-indigo-500' : 'text-gray-300'}`}>
+                                        <div className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest ${isVisible ? 'text-indigo-500' : 'text-gray-300'}`}>
                                             {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
                                         </div>
                                     </button>
@@ -366,7 +366,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                             })}
                         </div>
                         <div className="px-8 pb-8">
-                            <p className="text-[10px] font-bold text-gray-400 text-center uppercase tracking-widest">
+                            <p className="text-xs font-bold text-gray-400 text-center uppercase tracking-widest">
                                 Clique em cada aba para alternar visibilidade do corretor
                             </p>
                         </div>
@@ -412,7 +412,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                 <button
                                     key={p.id}
                                     onClick={() => setSelectedPurpose(p.id as 'SALE' | 'RENTAL' | 'BOTH')}
-                                    className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedPurpose === p.id
+                                    className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${selectedPurpose === p.id
                                         ? 'bg-white text-gray-900 shadow-sm'
                                         : 'text-gray-400 hover:text-gray-600'
                                         }`}
@@ -424,11 +424,11 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
 
                         {buildings.length > 0 && (
                             <div className="flex items-center gap-2 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 shrink-0">Empreendimento:</span>
+                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest px-2 shrink-0">Empreendimento:</span>
                                 <div className="flex bg-gray-100 p-1 rounded-2xl min-w-max">
                                     <button
                                         onClick={() => setSelectedBuildingId('all')}
-                                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedBuildingId === 'all'
+                                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${selectedBuildingId === 'all'
                                             ? 'bg-indigo-600 text-white shadow-sm'
                                             : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
                                             }`}
@@ -439,7 +439,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                         <button
                                             key={b.id}
                                             onClick={() => setSelectedBuildingId(b.id)}
-                                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all max-w-[150px] truncate ${selectedBuildingId === b.id
+                                            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all max-w-[150px] truncate ${selectedBuildingId === b.id
                                                 ? 'bg-indigo-600 text-white shadow-sm'
                                                 : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
                                                 }`}
@@ -516,7 +516,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                         </div>
                                         <div className="text-right">
                                             <p className="text-sm font-black text-gray-900">{formatCurrency(p.total_value || 0)}</p>
-                                            <span className={`inline-block mt-1 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${p.status === 'ENVIADA' ? 'bg-blue-50 text-blue-600' :
+                                            <span className={`inline-block mt-1 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${p.status === 'ENVIADA' ? 'bg-blue-50 text-blue-600' :
                                                 p.status === 'APROVADA' ? 'bg-emerald-50 text-emerald-600' :
                                                     p.status === 'REJEITADA' ? 'bg-red-50 text-red-600' :
                                                         'bg-gray-100 text-gray-500'

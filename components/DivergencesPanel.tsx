@@ -54,7 +54,7 @@ function Section({ title, subtitle, count, icon: Icon, accent, children }: Secti
                 </div>
                 <div className="text-left flex-1 min-w-0">
                     <p className="text-sm font-black text-gray-800">{title}</p>
-                    <p className="text-[11px] text-gray-400 font-medium">{subtitle}</p>
+                    <p className="text-xs text-gray-400 font-medium">{subtitle}</p>
                 </div>
                 <span className={`px-2.5 py-1 rounded-full text-xs font-black ${count > 0 ? accent : 'bg-gray-50 text-gray-300'}`}>
                     {count}
@@ -248,7 +248,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         <DirIcon dir={b.direction} />
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-gray-800 truncate">{b.description}</p>
-                            <p className="text-[11px] text-gray-400 font-medium">{b.account_name} · {formatDate(b.transaction_date)}</p>
+                            <p className="text-xs text-gray-400 font-medium">{b.account_name} · {formatDate(b.transaction_date)}</p>
                         </div>
                         <span className={`tabular-nums font-black text-sm ${b.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>
                             {formatBRL(b.amount)}
@@ -286,7 +286,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         <DirIcon dir={i.direction} />
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-gray-800 truncate">{i.description || i.party_name || 'Lançamento'}</p>
-                            <p className="text-[11px] text-gray-400 font-medium">
+                            <p className="text-xs text-gray-400 font-medium">
                                 {i.party_name ? `${i.party_name} · ` : ''}venc. {formatDate(i.ref_date)}
                                 {i.days_overdue > 0 && <span className="text-red-400 font-bold"> · {i.days_overdue}d em atraso</span>}
                             </p>
@@ -327,7 +327,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         <DirIcon dir={m.direction} />
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-gray-800 truncate">{m.bank_description}</p>
-                            <p className="text-[11px] text-gray-400 font-medium">
+                            <p className="text-xs text-gray-400 font-medium">
                                 Sistema {formatBRL(m.internal_amount)} · Banco {formatBRL(m.bank_amount)} · {m.account_name}
                             </p>
                         </div>
@@ -358,7 +358,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
                             <div className="min-w-0">
                                 <p className="text-sm font-bold text-gray-800 truncate">{formBank.description}</p>
-                                <p className="text-[11px] text-gray-400 font-medium">{formBank.account_name} · {formatDate(formBank.transaction_date)}</p>
+                                <p className="text-xs text-gray-400 font-medium">{formBank.account_name} · {formatDate(formBank.transaction_date)}</p>
                             </div>
                             <span className={`tabular-nums font-black text-sm ${formBank.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>
                                 {formatBRL(formBank.amount)}
@@ -366,7 +366,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         </div>
                     )}
                     <div>
-                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Categoria</label>
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Categoria</label>
                         <input
                             list="divergence-categories"
                             value={form.category}
@@ -379,7 +379,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         </datalist>
                     </div>
                     <div>
-                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Obra / Projeto</label>
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Obra / Projeto</label>
                         <select
                             value={form.projectId}
                             onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}
@@ -391,7 +391,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Centro de Custo</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Centro de Custo</label>
                             <select
                                 value={form.costCenterId}
                                 onChange={e => setForm(f => ({ ...f, costCenterId: e.target.value }))}
@@ -402,7 +402,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                             </select>
                         </div>
                         <div>
-                            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Contraparte</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Contraparte</label>
                             <select
                                 value={form.partyKey}
                                 onChange={e => setForm(f => ({ ...f, partyKey: e.target.value }))}
@@ -423,7 +423,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Descrição</label>
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Descrição</label>
                         <input
                             value={form.description}
                             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}

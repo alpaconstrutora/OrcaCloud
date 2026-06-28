@@ -161,13 +161,13 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                     {/* Campos de edição — ocultados após resultado final */}
                     {!allDone && (
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 pb-1 border-b border-gray-100">
+                            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400 pb-1 border-b border-gray-100">
                                 <Users className="w-3.5 h-3.5" />
                                 Alterar campos — deixe vazio para não alterar
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Fornecedor</label>
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Fornecedor</label>
                                 <select
                                     value={supplierId}
                                     onChange={e => setSupplierId(e.target.value)}
@@ -180,7 +180,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Obra / Projeto</label>
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Obra / Projeto</label>
                                 <select
                                     value={projectId}
                                     onChange={e => setProjectId(e.target.value)}
@@ -193,7 +193,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Centro de Custo</label>
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Centro de Custo</label>
                                 <select
                                     value={costCenterId}
                                     onChange={e => setCostCenterId(e.target.value)}
@@ -206,7 +206,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             {noneChanged && (
-                                <p className="text-[11px] text-gray-400 text-center">Selecione ao menos um campo para habilitar as ações.</p>
+                                <p className="text-xs text-gray-400 text-center">Selecione ao menos um campo para habilitar as ações.</p>
                             )}
                         </div>
                     )}

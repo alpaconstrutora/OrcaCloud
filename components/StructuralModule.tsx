@@ -266,7 +266,7 @@ const SteelCatalog: React.FC<{ orgId?: string }> = ({ orgId }) => {
         <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
+              <tr className="text-left text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
                 <th className="px-4 py-3">Tipo</th>
                 <th className="px-4 py-3">Bitola (mm)</th>
                 <th className="px-4 py-3">Peso (kg/m)</th>
@@ -294,11 +294,11 @@ const SteelCatalog: React.FC<{ orgId?: string }> = ({ orgId }) => {
                     <td className="px-4 py-3">{item.perda_pct_padrao}%</td>
                     <td className="px-4 py-3">
                       {isGlobal ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400">
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-400">
                           <Lock className="w-3 h-3" /> Global
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600">
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-600">
                           Organização
                         </span>
                       )}

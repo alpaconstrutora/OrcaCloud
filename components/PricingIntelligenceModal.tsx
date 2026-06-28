@@ -57,7 +57,7 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                     <div className="p-6 bg-blue-50 border border-blue-100 rounded-3xl flex items-start gap-4">
                         <Info className="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
                         <div className="text-sm">
-                            <h4 className="font-black text-blue-900 uppercase tracking-widest mb-1 text-[10px]">Modelo Hedônico de Precificação</h4>
+                            <h4 className="font-black text-blue-900 uppercase tracking-widest mb-1 text-xs">Modelo Hedônico de Precificação</h4>
                             <p className="text-blue-700/80 font-medium leading-relaxed">
                                 Este modelo distribui o VGV alvo proporcionalmente entre todas as unidades, considerando pesos estatísticos para cada atributo. 
                                 <span className="font-bold text-blue-900 ml-1 italic">Evita unidades encalhadas por superprecificação manual.</span>
@@ -69,7 +69,7 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                         {/* Target VGV Section */}
                         <div className="space-y-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">VGV Alvo do Projeto (R$)</label>
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">VGV Alvo do Projeto (R$)</label>
                                 <div className="relative flex items-center">
                                     <span className="absolute left-5 font-black text-gray-400">R$</span>
                                     <input
@@ -87,7 +87,7 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                                     <TrendingUp className="w-4 h-4 text-blue-600" /> Coeficiente de Andar
                                 </h3>
                                 <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-4">Valorização por Pavimento (%)</label>
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-4">Valorização por Pavimento (%)</label>
                                     <div className="flex items-center gap-6">
                                         <input
                                             type="range"
@@ -108,7 +108,7 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                         {/* Weights Section */}
                         <div className="space-y-6">
                             <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 space-y-4">
-                                <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-widest mb-4 border-b border-gray-200 pb-2">Pesos por Atendimento</h4>
+                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 border-b border-gray-200 pb-2">Pesos por Atendimento</h4>
                                 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1">
@@ -127,7 +127,7 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                             </div>
 
                             <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 space-y-4">
-                                <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-widest mb-4 border-b border-gray-200 pb-2">Sol da Manhã/Tarde</h4>
+                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 border-b border-gray-200 pb-2">Sol da Manhã/Tarde</h4>
                                 <div className="grid grid-cols-2 gap-4">
                                     {Object.entries(config.orientation_weights).map(([key, val]) => (
                                         <div key={key} className="space-y-1">
@@ -147,7 +147,7 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                         <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
                             <ShieldCheck className="w-5 h-5" />
                         </div>
-                        <p className="text-[10px] font-bold text-gray-500 max-w-[240px]">A aplicação deste modelo substituirá os preços atuais de todas as unidades deste edifício.</p>
+                        <p className="text-xs font-bold text-gray-500 max-w-[240px]">A aplicação deste modelo substituirá os preços atuais de todas as unidades deste edifício.</p>
                     </div>
                     
                     <div className="flex gap-4">

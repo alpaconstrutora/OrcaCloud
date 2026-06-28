@@ -96,7 +96,7 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
                     <span className={cfg.color}>{cfg.icon}</span>
                 </div>
                 <div className="flex-1">
-                    <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Análise de Crédito</p>
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Análise de Crédito</p>
                     {loading ? (
                         <p className="text-sm text-gray-400">Carregando…</p>
                     ) : (
@@ -116,14 +116,14 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
                     {/* Score bar */}
                     <div className="space-y-1.5">
                         <div className="flex justify-between items-center">
-                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Score Documental</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Score Documental</p>
                             <div className="flex items-center gap-2">
                                 <span className="text-lg font-black text-gray-900">{score}</span>
                                 <span className="text-xs text-gray-400">/100</span>
                                 {suggested !== result && (
                                     <button
                                         onClick={() => setResult(suggested)}
-                                        className="text-[10px] text-blue-600 hover:underline"
+                                        className="text-xs text-blue-600 hover:underline"
                                     >
                                         Sugerir: {RESULT_CONFIG[suggested].label}
                                     </button>
@@ -140,7 +140,7 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
 
                     {/* Checklist */}
                     <div className="space-y-2">
-                        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Documentos</p>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Documentos</p>
                         <div className="grid grid-cols-1 gap-1.5">
                             {(Object.keys(CHECKLIST_LABELS) as (keyof CreditChecklist)[]).map(key => (
                                 <label key={key} className="flex items-center gap-3 cursor-pointer group">
@@ -155,7 +155,7 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
                                         {checklist[key] && <CheckCircle2 size={13} className="text-white" />}
                                     </div>
                                     <span className="text-sm text-gray-700 flex-1">{CHECKLIST_LABELS[key]}</span>
-                                    <span className="text-[10px] text-gray-400 font-mono">+{CHECKLIST_WEIGHTS[key]}pts</span>
+                                    <span className="text-xs text-gray-400 font-mono">+{CHECKLIST_WEIGHTS[key]}pts</span>
                                 </label>
                             ))}
                         </div>
@@ -163,7 +163,7 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
 
                     {/* Resultado */}
                     <div className="space-y-2">
-                        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Parecer</p>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Parecer</p>
                         <div className="flex gap-2">
                             {(['PENDENTE', 'EM_ANALISE', 'APROVADO', 'REPROVADO'] as CreditResult[]).map(r => (
                                 <button
@@ -183,7 +183,7 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
 
                     {/* Notas */}
                     <div className="space-y-1.5">
-                        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Observações</p>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Observações</p>
                         <textarea
                             value={notes}
                             onChange={e => setNotes(e.target.value)}
@@ -195,7 +195,7 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
 
                     {/* Laudo PDF */}
                     <div className="space-y-1.5">
-                        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Laudo de Crédito (PDF)</p>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Laudo de Crédito (PDF)</p>
                         {analysis?.report_pdf_url ? (
                             <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-xl">
                                 <FileText size={15} className="text-blue-600" />
@@ -226,7 +226,7 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
                     </div>
 
                     {analysis?.analyzed_by && (
-                        <p className="text-[10px] text-gray-400 text-center">
+                        <p className="text-xs text-gray-400 text-center">
                             Analisado por {analysis.analyzed_by}
                             {analysis.analyzed_at && ` em ${new Date(analysis.analyzed_at).toLocaleDateString('pt-BR')}`}
                         </p>

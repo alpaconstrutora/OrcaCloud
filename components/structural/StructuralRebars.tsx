@@ -190,7 +190,7 @@ const StructuralRebars: React.FC<Props> = ({ orgId, element }) => {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-widest text-slate-400">Armaduras</p>
-          <p className="text-[11px] text-slate-400 font-medium">{element.nome} · {element.tipo} · ×{element.quantidade}</p>
+          <p className="text-xs text-slate-400 font-medium">{element.nome} · {element.tipo} · ×{element.quantidade}</p>
         </div>
         <button onClick={startNew}
           className="flex items-center gap-1 text-button font-black text-blue-600 hover:text-blue-700">
@@ -210,13 +210,13 @@ const StructuralRebars: React.FC<Props> = ({ orgId, element }) => {
         <div className="flex flex-col items-center py-8 text-slate-300">
           <Hammer className="w-8 h-8 mb-2 opacity-50" />
           <p className="text-xs font-medium text-slate-400">Nenhuma armadura cadastrada</p>
-          <p className="text-[11px] text-slate-300">Adicione as chamadas da prancha estrutural</p>
+          <p className="text-xs text-slate-300">Adicione as chamadas da prancha estrutural</p>
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 text-left">
+              <tr className="text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 text-left">
                 <th className="px-3 py-2.5">Pos.</th>
                 <th className="px-3 py-2.5">Bitola</th>
                 <th className="px-3 py-2.5">Função</th>

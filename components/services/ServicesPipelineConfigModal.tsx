@@ -127,7 +127,7 @@ const ServicesPipelineConfigModal: React.FC<Props> = ({ organizationId, onClose,
                   onChange={e => updateRow(r.stage, { label: e.target.value })}
                   className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <span className="text-[10px] uppercase tracking-wider text-gray-300 font-bold w-16 text-right">{r.stage}</span>
+                <span className="text-xs uppercase tracking-wider text-gray-300 font-bold w-16 text-right">{r.stage}</span>
               </div>
 
               {/* Sub-status presets */}

@@ -104,7 +104,7 @@ function DraggableCard({
         {/* Badge de prioridade + checkbox done */}
         <div className="flex items-center justify-between">
           <span
-            className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md"
+            className="text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md"
             style={{ backgroundColor: prio.bg, color: prio.color }}
           >
             {prio.label}
@@ -113,7 +113,7 @@ function DraggableCard({
           {/* Status badge (quando não agrupado por status) */}
           {showStatus && taskStatus && (
             <span
-              className="text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-md"
+              className="text-xs font-black uppercase tracking-wide px-2 py-0.5 rounded-md"
               style={{ backgroundColor: taskStatus.color + '22', color: taskStatus.color }}
             >
               {taskStatus.name}
@@ -167,7 +167,7 @@ function DraggableCard({
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5">
               <CheckSquare className="w-3 h-3 text-slate-400 flex-shrink-0" />
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
+              <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
                 {doneSubCount}/{subtasks.length} subtarefa{subtasks.length !== 1 ? 's' : ''}
               </span>
             </div>
@@ -210,7 +210,7 @@ function DraggableCard({
           {/* Avatar */}
           {assignee ? (
             <div
-              className={`w-6 h-6 rounded-full text-[10px] font-black text-white flex items-center justify-center flex-shrink-0 ${avatarBg(assignee.name)}`}
+              className={`w-6 h-6 rounded-full text-xs font-black text-white flex items-center justify-center flex-shrink-0 ${avatarBg(assignee.name)}`}
               title={assignee.name}
             >
               {initials(assignee.name)}
@@ -232,7 +232,7 @@ function DraggableCard({
 
           {/* Vencimento */}
           {task.due_date && (
-            <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg
+            <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-lg
               ${isOverdue(task.due_date) ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-500'}`}
             >
               {isOverdue(task.due_date) ? <AlertTriangle className="w-2.5 h-2.5" /> : <Calendar className="w-2.5 h-2.5" />}
@@ -242,7 +242,7 @@ function DraggableCard({
 
           {/* Contagem de subtarefas no rodapé (quando não há lista acima) */}
           {subtasks.length === 0 && (
-            <span className="text-[11px] text-slate-300 font-medium">
+            <span className="text-xs text-slate-300 font-medium">
               {/* espaço reservado */}
             </span>
           )}
@@ -281,7 +281,7 @@ function DroppableColumn({
           />
         )}
         <span className="font-black text-xs uppercase tracking-widest text-slate-700 flex-1">{col.label}</span>
-        <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+        <span className="text-xs font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
           {col.tasks.length}
         </span>
         {onAddTask && (

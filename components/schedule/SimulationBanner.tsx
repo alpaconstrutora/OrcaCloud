@@ -81,7 +81,7 @@ const SimulationBanner: React.FC<SimulationBannerProps> = ({
                         <button
                             onClick={handleConfirmSave}
                             disabled={!scenarioName.trim()}
-                            className="px-2 py-1 text-[11px] font-bold bg-purple-600 text-white rounded-lg disabled:opacity-50 hover:bg-purple-700 transition-all"
+                            className="px-2 py-1 text-xs font-bold bg-purple-600 text-white rounded-lg disabled:opacity-50 hover:bg-purple-700 transition-all"
                         >
                             Salvar
                         </button>

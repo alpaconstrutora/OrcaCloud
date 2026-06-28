@@ -44,7 +44,7 @@ const TabBtn: React.FC<{
     <Icon className="w-4 h-4" />
     {label}
     {count !== undefined && count > 0 && (
-      <span className={`px-1.5 py-0.5 rounded-md text-[10px] ${active ? 'bg-white/20' : 'bg-slate-200 text-slate-600'}`}>
+      <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? 'bg-white/20' : 'bg-slate-200 text-slate-600'}`}>
         {count}
       </span>
     )}

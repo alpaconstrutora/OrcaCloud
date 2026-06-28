@@ -40,7 +40,7 @@ function StatusBadge({ status }: { status: 'sent' | 'failed' | 'skipped' }) {
     const cfg = STATUS_CFG[status];
     const Icon = cfg.icon;
     return (
-        <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${cfg.cls}`}>
+        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.cls}`}>
             <Icon className="w-3 h-3" />
             {cfg.label}
         </span>
@@ -123,7 +123,7 @@ function RuleModal({
                     <div className="grid grid-cols-2 gap-4">
                         {/* Nome */}
                         <div className="col-span-2">
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Nome da regra *</label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Nome da regra *</label>
                             <input
                                 type="text"
                                 value={form.name}
@@ -135,7 +135,7 @@ function RuleModal({
 
                         {/* Offset */}
                         <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
                                 Disparar em (dias do vencimento)
                             </label>
                             <input
@@ -144,12 +144,12 @@ function RuleModal({
                                 onChange={e => patch({ days_offset: parseInt(e.target.value) || 0 })}
                                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
                             />
-                            <p className="text-[10px] text-gray-400 mt-1">{fmtOffset(form.days_offset)}</p>
+                            <p className="text-xs text-gray-400 mt-1">{fmtOffset(form.days_offset)}</p>
                         </div>
 
                         {/* Hora */}
                         <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Horário de envio (BRT)</label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Horário de envio (BRT)</label>
                             <select
                                 value={form.trigger_hour}
                                 onChange={e => patch({ trigger_hour: parseInt(e.target.value) })}
@@ -177,7 +177,7 @@ function RuleModal({
 
                     {/* Assunto */}
                     <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Assunto do e-mail</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Assunto do e-mail</label>
                         <input
                             type="text"
                             value={form.subject_template}
@@ -200,7 +200,7 @@ function RuleModal({
                     {/* Corpo */}
                     <div>
                         <div className="flex items-center justify-between mb-1">
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide">Corpo do e-mail (HTML)</label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Corpo do e-mail (HTML)</label>
                             <div className="flex bg-gray-100 rounded-lg overflow-hidden">
                                 {(['edit', 'preview'] as const).map(tab => (
                                     <button
@@ -436,7 +436,7 @@ function ReguaTab({ organizationId }: { organizationId: string }) {
                             {/* Info */}
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-gray-800 truncate">{rule.name}</p>
-                                <p className="text-[10px] text-gray-400 flex items-center gap-2 mt-0.5">
+                                <p className="text-xs text-gray-400 flex items-center gap-2 mt-0.5">
                                     <Clock className="w-3 h-3" />{String(rule.trigger_hour).padStart(2,'0')}:00 BRT
                                     <span>·</span>
                                     <Mail className="w-3 h-3" />{rule.channel}
@@ -567,7 +567,7 @@ function HistoricoTab({ organizationId }: { organizationId: string }) {
                                     <p className="text-xs font-medium text-gray-800 truncate">
                                         {ev.party_name ?? ev.recipient_email ?? 'Destinatário desconhecido'}
                                     </p>
-                                    <p className="text-[10px] text-gray-400 mt-0.5">
+                                    <p className="text-xs text-gray-400 mt-0.5">
                                         {fmtBRL(ev.amount)}
                                         {ev.due_date ? ` · venc. ${fmtDue(ev.due_date)}` : ''}
                                         {' · '}

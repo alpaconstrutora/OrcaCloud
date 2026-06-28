@@ -161,7 +161,7 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
                     </div>
 
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Identificação</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Identificação</p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <Field label="Código" required>
                                 <input className={cls} placeholder="ex: 0001" value={form.codigo}
@@ -182,7 +182,7 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
                     </div>
 
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Endereço</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Endereço</p>
                         <CityStateSelect
                             cep={form.cep}
                             stateCode={form.uf}
@@ -259,15 +259,15 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-black text-gray-900 text-sm">{b.nome}</span>
                                     {!b.ativa && (
-                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Inativa</span>
+                                        <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Inativa</span>
                                     )}
                                     {b.estoque_proprio && (
-                                        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">
+                                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">
                                             <Package className="w-3 h-3" /> Estoque
                                         </span>
                                     )}
                                     {b.cnpj_proprio && (
-                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">CNPJ próprio</span>
+                                        <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">CNPJ próprio</span>
                                     )}
                                 </div>
                                 {(b.endereco?.cidade || b.endereco?.uf) && (

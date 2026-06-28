@@ -58,7 +58,7 @@ const ageColor = (iso: string | null): string => {
 };
 
 const AgingBadges: React.FC<{ createdAt: string; updatedAt: string }> = ({ createdAt, updatedAt }) => (
-  <div className="flex items-center gap-2 text-[11px] font-semibold">
+  <div className="flex items-center gap-2 text-xs font-semibold">
     <span className="flex items-center gap-0.5 text-slate-400" title="Idade do lead (desde a criação)">
       <Clock size={11} className="flex-shrink-0" /> {formatAge(createdAt)}
     </span>
@@ -99,7 +99,7 @@ const OpportunityCard: React.FC<{
       <div className="p-3.5 space-y-2.5">
         {/* Badge de prioridade */}
         <span
-          className="inline-block text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md"
+          className="inline-block text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md"
           style={{ backgroundColor: prio.bg, color: prio.color }}
         >
           {prio.label}
@@ -111,7 +111,7 @@ const OpportunityCard: React.FC<{
         {/* Sub-status (etapa dentro do estágio) */}
         {opp.sub_status && (
           <span
-            className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border"
+            className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border"
             style={{ borderColor: `${stageHex}55`, color: stageHex, backgroundColor: `${stageHex}11` }}
           >
             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: stageHex }} />
@@ -139,7 +139,7 @@ const OpportunityCard: React.FC<{
             )}
           </div>
           {formattedValue && (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500 flex-shrink-0">
+            <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500 flex-shrink-0">
               {formattedValue}
             </span>
           )}
@@ -181,7 +181,7 @@ const PipelineColumn: React.FC<{
         style={{ backgroundColor: hex }}
       />
       <span className="font-black text-xs uppercase tracking-widest text-slate-700 flex-1">{label}</span>
-      <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{cards.length}</span>
+      <span className="text-xs font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{cards.length}</span>
       {onAddNew && (
         <button
           onClick={onAddNew}

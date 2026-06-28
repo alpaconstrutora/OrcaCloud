@@ -164,34 +164,34 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="col-span-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Nome *</label>
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Nome *</label>
                                 <input type="text" value={newLead.name} onChange={e => setNewLead(p => ({ ...p, name: e.target.value }))}
                                     className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm" placeholder="Nome completo" />
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Telefone</label>
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Telefone</label>
                                 <input type="text" value={newLead.phone} onChange={e => setNewLead(p => ({ ...p, phone: e.target.value }))}
                                     className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm" placeholder="(00) 00000-0000" />
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">E-mail</label>
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">E-mail</label>
                                 <input type="text" value={newLead.email} onChange={e => setNewLead(p => ({ ...p, email: e.target.value }))}
                                     className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm" placeholder="email@exemplo.com" />
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Origem</label>
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Origem</label>
                                 <select value={newLead.origin} onChange={e => setNewLead(p => ({ ...p, origin: e.target.value as BrokerLead['origin'] }))}
                                     className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm bg-white">
                                     {Object.entries(ORIGIN_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Interesse</label>
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Interesse</label>
                                 <input type="text" value={newLead.interest_typology} onChange={e => setNewLead(p => ({ ...p, interest_typology: e.target.value }))}
                                     className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm" placeholder="Ex: 3Q Suite" />
                             </div>
                             <div className="col-span-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Observações</label>
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Observações</label>
                                 <textarea value={newLead.notes} onChange={e => setNewLead(p => ({ ...p, notes: e.target.value }))} rows={2}
                                     className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm" />
                             </div>
@@ -214,7 +214,7 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                                 <div className={`rounded-xl p-3 ${cfg.bg} border ${cfg.border}`}>
                                     <div className="flex items-center justify-between">
                                         <span className={`text-xs font-black uppercase tracking-wider ${cfg.color}`}>{cfg.label}</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${cfg.bg} ${cfg.color} border ${cfg.border}`}>{count}</span>
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-black ${cfg.bg} ${cfg.color} border ${cfg.border}`}>{count}</span>
                                     </div>
                                 </div>
                                 <div className="space-y-2 max-h-[500px] overflow-y-auto scrollbar-hide">
@@ -222,10 +222,10 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                                         <button key={lead.id} onClick={() => setSelectedLead(lead)}
                                             className={`w-full text-left bg-white rounded-xl p-3 border border-gray-100 hover:shadow-md hover:border-indigo-200 transition-all ${selectedLead?.id === lead.id ? 'ring-2 ring-indigo-500 border-indigo-300' : ''}`}>
                                             <p className="text-sm font-bold text-gray-900 truncate">{lead.name}</p>
-                                            <p className="text-[10px] text-gray-400 mt-0.5">{lead.interest_typology || 'Sem preferência'}</p>
+                                            <p className="text-xs text-gray-400 mt-0.5">{lead.interest_typology || 'Sem preferência'}</p>
                                             <div className="flex items-center gap-1 mt-2">
                                                 <Shield className="w-3 h-3 text-emerald-500" />
-                                                <span className="text-[10px] font-bold text-emerald-600">{daysUntilExpiry(lead.protection_until)}d</span>
+                                                <span className="text-xs font-bold text-emerald-600">{daysUntilExpiry(lead.protection_until)}d</span>
                                             </div>
                                         </button>
                                     ))}
@@ -243,12 +243,12 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                         <table className="w-full">
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-100">
-                                    <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Lead</th>
-                                    <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Contato</th>
-                                    <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Origem</th>
-                                    <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Etapa</th>
-                                    <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Proteção</th>
-                                    <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Ações</th>
+                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Lead</th>
+                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Contato</th>
+                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Origem</th>
+                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Etapa</th>
+                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Proteção</th>
+                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
@@ -259,17 +259,17 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                                         <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="p-4">
                                                 <p className="text-sm font-bold text-gray-900">{lead.name}</p>
-                                                <p className="text-[10px] text-gray-400">{lead.interest_typology} • {lead.interest_block}</p>
+                                                <p className="text-xs text-gray-400">{lead.interest_typology} • {lead.interest_block}</p>
                                             </td>
                                             <td className="p-4">
                                                 <p className="text-xs text-gray-600">{lead.phone}</p>
-                                                <p className="text-[10px] text-gray-400">{lead.email}</p>
+                                                <p className="text-xs text-gray-400">{lead.email}</p>
                                             </td>
                                             <td className="p-4">
                                                 <span className="text-xs font-bold text-gray-600">{ORIGIN_LABELS[lead.origin]}</span>
                                             </td>
                                             <td className="p-4">
-                                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${cfg.bg} ${cfg.color} border ${cfg.border}`}>
+                                                <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${cfg.bg} ${cfg.color} border ${cfg.border}`}>
                                                     {cfg.label}
                                                 </span>
                                             </td>
@@ -320,19 +320,19 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <div className="bg-gray-50 rounded-xl p-3">
-                            <p className="text-[10px] font-black text-gray-400 uppercase">Origem</p>
+                            <p className="text-xs font-black text-gray-400 uppercase">Origem</p>
                             <p className="text-sm font-bold text-gray-900">{ORIGIN_LABELS[selectedLead.origin]}</p>
                         </div>
                         <div className="bg-gray-50 rounded-xl p-3">
-                            <p className="text-[10px] font-black text-gray-400 uppercase">Interesse</p>
+                            <p className="text-xs font-black text-gray-400 uppercase">Interesse</p>
                             <p className="text-sm font-bold text-gray-900">{selectedLead.interest_typology || '-'}</p>
                         </div>
                         <div className="bg-gray-50 rounded-xl p-3">
-                            <p className="text-[10px] font-black text-gray-400 uppercase">Faixa</p>
+                            <p className="text-xs font-black text-gray-400 uppercase">Faixa</p>
                             <p className="text-sm font-bold text-gray-900">{selectedLead.budget_range || '-'}</p>
                         </div>
                         <div className={`rounded-xl p-3 ${daysUntilExpiry(selectedLead.protection_until) < 15 ? 'bg-red-50' : 'bg-emerald-50'}`}>
-                            <p className="text-[10px] font-black text-gray-400 uppercase">Proteção</p>
+                            <p className="text-xs font-black text-gray-400 uppercase">Proteção</p>
                             <div className="flex items-center gap-1">
                                 <Shield className={`w-4 h-4 ${daysUntilExpiry(selectedLead.protection_until) < 15 ? 'text-red-500' : 'text-emerald-500'}`} />
                                 <p className={`text-sm font-bold ${daysUntilExpiry(selectedLead.protection_until) < 15 ? 'text-red-700' : 'text-emerald-700'}`}>
@@ -359,7 +359,7 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                                         </div>
                                         <div className="flex-1">
                                             <p className="text-sm font-bold text-gray-900">{interaction.description}</p>
-                                            <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(interaction.date)}</p>
+                                            <p className="text-xs text-gray-400 mt-0.5">{formatDate(interaction.date)}</p>
                                         </div>
                                     </div>
                                 );

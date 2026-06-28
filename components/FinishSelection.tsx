@@ -67,7 +67,7 @@ const FinishSelection: React.FC = () => {
                                 <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
                                 <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase">{cat}</h3>
                             </div>
-                            <div className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-4 py-2 rounded-full">
+                            <div className="flex items-center gap-2 text-xs font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-4 py-2 rounded-full">
                                 <Info className="w-4 h-4" />
                                 Escolha uma opção
                             </div>

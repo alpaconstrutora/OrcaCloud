@@ -115,7 +115,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                         <div key={label} className={`p-3 rounded-2xl ${alert ? 'bg-amber-400/30 border border-amber-300/30' : 'bg-white/10'}`}>
                             <div className="flex items-center gap-2">
                                 <Icon className="w-4 h-4 text-white/80" />
-                                <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">{label}</span>
+                                <span className="text-xs font-black text-white/60 uppercase tracking-widest">{label}</span>
                             </div>
                             <p className="text-2xl font-black text-white mt-1">{value}</p>
                         </div>
@@ -134,7 +134,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                     ['treino', 'Trein.',    BookOpen],
                 ] as const).map(([id, label, Icon]) => (
                     <button key={id} onClick={() => setActiveSection(id)}
-                        className={`flex-1 flex flex-col items-center gap-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 ${activeSection === id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400'}`}>
+                        className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs font-black uppercase tracking-widest transition-all border-b-2 ${activeSection === id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400'}`}>
                         <Icon className="w-4 h-4" />
                         {label}
                     </button>
@@ -196,7 +196,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                     </div>
                                     <div className="text-right">
                                         <p className="text-sm font-black text-slate-900">{e.hours_worked}h{e.overtime_hours > 0 ? ` +${e.overtime_hours}HE` : ''}</p>
-                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${e.status === 'APROVADO' ? 'bg-emerald-100 text-emerald-700' : e.status === 'REJEITADO' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        <span className={`text-xs font-black px-2 py-0.5 rounded-full ${e.status === 'APROVADO' ? 'bg-emerald-100 text-emerald-700' : e.status === 'REJEITADO' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
                                             {e.status}
                                         </span>
                                     </div>
@@ -228,7 +228,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                     </div>
                                     <div className="text-right">
                                         <p className="text-sm font-black text-slate-900">{a.dias}d</p>
-                                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${a.status === 'APROVADO' ? 'bg-emerald-100 text-emerald-700' : a.status === 'REJEITADO' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        <span className={`text-xs font-black px-1.5 py-0.5 rounded-full ${a.status === 'APROVADO' ? 'bg-emerald-100 text-emerald-700' : a.status === 'REJEITADO' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
                                             {a.status}
                                         </span>
                                     </div>
@@ -304,7 +304,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                             <p className="text-sm font-black text-emerald-700">
                                                 {(run.net ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                             </p>
-                                            <p className="text-[10px] text-slate-400">líquido</p>
+                                            <p className="text-xs text-slate-400">líquido</p>
                                         </div>
                                     </button>
                                 );
@@ -332,10 +332,10 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
                                                 <p className="text-sm font-bold text-slate-800">{t.course_nome}</p>
-                                                {t.nr_referencia && <p className="text-[10px] font-black text-rose-600">{t.nr_referencia}</p>}
+                                                {t.nr_referencia && <p className="text-xs font-black text-rose-600">{t.nr_referencia}</p>}
                                                 <p className="text-xs text-slate-400 mt-0.5">{t.data_realizacao}{t.data_validade ? ` → ${t.data_validade}` : ''}</p>
                                             </div>
-                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 ${expired ? 'bg-rose-100 text-rose-700' : expiring ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                            <span className={`text-xs font-black px-2 py-0.5 rounded-full shrink-0 ${expired ? 'bg-rose-100 text-rose-700' : expiring ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                                 {expired ? 'Vencido' : expiring ? 'Vencendo' : 'Válido'}
                                             </span>
                                         </div>
@@ -416,7 +416,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
                 <Smartphone className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
                 <div>
                     <p className="text-xs font-black text-indigo-900">Portal do Colaborador</p>
-                    <p className="text-[11px] text-indigo-700 mt-1">
+                    <p className="text-xs text-indigo-700 mt-1">
                         Gere um link seguro para cada colaborador acessar seu portal via celular.
                         O link expira em 30 dias. Não é necessário criar conta — basta o link.
                     </p>
@@ -473,7 +473,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
                                     </div>
                                     {tok && tok.is_active && !isExpired ? (
                                         <div className="flex items-center gap-2 shrink-0">
-                                            <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-700">
+                                            <div className="flex items-center gap-1 text-xs font-bold text-emerald-700">
                                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                                 Ativo
                                                 {tok.last_used_at && <span className="text-slate-400 ml-1">· Último acesso {tok.last_used_at.split('T')[0]}</span>}
@@ -481,7 +481,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
                                             <button onClick={() => setPreviewEmployee(emp.id)} className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-400 hover:text-indigo-600 transition-colors" title="Prévia do portal">
                                                 <Smartphone className="w-3.5 h-3.5" />
                                             </button>
-                                            <button onClick={() => handleCopy(tok)} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-black transition-all ${copied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                                            <button onClick={() => handleCopy(tok)} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-black transition-all ${copied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                                                 {copied ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                                                 {copied ? 'Copiado!' : 'Copiar link'}
                                             </button>
@@ -496,7 +496,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
                                         <button
                                             onClick={() => handleGenerate(emp)}
                                             disabled={generating}
-                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all ${generating ? 'bg-slate-100 text-slate-400' : 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700'}`}
+                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${generating ? 'bg-slate-100 text-slate-400' : 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700'}`}
                                         >
                                             {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
                                             {generating ? 'Gerando...' : (isExpired ? 'Renovar' : 'Gerar acesso')}

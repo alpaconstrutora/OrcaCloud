@@ -284,7 +284,7 @@ export const EapPanel: React.FC<Props> = ({ hierarchy, schedule, onUpdateLocatio
                     <Building2 className="w-4 h-4 text-blue-600" />
                     <h2 className="text-sm font-bold text-gray-800">EAP Física — Estrutura Analítica da Obra</h2>
                 </div>
-                <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                <div className="flex items-center gap-3 text-xs text-gray-400">
                     <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold border border-blue-100">
                         {assignedCount}/{leaves.length} atividades com localização
                     </span>
@@ -292,7 +292,7 @@ export const EapPanel: React.FC<Props> = ({ hierarchy, schedule, onUpdateLocatio
             </div>
 
             {/* Legend */}
-            <div className="flex items-center gap-2 flex-wrap text-[10px]">
+            <div className="flex items-center gap-2 flex-wrap text-xs">
                 {(['bloco','pavimento','ambiente','disciplina'] as const).map(level => (
                     <div key={level} className={`flex items-center gap-1 px-2 py-0.5 rounded-full border ${LEVEL_COLOR[level]}`}>
                         {LEVEL_ICON[level]}
@@ -307,7 +307,7 @@ export const EapPanel: React.FC<Props> = ({ hierarchy, schedule, onUpdateLocatio
                 <div className="bg-white border border-dashed border-gray-200 rounded-2xl py-14 text-center">
                     <Building2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                     <p className="text-sm font-bold text-gray-500">Nenhuma atividade no cronograma</p>
-                    <p className="text-[11px] text-gray-400 mt-1">
+                    <p className="text-xs text-gray-400 mt-1">
                         Adicione atividades ao cronograma e atribua localizações físicas para visualizar a EAP.
                     </p>
                 </div>
@@ -349,7 +349,7 @@ export const EapPanel: React.FC<Props> = ({ hierarchy, schedule, onUpdateLocatio
                         <span className="text-xs font-bold text-gray-600 flex-1 text-left">
                             Sem localização ({unassigned.itemIds.length} atividades)
                         </span>
-                        <span className="text-[10px] text-gray-400">
+                        <span className="text-xs text-gray-400">
                             Clique para expandir e atribuir localizações
                         </span>
                         {expanded['__unassigned__']
@@ -413,7 +413,7 @@ const EapNodeRow: React.FC<{
                 onClick={() => toggleExpand(node.key)}
                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50/50 transition-colors"
             >
-                <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${clr}`}>
+                <span className={`flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border ${clr}`}>
                     {levelIcon[node.level]}
                     {node.label}
                 </span>
@@ -428,10 +428,10 @@ const EapNodeRow: React.FC<{
                             />
                         </div>
                     </div>
-                    <span className="text-[10px] text-gray-500 font-bold">{node.completionPct.toFixed(0)}%</span>
+                    <span className="text-xs text-gray-500 font-bold">{node.completionPct.toFixed(0)}%</span>
                 </div>
 
-                <div className="flex items-center gap-4 text-[10px] text-gray-400 shrink-0">
+                <div className="flex items-center gap-4 text-xs text-gray-400 shrink-0">
                     <span>{totalItems} ativ.</span>
                     {node.budgetedTotal > 0 && <span>{fmtBRL(node.budgetedTotal)}</span>}
                     {node.startDate && <span>{fmtDate(node.startDate)} → {fmtDate(node.endDate)}</span>}
@@ -527,7 +527,7 @@ const ItemRowCompact: React.FC<{
                 <div className="flex items-center gap-3">
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
                     <span className="text-xs text-gray-700 flex-1 truncate font-medium">{leaf.name}</span>
-                    <div className="flex items-center gap-3 text-[10px] text-gray-400 shrink-0">
+                    <div className="flex items-center gap-3 text-xs text-gray-400 shrink-0">
                         <span>{fmtDate(start)} → {fmtDate(end)}</span>
                         <div className="flex items-center gap-1">
                             <div className="w-10 h-1 bg-gray-100 rounded-full overflow-hidden">
@@ -590,13 +590,13 @@ const LocationForm: React.FC<{
         <div className="flex items-center gap-2 justify-end">
             <button
                 onClick={onCancel}
-                className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:text-gray-700 transition-colors"
+                className="px-3 py-1 text-xs font-bold text-gray-500 hover:text-gray-700 transition-colors"
             >
                 Cancelar
             </button>
             <button
                 onClick={onSave}
-                className="flex items-center gap-1 px-3 py-1 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
             >
                 <Check className="w-3 h-3" />
                 Salvar

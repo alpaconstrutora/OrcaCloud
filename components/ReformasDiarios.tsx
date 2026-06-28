@@ -239,7 +239,7 @@ const ReformasDiarios: React.FC<ReformasDiariosProps> = ({ userId }) => {
 
       {/* Relator de Diário */}
       <div className="bg-[#0D1224] p-5 border border-white/5 rounded-3xl space-y-4 shadow-xl">
-        <span className="text-[10px] font-black uppercase tracking-widest text-orange-500 flex items-center gap-1.5">
+        <span className="text-xs font-black uppercase tracking-widest text-orange-500 flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 animate-pulse" />
           Registrar Progresso de Hoje
         </span>
@@ -257,7 +257,7 @@ const ReformasDiarios: React.FC<ReformasDiariosProps> = ({ userId }) => {
           >
             {isRecording ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
           </button>
-          <span className="text-[10px] font-bold text-slate-400 mt-3 uppercase tracking-wider">
+          <span className="text-xs font-bold text-slate-400 mt-3 uppercase tracking-wider">
             {isRecording ? 'Gravando e Transcrevendo...' : 'Clique para Falar'}
           </span>
 

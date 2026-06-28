@@ -148,7 +148,7 @@ const CostCenterImportModal: React.FC<Props> = ({
                         <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">
                             Importar Centros de Custo
                         </h2>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">
                             {step === 'upload' && 'Selecione um arquivo .xlsx ou .csv'}
                             {step === 'preview' && `${rows.length} linha(s) encontrada(s) em "${fileName}"`}
                             {step === 'done' && 'Importação concluída'}
@@ -192,7 +192,7 @@ const CostCenterImportModal: React.FC<Props> = ({
                     {step === 'preview' && (
                         <div>
                             {/* summary bar */}
-                            <div className="flex items-center gap-3 px-8 py-4 bg-gray-50 border-b border-gray-100 text-[11px] font-black uppercase tracking-widest">
+                            <div className="flex items-center gap-3 px-8 py-4 bg-gray-50 border-b border-gray-100 text-xs font-black uppercase tracking-widest">
                                 <span className="text-emerald-600">{rows.filter(r => r.status === 'new').length} novos</span>
                                 <span className="text-gray-300">·</span>
                                 <span className="text-amber-600">{rows.filter(r => r.status === 'update').length} a atualizar</span>
@@ -201,7 +201,7 @@ const CostCenterImportModal: React.FC<Props> = ({
                             </div>
 
                             <table className="min-w-full divide-y divide-gray-100">
-                                <thead className="bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-widest">
+                                <thead className="bg-gray-50 text-gray-400 text-xs font-black uppercase tracking-widest">
                                     <tr>
                                         <th className="px-4 py-3 text-center w-10">
                                             <input
@@ -237,18 +237,18 @@ const CostCenterImportModal: React.FC<Props> = ({
                                                     />
                                                 </td>
                                                 <td className="px-4 py-2.5">
-                                                    <span className="text-[10px] font-black bg-gray-100 text-gray-500 px-2 py-1 rounded uppercase tracking-wider">
+                                                    <span className="text-xs font-black bg-gray-100 text-gray-500 px-2 py-1 rounded uppercase tracking-wider">
                                                         {row.code || '—'}
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-2.5">
                                                     <span className="text-sm font-bold text-gray-800">{row.name || <span className="text-red-400 italic">vazio</span>}</span>
                                                     {row.errorMsg && (
-                                                        <p className="text-[10px] text-red-400 font-bold mt-0.5">{row.errorMsg}</p>
+                                                        <p className="text-xs text-red-400 font-bold mt-0.5">{row.errorMsg}</p>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-2.5 text-center">
-                                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+                                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black uppercase tracking-wider border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
                                                         <StatusIcon className="w-3 h-3" />
                                                         {cfg.label}
                                                     </span>
@@ -274,16 +274,16 @@ const CostCenterImportModal: React.FC<Props> = ({
                             <div className="flex gap-4">
                                 <div className="px-6 py-4 bg-emerald-50 rounded-2xl text-center border border-emerald-100">
                                     <p className="text-2xl font-black text-emerald-600">{result.created}</p>
-                                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">Criados</p>
+                                    <p className="text-xs font-black text-emerald-500 uppercase tracking-widest mt-1">Criados</p>
                                 </div>
                                 <div className="px-6 py-4 bg-amber-50 rounded-2xl text-center border border-amber-100">
                                     <p className="text-2xl font-black text-amber-600">{result.updated}</p>
-                                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mt-1">Atualizados</p>
+                                    <p className="text-xs font-black text-amber-500 uppercase tracking-widest mt-1">Atualizados</p>
                                 </div>
                                 {result.errors > 0 && (
                                     <div className="px-6 py-4 bg-red-50 rounded-2xl text-center border border-red-100">
                                         <p className="text-2xl font-black text-red-500">{result.errors}</p>
-                                        <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mt-1">Ignorados</p>
+                                        <p className="text-xs font-black text-red-400 uppercase tracking-widest mt-1">Ignorados</p>
                                     </div>
                                 )}
                             </div>

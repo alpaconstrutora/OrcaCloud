@@ -11,7 +11,7 @@ interface ModernDateInputProps {
 const ModernDateInput: React.FC<ModernDateInputProps> = ({ value, onChange, label, className, compact }) => {
     return (
         <div className={`flex flex-col gap-0.5 ${className}`}>
-            {label && <span className="text-[10px] font-bold text-gray-500 uppercase ml-1">{label}</span>}
+            {label && <span className="text-xs font-bold text-gray-500 uppercase ml-1">{label}</span>}
             <div className="relative group/date">
                 <input
                     type="date"

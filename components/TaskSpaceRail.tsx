@@ -240,7 +240,7 @@ const TaskSpaceRail: React.FC<Props> = ({
       <div className="flex flex-col gap-1 flex-1 min-w-0 overflow-hidden">
 
       {/* ── INBOX ────────────────────────────────────────────────────────── */}
-      <p className="px-2 pb-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">Inbox</p>
+      <p className="px-2 pb-1 text-xs font-black text-slate-400 uppercase tracking-widest">Inbox</p>
 
       <NavItem active={isInbox && activeFilter === 'today'}   onClick={() => onSelectInbox('today')}   count={todayCount}>
         <Calendar className="w-3.5 h-3.5 flex-shrink-0" /> Hoje
@@ -257,7 +257,7 @@ const TaskSpaceRail: React.FC<Props> = ({
 
       {/* ── ESPAÇOS ──────────────────────────────────────────────────────── */}
       <div className="mt-3 mb-1 flex items-center justify-between px-2">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Espaços</p>
+        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Espaços</p>
         <button onClick={() => setCreatingSpace(true)} title="Novo espaço"
           className="text-slate-400 hover:text-blue-600 transition-colors">
           <Plus className="w-3.5 h-3.5" />
@@ -459,7 +459,7 @@ const TaskSpaceRail: React.FC<Props> = ({
 
                           {isMoving && (
                             <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-lg min-w-[140px] py-1 overflow-hidden">
-                              <p className="px-3 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Mover para</p>
+                              <p className="px-3 py-1.5 text-xs font-black text-slate-400 uppercase tracking-widest">Mover para</p>
                               {otherSpaces.map(s => (
                                 <button
                                   key={s.id}

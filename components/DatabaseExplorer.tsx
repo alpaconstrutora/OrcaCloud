@@ -610,11 +610,11 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
     const getTypeBadge = (type: SinapiType) => {
         switch (type) {
             case SinapiType.COMPOSITION:
-                return <span className="flex items-center gap-1 bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-[10px] font-bold border border-blue-100"><Layers className="w-2.5 h-2.5" /> COMPOSIÇÃO</span>;
+                return <span className="flex items-center gap-1 bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-xs font-bold border border-blue-100"><Layers className="w-2.5 h-2.5" /> COMPOSIÇÃO</span>;
             case SinapiType.SERVICE:
-                return <span className="flex items-center gap-1 bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded text-[10px] font-bold border border-purple-100"><Package className="w-2.5 h-2.5" /> SERVIÇO</span>;
+                return <span className="flex items-center gap-1 bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded text-xs font-bold border border-purple-100"><Package className="w-2.5 h-2.5" /> SERVIÇO</span>;
             default:
-                return <span className="flex items-center gap-1 bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded text-[10px] font-bold border border-amber-100"><Box className="w-2.5 h-2.5" /> INSUMO</span>;
+                return <span className="flex items-center gap-1 bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded text-xs font-bold border border-amber-100"><Box className="w-2.5 h-2.5" /> INSUMO</span>;
         }
     };
 
@@ -742,7 +742,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                 <div className="p-4 border-b border-gray-100">
                     <div className="grid grid-cols-12 gap-3 mb-4">
                         <div className="col-span-1">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Código</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Código</label>
                             <input
                                 type="text"
                                 placeholder="Ex: 98546"
@@ -752,7 +752,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                             />
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tipo</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo</label>
                             <select
                                 className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                                 value={searchType}
@@ -764,7 +764,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                             </select>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Natureza</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Natureza</label>
                             <select
                                 className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                                 value={searchNature}
@@ -777,7 +777,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                             </select>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Grupo</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Grupo</label>
                             <select
                                 className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                                 value={searchGroup}
@@ -790,7 +790,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                             </select>
                         </div>
                         <div className="col-span-5">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Descrição</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Descrição</label>
                             <div className="flex gap-2">
                                 <div className="relative flex-1">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -829,7 +829,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
 
                     <div className="flex flex-wrap items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
                         <div className="flex items-center gap-2">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase">Base de Dados:</label>
+                            <label className="text-xs font-bold text-gray-400 uppercase">Base de Dados:</label>
                             <select
                                 className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                                 value={searchDatabase}
@@ -843,7 +843,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                         {searchDatabase === 'GENERAL' && (
                             <>
                                 <div className="flex items-center gap-2 ml-2 border-l border-gray-200 pl-4">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Selecione:</label>
+                                    <label className="text-xs font-bold text-gray-400 uppercase">Selecione:</label>
                                     <div className="flex items-center gap-2">
                                         <select
                                             className="bg-white text-form-input font-bold text-gray-800 outline-none border border-gray-200 rounded-md py-1 px-2 hover:border-blue-300 max-w-[150px]"
@@ -880,7 +880,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                     <div className="flex items-center gap-2 ml-2">
                                         <button
                                             onClick={() => setIsImportModalOpen(true)}
-                                            className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"
+                                            className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"
                                             title="Importar itens via Excel"
                                         >
                                             <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -888,7 +888,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                         </button>
                                         <button
                                             onClick={handleExportDatabase}
-                                            className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold hover:bg-blue-100 transition-colors border border-blue-100"
+                                            className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100"
                                             title="Exportar base para Excel"
                                         >
                                             <Upload className="w-3.5 h-3.5" />
@@ -902,7 +902,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                         <div className="h-4 w-[1px] bg-gray-200" />
 
                         <div className="flex items-center gap-2">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase">Referência:</label>
+                            <label className="text-xs font-bold text-gray-400 uppercase">Referência:</label>
                             <select
                                 className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                                 value={searchReference}
@@ -915,7 +915,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                             {searchDatabase === 'SINAPI' && (
                                 <button
                                     onClick={() => setIsSinapiImportOpen(true)}
-                                    className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"
+                                    className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"
                                     title="Importar nova competência SINAPI via planilha"
                                 >
                                     <Upload className="w-3 h-3" />
@@ -929,7 +929,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-                                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold transition-colors border ${showOnlyFavorites ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'}`}
+                                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-colors border ${showOnlyFavorites ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'}`}
                             >
                                 <Star className={`w-3.5 h-3.5 ${showOnlyFavorites ? 'fill-amber-500 text-amber-500' : ''}`} />
                                 Favoritos
@@ -967,7 +967,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                         <div className="h-4 w-[1px] bg-gray-200" />
 
                         <div className="flex items-center gap-2">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase">Estado:</label>
+                            <label className="text-xs font-bold text-gray-400 uppercase">Estado:</label>
                             <select
                                 className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                                 value={searchLocation}
@@ -982,7 +982,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                         <div className="h-4 w-[1px] bg-gray-200" />
 
                         <div className="flex items-center gap-2">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase">Encargos Sociais:</label>
+                            <label className="text-xs font-bold text-gray-400 uppercase">Encargos Sociais:</label>
                             <select
                                 className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                                 value={searchCharges}
@@ -993,7 +993,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                             </select>
                         </div>
 
-                        <div className="ml-auto text-[10px] text-gray-400 flex items-center gap-3">
+                        <div className="ml-auto text-xs text-gray-400 flex items-center gap-3">
                             {searchResults.length > 0 && (
                                 <div className="flex items-center gap-1.5 bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold border border-blue-100">
                                     <Search className="w-3 h-3" />
@@ -1036,16 +1036,16 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                             </div>
                                             <p className="text-sm text-gray-700 font-medium leading-tight group-hover:text-blue-700 transition-colors uppercase">{result.description}</p>
                                             <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                                <span className="text-[10px] bg-gray-100 border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-bold uppercase tracking-wider">{result.unit}</span>
+                                                <span className="text-xs bg-gray-100 border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-bold uppercase tracking-wider">{result.unit}</span>
                                                 {result.nature && (
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border ${
+                                                    <span className={`text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider border ${
                                                         result.nature === 'Mão de Obra' ? 'bg-orange-50 text-orange-600 border-orange-100' :
                                                         result.nature === 'Material'    ? 'bg-sky-50 text-sky-600 border-sky-100' :
                                                         result.nature === 'Equipamento' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                                                                                           'bg-purple-50 text-purple-600 border-purple-100'
                                                     }`}>{result.nature}</span>
                                                 )}
-                                                <span className="text-[10px] text-gray-400 uppercase font-medium truncate">{result.category}</span>
+                                                <span className="text-xs text-gray-400 uppercase font-medium truncate">{result.category}</span>
                                             </div>
 
                                             <div className="mt-3 flex items-center justify-between">
@@ -1071,7 +1071,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-gray-50/50 border-b border-gray-200">
-                                        <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">
+                                        <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none">
                                             <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Item</th>
                                             <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center">Tipo</th>
                                             <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Descrição</th>
@@ -1179,10 +1179,10 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                     type="text"
                                                     value={selectedItem.code}
                                                     onChange={(e) => setSelectedItem({ ...selectedItem, code: e.target.value })}
-                                                    className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm w-full text-center outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm w-full text-center outline-none focus:ring-2 focus:ring-blue-500"
                                                 />
                                             ) : (
-                                                <div className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
+                                                <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
                                                     {selectedItem.code}
                                                 </div>
                                             )}
@@ -1212,7 +1212,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                 <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Grupo:</span>
                                                 {selectedItem.source === 'Própria' ? (
                                                     <select
-                                                        className="bg-transparent text-[10px] font-bold text-gray-600 outline-none cursor-pointer uppercase"
+                                                        className="bg-transparent text-xs font-bold text-gray-600 outline-none cursor-pointer uppercase"
                                                         value={selectedItem.category}
                                                         onChange={(e) => setSelectedItem({ ...selectedItem, category: e.target.value })}
                                                     >
@@ -1222,7 +1222,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                         ))}
                                                     </select>
                                                 ) : (
-                                                    <span className="text-[10px] font-bold text-gray-600 uppercase truncate max-w-[200px]">{selectedItem.category || 'Geral'}</span>
+                                                    <span className="text-xs font-bold text-gray-600 uppercase truncate max-w-[200px]">{selectedItem.category || 'Geral'}</span>
                                                 )}
                                             </div>
 
@@ -1231,7 +1231,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 rounded-md border border-blue-100 shadow-sm">
                                                     <Calendar className="w-3 h-3 text-blue-400" />
                                                     <span className="text-[9px] font-black text-blue-400 uppercase tracking-tighter">Ref:</span>
-                                                    <span className="text-[10px] font-bold text-blue-600">
+                                                    <span className="text-xs font-bold text-blue-600">
                                                         {references.find(r => r.referenceDate === searchReference)?.label || searchReference}
                                                     </span>
                                                 </div>
@@ -1255,7 +1255,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className="text-right">
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase whitespace-nowrap">Unidade</p>
+                                        <p className="text-xs text-gray-400 font-bold uppercase whitespace-nowrap">Unidade</p>
                                         {selectedItem.source === 'Própria' ? (
                                             <input
                                                 type="text"
@@ -1268,7 +1268,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                         )}
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase whitespace-nowrap">Preço Unitário</p>
+                                        <p className="text-xs text-gray-400 font-bold uppercase whitespace-nowrap">Preço Unitário</p>
                                         <div className="flex items-center justify-end gap-1 group/price">
                                             <span className="text-xl font-black text-emerald-600">R$</span>
                                             <input
@@ -1329,7 +1329,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                         </div>
 
                                         <div className="rounded-xl border border-gray-100 overflow-hidden shadow-sm">
-                                            <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider px-4 py-3 bg-gray-50 border-b border-gray-100">
+                                            <div className="grid grid-cols-12 gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider px-4 py-3 bg-gray-50 border-b border-gray-100">
                                                 <div className="col-span-1 text-center">Código</div>
                                                 <div className="col-span-1 text-center">Tipo</div>
                                                 <div className="col-span-1 text-center font-bold">Base</div>
@@ -1421,7 +1421,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                                     <span className="leading-tight text-xs font-medium text-gray-700 uppercase">{comp.description}</span>
                                                                 )}
                                                             </div>
-                                                            <div className="col-span-1 text-center text-gray-400 font-bold text-[10px]">
+                                                            <div className="col-span-1 text-center text-gray-400 font-bold text-xs">
                                                                 {selectedItem.source === 'Própria' ? (
                                                                     <input
                                                                         type="text"
@@ -1442,7 +1442,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                             </div>
                                                             <div className="col-span-1">
                                                                 <div className="flex items-center justify-center gap-1 bg-white border border-gray-200 rounded px-1 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-                                                                    <span className="text-[10px] text-gray-400">R$</span>
+                                                                    <span className="text-xs text-gray-400">R$</span>
                                                                     <input
                                                                         type="number"
                                                                         step="0.01"
@@ -1686,8 +1686,8 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                                                         }
                                                     }}
                                                 />
-                                                <button onClick={() => { if (!newName.trim()) return; onRename(group, newName).then(() => setEditingGroup(null)); }} className="text-[10px] font-bold text-blue-600">Salvar</button>
-                                                <button onClick={() => setEditingGroup(null)} className="text-[10px] font-bold text-gray-400">Cancelar</button>
+                                                <button onClick={() => { if (!newName.trim()) return; onRename(group, newName).then(() => setEditingGroup(null)); }} className="text-xs font-bold text-blue-600">Salvar</button>
+                                                <button onClick={() => setEditingGroup(null)} className="text-xs font-bold text-gray-400">Cancelar</button>
                                             </div>
                                         ) : (
                                             <>

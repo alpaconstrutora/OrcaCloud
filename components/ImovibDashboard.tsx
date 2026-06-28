@@ -135,10 +135,10 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                                         <TrendingUp className="w-6 h-6" />
                                     </div>
                                     <div className="flex flex-col items-end">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-lg">
+                                        <span className="text-xs font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-lg">
                                             {study.phase || 'Estudo Inicial'}
                                         </span>
-                                        <span className="text-[10px] font-bold text-gray-400 mt-1">v{study.version}</span>
+                                        <span className="text-xs font-bold text-gray-400 mt-1">v{study.version}</span>
                                     </div>
                                 </div>
 

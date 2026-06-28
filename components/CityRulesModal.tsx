@@ -257,7 +257,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
             <h3 className="text-sm font-black uppercase tracking-wider">
               ⚙️ Regras de Vocação Imobiliária
             </h3>
-            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">
+            <p className="text-xs text-slate-400 font-semibold mt-0.5">
               Cidade: <span className="text-white font-bold">{cityName}</span>
             </p>
           </div>
@@ -286,18 +286,18 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
 
           {/* Seção de Limites de Preço/m² */}
           <div className="space-y-3">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-1.5">
+            <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-1.5">
               Limites de Transição por Padrão Construtivo (R$ / m²)
             </h4>
             
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-2xl">
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
                   Econômico ➜ Médio
                 </label>
                 <div className="relative rounded-xl shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-slate-400 text-[11px]">R$</span>
+                    <span className="text-slate-400 text-xs">R$</span>
                   </div>
                   <input
                     type="number"
@@ -310,12 +310,12 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
                   Médio ➜ Médio-Alto
                 </label>
                 <div className="relative rounded-xl shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-slate-400 text-[11px]">R$</span>
+                    <span className="text-slate-400 text-xs">R$</span>
                   </div>
                   <input
                     type="number"
@@ -328,12 +328,12 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
                   Médio-Alto ➜ Alto Padrão
                 </label>
                 <div className="relative rounded-xl shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-slate-400 text-[11px]">R$</span>
+                    <span className="text-slate-400 text-xs">R$</span>
                   </div>
                   <input
                     type="number"
@@ -346,12 +346,12 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
                   Alto Padrão ➜ Luxo
                 </label>
                 <div className="relative rounded-xl shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-slate-400 text-[11px]">R$</span>
+                    <span className="text-slate-400 text-xs">R$</span>
                   </div>
                   <input
                     type="number"
@@ -367,7 +367,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
 
           {/* Abas e Mix de Tipologias */}
           <div className="space-y-4">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-1.5">
+            <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-1.5">
               Personalização do Mix de Tipologias Recomendadas
             </h4>
 
@@ -421,13 +421,13 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                     <span className="text-xs font-black uppercase text-slate-700 tracking-wider">
                       Tipologias para o Padrão {activeRule.standard}
                     </span>
-                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                    <p className="text-xs text-slate-400 font-semibold mt-0.5">
                       Adicione as tipologias de venda e distribua a porcentagem que cada uma representa.
                     </p>
                   </div>
 
                   {/* Status da soma */}
-                  <div className={`px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                  <div className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
                     mixSum === 100 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                   }`}>
                     <span>{mixSum === 100 ? '✓' : '⚠️'}</span>
@@ -443,7 +443,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                     </div>
                   ) : (
                     <div className="space-y-2.5">
-                      <div className="hidden md:grid grid-cols-12 gap-3 text-[10px] font-black uppercase text-slate-400 tracking-wider px-3">
+                      <div className="hidden md:grid grid-cols-12 gap-3 text-xs font-black uppercase text-slate-400 tracking-wider px-3">
                         <div className="col-span-6">Nome da Tipologia / Descrição</div>
                         <div className="col-span-3">Área Privativa (m²)</div>
                         <div className="col-span-2">Mix Recomendado (%)</div>
@@ -483,7 +483,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                                 placeholder="65"
                               />
                               <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
-                                <span className="text-[10px] text-slate-400 font-bold">m²</span>
+                                <span className="text-xs text-slate-400 font-bold">m²</span>
                               </div>
                             </div>
                           </div>
@@ -502,7 +502,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                                 placeholder="60"
                               />
                               <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
-                                <span className="text-[10px] text-slate-400 font-bold">%</span>
+                                <span className="text-xs text-slate-400 font-bold">%</span>
                               </div>
                             </div>
                           </div>
@@ -511,7 +511,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                           <div className="col-span-1 md:col-span-1 text-center mt-2 md:mt-0">
                             <button
                               onClick={() => handleRemoveTipologia(index)}
-                              className="text-rose-500 hover:text-rose-600 font-black text-[10px] uppercase tracking-wider py-1.5 px-3 md:p-1 md:hover:bg-rose-50 rounded-lg transition-colors border border-rose-100 md:border-0"
+                              className="text-rose-500 hover:text-rose-600 font-black text-xs uppercase tracking-wider py-1.5 px-3 md:p-1 md:hover:bg-rose-50 rounded-lg transition-colors border border-rose-100 md:border-0"
                             >
                               Remover
                             </button>

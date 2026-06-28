@@ -584,7 +584,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
           </div>
           <button
             onClick={() => handleUpdate()}
-            className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm"
+            className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm"
           >
             Salvar
           </button>
@@ -626,7 +626,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 <button onClick={() => setAntesFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-button flex items-center justify-center">×</button>
               </div>
             ) : (
-              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-[10px] uppercase font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
+              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-xs uppercase font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
                 📸 Adicionar
                 <input type="file" accept="image/*" className="hidden" onChange={handleFotoAntesUpload} />
               </label>
@@ -640,7 +640,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 <button onClick={() => setDepoisFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-button flex items-center justify-center">×</button>
               </div>
             ) : (
-              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-[10px] uppercase font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
+              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-xs uppercase font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
                 📸 Adicionar
                 <input type="file" accept="image/*" className="hidden" onChange={handleFotoDepoisUpload} />
               </label>
@@ -655,7 +655,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
         {assinaturaImagem ? (
           <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col items-center gap-2">
             <img src={assinaturaImagem} alt="Assinatura" className="h-16 w-auto border-b border-slate-100 pb-2" />
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Assinado por: {assinaturaNome}</span>
+            <span className="text-xs font-black uppercase tracking-wider text-slate-400">Assinado por: {assinaturaNome}</span>
             <button onClick={() => { setAssinaturaImagem(''); setAssinaturaNome(''); }} className="text-[9px] font-black uppercase tracking-widest text-red-500 mt-1">Refazer Assinatura</button>
           </div>
         ) : (
@@ -722,7 +722,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
       <div className="space-y-3">
         <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Cobrança PIX</h2>
         <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col items-center text-center gap-3">
-          <span className="text-[10px] font-black uppercase tracking-widest text-teal-600">Receber Pagamento</span>
+          <span className="text-xs font-black uppercase tracking-widest text-teal-600">Receber Pagamento</span>
           {pixCopiaECola ? (
             <>
               <img src={qrCodeUrl} alt="QR Code PIX" className="w-40 h-40 bg-white p-2 rounded-xl border border-slate-100" />
@@ -744,7 +744,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                   navigator.clipboard.writeText(pixCopiaECola);
                   alert('Código Pix Copia e Cola copiado com sucesso!');
                 }}
-                className="w-full py-2.5 bg-teal-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-teal-600 transition-colors shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
+                className="w-full py-2.5 bg-teal-500 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-teal-600 transition-colors shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
               >
                 📋 Copiar Pix Copia e Cola
               </button>
@@ -803,7 +803,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
           <div className="space-y-3">
             <div className="p-4 bg-emerald-50 border border-emerald-100 text-center rounded-[20px] text-emerald-700">
               <span className="text-xs font-black uppercase tracking-widest">Serviço Concluído</span>
-              <p className="text-[10px] text-slate-500 mt-1">Todas as etapas foram finalizadas e o Pix de cobrança foi gerado.</p>
+              <p className="text-xs text-slate-500 mt-1">Todas as etapas foram finalizadas e o Pix de cobrança foi gerado.</p>
             </div>
             <button
               onClick={generateComprovantePDF}

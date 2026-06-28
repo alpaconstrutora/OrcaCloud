@@ -77,7 +77,7 @@ const MyTasksWidget: React.FC<Props> = ({ orgId, onNavigate }) => {
                     </div>
                     <div>
                         <h3 className="text-sm font-black text-gray-900">Minhas Tarefas</h3>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-none mt-0.5">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider leading-none mt-0.5">
                             {overdueCount > 0
                                 ? <span className="text-red-500">{overdueCount} atrasada{overdueCount > 1 ? 's' : ''}</span>
                                 : null}
@@ -89,7 +89,7 @@ const MyTasksWidget: React.FC<Props> = ({ orgId, onNavigate }) => {
                 </div>
                 <button
                     onClick={() => onNavigate?.('tarefas')}
-                    className="flex items-center gap-1 text-[10px] font-black text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors"
+                    className="flex items-center gap-1 text-xs font-black text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors"
                 >
                     Ver todas <ChevronRight className="w-3.5 h-3.5" />
                 </button>
@@ -106,7 +106,7 @@ const MyTasksWidget: React.FC<Props> = ({ orgId, onNavigate }) => {
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nenhuma tarefa para hoje</p>
                     <button
                         onClick={() => onNavigate?.('tarefas')}
-                        className="mt-3 flex items-center gap-1.5 mx-auto text-[11px] font-black text-blue-600 hover:text-blue-800 transition-colors"
+                        className="mt-3 flex items-center gap-1.5 mx-auto text-xs font-black text-blue-600 hover:text-blue-800 transition-colors"
                     >
                         <Plus className="w-3.5 h-3.5" /> Nova tarefa
                     </button>
@@ -125,7 +125,7 @@ const MyTasksWidget: React.FC<Props> = ({ orgId, onNavigate }) => {
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-bold text-gray-800 truncate leading-tight">{t.title}</p>
                                 {t.due_date && (
-                                    <p className={`text-[10px] font-bold flex items-center gap-1 mt-0.5 ${isOverdue(t.due_date) ? 'text-red-500' : 'text-gray-400'}`}>
+                                    <p className={`text-xs font-bold flex items-center gap-1 mt-0.5 ${isOverdue(t.due_date) ? 'text-red-500' : 'text-gray-400'}`}>
                                         {isOverdue(t.due_date)
                                             ? <AlertTriangle className="w-3 h-3" />
                                             : <Calendar className="w-3 h-3" />}
@@ -147,7 +147,7 @@ const MyTasksWidget: React.FC<Props> = ({ orgId, onNavigate }) => {
                 <div className="px-5 py-2.5 border-t border-gray-50 text-center">
                     <button
                         onClick={() => onNavigate?.('tarefas')}
-                        className="text-[10px] font-black text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors"
+                        className="text-xs font-black text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors"
                     >
                         Ver todas as tarefas →
                     </button>

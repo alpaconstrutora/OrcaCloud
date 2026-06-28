@@ -154,16 +154,16 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-1">
-        <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
+        <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
           <Layers className="w-3.5 h-3.5" /> Pavimentos
         </h4>
         {floors.length > 0 && (
-          <div className="flex items-center gap-3 text-[10px] text-gray-400 font-semibold">
+          <div className="flex items-center gap-3 text-xs text-gray-400 font-semibold">
             <span>{totalAndares} andares · {totalUnidades} unidades</span>
             <button
               onClick={handleGenerate}
               disabled={generating}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-black text-[10px] uppercase tracking-wider"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-black text-xs uppercase tracking-wider"
             >
               {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
               Gerar Unidades ({totalUnidades})
@@ -252,7 +252,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
                           onChange={e => setEditForm(p => ({ ...p, repeat_count: e.target.value }))} /></td>
                         <td className="py-2 px-3"><input className={editCls + ' w-16'} type="number" min="1" value={editForm.units_per_floor}
                           onChange={e => setEditForm(p => ({ ...p, units_per_floor: e.target.value }))} /></td>
-                        <td className="py-2 px-3 text-gray-400 italic text-[10px]">
+                        <td className="py-2 px-3 text-gray-400 italic text-xs">
                           {previewRange(editForm.floor_number, editForm.repeat_count, editForm.tipo)}
                         </td>
                         <td className="py-2 px-3 text-center">
@@ -275,7 +275,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
                           {f.repeat_count > 1 ? <span className="font-bold text-blue-600">{f.repeat_count}×</span> : '1×'}
                         </td>
                         <td className="py-2.5 px-4 text-gray-500">{upf != null ? upf : <span className="text-gray-300">—</span>}</td>
-                        <td className="py-2.5 px-4 text-gray-500 text-[10px] font-mono">{rangeStr}</td>
+                        <td className="py-2.5 px-4 text-gray-500 text-xs font-mono">{rangeStr}</td>
                         <td className="py-2.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => startEdit(f)} className="p-1.5 hover:bg-blue-50 text-blue-500 rounded-lg" title="Editar"><Edit className="w-3.5 h-3.5" /></button>

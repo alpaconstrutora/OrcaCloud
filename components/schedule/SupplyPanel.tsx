@@ -156,7 +156,7 @@ export const SupplyPanel: React.FC<Props> = ({ organizationId, projectId, onNavi
                     <ShoppingCart className="w-4 h-4 text-blue-600" />
                     <h2 className="text-sm font-bold text-gray-800">Plano de Suprimentos</h2>
                     {items.length > 0 && (
-                        <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
                             {items.length} insumos
                         </span>
                     )}
@@ -198,11 +198,11 @@ export const SupplyPanel: React.FC<Props> = ({ organizationId, projectId, onNavi
                     <Package className="w-10 h-10 text-gray-300 mx-auto" />
                     <div>
                         <p className="text-sm font-bold text-gray-500">Nenhum plano de suprimentos gerado</p>
-                        <p className="text-[11px] text-gray-400 mt-1 max-w-xs mx-auto">
+                        <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
                             Clique em <strong>Gerar Plano de Compras</strong> para calcular as datas ideais de compra a partir do cronograma.
                         </p>
                     </div>
-                    <div className="text-[10px] text-gray-400 space-y-0.5">
+                    <div className="text-xs text-gray-400 space-y-0.5">
                         <p>Pré-requisitos: atividades com <strong>composições SINAPI</strong> + <strong>datas no cronograma</strong></p>
                     </div>
                 </div>
@@ -258,10 +258,10 @@ export const SupplyPanel: React.FC<Props> = ({ organizationId, projectId, onNavi
                                 >
                                     <div className="flex items-center gap-3">
                                         <span className="text-xs font-bold text-gray-700">{BUCKET_LABEL[b]}</span>
-                                        <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold">
+                                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold">
                                             {list.length} {list.length === 1 ? 'item' : 'itens'}
                                         </span>
-                                        <span className="text-[10px] text-gray-400">{fmtBRL(bucketTotal)}</span>
+                                        <span className="text-xs text-gray-400">{fmtBRL(bucketTotal)}</span>
                                     </div>
                                     <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                                 </button>
@@ -310,22 +310,22 @@ const ItemRow: React.FC<{ item: ProcurementPlanItem }> = ({ item }) => {
                     {item.inputDescription}
                 </div>
             </div>
-            <div className="col-span-2 text-[10px] text-gray-400 truncate" title={item.sourceBudgetItemDesc}>
+            <div className="col-span-2 text-xs text-gray-400 truncate" title={item.sourceBudgetItemDesc}>
                 {item.sourceBudgetItemDesc || '—'}
             </div>
-            <div className="col-span-1 text-right font-mono text-[11px] text-gray-700">
+            <div className="col-span-1 text-right font-mono text-xs text-gray-700">
                 {item.netRequiredQty > 0
                     ? item.netRequiredQty.toFixed(2)
                     : item.requiredQty.toFixed(2)}
             </div>
-            <div className="col-span-1 text-center text-[10px] text-gray-500">{item.inputUnit}</div>
-            <div className="col-span-1 text-center text-[10px] text-gray-400">
+            <div className="col-span-1 text-center text-xs text-gray-500">{item.inputUnit}</div>
+            <div className="col-span-1 text-center text-xs text-gray-400">
                 {item.leadTimeDays > 0 ? `${item.leadTimeDays}d` : '—'}
             </div>
-            <div className={`col-span-1 text-center text-[11px] font-bold ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>
+            <div className={`col-span-1 text-center text-xs font-bold ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>
                 {fmtDate(item.suggestedBuyDate)}
             </div>
-            <div className="col-span-1 text-right text-[11px] font-bold text-gray-700">
+            <div className="col-span-1 text-right text-xs font-bold text-gray-700">
                 {item.estimatedTotal > 0 ? fmtBRL(item.estimatedTotal) : '—'}
             </div>
             <div className="col-span-1 text-center">
@@ -355,11 +355,11 @@ const KpiCard: React.FC<{
     return (
         <div className={`${c.bg} border ${c.border} rounded-xl px-4 py-3`}>
             <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">{label}</span>
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</span>
                 {icon && <span className={c.icon}>{icon}</span>}
             </div>
             <div className={`text-lg font-black ${c.text} truncate`}>{value}</div>
-            {sub && <div className="text-[10px] text-gray-400 mt-0.5">{sub}</div>}
+            {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
         </div>
     );
 };

@@ -298,34 +298,34 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     switch (status) {
       case 'rascunho':
         return (
-          <span className="px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 rounded border border-slate-200">
+          <span className="px-2.5 py-0.5 text-xs font-black uppercase tracking-wider bg-slate-100 text-slate-500 rounded border border-slate-200">
             Rascunho
           </span>
         );
       case 'pendente':
         return (
-          <span className="flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-black bg-blue-50 text-blue-600 rounded border border-blue-100 uppercase tracking-wider">
+          <span className="flex items-center gap-1 px-2.5 py-0.5 text-xs font-black bg-blue-50 text-blue-600 rounded border border-blue-100 uppercase tracking-wider">
             <Clock className="w-3 h-3" />
             Pendente
           </span>
         );
       case 'aprovado':
         return (
-          <span className="flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-black bg-emerald-50 text-emerald-600 rounded border border-emerald-100 uppercase tracking-wider">
+          <span className="flex items-center gap-1 px-2.5 py-0.5 text-xs font-black bg-emerald-50 text-emerald-600 rounded border border-emerald-100 uppercase tracking-wider">
             <CheckCircle2 className="w-3 h-3" />
             Aprovado
           </span>
         );
       case 'rejeitado':
         return (
-          <span className="flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-black bg-rose-50 text-rose-600 rounded border border-rose-100 uppercase tracking-wider">
+          <span className="flex items-center gap-1 px-2.5 py-0.5 text-xs font-black bg-rose-50 text-rose-600 rounded border border-rose-100 uppercase tracking-wider">
             <ThumbsDown className="w-3 h-3" />
             Rejeitado
           </span>
         );
       default:
         return (
-          <span className="px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 rounded border border-slate-200">
+          <span className="px-2.5 py-0.5 text-xs font-black uppercase tracking-wider bg-slate-100 text-slate-500 rounded border border-slate-200">
             Rascunho
           </span>
         );
@@ -913,14 +913,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                 setRejectingId(null);
                                 setFeedbackText('');
                               }}
-                              className="px-3 py-1.5 border border-slate-200 text-slate-500 text-[10px] font-bold uppercase rounded-lg hover:bg-slate-50"
+                              className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-bold uppercase rounded-lg hover:bg-slate-50"
                             >
                               Cancelar
                             </button>
                             <button
                               onClick={() => approvingId === app.id ? handleApproveAction(app.id) : handleRejectAction(app.id)}
                               disabled={processingAction || (rejectingId === app.id && !feedbackText.trim())}
-                              className={`px-4 py-1.5 text-white text-[10px] font-black uppercase rounded-lg shadow-sm disabled:opacity-50 ${
+                              className={`px-4 py-1.5 text-white text-xs font-black uppercase rounded-lg shadow-sm disabled:opacity-50 ${
                                 approvingId === app.id ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
                               }`}
                             >
@@ -1031,7 +1031,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       <div className="space-y-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <h4 className="font-bold text-slate-800 leading-snug">{doc.nome}</h4>
-                          <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 rounded">
+                          <span className="px-2 py-0.5 text-xs font-black uppercase tracking-wider bg-slate-100 text-slate-600 rounded">
                             {doc.tipo_documento}
                           </span>
                           {getValidadeBadge(doc.data_validade)}
@@ -1420,7 +1420,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     return (
                       <div key={ver.id} className="flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors">
                         <div className="flex items-center gap-3">
-                          <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-wider rounded ${
+                          <span className={`px-2 py-1 text-xs font-black uppercase tracking-wider rounded ${
                             isActive
                               ? 'bg-blue-600 text-white'
                               : 'bg-slate-100 text-slate-500'
@@ -1507,7 +1507,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             </span>
                             <span className="font-bold text-slate-600">Revisor: {app.approver_email}</span>
                           </div>
-                          <span className="text-[10px] text-slate-400 font-semibold">{new Date(app.created_at).toLocaleString()}</span>
+                          <span className="text-xs text-slate-400 font-semibold">{new Date(app.created_at).toLocaleString()}</span>
                         </div>
                         <p className="text-slate-500">Solicitado por: <span className="font-bold text-slate-600">{app.requested_by}</span></p>
                         {app.feedback && (
@@ -1559,13 +1559,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       }
 
                       return (
-                        <div key={log.id} className="p-3 hover:bg-slate-50 transition-colors text-[11px] space-y-1">
+                        <div key={log.id} className="p-3 hover:bg-slate-50 transition-colors text-xs space-y-1">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5 font-bold text-slate-700">
                               {icon}
                               <span>{log.user_email}</span>
                             </div>
-                            <span className="text-[10px] text-slate-400 font-semibold">
+                            <span className="text-xs text-slate-400 font-semibold">
                               {new Date(log.created_at).toLocaleString()}
                             </span>
                           </div>

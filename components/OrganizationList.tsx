@@ -175,7 +175,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                     </div>
                     <div>
                         <h1 className="text-2xl font-black text-white tracking-tight uppercase">Minha Organização</h1>
-                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                        <p className="text-slate-400 text-xs font-black uppercase tracking-widest">
                             {activeOrganizationId
                                 ? `Filtro Ativo: ${organizations.find(o => o.id === activeOrganizationId)?.name}`
                                 : 'Visão Consolidada Global'}
@@ -200,7 +200,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             <button
                                 key={tab.id}
                                 onClick={() => onTabChange(tab.id)}
-                                className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${isActive ? 'bg-slate-700/80 text-white shadow-inner ring-1 ring-white/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
+                                className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-black text-xs uppercase tracking-widest transition-all whitespace-nowrap ${isActive ? 'bg-slate-700/80 text-white shadow-inner ring-1 ring-white/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
                             >
                                 <tab.icon className="w-4 h-4" />
                                 {tab.label}
@@ -216,7 +216,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                         <div>
                             <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight italic border-l-4 border-blue-600 pl-4">Empresas do Grupo</h2>
-                            <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-1">Gerencie os perfis e logotipos das suas empresas.</p>
+                            <p className="text-gray-400 text-xs font-black uppercase tracking-widest mt-1">Gerencie os perfis e logotipos das suas empresas.</p>
                         </div>
                         <button
                             onClick={onCreate}
@@ -283,7 +283,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] border-b border-gray-100">
+                                        <tr className="bg-gray-50 text-gray-400 text-xs font-black uppercase tracking-[0.2em] border-b border-gray-100">
                                             {tableColumns.visibleColumns.includes('name') && (
                                                 <SortableHeader label="Organização" colKey="name" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-8 py-5" />
                                             )}
@@ -314,13 +314,13 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                                 TODAS AS ORGANIZAÇÕES
                                                                 {!activeOrganizationId && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
                                                             </p>
-                                                            <span className="text-[10px] text-gray-400 font-medium">Visão consolidada do grupo</span>
+                                                            <span className="text-xs text-gray-400 font-medium">Visão consolidada do grupo</span>
                                                         </div>
                                                     </div>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('contact') && (
-                                                <td className="px-8 py-4 text-[10px] text-gray-400 font-black uppercase tracking-widest italic">Global</td>
+                                                <td className="px-8 py-4 text-xs text-gray-400 font-black uppercase tracking-widest italic">Global</td>
                                             )}
                                             {tableColumns.visibleColumns.includes('cnpj') && (
                                                 <td className="px-8 py-4">---</td>
@@ -330,7 +330,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                     <div className="flex items-center justify-center">
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(null); setManagingOrgId(null); }}
-                                                            className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${!activeOrganizationId ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                                            className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${!activeOrganizationId ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                                                         >
                                                             {!activeOrganizationId ? 'ATIVO' : 'SELECIONAR'}
                                                         </button>
@@ -361,7 +361,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                     )}
                                                     {tableColumns.visibleColumns.includes('contact') && (
                                                         <td className="px-8 py-4">
-                                                            <div className="flex items-center gap-2 text-[10px] text-gray-500 font-bold uppercase">
+                                                            <div className="flex items-center gap-2 text-xs text-gray-500 font-bold uppercase">
                                                                 <Mail className="w-3.5 h-3.5 text-gray-400" />
                                                                 {org.email || '---'}
                                                             </div>
@@ -369,7 +369,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                     )}
                                                     {tableColumns.visibleColumns.includes('cnpj') && (
                                                         <td className="px-8 py-4">
-                                                            <span className="text-[10px] font-black text-gray-600 font-mono bg-gray-100/50 px-3 py-1 rounded-lg border border-gray-100">
+                                                            <span className="text-xs font-black text-gray-600 font-mono bg-gray-100/50 px-3 py-1 rounded-lg border border-gray-100">
                                                                 {org.cnpj || '---'}
                                                             </span>
                                                         </td>
@@ -379,7 +379,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                             <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(org.id); }}
-                                                                    className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${isActive ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                                                    className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${isActive ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                                                                 >
                                                                     {isActive ? 'ATIVO' : 'SELECIONAR'}
                                                                 </button>
@@ -418,7 +418,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                     <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2 truncate">TODAS AS ORGANIZAÇÕES</h3>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(null); }}
-                                        className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all ${!activeOrganizationId ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/20' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                        className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all ${!activeOrganizationId ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/20' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                                     >
                                         {!activeOrganizationId ? 'ATIVO' : 'SELECIONAR VISÃO GLOBAL'}
                                     </button>
@@ -443,7 +443,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                             <div className="flex gap-3 items-center" onClick={(e) => e.stopPropagation()}>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(org.id); }}
-                                                    className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all ${isActive ? 'bg-emerald-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                                    className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all ${isActive ? 'bg-emerald-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                                                 >
                                                     {isActive ? 'ATIVO' : 'SELECIONAR'}
                                                 </button>
@@ -515,12 +515,12 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
                                 <div>
                                     <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Todos os Usuários</h2>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Visão consolidada de acessos do ecossistema</p>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Visão consolidada de acessos do ecossistema</p>
                                 </div>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full">
-                                    <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                                    <thead className="bg-gray-50 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
                                         <tr>
                                             <th className="px-8 py-4 text-left">Usuário</th>
                                             <th className="px-8 py-4 text-left">E-mail</th>
@@ -535,12 +535,12 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                 <td className="px-8 py-4 font-bold text-gray-900">{member.name}</td>
                                                 <td className="px-8 py-4 text-gray-500">{member.email}</td>
                                                 <td className="px-8 py-4">
-                                                    <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
+                                                    <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-black uppercase tracking-widest">
                                                         {org.name}
                                                     </span>
                                                 </td>
                                                 <td className="px-8 py-4">
-                                                    <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
+                                                    <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-black uppercase tracking-widest">
                                                         {member.role}
                                                     </span>
                                                 </td>

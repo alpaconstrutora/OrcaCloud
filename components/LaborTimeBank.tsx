@@ -12,7 +12,7 @@ import { STALE } from '../lib/queryClient';
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
         {children}
     </div>
 );
@@ -237,7 +237,7 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                     { label: 'QR Codes Ativos',         value: qrCodes.filter(q => q.is_active).length, bg: 'bg-amber-50', text: 'text-amber-700' },
                 ].map(({ label, value, bg, text }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
                         <p className={`text-2xl font-black ${text} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
                     </div>
                 ))}
@@ -292,7 +292,7 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                             <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/50">
                                     {['Colaborador', 'Saldo Atual', 'Limite Máx.', 'Limite Negativo', 'Situação'].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -377,12 +377,12 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-bold text-slate-900">{qr.project_name || 'Sem obra'}{qr.label ? ` — ${qr.label}` : ''}</p>
-                                        <p className="text-[11px] text-slate-400 font-mono truncate max-w-[260px]">{qr.token}</p>
-                                        <p className="text-[10px] text-slate-400">{qr.scan_count} scans{qr.expires_at ? ` · Expira ${qr.expires_at.split('T')[0]}` : ''}</p>
+                                        <p className="text-xs text-slate-400 font-mono truncate max-w-[260px]">{qr.token}</p>
+                                        <p className="text-xs text-slate-400">{qr.scan_count} scans{qr.expires_at ? ` · Expira ${qr.expires_at.split('T')[0]}` : ''}</p>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                         <button onClick={() => toggleQr.mutate({ id: qr.id, v: !qr.is_active })}
-                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${qr.is_active ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${qr.is_active ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
                                             {qr.is_active ? 'Desativar' : 'Ativar'}
                                         </button>
                                         <button onClick={() => { if (confirm('Excluir este QR Code?')) deleteQr.mutate(qr.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">

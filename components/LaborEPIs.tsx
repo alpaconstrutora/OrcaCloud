@@ -24,7 +24,7 @@ const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded
 
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
         {children}
     </div>
 );
@@ -356,7 +356,7 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
                             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                             <div>
                                 <p className="text-xs font-black text-amber-900 uppercase tracking-tight">Estoque Baixo</p>
-                                <p className="text-[11px] text-amber-700 mt-1">{alerts.lowStock.map(i => i.nome).join(', ')}</p>
+                                <p className="text-xs text-amber-700 mt-1">{alerts.lowStock.map(i => i.nome).join(', ')}</p>
                             </div>
                         </div>
                     )}
@@ -365,7 +365,7 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
                             <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                             <div>
                                 <p className="text-xs font-black text-rose-900 uppercase tracking-tight">CA Vencendo</p>
-                                <p className="text-[11px] text-rose-700 mt-1">{alerts.expiredCa.map(i => `${i.nome} (CA ${i.ca})`).join(', ')}</p>
+                                <p className="text-xs text-rose-700 mt-1">{alerts.expiredCa.map(i => `${i.nome} (CA ${i.ca})`).join(', ')}</p>
                             </div>
                         </div>
                     )}
@@ -381,7 +381,7 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
                     { label: 'CA Vencendo', value: alerts?.expiredCa.length ?? 0, color: 'bg-rose-50 text-rose-700' },
                 ].map(({ label, value, color }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
                         <p className={`text-2xl font-black ${color.split(' ')[1]} px-2 py-0.5 rounded-lg inline-block ${color.split(' ')[0]}`}>{value}</p>
                     </div>
                 ))}
@@ -464,7 +464,7 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
                             <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/50">
                                     {['EPI', 'Categoria', 'CA', 'Estoque', 'Mínimo', 'Custo Unit.', 'Status', ''].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -478,17 +478,17 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
                                         <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 py-3">
                                                 <p className="text-sm font-bold text-slate-900">{item.nome}</p>
-                                                {item.descricao && <p className="text-[11px] text-slate-400 truncate max-w-[160px]">{item.descricao}</p>}
+                                                {item.descricao && <p className="text-xs text-slate-400 truncate max-w-[160px]">{item.descricao}</p>}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${categoriaColors[item.categoria]}`}>
+                                                <span className={`px-2 py-0.5 rounded-lg text-xs font-black ${categoriaColors[item.categoria]}`}>
                                                     {EPI_CATEGORIA_LABELS[item.categoria].split(' ').slice(0,2).join(' ')}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">
                                                 <p className="text-xs font-bold text-slate-700">{item.ca || '—'}</p>
                                                 {item.ca_validade && (
-                                                    <p className={`text-[10px] font-bold ${caExpiring ? 'text-rose-600' : 'text-slate-400'}`}>
+                                                    <p className={`text-xs font-bold ${caExpiring ? 'text-rose-600' : 'text-slate-400'}`}>
                                                         {caExpiring ? '⚠ ' : ''}{item.ca_validade}
                                                     </p>
                                                 )}
@@ -503,7 +503,7 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
                                                 {item.custo_unitario > 0 ? `R$ ${item.custo_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${item.status === 'ATIVO' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${item.status === 'ATIVO' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                                                     {item.status}
                                                 </span>
                                             </td>
@@ -541,7 +541,7 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
                             <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/50">
                                     {['Colaborador', 'EPI', 'Qtd', 'Entregue em', 'Motivo', 'Status', ''].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -550,7 +550,7 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
                                     <tr key={d.id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${d.is_returned ? 'opacity-60' : ''}`}>
                                         <td className="px-4 py-3">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center text-[10px] font-black text-indigo-600">
+                                                <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center text-xs font-black text-indigo-600">
                                                     {(d.employee_name || 'U').charAt(0)}
                                                 </div>
                                                 <span className="text-sm font-bold text-slate-800">{d.employee_name || '—'}</span>
@@ -562,16 +562,16 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
                                         <td className="px-4 py-3 text-table-body text-slate-500 max-w-[160px] truncate">{d.motivo || '—'}</td>
                                         <td className="px-4 py-3">
                                             {d.is_returned ? (
-                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-500">Devolvido</span>
+                                                <span className="px-2 py-0.5 rounded-full text-xs font-black bg-slate-100 text-slate-500">Devolvido</span>
                                             ) : (
-                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700">Em uso</span>
+                                                <span className="px-2 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-700">Em uso</span>
                                             )}
                                         </td>
                                         <td className="px-4 py-3">
                                             {!d.is_returned && (
                                                 <button
                                                     onClick={() => { if (confirm('Confirmar devolução?')) returnMutation.mutate(d.id); }}
-                                                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 rounded-lg text-[10px] font-black transition-all"
+                                                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 rounded-lg text-xs font-black transition-all"
                                                 >
                                                     <CheckCircle2 className="w-3 h-3" /> Devolver
                                                 </button>

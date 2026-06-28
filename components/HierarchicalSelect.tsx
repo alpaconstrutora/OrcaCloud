@@ -64,7 +64,7 @@ const HierarchicalSelect: React.FC<Props> = ({
                 {selected ? (
                     <span className="flex items-center gap-2 flex-1 min-w-0">
                         {selected.code && (
-                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-black ${getCodeLevelStyle(selected.code, 'slate').codeCls}`}>
+                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs font-black ${getCodeLevelStyle(selected.code, 'slate').codeCls}`}>
                                 {selected.code}
                             </span>
                         )}
@@ -112,7 +112,7 @@ const HierarchicalSelect: React.FC<Props> = ({
                                         style={{ paddingLeft: 12 + lvl.indent }}
                                     >
                                         {item.code && (
-                                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
+                                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
                                                 {item.code}
                                             </span>
                                         )}

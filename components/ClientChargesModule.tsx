@@ -33,7 +33,7 @@ const PAID = ['RECEIVED', 'CONFIRMED'];
 function StatusBadge({ status }: { status: string }) {
     const m = STATUS_META[status] ?? { label: status, cls: 'bg-gray-100 text-gray-600 border-gray-200' };
     return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${m.cls}`}>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest border ${m.cls}`}>
             {status === 'OVERDUE' && <AlertCircle className="w-2.5 h-2.5 mr-1" />}
             {m.label}
         </span>
@@ -176,7 +176,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
                         { label: 'Vencido',       value: kpis.vencido,  color: kpis.vencido > 0 ? 'text-red-600' : 'text-gray-700' },
                     ].map(k => (
                         <div key={k.label} className="bg-gray-50 rounded-xl p-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">{k.label}</p>
+                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-0.5">{k.label}</p>
                             <p className={`text-base font-black ${k.color}`}>{fmt(k.value)}</p>
                         </div>
                     ))}
@@ -201,7 +201,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
                             <button
                                 key={f.id}
                                 onClick={() => setFilter(f.id)}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+                                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all ${
                                     filter === f.id ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                                 }`}
                             >
@@ -230,7 +230,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
                         <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
                             <tr>
                                 {['Cliente', 'Descrição', 'Tipo', 'Vencimento', 'Valor', 'Status', 'Ações'].map(h => (
-                                    <th key={h} className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">{h}</th>
+                                    <th key={h} className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">{h}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -252,13 +252,13 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                                 <div className="flex items-center gap-1.5">
                                                     {(c.bank_slip_url || c.invoice_url || c.pix_payload) && (
                                                         <button onClick={() => setExpanded(expanded === c.id ? null : c.id)}
-                                                            className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1">
+                                                            className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1">
                                                             {expanded === c.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />} Links
                                                         </button>
                                                     )}
                                                     {active && (
                                                         <button onClick={() => handleCancel(c)} disabled={cancelling === c.id}
-                                                            className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1">
+                                                            className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1">
                                                             {cancelling === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Slash className="w-3 h-3" />} Cancelar
                                                         </button>
                                                     )}
@@ -304,7 +304,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                                             </span>
                                                         )}
                                                         {c.asaas_payment_id && (
-                                                            <span className="flex items-center px-3 py-2 text-[10px] font-mono text-gray-400">{c.asaas_payment_id}</span>
+                                                            <span className="flex items-center px-3 py-2 text-xs font-mono text-gray-400">{c.asaas_payment_id}</span>
                                                         )}
                                                     </div>
                                                 </td>

@@ -317,7 +317,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                         key={m}
                                         type="button"
                                         onClick={() => setMeasurementMode(m)}
-                                        className={`flex-1 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-wider transition-all ${
+                                        className={`flex-1 py-1 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
                                             measurementMode === m
                                                 ? 'bg-blue-600 text-white'
                                                 : 'bg-white/10 text-gray-400 hover:bg-white/20'
@@ -472,7 +472,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                                                 key={m}
                                                                 type="button"
                                                                 onClick={() => setItemModes(prev => ({ ...prev, [item.id]: m }))}
-                                                                className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all ${
+                                                                className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider transition-all ${
                                                                     (itemModes[item.id] ?? 'QUANTITATIVO') === m
                                                                         ? 'bg-blue-600 text-white'
                                                                         : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
@@ -496,7 +496,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                                                 className={`w-24 bg-white border ${isExceeded ? 'border-red-300 bg-red-50 text-red-600' : 'border-gray-200 focus:border-blue-500'} rounded-xl px-3 py-2 text-right font-medium text-sm outline-none transition-all`}
                                                             />
                                                             {isExceeded && (
-                                                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] font-medium px-2 py-1 rounded-lg whitespace-nowrap shadow-lg z-10">
+                                                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-red-600 text-white text-xs font-medium px-2 py-1 rounded-lg whitespace-nowrap shadow-lg z-10">
                                                                     Acima do Saldo
                                                                 </div>
                                                             )}
@@ -513,15 +513,15 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                                                 placeholder="0,0"
                                                                 className={`w-20 bg-white border ${isExceeded ? 'border-red-300 bg-red-50 text-red-600' : 'border-gray-200 focus:border-blue-500'} rounded-xl pl-3 pr-6 py-2 text-right font-medium text-sm outline-none transition-all`}
                                                             />
-                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400">%</span>
+                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">%</span>
                                                             {isExceeded && (
-                                                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] font-medium px-2 py-1 rounded-lg whitespace-nowrap shadow-lg z-10">
+                                                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-red-600 text-white text-xs font-medium px-2 py-1 rounded-lg whitespace-nowrap shadow-lg z-10">
                                                                     Acima de {remainingPct.toFixed(1)}%
                                                                 </div>
                                                             )}
                                                             {/* Saldo % disponível */}
                                                             {remainingPct < 100 && (
-                                                                <p className="text-[10px] text-gray-400 mt-0.5 text-right">
+                                                                <p className="text-xs text-gray-400 mt-0.5 text-right">
                                                                     Disp: {remainingPct.toFixed(1)}%
                                                                 </p>
                                                             )}

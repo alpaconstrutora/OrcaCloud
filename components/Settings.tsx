@@ -176,7 +176,7 @@ const Settings: React.FC = () => {
                             placeholder="PO-"
                             className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                         />
-                        <p className="text-[11px] text-gray-400 mt-1">Ex: <span className="font-mono">{appSettings.orderPrefix}123456</span></p>
+                        <p className="text-xs text-gray-400 mt-1">Ex: <span className="font-mono">{appSettings.orderPrefix}123456</span></p>
                     </div>
                     <div>
                         <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Sufixo de Duplicata</label>
@@ -187,7 +187,7 @@ const Settings: React.FC = () => {
                             placeholder="-DUP"
                             className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                         />
-                        <p className="text-[11px] text-gray-400 mt-1">Ex: <span className="font-mono">{appSettings.orderPrefix}123456{appSettings.orderDuplicateSuffix}</span></p>
+                        <p className="text-xs text-gray-400 mt-1">Ex: <span className="font-mono">{appSettings.orderPrefix}123456{appSettings.orderDuplicateSuffix}</span></p>
                     </div>
                 </div>
                 <div className="flex justify-end mt-4">
@@ -215,9 +215,9 @@ const Settings: React.FC = () => {
                     </button>
                 </div>
                 <div className="mt-4 mb-3 flex flex-wrap gap-2">
-                    <span className="text-[11px] text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
+                    <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
                     {TEMPLATE_VARS.email.map(v => (
-                        <span key={v} className="font-mono text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">{v}</span>
+                        <span key={v} className="font-mono text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">{v}</span>
                     ))}
                 </div>
                 <div className="border-t border-gray-100 pt-6 space-y-4">
@@ -257,7 +257,7 @@ const Settings: React.FC = () => {
                     <div className="flex-1">
                         <div className="flex items-center gap-3">
                             <h2 className="text-lg font-semibold text-gray-800">WhatsApp Business (API Oficial)</h2>
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${isWaActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider ${isWaActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                                 {isWaActive ? 'Configurado' : 'Não configurado'}
                             </span>
                         </div>
@@ -343,9 +343,9 @@ const Settings: React.FC = () => {
                         <label className="text-form-label font-bold text-gray-700 uppercase tracking-widest">Pedido Enviado ao Fornecedor</label>
                     </div>
                     <div className="flex flex-wrap gap-2 mb-2">
-                        <span className="text-[11px] text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
+                        <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
                         {TEMPLATE_VARS.whatsappOrderSent.map(v => (
-                            <span key={v} className="font-mono text-[11px] bg-green-50 text-green-700 px-2 py-0.5 rounded-md border border-green-100">{v}</span>
+                            <span key={v} className="font-mono text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-md border border-green-100">{v}</span>
                         ))}
                     </div>
                     <textarea
@@ -362,9 +362,9 @@ const Settings: React.FC = () => {
                         <label className="text-form-label font-bold text-gray-700 uppercase tracking-widest">Mudança de Status</label>
                     </div>
                     <div className="flex flex-wrap gap-2 mb-2">
-                        <span className="text-[11px] text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
+                        <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
                         {TEMPLATE_VARS.whatsappStatusChange.map(v => (
-                            <span key={v} className="font-mono text-[11px] bg-green-50 text-green-700 px-2 py-0.5 rounded-md border border-green-100">{v}</span>
+                            <span key={v} className="font-mono text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-md border border-green-100">{v}</span>
                         ))}
                     </div>
                     <textarea

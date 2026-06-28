@@ -38,7 +38,7 @@ const splitName = (fullName: string | null | undefined) => {
 const getTypeBadge = (type: SinapiType) => {
   if (type === SinapiType.COMPOSITION) {
     return (
-      <span className="flex items-center gap-1 bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded font-semibold border border-blue-200">
+      <span className="flex items-center gap-1 bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded font-semibold border border-blue-200">
         <Layers className="w-3 h-3" />
         COMPOSIÇÃO
       </span>
@@ -46,14 +46,14 @@ const getTypeBadge = (type: SinapiType) => {
   }
   if (type === SinapiType.SERVICE) {
     return (
-      <span className="flex items-center gap-1 bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0.5 rounded font-semibold border border-purple-200">
+      <span className="flex items-center gap-1 bg-purple-100 text-purple-700 text-xs px-1.5 py-0.5 rounded font-semibold border border-purple-200">
         <Loader2 className="w-3 h-3" />
         SERVIÇO
       </span>
     );
   }
   return (
-    <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0.5 rounded font-semibold border border-amber-200">
+    <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded font-semibold border border-amber-200">
       <Box className="w-3 h-3" />
       INSUMO
     </span>
@@ -1545,7 +1545,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               {orphanedItems.map((item, idx) => (
                 <li key={idx}>
                   {item.sinapiItem?.code || 'N/A'} - {(item.sinapiItem?.description || 'Sem descrição').substring(0, 50)}...
-                  <span className="text-amber-600 block text-[10px] mt-0.5">
+                  <span className="text-amber-600 block text-xs mt-0.5">
                     Path: [{item.group}] &gt; [{item.phase}] &gt; [{item.subPhase}]
                   </span>
                 </li>
@@ -1563,15 +1563,15 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         {/* Statistics Card */}
         <div className="flex items-stretch bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden divide-x divide-gray-100">
           <div className="px-5 py-2.5 flex flex-col justify-center">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Custo Direto</span>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-0.5">Custo Direto</span>
             <span className="font-bold text-gray-700 text-lg">R$ {totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </div>
           <div className="px-5 py-2.5 flex flex-col justify-center bg-blue-50/30">
-            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-0.5 whitespace-nowrap">BDI ({settings.bdi}%)</span>
+            <span className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-0.5 whitespace-nowrap">BDI ({settings.bdi}%)</span>
             <span className="font-bold text-blue-600 text-lg">+ R$ {(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </div>
           <div className="px-6 py-2.5 flex flex-col justify-center bg-gray-50/50">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Preço Venda</span>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-0.5">Preço Venda</span>
             <span className="font-black text-emerald-600 text-2xl">R$ {totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </div>
         </div>
@@ -1607,7 +1607,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           {/* Grupo 1: Visualização & Configurações */}
           <div className="flex items-center gap-3 bg-gray-50/80 p-1.5 rounded-lg border border-gray-100 pr-4">
             <div className="flex items-center gap-2 pl-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase whitespace-nowrap">BDI (%):</label>
+              <label className="text-xs font-bold text-gray-400 uppercase whitespace-nowrap">BDI (%):</label>
               <input
                 type="number"
                 value={settings.bdi}
@@ -1652,7 +1652,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
             <button
               onClick={() => setShowNatureBreakdown(!showNatureBreakdown)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${showNatureBreakdown ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all border ${showNatureBreakdown ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
               title="Mostrar detalhamento de custos (Mão de Obra, Material, Equipamento)"
             >
               <Layers className="w-3.5 h-3.5" />
@@ -1684,7 +1684,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               return (
                 <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-md" title={`Versão ativa: ${activeVersion.description}`}>
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-                  <span className="text-[10px] font-bold text-amber-700 max-w-[120px] truncate">v{activeVersion.item} · {activeVersion.description}</span>
+                  <span className="text-xs font-bold text-amber-700 max-w-[120px] truncate">v{activeVersion.item} · {activeVersion.description}</span>
                 </div>
               );
             })()}
@@ -1822,13 +1822,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         <div className="flex items-center gap-1.5">
                           <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">Item {v.item}</span>
                           {isActive && (
-                            <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-xs font-bold px-1.5 py-0.5 rounded-full">
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                               Ativa
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                        <span className="text-xs text-gray-400 flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
                           {new Date(v.date).toLocaleDateString()} {new Date(v.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
@@ -1885,11 +1885,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             {showNatureBreakdown && (
               <>
                 <div className="col-span-11"></div>
-                <div className="text-center text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50/50 rounded-t-lg py-1 border-x border-t border-blue-100/50 ml-2">Distribuição de Custos</div>
+                <div className="text-center text-xs font-black text-blue-600 uppercase tracking-widest bg-blue-50/50 rounded-t-lg py-1 border-x border-t border-blue-100/50 ml-2">Distribuição de Custos</div>
               </>
             )}
           </div>
-          <div className={`bg-gray-50 border-y border-gray-200 px-4 py-3 grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider`}>
+          <div className={`bg-gray-50 border-y border-gray-200 px-4 py-3 grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider`}>
             <div>Item</div>
             <div className="text-center">Base</div>
             <div className="text-center">Código</div>
@@ -1961,9 +1961,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     const nat = calculateGroupNatureTotal(group.name);
                     return (
                       <>
-                        <div className="text-right text-[11px] font-bold text-blue-200 ml-2">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-[11px] font-bold text-blue-200">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-[11px] font-bold text-blue-200">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-xs font-bold text-blue-200 ml-2">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-xs font-bold text-blue-200">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-xs font-bold text-blue-200">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                       </>
                     );
                   })()}
@@ -2018,9 +2018,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                           const nat = calculatePhaseNatureTotal(group.name, phase.name);
                           return (
                             <>
-                              <div className="text-right text-[11px] font-bold text-gray-500 ml-2">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                              <div className="text-right text-[11px] font-bold text-gray-500">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                              <div className="text-right text-[11px] font-bold text-gray-500">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                              <div className="text-right text-xs font-bold text-gray-500 ml-2">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                              <div className="text-right text-xs font-bold text-gray-500">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                              <div className="text-right text-xs font-bold text-gray-500">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                             </>
                           );
                         })()}
@@ -2075,9 +2075,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                 const nat = calculateSubPhaseNatureTotal(group.name, phase.name, subPhaseName);
                                 return (
                                   <>
-                                    <div className="text-right text-[11px] font-medium text-gray-600 ml-2">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                                    <div className="text-right text-[11px] font-medium text-gray-600">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                                    <div className="text-right text-[11px] font-medium text-gray-600">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                    <div className="text-right text-xs font-medium text-gray-600 ml-2">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                    <div className="text-right text-xs font-medium text-gray-600">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                    <div className="text-right text-xs font-medium text-gray-600">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                                   </>
                                 );
                               })()}
@@ -2249,7 +2249,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
                   <div className="grid grid-cols-12 gap-4">
                     <div className="col-span-3">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tipo</label>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo</label>
                       <select
                         className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
                         value={newItem.type}
@@ -2261,7 +2261,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       </select>
                     </div>
                     <div className="col-span-6">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Descrição do Item</label>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Descrição do Item</label>
                       <input
                         type="text"
                         placeholder="Ex: Cimento Portland CP-III-40 ensacado"
@@ -2271,7 +2271,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       />
                     </div>
                     <div className="col-span-1">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Unid.</label>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Unid.</label>
                       <input
                         type="text"
                         placeholder="kg"
@@ -2281,7 +2281,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Preço Base (R$)</label>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Preço Base (R$)</label>
                       <input
                         type="number"
                         step="0.01"
@@ -2292,7 +2292,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       />
                     </div>
                     <div className="col-span-9">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Grupo (Categoria)</label>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Grupo (Categoria)</label>
                       <select
                         className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
                         value={newItem.category}
@@ -2313,7 +2313,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       </button>
                     </div>
                   </div>
-                  <p className="mt-3 text-[10px] text-blue-600/70 italic flex items-center gap-1">
+                  <p className="mt-3 text-xs text-blue-600/70 italic flex items-center gap-1">
                     <Database className="w-2.5 h-2.5" /> O item será salvo na sua Base Própria e poderá ser usado em qualquer projeto.
                   </p>
                 </div>
@@ -2323,7 +2323,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               <div className="p-4 border-b border-gray-100 bg-white">
                 <div className="grid grid-cols-12 gap-3 mb-4">
                   <div className="col-span-1">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Código</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Código</label>
                     <input
                       type="text"
                       placeholder="Ex: 98546"
@@ -2333,7 +2333,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tipo</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo</label>
                     <select
                       className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                       value={searchType}
@@ -2345,7 +2345,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </select>
                   </div>
                   <div className="col-span-3">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Grupo</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Grupo</label>
                     <select
                       className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                       value={searchGroupFilter}
@@ -2358,7 +2358,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </select>
                   </div>
                   <div className="col-span-6">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Descrição</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Descrição</label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -2398,7 +2398,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 {/* Filtros de Base/Configuração */}
                 <div className="flex flex-wrap items-center gap-4 p-3 bg-gray-50 rounded-xl border border-gray-100 transition-all">
                   <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Base:</label>
+                    <label className="text-xs font-bold text-gray-400 uppercase">Base:</label>
                     <select
                       className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer max-w-[150px]"
                       value={searchDatabase}
@@ -2420,7 +2420,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="h-4 w-[1px] bg-gray-200" />
 
                   <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Referência:</label>
+                    <label className="text-xs font-bold text-gray-400 uppercase">Referência:</label>
                     <select
                       className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                       value={searchReference}
@@ -2438,7 +2438,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="h-4 w-[1px] bg-gray-200" />
 
                   <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Estado:</label>
+                    <label className="text-xs font-bold text-gray-400 uppercase">Estado:</label>
                     <select
                       className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                       value={searchLocation}
@@ -2457,7 +2457,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="h-4 w-[1px] bg-gray-200" />
 
                   <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Encargos:</label>
+                    <label className="text-xs font-bold text-gray-400 uppercase">Encargos:</label>
                     <select
                       className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                       value={searchCharges}
@@ -2472,7 +2472,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </select>
                   </div>
 
-                  <div className="ml-auto text-[10px] text-gray-400 flex items-center gap-3">
+                  <div className="ml-auto text-xs text-gray-400 flex items-center gap-3">
                     {searchResults.length > 0 && (
                       <div className="flex items-center gap-1.5 bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold border border-blue-100">
                         <Search className="w-3 h-3" />
@@ -2547,18 +2547,18 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             <span className="font-bold text-gray-700 text-sm">{result.code}</span>
                             {getTypeBadge(result.type)}
                             {searchDatabase === 'GENERAL' && (
-                              <span className="flex items-center gap-1 bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded text-[10px] font-bold border border-amber-100">
+                              <span className="flex items-center gap-1 bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded text-xs font-bold border border-amber-100">
                                 <Database className="w-2.5 h-2.5" /> BASE PRÓPRIA
                               </span>
                             )}
                             <span className="mx-1 text-gray-300">|</span>
-                            <span className="text-[10px] text-gray-500 uppercase">{result.category}</span>
+                            <span className="text-xs text-gray-500 uppercase">{result.category}</span>
                           </div>
                           <span className="text-emerald-600 font-bold text-sm">R$ {result.price.toFixed(2)}</span>
                         </div>
                         <p className="text-sm text-gray-700 mt-1 leading-snug whitespace-normal break-words">{result.description}</p>
                         <div className="flex justify-between items-end mt-2">
-                          <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500 font-medium uppercase">{result.unit}</span>
+                          <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500 font-medium uppercase">{result.unit}</span>
                           <div className="flex items-center gap-2">
                             {searchDatabase === 'GENERAL' && (
                               <button
@@ -2661,22 +2661,22 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={(e) => onToggleFavorite(e, selectedCPUItem.sinapiItem?.code || '')}
-                      className={`p-1.5 px-2 rounded-lg shadow-sm transition-all z-10 border flex items-center gap-1.5 font-bold text-[10px] uppercase ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}
+                      className={`p-1.5 px-2 rounded-lg shadow-sm transition-all z-10 border flex items-center gap-1.5 font-bold text-xs uppercase ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}
                       title={favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                     >
                       <Star className={`w-3.5 h-3.5 ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'fill-amber-500 text-amber-500' : ''}`} />
                       {favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'Favorito' : 'Favoritar'}
                     </button>
-                    <span className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm">{selectedCPUItem.sinapiItem?.code || '---'}</span>
+                    <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm">{selectedCPUItem.sinapiItem?.code || '---'}</span>
                   </div>
-                  <p className="text-[13px] text-gray-500 font-medium leading-tight max-w-2xl uppercase">
+                  <p className="text-form-label text-gray-500 font-medium leading-tight max-w-2xl uppercase">
                     {selectedCPUItem.sinapiItem?.description || 'Sem descrição'}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-4">
                   <div className="text-right whitespace-nowrap">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Preço Unitário</p>
+                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Preço Unitário</p>
                     <p className="text-2xl font-black text-emerald-600">
                       R$ {(selectedCPUItem.sinapiItem?.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
@@ -2692,7 +2692,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               </div>
 
               <div className="flex-1 overflow-y-auto p-6">
-                <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-4 shadow-sm py-2 bg-gray-50 rounded-t-lg">
+                <div className="grid grid-cols-12 gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-4 shadow-sm py-2 bg-gray-50 rounded-t-lg">
                   <div className="col-span-1 text-center">Código</div>
                   <div className="col-span-1 text-center font-bold">Tipo</div>
                   <div className="col-span-3">Insumo/Composição</div>
@@ -2718,7 +2718,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                           </span>
                         </div>
                         <div className="col-span-3 flex flex-col">
-                          <span className="leading-tight text-[13px] font-medium text-gray-700">{comp.description}</span>
+                          <span className="leading-tight text-form-label font-medium text-gray-700">{comp.description}</span>
                         </div>
                         <div className="col-span-1 text-center text-gray-400 font-medium">{comp.unit || '-'}</div>
                         <div className="col-span-2">
@@ -2862,7 +2862,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         <span className="text-gray-600 font-medium">Etapas a Gerar:</span>
                         <span className="font-bold text-gray-800">{parametricPreview.itemsCount}</span>
                       </div>
-                      <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">
+                      <p className="text-xs text-gray-500 mt-3 leading-relaxed">
                         Cálculo baseado no VGV estimado utilizando o CUB estadual e pesos estatísticos por fase da obra.
                       </p>
                     </div>
@@ -2870,7 +2870,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100">
                       <div className="flex justify-between items-center mb-4">
                         <span className="text-indigo-700 font-bold">Lote Básico NBR 12721</span>
-                        <span className="bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded text-[10px] font-bold uppercase">{settings.standard}</span>
+                        <span className="bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded text-xs font-bold uppercase">{settings.standard}</span>
                       </div>
 
                       <div className="grid grid-cols-2 gap-x-6 gap-y-2">
@@ -2887,7 +2887,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         <span className="font-bold text-indigo-700">{parametricPreview.itemsCount} insumos</span>
                       </div>
 
-                      <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">
+                      <p className="text-xs text-gray-500 mt-3 leading-relaxed">
                         Cálculo de quantidades exatas de materiais e mão de obra por m² conforme a Norma NBR 12721.
                       </p>
                     </div>

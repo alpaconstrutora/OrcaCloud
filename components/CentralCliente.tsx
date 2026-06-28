@@ -259,7 +259,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                                         <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 tabular-nums">{e.transaction_date.split('-').reverse().join('/')}</td>
                                         <td className="px-2 py-2.5">
                                             <p className="text-gray-700 font-medium truncate max-w-[260px]">{e.description || e.category_name || '—'}</p>
-                                            <p className="text-[11px] text-gray-400 truncate">
+                                            <p className="text-xs text-gray-400 truncate">
                                                 {[e.category_name, e.project_name].filter(Boolean).join(' · ')}
                                                 {e.status === 'PENDING' ? ' · previsto' : ''}
                                             </p>

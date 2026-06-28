@@ -122,7 +122,7 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                     <Filter className="w-3.5 h-3.5 text-slate-400" />
                     {(['ALL', 'PENDENTE', 'APROVADO', 'REJEITADO'] as const).map(s => (
                         <button key={s} onClick={() => setFilterStatus(s)}
-                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black transition-all ${filterStatus === s ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-black transition-all ${filterStatus === s ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
                             {s === 'ALL' ? 'Todos' : s} {s === 'PENDENTE' && pendingCount > 0 ? `(${pendingCount})` : ''}
                         </button>
                     ))}
@@ -240,11 +240,11 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                                         <div className="text-xs font-bold text-slate-900">{entry.employee_name || '—'}</div>
                                     </td>
                                     <td className="px-4 py-3">
-                                        <span className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md font-bold">
+                                        <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md font-bold">
                                             {entry.project_name || 'Sem obra'}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-[10px] font-bold text-slate-500">
+                                    <td className="px-4 py-3 text-xs font-bold text-slate-500">
                                         {new Date(entry.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                                     </td>
                                     <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">{entry.hours_worked}h</td>
@@ -253,7 +253,7 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                                         {entry.total_cost ? `R$ ${entry.total_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
                                     </td>
                                     <td className="px-4 py-3">
-                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black
+                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-black
                                             ${entry.status === 'APROVADO' ? 'bg-emerald-100 text-emerald-700' :
                                               entry.status === 'REJEITADO' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                             {entry.status}
@@ -282,7 +282,7 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                         {filtered.length > 0 && (
                             <tfoot>
                                 <tr className="bg-slate-50/80 border-t border-slate-100">
-                                    <td colSpan={4} className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    <td colSpan={4} className="px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">
                                         {filtered.length} registros
                                     </td>
                                     <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">

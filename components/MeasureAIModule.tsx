@@ -918,7 +918,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
         {isCreatingProject && (
           <form onSubmit={handleCreateProject} className="p-4 bg-slate-900 border-b border-slate-800 space-y-3">
             <div>
-              <label className="text-[10px] uppercase font-bold text-slate-500">Nome do Projeto</label>
+              <label className="text-xs uppercase font-bold text-slate-500">Nome do Projeto</label>
               <input
                 type="text"
                 value={newProjectName}
@@ -928,19 +928,19 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               />
             </div>
             <div>
-              <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Tipo de Vínculo</label>
+              <label className="text-xs uppercase font-bold text-slate-500 block mb-1">Tipo de Vínculo</label>
               <div className="flex gap-2 bg-slate-950 p-1 rounded-lg border border-slate-800">
                 <button
                   type="button"
                   onClick={() => setLinkType('ENGENHARIA')}
-                  className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${linkType === 'ENGENHARIA' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                  className={`flex-1 py-1 rounded text-xs font-bold transition-all ${linkType === 'ENGENHARIA' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                 >
                   Engenharia
                 </button>
                 <button
                   type="button"
                   onClick={() => setLinkType('PRO')}
-                  className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${linkType === 'PRO' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                  className={`flex-1 py-1 rounded text-xs font-bold transition-all ${linkType === 'PRO' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                 >
                   ÒPURA Pro
                 </button>
@@ -949,7 +949,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
 
             {linkType === 'ENGENHARIA' ? (
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-500">Obra / Orçamento Principal</label>
+                <label className="text-xs uppercase font-bold text-slate-500">Obra / Orçamento Principal</label>
                 <select
                   value={selectedAssociatedProjectId}
                   onChange={e => setSelectedAssociatedProjectId(e.target.value)}
@@ -963,7 +963,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               </div>
             ) : (
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-500">Orçamento Standalone Pro</label>
+                <label className="text-xs uppercase font-bold text-slate-500">Orçamento Standalone Pro</label>
                 <select
                   value={selectedOrcamentoId}
                   onChange={e => setSelectedOrcamentoId(e.target.value)}
@@ -1015,7 +1015,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
         {/* Lista de Arquivos (Plantas) */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+            <div className="flex items-center justify-between text-xs uppercase font-bold text-slate-500 tracking-wider">
               <span>Plantas & Desenhos</span>
               <button
                 onClick={handleUploadClick}
@@ -1071,7 +1071,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
 
           {/* Seção de Camadas (Layers) */}
           <div className="space-y-2 border-t border-slate-900 pt-4">
-            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+            <div className="text-xs uppercase font-bold text-slate-500 tracking-wider">
               <span>Camadas de Medição</span>
             </div>
             <div className="space-y-1">
@@ -1121,7 +1121,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
           <div className="p-3 border-t border-slate-800 bg-slate-950 flex justify-end">
             <button
               onClick={() => handleDeleteProject(activeProject.id)}
-              className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1 font-bold uppercase tracking-wider"
+              className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 font-bold uppercase tracking-wider"
             >
               <Trash2 className="w-3 h-3" /> Excluir Projeto
             </button>
@@ -1160,7 +1160,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
 
             {/* Mostrar escala ativa */}
             {activeFile?.scale && (
-              <span className="text-[10px] text-slate-400 font-mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
+              <span className="text-xs text-slate-400 font-mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
                 1m = {Number(activeFile.scale).toFixed(1)} px
               </span>
             )}
@@ -1329,7 +1329,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                 <span className="text-xs font-bold text-slate-200">
                   {tool === 'POLYGON' ? 'Desenhando Área' : 'Desenhando Linha'}
                 </span>
-                <span className="text-[10px] text-slate-400 font-mono">
+                <span className="text-xs text-slate-400 font-mono">
                   {tempPoints.length} {tempPoints.length === 1 ? 'ponto' : 'pontos'} inseridos
                 </span>
               </div>
@@ -1339,7 +1339,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                   onClick={() => {
                     setTempPoints([]);
                   }}
-                  className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-bold rounded-lg text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                  className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold rounded-lg text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
                 >
                   Cancelar (Esc)
                 </button>
@@ -1348,7 +1348,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                     finishDrawing(tempPoints, tool);
                   }}
                   disabled={(tool === 'POLYGON' && tempPoints.length < 3) || (tool === 'LINE' && tempPoints.length < 2)}
-                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-[10px] font-bold rounded-lg text-white transition-colors flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-xs font-bold rounded-lg text-white transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Concluir (Enter)</span>
@@ -1359,7 +1359,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
 
           {/* Dica flutuante do Canvas */}
           {activeFile && (
-            <div className="absolute bottom-4 left-4 bg-slate-950/90 border border-slate-800 px-3 py-2 rounded-xl text-[10px] text-slate-400 font-medium z-10 pointer-events-none max-w-xs shadow-xl">
+            <div className="absolute bottom-4 left-4 bg-slate-950/90 border border-slate-800 px-3 py-2 rounded-xl text-xs text-slate-400 font-medium z-10 pointer-events-none max-w-xs shadow-xl">
               {tool === 'PAN' && '💡 Arraste a tela para navegar. Use o scroll do mouse para Zoom.'}
               {tool === 'SCALE' && '💡 Clique em dois pontos com distância conhecida para configurar a escala real da planta.'}
               {tool === 'POLYGON' && '💡 Clique nos vértices para desenhar. Feche clicando no primeiro ponto, pressionando Enter ou no botão flutuante.'}
@@ -1394,7 +1394,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
           <div className="p-4 bg-slate-900 border-b border-slate-800 space-y-3">
             {linkedProject && linkedProject.budget && (
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Associar a Item do Orçamento</label>
+                <label className="text-xs uppercase font-bold text-slate-500 block mb-1">Associar a Item do Orçamento</label>
                 <select
                   value={newItemReferenciaId}
                   onChange={e => {
@@ -1424,7 +1424,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               </div>
             )}
             <div>
-              <label className="text-[10px] uppercase font-bold text-slate-500">Nome do Item</label>
+              <label className="text-xs uppercase font-bold text-slate-500">Nome do Item</label>
               <input
                 type="text"
                 value={newItemName}
@@ -1435,7 +1435,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
             </div>
             <div className="flex gap-2">
               <div className="flex-1">
-                <label className="text-[10px] uppercase font-bold text-slate-500">Unidade</label>
+                <label className="text-xs uppercase font-bold text-slate-500">Unidade</label>
                 <select
                   value={newItemUnit}
                   onChange={e => setNewItemUnit(e.target.value as any)}
@@ -1447,7 +1447,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                 </select>
               </div>
               <div className="flex-1">
-                <label className="text-[10px] uppercase font-bold text-slate-500">Preço Unit. (R$)</label>
+                <label className="text-xs uppercase font-bold text-slate-500">Preço Unit. (R$)</label>
                 <input
                   type="text"
                   value={newItemValue}
@@ -1478,7 +1478,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
 
         {/* Seleção do Item de Biblioteca Ativo */}
         <div className="p-4 border-b border-slate-800">
-          <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1.5">Medindo Item</label>
+          <label className="text-xs uppercase font-bold text-slate-500 block mb-1.5">Medindo Item</label>
           <select
             value={activeLibraryItem?.id || ''}
             onChange={(e) => {
@@ -1496,7 +1496,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
 
         {/* Resumo de Quantitativos Extraídos */}
         <div className="flex-1 overflow-y-auto p-4 flex flex-col">
-          <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-3">
+          <div className="text-xs uppercase font-bold text-slate-500 tracking-wider mb-3">
             <span>Quantitativos do Projeto</span>
           </div>
 
@@ -1508,11 +1508,11 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               >
                 <div className="min-w-0 flex-1">
                   <p className="font-bold text-slate-200 truncate">{q.item.nome}</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Preço Unit: R$ {Number(q.item.valor_unitario).toFixed(2)}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Preço Unit: R$ {Number(q.item.valor_unitario).toFixed(2)}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <span className="font-mono font-bold text-slate-100 text-sm">{q.total.toFixed(2)}</span>
-                  <span className="text-[10px] text-slate-500 uppercase ml-1 font-bold">
+                  <span className="text-xs text-slate-500 uppercase ml-1 font-bold">
                     {q.item.unidade === 'M2' ? 'm²' : (q.item.unidade === 'M' ? 'm' : 'un')}
                   </span>
                 </div>
@@ -1555,12 +1555,12 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               </div>
               <div>
                 <h4 className="font-black text-slate-100">Configurar Escala Real</h4>
-                <p className="text-[10px] text-slate-500 font-medium">Informe o comprimento real do segmento selecionado.</p>
+                <p className="text-xs text-slate-500 font-medium">Informe o comprimento real do segmento selecionado.</p>
               </div>
             </div>
 
             <div>
-              <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Distância em Metros (m)</label>
+              <label className="text-xs uppercase font-bold text-slate-500 block mb-1">Distância em Metros (m)</label>
               <input
                 type="number"
                 step="0.01"

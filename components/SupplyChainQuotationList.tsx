@@ -61,7 +61,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
             'Cancelada': 'bg-gray-50 text-gray-400 border-gray-100',
         };
         return (
-            <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${colors[status] || 'bg-gray-100 text-gray-600'}`}>
+            <span className={`px-2 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${colors[status] || 'bg-gray-100 text-gray-600'}`}>
                 {status}
             </span>
         );
@@ -143,7 +143,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                             <FileText className="w-6 h-6" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total</p>
                             <h3 className="text-3xl font-black text-gray-900">{requests.length}</h3>
                         </div>
                     </div>
@@ -159,7 +159,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                             <Clock className="w-6 h-6" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Abertas</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Abertas</p>
                             <h3 className="text-3xl font-black text-gray-900">
                                 {requests.filter(r => r.status === 'Aberta').length}
                             </h3>
@@ -177,7 +177,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                             <Search className="w-6 h-6 text-indigo-600" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Em Análise</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Em Análise</p>
                             <h3 className="text-3xl font-black text-gray-900">
                                 {requests.filter(r => r.status === 'Em Análise').length}
                             </h3>
@@ -195,7 +195,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                             <Plus className="w-6 h-6 text-green-600" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Concluídas</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Concluídas</p>
                             <h3 className="text-3xl font-black text-gray-900">
                                 {requests.filter(r => r.status === 'Concluída').length}
                             </h3>
@@ -238,7 +238,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                 viewMode === 'list' ? (
                     <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
                         <table className="w-full text-left border-collapse">
-                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-widest border-b border-gray-200">
+                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs tracking-widest border-b border-gray-200">
                                 <tr>
                                     {tableColumns.visibleColumns.includes('number') && (
                                         <SortableHeader colKey="number" label="Número" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
@@ -273,7 +273,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 <div className="flex flex-col">
                                                     <span className="text-sm font-medium text-gray-900">{req.title}</span>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{req.projectName}</span>
+                                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{req.projectName}</span>
                                                 </div>
                                             </td>
                                         )}
@@ -337,7 +337,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
 
                                 <div className="flex items-center justify-between pt-6 border-t border-gray-50">
                                     <div className="flex flex-col">
-                                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Prazo Final</p>
+                                        <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Prazo Final</p>
                                         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
                                             <Calendar className="w-3.5 h-3.5 text-indigo-500" />
                                             {new Date(req.deadline + 'T12:00:00').toLocaleDateString('pt-BR')}

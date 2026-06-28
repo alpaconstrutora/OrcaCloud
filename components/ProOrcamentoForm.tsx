@@ -423,7 +423,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
         <div className="space-y-4 flex-1">
           {/* Modelos Rápidos por Profissão */}
           <div className="space-y-1.5">
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Carregar Modelo Rápido</label>
+            <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Carregar Modelo Rápido</label>
             <select
               value={selectedTemplateIndex}
               onChange={(e) => {
@@ -475,7 +475,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
           {/* Seletor de Cliente */}
           <div className="space-y-1.5">
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Cliente</label>
+            <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Cliente</label>
             <select
               value={isNovoCliente ? 'NOVO' : clienteId}
               onChange={(e) => {
@@ -530,7 +530,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
           {/* Descrição do Serviço */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Serviço a ser realizado</label>
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Serviço a ser realizado</label>
               <button
                 type="button"
                 onClick={handleVoiceInput}
@@ -606,7 +606,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
               </div>
             </div>
             {quantidade && valorUnitario && !isNaN(parseFloat(quantidade)) && !isNaN(parseFloat(valorUnitario)) && (
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200/50 flex justify-between items-center text-[10px] font-bold text-slate-500 animate-fadeIn">
+              <div className="bg-white p-2.5 rounded-xl border border-slate-200/50 flex justify-between items-center text-xs font-bold text-slate-500 animate-fadeIn">
                 <span>Cálculo do Total:</span>
                 <span className="text-teal-600 font-black">
                   {quantidade} x R$ {parseFloat(valorUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} = R$ {((parseFloat(quantidade) || 0) * (parseFloat(valorUnitario) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -617,7 +617,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
           {/* Valor */}
           <div className="space-y-1.5">
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Valor Cobrado (R$)</label>
+            <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Valor Cobrado (R$)</label>
             <input
               type="number"
               placeholder="0,00"
@@ -630,7 +630,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
           <div className="grid grid-cols-2 gap-4">
             {/* Validade */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Validade (dias)</label>
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Validade (dias)</label>
               <input
                 type="number"
                 value={validadeDias}
@@ -641,7 +641,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
             {/* Garantia */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Garantia (dias)</label>
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Garantia (dias)</label>
               <input
                 type="number"
                 value={garantiaDias}
@@ -653,7 +653,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
           {/* Observações */}
           <div className="space-y-1.5">
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Observações adicionais</label>
+            <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Observações adicionais</label>
             <textarea
               rows={2}
               placeholder="Ex: Não incluso quebra de alvenaria. Chave Pix para pagamento no rodapé do documento."

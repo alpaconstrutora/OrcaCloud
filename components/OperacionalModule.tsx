@@ -138,7 +138,7 @@ const ProjectSelector: React.FC<{
                 <Building2 className="w-4 h-4 text-slate-300 flex-shrink-0" />
                 <div className="min-w-0">
                   <p className="font-bold text-slate-900 text-sm truncate">{p.name}</p>
-                  <p className="text-[10px] text-slate-400 font-medium">Obra</p>
+                  <p className="text-xs text-slate-400 font-medium">Obra</p>
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />

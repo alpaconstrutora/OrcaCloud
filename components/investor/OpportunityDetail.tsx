@@ -139,12 +139,12 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                 <div className="max-w-5xl mx-auto px-6 pb-8 pt-6">
                     <div className="flex flex-wrap items-start gap-3 mb-3">
                         {op.status && (
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
                                 {OPPORTUNITY_STATUS_LABELS[op.status]}
                             </span>
                         )}
                         {op.opportunity_type && (
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/10 text-white/70">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-white/10 text-white/70">
                                 {OPPORTUNITY_TYPE_LABELS[op.opportunity_type]}
                             </span>
                         )}
@@ -254,19 +254,19 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                 <div className="flex flex-wrap gap-8">
                                                     {op.land_area_m2 && (
                                                         <div>
-                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Terreno</p>
+                                                            <p className="text-xs font-black text-gray-400 uppercase tracking-wider">Terreno</p>
                                                             <p className="text-xl font-black text-gray-800 mt-0.5">{fmtM2(op.land_area_m2)}</p>
                                                         </div>
                                                     )}
                                                     {op.built_area_m2 && (
                                                         <div>
-                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Área construída</p>
+                                                            <p className="text-xs font-black text-gray-400 uppercase tracking-wider">Área construída</p>
                                                             <p className="text-xl font-black text-gray-800 mt-0.5">{fmtM2(op.built_area_m2)}</p>
                                                         </div>
                                                     )}
                                                     {op.floors && (
                                                         <div>
-                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Pavimentos</p>
+                                                            <p className="text-xs font-black text-gray-400 uppercase tracking-wider">Pavimentos</p>
                                                             <p className="text-xl font-black text-gray-800 mt-0.5">{op.floors}</p>
                                                         </div>
                                                     )}
@@ -388,7 +388,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                                     <span className="text-sm font-bold text-gray-800">{i.contact_name}</span>
                                                                     <span className="ml-2 text-xs text-gray-400">{INTEREST_ROLE_LABELS[i.role]}</span>
                                                                 </div>
-                                                                <span className="text-[10px] font-bold px-2 py-1 bg-gray-100 text-gray-500 rounded-lg">
+                                                                <span className="text-xs font-bold px-2 py-1 bg-gray-100 text-gray-500 rounded-lg">
                                                                     {INTEREST_STAGE_LABELS[i.stage ?? 'lead']}
                                                                 </span>
                                                             </div>

@@ -45,7 +45,7 @@ const DependencyLabels: Record<string, string> = {
 interface FieldProps { label: string; value: React.ReactNode; className?: string }
 const Field: React.FC<FieldProps> = ({ label, value, className }) => (
     <div className={`flex flex-col gap-0.5 ${className || ''}`}>
-        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</span>
+        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">{label}</span>
         <span className="text-sm font-semibold text-gray-800">{value ?? '—'}</span>
     </div>
 );
@@ -71,7 +71,7 @@ const EditField: React.FC<EditFieldProps> = ({ label, type = 'number', value, su
 
     return (
         <div className={`flex flex-col gap-0.5 ${className || ''}`}>
-            {label && <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</span>}
+            {label && <span className="text-xs font-black text-gray-400 uppercase tracking-widest">{label}</span>}
             <div className="flex items-center gap-1">
                 <input
                     type={type}
@@ -119,11 +119,11 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                             {node.wbsCode && (
-                                <span className="text-[10px] font-black font-mono text-blue-600 bg-white px-1.5 py-0.5 rounded border border-blue-200">
+                                <span className="text-xs font-black font-mono text-blue-600 bg-white px-1.5 py-0.5 rounded border border-blue-200">
                                     {node.wbsCode}
                                 </span>
                             )}
-                            <span className="text-[10px] font-bold text-gray-400 bg-white px-1.5 py-0.5 rounded border border-gray-200">
+                            <span className="text-xs font-bold text-gray-400 bg-white px-1.5 py-0.5 rounded border border-gray-200">
                                 ID {node.uid}
                             </span>
                             {isCritical && (
@@ -146,7 +146,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Localização na WBS */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
                             <Layers className="w-3.5 h-3.5" /> Localização
                         </h3>
                         <div className="grid grid-cols-1 gap-2">
@@ -158,7 +158,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Cronograma — editável */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
                             <Calendar className="w-3.5 h-3.5" /> Cronograma
                         </h3>
                         <div className="grid grid-cols-2 gap-3">
@@ -183,7 +183,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                 onCommit={(v) => handleUpdateItemSchedule(item.id, 'duration', parseInt(v, 10) || 0)}
                             />
                             <div className="flex flex-col gap-0.5">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Folga Total</span>
+                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Folga Total</span>
                                 <span className={`text-sm font-semibold py-1.5 ${totalFloat === 0 ? 'text-red-600' : totalFloat <= 3 ? 'text-orange-500' : 'text-green-600'}`}>
                                     {totalFloat} {totalFloat === 1 ? 'dia' : 'dias'}
                                 </span>
@@ -198,7 +198,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                             </div>
                             {itemSchedule?.isMilestone && (
                                 <div className="col-span-2">
-                                    <span className="text-[10px] font-black text-purple-600 bg-purple-50 border border-purple-200 px-2 py-1 rounded-lg uppercase tracking-widest">
+                                    <span className="text-xs font-black text-purple-600 bg-purple-50 border border-purple-200 px-2 py-1 rounded-lg uppercase tracking-widest">
                                         Marco (Milestone)
                                     </span>
                                 </div>
@@ -208,7 +208,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Progresso — editável */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
                             <TrendingUp className="w-3.5 h-3.5" /> Progresso
                         </h3>
                         <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 space-y-2">
@@ -239,7 +239,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Custos */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
                             <TrendingDown className="w-3.5 h-3.5" /> Custos
                         </h3>
                         <div className="grid grid-cols-2 gap-3">
@@ -265,7 +265,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Item SINAPI */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
                             <Package className="w-3.5 h-3.5" /> Item
                         </h3>
                         <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 space-y-2">
@@ -273,7 +273,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                 <span className="text-xs font-black font-mono text-gray-500 bg-white border border-gray-200 px-1.5 py-0.5 rounded shrink-0">
                                     {item.sinapiItem.code}
                                 </span>
-                                <span className="text-[10px] text-gray-400 font-medium text-right leading-tight">{item.sinapiItem.category}</span>
+                                <span className="text-xs text-gray-400 font-medium text-right leading-tight">{item.sinapiItem.category}</span>
                             </div>
                             <div className="grid grid-cols-3 gap-2">
                                 <Field label="Quantidade" value={item.quantity.toLocaleString('pt-BR')} />
@@ -289,7 +289,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     {/* Restrição */}
                     {itemSchedule?.constraintType && itemSchedule.constraintType !== 'ASAP' && (
                         <section>
-                            <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                            <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
                                 <Clock className="w-3.5 h-3.5" /> Restrição
                             </h3>
                             <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 space-y-2">
@@ -304,12 +304,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     {/* Predecessores — editável via PredecessorModal */}
                     <section>
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest">
                                 <Link2 className="w-3.5 h-3.5" /> Predecessores ({itemSchedule?.predecessors?.length || 0})
                             </h3>
                             <button
                                 onClick={onEditPredecessors}
-                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-blue-600 hover:bg-blue-50 border border-blue-200 transition-colors"
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold text-blue-600 hover:bg-blue-50 border border-blue-200 transition-colors"
                             >
                                 <Link2 className="w-3 h-3" /> Editar
                             </button>
@@ -321,14 +321,14 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                     const uid = idToUid[pred.id] || '—';
                                     return (
                                         <div key={pred.id} className="flex items-start gap-2 bg-gray-50 border border-gray-100 rounded-xl p-2.5">
-                                            <span className="shrink-0 text-[10px] font-black font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                                            <span className="shrink-0 text-xs font-black font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
                                                 {uid}
                                             </span>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-[11px] font-semibold text-gray-700 truncate" title={predItem?.name}>
+                                                <p className="text-xs font-semibold text-gray-700 truncate" title={predItem?.name}>
                                                     {predItem?.name || pred.id}
                                                 </p>
-                                                <p className="text-[10px] text-gray-400 mt-0.5">
+                                                <p className="text-xs text-gray-400 mt-0.5">
                                                     {DependencyLabels[pred.type] || pred.type}
                                                     {pred.lag !== 0 && ` · Lag: ${pred.lag > 0 ? '+' : ''}${pred.lag}d`}
                                                 </p>
@@ -340,7 +340,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         ) : (
                             <button
                                 onClick={onEditPredecessors}
-                                className="w-full text-center py-4 border-2 border-dashed border-gray-100 rounded-xl text-gray-400 text-[11px] hover:border-blue-200 hover:text-blue-500 transition-colors"
+                                className="w-full text-center py-4 border-2 border-dashed border-gray-100 rounded-xl text-gray-400 text-xs hover:border-blue-200 hover:text-blue-500 transition-colors"
                             >
                                 Nenhum predecessor — clique para adicionar
                             </button>
@@ -349,7 +349,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Equipe — editável */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
                             <Users className="w-3.5 h-3.5" /> Equipe
                         </h3>
                         <div className="grid grid-cols-3 gap-3">
@@ -390,17 +390,17 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                 <Field label="H·H Total" value={`${itemSchedule.totalManHours.toFixed(1)} h`} />
                             )}
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-2 leading-tight">
+                        <p className="text-xs text-gray-400 mt-2 leading-tight">
                             Alterar a equipe ativa o cálculo automático de duração com base na produtividade.
                         </p>
                     </section>
 
                     {/* IDs internos */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
                             <Hash className="w-3.5 h-3.5" /> Referência
                         </h3>
-                        <div className="grid grid-cols-1 gap-1.5 text-[10px] font-mono text-gray-400 bg-gray-50 border border-gray-100 rounded-xl p-3">
+                        <div className="grid grid-cols-1 gap-1.5 text-xs font-mono text-gray-400 bg-gray-50 border border-gray-100 rounded-xl p-3">
                             <div className="flex justify-between"><span>ID interno:</span><span className="text-gray-600">{item.id}</span></div>
                             <div className="flex justify-between"><span>UID seq.:</span><span className="text-gray-600">{node.uid}</span></div>
                         </div>

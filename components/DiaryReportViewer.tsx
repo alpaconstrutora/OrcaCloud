@@ -61,7 +61,7 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                             <FileText className="w-6 h-6 text-indigo-600" />
                             Relatório de Diário de Obras
                         </h1>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                             {settings.name} • {entries.length} Registros
                         </p>
                     </div>
@@ -92,13 +92,13 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                                 <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">
                                     {selectedOrganization?.name || 'Opura'}
                                 </h2>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">
                                     Relatório Consolidado de Diário de Obras
                                 </p>
                             </div>
                         </div>
                         <div className="text-right">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Emitido em</div>
+                            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Emitido em</div>
                             <div className="text-sm font-black text-gray-900">{new Date().toLocaleDateString('pt-BR')}</div>
                         </div>
                     </div>
@@ -155,21 +155,21 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 bg-indigo-600 rounded-xl flex flex-col items-center justify-center text-white shadow-lg shadow-indigo-100">
                                             <span className="text-lg font-black leading-none">{new Date(entry.date + 'T12:00:00').getDate()}</span>
-                                            <span className="text-[10px] font-bold uppercase">{new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(entry.date + 'T12:00:00')).replace('.', '')}</span>
+                                            <span className="text-xs font-bold uppercase">{new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(entry.date + 'T12:00:00')).replace('.', '')}</span>
                                         </div>
                                         <div>
                                             <div className="text-sm font-black text-gray-900 uppercase">Diário de Obras #{entries.length - index}</div>
-                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(new Date(entry.date + 'T12:00:00'))}</div>
+                                            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">{new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(new Date(entry.date + 'T12:00:00'))}</div>
                                         </div>
                                     </div>
 
                                     <div className="flex items-center gap-4">
                                         <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-gray-100 shadow-sm">
                                             {weatherIcons[entry.weather || 'Ensolarado']}
-                                            <span className="text-[10px] font-bold text-gray-700 uppercase tracking-widest">{entry.weather}</span>
-                                            {entry.temperature && <span className="text-[10px] font-black text-indigo-600 border-l border-gray-100 pl-2">{entry.temperature}</span>}
+                                            <span className="text-xs font-bold text-gray-700 uppercase tracking-widest">{entry.weather}</span>
+                                            {entry.temperature && <span className="text-xs font-black text-indigo-600 border-l border-gray-100 pl-2">{entry.temperature}</span>}
                                         </div>
-                                        <div className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                        <div className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest border ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                                                 entry.status === 'Recusado' ? 'bg-red-50 text-red-600 border-red-100' :
                                                     'bg-amber-50 text-amber-600 border-amber-100'
                                             }`}>
@@ -183,7 +183,7 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                                     {/* Description */}
                                     {entry.description && (
                                         <div className="space-y-2">
-                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                                 <MessageSquare className="w-3.5 h-3.5" />
                                                 Relato do Dia
                                             </h4>
@@ -197,34 +197,34 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                                     <div className="grid grid-cols-2 gap-8">
                                         {/* Activities */}
                                         <div className="space-y-3">
-                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                                 Atividades Realizadas
                                             </h4>
                                             {entry.activities && entry.activities.length > 0 ? (
                                                 <div className="space-y-2">
                                                     {entry.activities.map((act, i) => (
-                                                        <div key={i} className="flex items-center justify-between text-[11px] p-2 bg-gray-50/50 rounded-lg border border-gray-100">
+                                                        <div key={i} className="flex items-center justify-between text-xs p-2 bg-gray-50/50 rounded-lg border border-gray-100">
                                                             <span className="font-bold text-gray-700 truncate flex-1 mr-2">{act.description}</span>
                                                             <span className="font-black text-indigo-600">{act.evolution}%</span>
                                                         </div>
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <p className="text-[10px] text-gray-400 italic">Nenhuma atividade registrada.</p>
+                                                <p className="text-xs text-gray-400 italic">Nenhuma atividade registrada.</p>
                                             )}
                                         </div>
 
                                         {/* Manpower */}
                                         <div className="space-y-3">
-                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                                 <Users className="w-3.5 h-3.5" />
                                                 Efetivo / Mão de Obra
                                             </h4>
                                             {entry.labor && entry.labor.length > 0 ? (
                                                 <div className="grid grid-cols-1 gap-1">
                                                     {entry.labor.map((lab, i) => (
-                                                        <div key={i} className="flex items-center justify-between text-[11px] py-1 border-b border-gray-50 last:border-0 px-1">
+                                                        <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-gray-50 last:border-0 px-1">
                                                             <span className="font-medium text-gray-600 truncate mr-2">{lab.category}</span>
                                                             <div className="flex items-center gap-2">
                                                                 {lab.hours && <span className="text-[9px] text-gray-400 font-bold uppercase whitespace-nowrap">{lab.hours}h</span>}
@@ -234,7 +234,7 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <p className="text-[10px] text-gray-400 italic">Nenhum efetivo registrado.</p>
+                                                <p className="text-xs text-gray-400 italic">Nenhum efetivo registrado.</p>
                                             )}
                                         </div>
                                     </div>
@@ -242,7 +242,7 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                                     {/* Impediments */}
                                     {entry.impediments && (
                                         <div className="p-4 bg-red-50/30 rounded-xl border border-red-100">
-                                            <h4 className="text-[10px] font-black text-red-600 uppercase tracking-widest flex items-center gap-2 mb-2">
+                                            <h4 className="text-xs font-black text-red-600 uppercase tracking-widest flex items-center gap-2 mb-2">
                                                 <AlertTriangle className="w-3.5 h-3.5" />
                                                 Impedimentos / Paralisações
                                             </h4>
@@ -255,7 +255,7 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                                     {/* Photos Grid */}
                                     {entry.images && entry.images.length > 0 && (
                                         <div className="space-y-3">
-                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                                 <ImageIcon className="w-3.5 h-3.5" />
                                                 Registro Fotográfico ({entry.images.length})
                                             </h4>
@@ -275,13 +275,13 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                                     <div className="mt-20 grid grid-cols-2 gap-20 px-10">
                                         <div className="flex flex-col items-center">
                                             <div className="w-full border-t border-gray-300 pt-2 text-center">
-                                                <div className="text-[10px] font-bold text-gray-900 uppercase">Assinatura do Responsável</div>
+                                                <div className="text-xs font-bold text-gray-900 uppercase">Assinatura do Responsável</div>
                                                 <div className="text-[8px] text-gray-400 uppercase">Engenheiro / Encarregado</div>
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-center">
                                             <div className="w-full border-t border-gray-300 pt-2 text-center">
-                                                <div className="text-[10px] font-bold text-gray-900 uppercase">Fiscalização / Cliente</div>
+                                                <div className="text-xs font-bold text-gray-900 uppercase">Fiscalização / Cliente</div>
                                                 <div className="text-[8px] text-gray-400 uppercase">Visto de Conferência</div>
                                             </div>
                                         </div>

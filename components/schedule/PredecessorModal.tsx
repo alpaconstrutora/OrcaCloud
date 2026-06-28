@@ -83,7 +83,7 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                 <div className="p-6 overflow-y-auto flex-1 bg-white">
                     <div className="space-y-6">
                         <div>
-                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Predecessores Atuais</h4>
+                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Predecessores Atuais</h4>
                             <div className="space-y-2">
                                 {predecessors.map(p => {
                                     const task = allTasks.find(t => t.id === p.id);
@@ -92,7 +92,7 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                                         <div key={p.id} className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-100 rounded-xl">
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-xs font-bold text-gray-800 flex items-center gap-2">
-                                                    <span className="shrink-0 bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-[10px]">{idToUid[p.id] || (task?.nodeType ? typeLabel[task.nodeType] : '—')}</span>
+                                                    <span className="shrink-0 bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-xs">{idToUid[p.id] || (task?.nodeType ? typeLabel[task.nodeType] : '—')}</span>
                                                     <span className="truncate">{task?.name || 'Item não encontrado'}</span>
                                                 </div>
                                             </div>
@@ -100,7 +100,7 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                                                 <select
                                                     value={p.type}
                                                     onChange={(e) => handleUpdatePred(p.id, 'type', e.target.value)}
-                                                    className="text-[10px] font-bold border border-blue-200 bg-white rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                                    className="text-xs font-bold border border-blue-200 bg-white rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                                                 >
                                                     <option value="FS">Termina-Início (TI)</option>
                                                     <option value="SS">Início-Início (II)</option>
@@ -112,7 +112,7 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                                                         type="number"
                                                         value={p.lag}
                                                         onChange={(e) => handleUpdatePred(p.id, 'lag', e.target.value)}
-                                                        className="w-14 text-[10px] font-bold border border-blue-200 bg-white rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                                                        className="w-14 text-xs font-bold border border-blue-200 bg-white rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-blue-500 text-center"
                                                     />
                                                     <span className="text-[9px] text-gray-400 font-medium">lag</span>
                                                 </div>
@@ -130,7 +130,7 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                         </div>
 
                         <div className="pt-6 border-t border-gray-100">
-                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Adicionar Novo Predecessor</h4>
+                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Adicionar Novo Predecessor</h4>
                             <div className="space-y-2">
                                 {allTasks.filter(t => !predecessors.some(p => p.id === t.id)).map(task => {
                                     const nodeColors: Record<string, string> = {
@@ -149,20 +149,20 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                                                 </span>
                                                 {task.name}
                                             </div>
-                                            <div className="text-[10px] text-gray-500 flex items-center gap-2 mt-0.5">
+                                            <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
                                                 {task.group && <span>{task.group}</span>}
                                                 {task.group && task.phase && <span>•</span>}
                                                 {task.phase && <span>{task.phase}</span>}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <select id={`type-${task.id}`} className="text-[10px] font-bold border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500" defaultValue="FS">
+                                            <select id={`type-${task.id}`} className="text-xs font-bold border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500" defaultValue="FS">
                                                 <option value="FS">Termina-Início (TI)</option>
                                                 <option value="SS">Início-Início (II)</option>
                                                 <option value="FF">Termina-Termina (TT)</option>
                                                 <option value="SF">Início-Termina (IT)</option>
                                             </select>
-                                            <input id={`lag-${task.id}`} type="number" className="w-12 text-[10px] font-bold border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500" defaultValue="0" />
+                                            <input id={`lag-${task.id}`} type="number" className="w-12 text-xs font-bold border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500" defaultValue="0" />
                                             <button
                                                 onClick={() => {
                                                     const type = (document.getElementById(`type-${task.id}`) as HTMLSelectElement).value as DependencyType;

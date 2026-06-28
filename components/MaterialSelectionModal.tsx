@@ -102,7 +102,7 @@ const MaterialSelectionModal: React.FC<MaterialSelectionModalProps> = ({
                             </div>
                             <div>
                                 <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Seleção de Insumos da Composição</h3>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Selecione os materiais e ajuste as quantidades para o pedido</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Selecione os materiais e ajuste as quantidades para o pedido</p>
                             </div>
                         </div>
                         <button onClick={onClose} className="p-3 hover:bg-white hover:shadow-sm rounded-2xl transition-all border border-transparent hover:border-gray-100 group">
@@ -142,7 +142,7 @@ const MaterialSelectionModal: React.FC<MaterialSelectionModalProps> = ({
                 {/* Content Table */}
                 <div className="flex-1 overflow-y-auto p-8 bg-white">
                     <table className="w-full text-left">
-                        <thead className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-50">
+                        <thead className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-50">
                             <tr>
                                 <th className="pb-4 w-10 text-center">
                                     <input 
@@ -181,7 +181,7 @@ const MaterialSelectionModal: React.FC<MaterialSelectionModalProps> = ({
                                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                         />
                                     </td>
-                                    <td className="py-4 px-4 text-center font-mono text-[11px] text-gray-400 font-bold">{comp.code}</td>
+                                    <td className="py-4 px-4 text-center font-mono text-xs text-gray-400 font-bold">{comp.code}</td>
                                     <td className="py-4 px-4">
                                         <div className="flex flex-col">
                                             <span className="text-sm font-bold text-gray-900 uppercase leading-tight">{comp.description}</span>
@@ -190,7 +190,7 @@ const MaterialSelectionModal: React.FC<MaterialSelectionModalProps> = ({
                                             </span>
                                         </div>
                                     </td>
-                                    <td className="py-4 px-4 text-center text-[11px] font-black text-gray-400 uppercase">{comp.unit}</td>
+                                    <td className="py-4 px-4 text-center text-xs font-black text-gray-400 uppercase">{comp.unit}</td>
                                     <td className="py-4 px-4 text-right font-bold text-gray-600">{comp.quantity?.toFixed(4)}</td>
                                     <td className="py-4 px-4 text-right font-black text-emerald-600">
                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(customPrices?.get(comp.code) ?? comp.price ?? 0)}
@@ -237,21 +237,21 @@ const MaterialSelectionModal: React.FC<MaterialSelectionModalProps> = ({
                         {selectedCodes.size > 0 && (
                             <div className="flex items-center gap-2 bg-blue-600/10 text-blue-600 px-4 py-2 rounded-2xl border border-blue-100">
                                 <AlertCircle className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase tracking-widest italic">Revise as quantidades antes de confirmar</span>
+                                <span className="text-xs font-black uppercase tracking-widest italic">Revise as quantidades antes de confirmar</span>
                             </div>
                         )}
                     </div>
                     <div className="flex items-center gap-4">
                         <button 
                             onClick={onClose}
-                            className="px-8 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-gray-600 transition-colors"
+                            className="px-8 py-4 text-xs font-black uppercase tracking-[0.2em] text-gray-400 hover:text-gray-600 transition-colors"
                         >
                             Cancelar
                         </button>
                         <button 
                             onClick={handleConfirm}
                             disabled={selectedCodes.size === 0}
-                            className={`px-10 py-4 rounded-[20px] text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 shadow-xl transition-all active:scale-95 ${
+                            className={`px-10 py-4 rounded-[20px] text-xs font-black uppercase tracking-[0.2em] flex items-center gap-3 shadow-xl transition-all active:scale-95 ${
                                 selectedCodes.size === 0 
                                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
                                 : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-900/10'

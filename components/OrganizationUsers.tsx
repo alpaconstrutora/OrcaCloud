@@ -564,14 +564,14 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     <select
                                                         value={member.role}
                                                         onChange={(e) => handleMemberRoleChange(member.id, e.target.value as OrganizationRole)}
-                                                        className={`w-fit px-2 py-1 rounded-full text-[10px] font-bold border ${getRoleBadgeColor(member.role)} outline-none cursor-pointer`}
+                                                        className={`w-fit px-2 py-1 rounded-full text-xs font-bold border ${getRoleBadgeColor(member.role)} outline-none cursor-pointer`}
                                                     >
                                                         <option value="admin">ADMIN</option>
                                                         <option value="member">MEMBRO</option>
                                                         <option value="viewer">VISITANTE</option>
                                                     </select>
                                                     {member.customRoleId && (
-                                                        <span className="text-[10px] text-gray-400 font-medium px-2 italic">
+                                                        <span className="text-xs text-gray-400 font-medium px-2 italic">
                                                             Cargo: {customRoles.find(r => r.id === member.customRoleId)?.name || 'Customizado'}
                                                         </span>
                                                     )}
@@ -622,12 +622,12 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     <div className="bg-white rounded-lg border border-gray-200 shadow-inner overflow-hidden">
                                                         <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                                                             <div className="text-sm font-bold text-gray-700">Permissões Detalhadas</div>
-                                                            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Controle de Acesso por Módulo</div>
+                                                            <div className="text-xs text-gray-400 font-bold uppercase tracking-widest">Controle de Acesso por Módulo</div>
                                                         </div>
                                                         <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-8 gap-x-12">
                                                             {DETAILED_PERMISSIONS.map((module) => (
                                                                 <div key={module.title} className="space-y-4">
-                                                                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2">{module.title}</div>
+                                                                    <div className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2">{module.title}</div>
                                                                     <div className="space-y-2">
                                                                         <PermissionCheckbox
                                                                             label="Visualizar"
@@ -706,7 +706,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         )}
                                     </div>
                                 </div>
-                                <div className="mt-4 pt-4 border-t border-gray-50 text-[10px] text-gray-400 italic">
+                                <div className="mt-4 pt-4 border-t border-gray-50 text-xs text-gray-400 italic">
                                     {members.filter(m => m.customRoleId === role.id).length} membros vinculados
                                 </div>
                             </div>
@@ -742,7 +742,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 >
                                     <span>{p.icon}</span>
                                     <div className="text-left">
-                                        <div className="font-black text-[11px] uppercase tracking-widest">{p.label}</div>
+                                        <div className="font-black text-xs uppercase tracking-widest">{p.label}</div>
                                         {isActive && <div className="text-[9px] font-medium opacity-80">{p.description}</div>}
                                     </div>
                                 </button>
@@ -964,7 +964,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                         : 'border-gray-200 text-gray-500 hover:border-gray-300'
                                                 }`}>
                                                 <span className="text-xl">{p.icon}</span>
-                                                <span className="font-black text-[10px] uppercase tracking-wide">{p.label}</span>
+                                                <span className="font-black text-xs uppercase tracking-wide">{p.label}</span>
                                                 <span className="text-[9px] text-gray-400 text-center leading-tight">{p.description}</span>
                                             </button>
                                         ))}
@@ -977,7 +977,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-y-8 gap-x-12 max-h-[400px] overflow-y-auto">
                                             {DETAILED_PERMISSIONS.map((module) => (
                                                 <div key={module.title} className="space-y-4">
-                                                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">{module.title}</div>
+                                                    <div className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">{module.title}</div>
                                                     <div className="space-y-2">
                                                         <PermissionCheckbox
                                                             label="Visualizar"
@@ -1048,7 +1048,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         <div className="p-6 grid grid-cols-1 gap-y-8 max-h-[400px] overflow-y-auto">
                                             {DETAILED_PERMISSIONS.map((module) => (
                                                 <div key={module.title} className="space-y-4">
-                                                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">{module.title}</div>
+                                                    <div className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">{module.title}</div>
                                                     <div className="space-y-2">
                                                         <PermissionCheckbox
                                                             label="Visualizar"

@@ -134,7 +134,7 @@ export const PublicEspecificacoesView: React.FC<PublicEspecificacoesViewProps> =
               <Compass className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Aprovação de Memorial</span>
+              <span className="text-xs font-black uppercase tracking-widest text-blue-500">Aprovação de Memorial</span>
               <h1 className="text-lg font-black tracking-tight text-white">{projectName}</h1>
             </div>
           </div>
@@ -171,7 +171,7 @@ export const PublicEspecificacoesView: React.FC<PublicEspecificacoesViewProps> =
               <section key={envName} className="space-y-4">
                 <div className="flex items-center gap-2 border-b border-white/5 pb-2">
                   <h2 className="text-xl font-bold tracking-tight text-white">{envName}</h2>
-                  <span className="text-[10px] font-bold bg-white/5 text-slate-400 px-2 py-0.5 rounded-full">
+                  <span className="text-xs font-bold bg-white/5 text-slate-400 px-2 py-0.5 rounded-full">
                     {items.length} {items.length === 1 ? 'item' : 'itens'}
                   </span>
                 </div>
@@ -202,12 +202,12 @@ export const PublicEspecificacoesView: React.FC<PublicEspecificacoesViewProps> =
                           {/* Badge de Status no Card */}
                           <div className="absolute top-1 right-1">
                             {isApproved && (
-                              <span className="flex items-center justify-center w-5 h-5 bg-emerald-500 text-[#070913] rounded-full text-[10px] font-bold">
+                              <span className="flex items-center justify-center w-5 h-5 bg-emerald-500 text-[#070913] rounded-full text-xs font-bold">
                                 <Check className="w-3 h-3 stroke-[3]" />
                               </span>
                             )}
                             {isRefused && (
-                              <span className="flex items-center justify-center w-5 h-5 bg-rose-500 text-white rounded-full text-[10px] font-bold">
+                              <span className="flex items-center justify-center w-5 h-5 bg-rose-500 text-white rounded-full text-xs font-bold">
                                 <X className="w-3 h-3 stroke-[3]" />
                               </span>
                             )}

@@ -174,7 +174,7 @@ const StructuralElements: React.FC<Props> = ({ orgId, assembly, selected, onSele
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-widest text-slate-400">Elementos</p>
-          <p className="text-[11px] text-slate-400 font-medium">{assembly.nome}</p>
+          <p className="text-xs text-slate-400 font-medium">{assembly.nome}</p>
         </div>
         <button onClick={startNew}
           className="flex items-center gap-1 text-button font-black text-blue-600 hover:text-blue-700">
@@ -194,7 +194,7 @@ const StructuralElements: React.FC<Props> = ({ orgId, assembly, selected, onSele
         <div className="flex flex-col items-center py-8 text-slate-300">
           <Layers className="w-8 h-8 mb-2 opacity-50" />
           <p className="text-xs font-medium text-slate-400">Nenhum elemento</p>
-          <p className="text-[11px] text-slate-300">Adicione vigas, pilares, sapatas…</p>
+          <p className="text-xs text-slate-300">Adicione vigas, pilares, sapatas…</p>
         </div>
       ) : (
         <div className="space-y-1">
@@ -202,13 +202,13 @@ const StructuralElements: React.FC<Props> = ({ orgId, assembly, selected, onSele
             <button key={el.id} onClick={() => onSelect(el)}
               className={`w-full text-left flex items-center gap-2 px-3 py-2.5 rounded-xl group transition-all
                 ${selected?.id === el.id ? 'bg-blue-600 text-white' : 'hover:bg-slate-100 text-slate-700'}`}>
-              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md flex-shrink-0
+              <span className={`text-xs font-black px-1.5 py-0.5 rounded-md flex-shrink-0
                 ${selected?.id === el.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>
                 {typeLabel(el.tipo)}
               </span>
               <span className="flex-1 text-sm font-bold truncate">{el.nome}</span>
               {el.quantidade > 1 && (
-                <span className={`text-[10px] font-bold ${selected?.id === el.id ? 'text-white/60' : 'text-slate-400'}`}>
+                <span className={`text-xs font-bold ${selected?.id === el.id ? 'text-white/60' : 'text-slate-400'}`}>
                   ×{el.quantidade}
                 </span>
               )}

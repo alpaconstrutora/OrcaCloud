@@ -192,7 +192,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
     >
       <span className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
         {label}
-        <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-lg font-bold">{count}</span>
+        <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-lg font-bold">{count}</span>
       </span>
       {collapsedSections[id]
         ? <ChevronRight className="w-4 h-4 text-slate-400" />
@@ -429,7 +429,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                     const ct = draft.checklist_template.find(c => c.phase === phase) || { phase, items: [] }
                     return (
                       <div key={phase} className="space-y-2">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{GATE_LABELS[phase]}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{GATE_LABELS[phase]}</p>
                         {ct.items.map((item, idx) => (
                           <div key={idx} className="flex items-center gap-2">
                             <span className="flex-1 text-xs text-slate-700 bg-slate-50 rounded-lg px-3 py-1.5 border border-slate-100">{item}</span>
@@ -479,13 +479,13 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
           {/* Preview panel */}
           <div className="space-y-4">
             <div className="bg-slate-50 rounded-2xl border border-slate-100 p-5 space-y-4 sticky top-4">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <Layers className="w-3.5 h-3.5" />
                 Preview — {obraTypes.find(t => t.slug === selectedTipo)?.name ?? TIPO_OBRA_LABELS_FALLBACK[selectedTipo] ?? selectedTipo}
               </p>
 
               <div>
-                <p className="text-[10px] font-bold text-slate-400 mb-1.5">Fases EAP ({draft.eap_phases.length})</p>
+                <p className="text-xs font-bold text-slate-400 mb-1.5">Fases EAP ({draft.eap_phases.length})</p>
                 {draft.eap_phases.length === 0
                   ? <p className="text-xs text-slate-400 italic">Nenhuma fase</p>
                   : draft.eap_phases.slice(0, 6).map(p => (
@@ -498,26 +498,26 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
               </div>
 
               <div>
-                <p className="text-[10px] font-bold text-slate-400 mb-1.5">Docs obrigatórios ({draft.required_docs.filter(d => d.required).length})</p>
+                <p className="text-xs font-bold text-slate-400 mb-1.5">Docs obrigatórios ({draft.required_docs.filter(d => d.required).length})</p>
                 {draft.required_docs.filter(d => d.required).slice(0, 5).map(d => (
                   <div key={d.name} className="text-xs text-slate-700 mb-0.5">• {d.name}</div>
                 ))}
               </div>
 
               <div>
-                <p className="text-[10px] font-bold text-slate-400 mb-1.5">KPIs ({draft.indicators.length})</p>
+                <p className="text-xs font-bold text-slate-400 mb-1.5">KPIs ({draft.indicators.length})</p>
                 {draft.indicators.map(ind => (
                   <div key={ind.key} className="text-xs text-slate-700 mb-0.5">{ind.label} <span className="text-slate-400">({ind.unit})</span></div>
                 ))}
               </div>
 
               <div>
-                <p className="text-[10px] font-bold text-slate-400 mb-1.5">
+                <p className="text-xs font-bold text-slate-400 mb-1.5">
                   Checklist ({draft.checklist_template.reduce((a, c) => a + c.items.length, 0)} itens)
                 </p>
                 {draft.checklist_template.map(ct => ct.items.length > 0 && (
                   <div key={ct.phase} className="mb-1.5">
-                    <span className="text-[10px] font-black text-slate-400 uppercase">{GATE_LABELS[ct.phase]}: </span>
+                    <span className="text-xs font-black text-slate-400 uppercase">{GATE_LABELS[ct.phase]}: </span>
                     <span className="text-xs text-slate-600">{ct.items.length} itens</span>
                   </div>
                 ))}

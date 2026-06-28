@@ -131,7 +131,7 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
           <div className="w-7 h-7 bg-[#D47A55]/10 rounded-lg flex items-center justify-center">
             <Plus className="w-4 h-4 text-[#D47A55]" />
           </div>
-          <span className="text-[10px] font-black uppercase tracking-widest text-[#D47A55]">Lançar Nova Atividade</span>
+          <span className="text-xs font-black uppercase tracking-widest text-[#D47A55]">Lançar Nova Atividade</span>
         </div>
 
         <div className="space-y-3">
@@ -186,7 +186,7 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
         <button
           type="submit"
           disabled={!selectedProjetoId || loading}
-          className="w-full py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-md shadow-[#D47A55]/15 active:scale-[0.98] disabled:opacity-50 transition-all"
+          className="w-full py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-md shadow-[#D47A55]/15 active:scale-[0.98] disabled:opacity-50 transition-all"
         >
           Registrar Horas
         </button>
@@ -197,20 +197,20 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-[#D47A55]" />
-            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">
               Histórico — {projetoAtual?.name || 'Projeto'}
             </h2>
           </div>
-          <span className="text-[10px] font-black text-[#D47A55]">Total: {totalHorasProjeto}h</span>
+          <span className="text-xs font-black text-[#D47A55]">Total: {totalHorasProjeto}h</span>
         </div>
 
         {loading && timesheetEntries.length === 0 ? (
           <div className="flex flex-col items-center py-10">
             <div className="w-6 h-6 border-2 border-[#D47A55] border-t-transparent rounded-full animate-spin mb-2" />
-            <span className="text-[10px] text-slate-400">Carregando histórico...</span>
+            <span className="text-xs text-slate-400">Carregando histórico...</span>
           </div>
         ) : timesheetEntries.length === 0 ? (
-          <div className="text-center py-12 text-[11px] text-slate-400">
+          <div className="text-center py-12 text-xs text-slate-400">
             Nenhuma hora registrada para este projeto ainda.
           </div>
         ) : (
@@ -230,7 +230,7 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
                     <td className="px-5 py-3.5">
                       <span className="block text-xs font-black text-slate-700">{entry.descricao_atividade || 'Atividade geral'}</span>
                     </td>
-                    <td className="px-3 py-3.5 text-[11px] text-slate-500 hidden sm:table-cell">
+                    <td className="px-3 py-3.5 text-xs text-slate-500 hidden sm:table-cell">
                       {new Date(entry.data_lancamento).toLocaleDateString('pt-BR')}
                     </td>
                     <td className="px-3 py-3.5 text-right">

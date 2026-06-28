@@ -266,7 +266,7 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
 
                 {/* Cabeçalho */}
                 <div className="px-8 pt-7 pb-5 border-b border-slate-100 bg-slate-50/50 print:bg-white">
-                    <div className="flex justify-between items-start text-[11px] text-slate-500 font-medium mb-3">
+                    <div className="flex justify-between items-start text-xs text-slate-500 font-medium mb-3">
                         <div className="space-y-0.5">
                             <p className="font-black text-slate-800 text-sm uppercase">{orgName}</p>
                             {orgCnpj && <p>CNPJ: <span className="font-bold">{orgCnpj}</span></p>}
@@ -280,7 +280,7 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
                         </div>
                     </div>
                     {worksiteName && (
-                        <p className="text-[11px] font-bold text-slate-600 mt-1">{worksiteName}</p>
+                        <p className="text-xs font-bold text-slate-600 mt-1">{worksiteName}</p>
                     )}
                     <h2 className="text-center text-sm font-black text-slate-900 uppercase tracking-widest mt-4">
                         Relação da Folha por Empregado
@@ -292,22 +292,22 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
                         <table className="w-full text-xs border-collapse">
                             <thead>
                                 <tr className="bg-slate-100 border-y border-slate-200">
-                                    <th className="text-left px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px] w-10">Cód.</th>
-                                    <th className="text-left px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Nome do empregado</th>
-                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Salário</th>
-                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Out.Prov.</th>
-                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Sal.Fam.</th>
-                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">INSS</th>
-                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">IRRF</th>
-                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Out.Desc.</th>
-                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Líquido</th>
-                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">FGTS</th>
+                                    <th className="text-left px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs w-10">Cód.</th>
+                                    <th className="text-left px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Nome do empregado</th>
+                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Salário</th>
+                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Out.Prov.</th>
+                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Sal.Fam.</th>
+                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">INSS</th>
+                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">IRRF</th>
+                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Out.Desc.</th>
+                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Líquido</th>
+                                    <th className="text-right px-2 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">FGTS</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {/* Grupo: Empregados */}
                                 <tr>
-                                    <td colSpan={10} className="px-2 py-2 text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-50/80 border-b border-slate-100">
+                                    <td colSpan={10} className="px-2 py-2 text-xs font-black text-slate-500 uppercase tracking-widest bg-slate-50/80 border-b border-slate-100">
                                         Empregados
                                     </td>
                                 </tr>
@@ -336,7 +336,7 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
                             <tfoot>
                                 {/* Total empregados */}
                                 <tr className="border-t border-slate-200 bg-slate-50">
-                                    <td colSpan={2} className="px-2 py-2 text-[10px] font-black text-slate-600 uppercase">
+                                    <td colSpan={2} className="px-2 py-2 text-xs font-black text-slate-600 uppercase">
                                         Empregados: {rows.length} &nbsp; Total:
                                     </td>
                                     <td className="px-2 py-2 text-right font-mono font-black text-slate-800">{fmtN(totals.salario)}</td>
@@ -350,7 +350,7 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
                                 </tr>
                                 {/* Todos geral */}
                                 <tr className="border-t-2 border-slate-300 bg-slate-100">
-                                    <td colSpan={2} className="px-2 py-2.5 text-[10px] font-black text-slate-700 uppercase">
+                                    <td colSpan={2} className="px-2 py-2.5 text-xs font-black text-slate-700 uppercase">
                                         Todos geral: {rows.length} &nbsp; Total:
                                     </td>
                                     <td className="px-2 py-2.5 text-right font-mono font-black text-slate-900">{fmtN(totals.salario)}</td>

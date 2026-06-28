@@ -133,7 +133,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Nome Completo */}
                         <div className="md:col-span-2 space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Nome Completo</label>
                             <div className="relative group">
                                 <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                 <input
@@ -149,7 +149,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
 
                         {/* Email */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">E-mail</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">E-mail</label>
                             <div className="relative group">
                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                 <input
@@ -165,7 +165,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
 
                         {/* Telefone */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Telefone / WhatsApp</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Telefone / WhatsApp</label>
                             <div className="relative group">
                                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                 <input
@@ -180,7 +180,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
 
                         {/* CPF */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CPF</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">CPF</label>
                             <div className="relative group">
                                 <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                 <input
@@ -195,7 +195,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
 
                         {/* CRECI */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CRECI</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">CRECI</label>
                             <div className="relative group">
                                 <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                 <input
@@ -210,7 +210,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
 
                         {/* Imobiliária / Agência */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Imobiliária / Agência</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Imobiliária / Agência</label>
                             <div className="relative group">
                                 <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                 <input
@@ -225,7 +225,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
 
                         {/* Taxa de Comissão */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Taxa de Comissão (%)</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Taxa de Comissão (%)</label>
                             <div className="relative group">
                                 <Percent className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                 <input
@@ -256,7 +256,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                     {/* Seção de Acesso ao Portal — somente em modo edição */}
                     {initialData && organizationId && (
                         <div className="mt-8 pt-6 border-t border-gray-100 space-y-3">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Acesso ao Portal</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Acesso ao Portal</label>
                             <p className="text-xs text-gray-400">Gere um link para que o corretor acesse o portal sem precisar de cadastro.</p>
 
                             {tokenLoading ? (
@@ -269,7 +269,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                         <p className="text-xs font-mono text-emerald-700 truncate">
                                             {brokerPortalService.buildPortalUrl(portalToken.token)}
                                         </p>
-                                        <p className="text-[10px] text-emerald-500 mt-1">
+                                        <p className="text-xs text-emerald-500 mt-1">
                                             Válido até {new Date(portalToken.expires_at).toLocaleDateString('pt-BR')}
                                         </p>
                                     </div>

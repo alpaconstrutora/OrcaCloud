@@ -189,7 +189,7 @@ const LaborFiscalSettings: React.FC = () => {
                     <button 
                         onClick={handleDuplicateYear}
                         disabled={saving || loading}
-                        className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-600 rounded-3xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-100 transition-all border border-indigo-100"
+                        className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-600 rounded-3xl font-black text-xs uppercase tracking-widest hover:bg-indigo-100 transition-all border border-indigo-100"
                     >
                         {saving ? <Loader2 size={16} className="animate-spin" /> : <TrendingUp size={16} />} 
                         Clonar Tabelas
@@ -224,14 +224,14 @@ const LaborFiscalSettings: React.FC = () => {
                             </div>
                             <div>
                                 <h3 className="text-lg font-black tracking-tight">Tabela INSS</h3>
-                                <p className="text-indigo-400 text-[10px] font-bold uppercase tracking-widest">Cálculo Progressivo</p>
+                                <p className="text-indigo-400 text-xs font-bold uppercase tracking-widest">Cálculo Progressivo</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
                             <button 
                                 onClick={handleSaveINSS}
                                 disabled={saving}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                                     editingINSS ? 'bg-indigo-500 text-white animate-pulse' : 'bg-white/10 text-indigo-400 hover:bg-white/20'
                                 }`}
                             >
@@ -256,11 +256,11 @@ const LaborFiscalSettings: React.FC = () => {
                                         <div key={idx} className="group relative bg-slate-50 p-4 rounded-2xl border border-transparent hover:border-indigo-100 hover:bg-white hover:shadow-md transition-all">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-black">
+                                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-black">
                                                         {idx + 1}º
                                                     </div>
                                                     <div>
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Faixa de Base</p>
+                                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">Faixa de Base</p>
                                                         {editingINSS ? (
                                                             <div className="flex flex-col gap-2">
                                                                 <div className="flex items-center gap-2">
@@ -274,7 +274,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].valid_to = `${year}-12-31`;
                                                                             setInssBrackets(newBrackets);
                                                                         }}
-                                                                        className="bg-white border border-slate-200 rounded px-1 py-0.5 text-[10px] font-black text-indigo-600 outline-none"
+                                                                        className="bg-white border border-slate-200 rounded px-1 py-0.5 text-xs font-black text-indigo-600 outline-none"
                                                                     >
                                                                         {years.map(y => <option key={y} value={y.toString()}>{y}</option>)}
                                                                     </select>
@@ -291,7 +291,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                         }}
                                                                         className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-form-input font-black"
                                                                     />
-                                                                    <span className="text-slate-400 text-[10px]">até</span>
+                                                                    <span className="text-slate-400 text-xs">até</span>
                                                                     <input 
                                                                         type="number" 
                                                                         value={bracket.max_value || 0}
@@ -314,7 +314,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                 </div>
                                                 <div className="flex items-center gap-4">
                                                     <div className="text-right">
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Alíquota</p>
+                                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">Alíquota</p>
                                                         {editingINSS ? (
                                                             <div className="flex items-center justify-end gap-1">
                                                                 <input 
@@ -376,14 +376,14 @@ const LaborFiscalSettings: React.FC = () => {
                             </div>
                             <div>
                                 <h3 className="text-lg font-black tracking-tight">Tabela IRRF</h3>
-                                <p className="text-rose-400 text-[10px] font-bold uppercase tracking-widest">Imposto de Renda</p>
+                                <p className="text-rose-400 text-xs font-bold uppercase tracking-widest">Imposto de Renda</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
                             <button 
                                 onClick={handleSaveIRRF}
                                 disabled={saving}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                                     editingIRRF ? 'bg-rose-500 text-white animate-pulse' : 'bg-white/10 text-rose-400 hover:bg-white/20'
                                 }`}
                             >
@@ -408,11 +408,11 @@ const LaborFiscalSettings: React.FC = () => {
                                         <div key={idx} className="group relative bg-slate-50 p-4 rounded-2xl border border-transparent hover:border-rose-100 hover:bg-white hover:shadow-md transition-all">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-[10px] font-black">
+                                                    <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-xs font-black">
                                                         {idx + 1}º
                                                     </div>
                                                     <div>
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Faixa de Base</p>
+                                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">Faixa de Base</p>
                                                         {editingIRRF ? (
                                                             <div className="flex flex-col gap-2">
                                                                 <div className="flex items-center gap-2">
@@ -426,7 +426,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].valid_to = `${year}-12-31`;
                                                                             setIrrfBrackets(newBrackets);
                                                                         }}
-                                                                        className="bg-white border border-slate-200 rounded px-1 py-0.5 text-[10px] font-black text-rose-600 outline-none"
+                                                                        className="bg-white border border-slate-200 rounded px-1 py-0.5 text-xs font-black text-rose-600 outline-none"
                                                                     >
                                                                         {years.map(y => <option key={y} value={y.toString()}>{y}</option>)}
                                                                     </select>
@@ -443,7 +443,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                         }}
                                                                         className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-form-input font-black"
                                                                     />
-                                                                    <span className="text-slate-400 text-[10px]">até</span>
+                                                                    <span className="text-slate-400 text-xs">até</span>
                                                                     <input 
                                                                         type="number" 
                                                                         value={bracket.max_value || 0}
@@ -466,7 +466,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                 </div>
                                                 <div className="flex gap-4 items-center">
                                                     <div className="text-right">
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Dedução</p>
+                                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">Dedução</p>
                                                         {editingIRRF ? (
                                                             <input 
                                                                 type="number" 
@@ -483,7 +483,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                         )}
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Alíquota</p>
+                                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">Alíquota</p>
                                                         {editingIRRF ? (
                                                             <div className="flex items-center justify-end gap-1">
                                                                 <input 
@@ -551,7 +551,7 @@ const LaborFiscalSettings: React.FC = () => {
 
                 <div className="flex items-center gap-8 px-8 py-4 bg-slate-50 rounded-[32px] border border-slate-100 min-w-[300px]">
                     <div className="flex-1">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Alíquota Vigente</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Alíquota Vigente</p>
                         {editingFGTS ? (
                             <div className="flex items-center gap-1">
                                 <input 

@@ -115,7 +115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ budget, settings, onNavigate }) =
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-gray-900">Curva ABC Executiva</h1>
-              <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-black uppercase rounded-full border border-blue-100">
+              <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs font-black uppercase rounded-full border border-blue-100">
                 {settings.name || 'Projeto sem nome'}
               </span>
             </div>
@@ -123,7 +123,7 @@ const Dashboard: React.FC<DashboardProps> = ({ budget, settings, onNavigate }) =
           </div>
         </div>
         <div className="hidden md:block text-right">
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Última atualização SINAPI</span>
+          <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Última atualização SINAPI</span>
           <p className="text-sm font-bold text-gray-700">JAN/2025 - COM DESONERAÇÃO</p>
         </div>
       </div>
@@ -248,12 +248,12 @@ const Dashboard: React.FC<DashboardProps> = ({ budget, settings, onNavigate }) =
           <table className="w-full text-left">
             <thead>
               <tr className="bg-white">
-                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center w-16">Pos</th>
-                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Descrição</th>
-                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Custo Total</th>
-                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center">% Part.</th>
-                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center">% Acum.</th>
-                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center">Classe</th>
+                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-center w-16">Pos</th>
+                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Descrição</th>
+                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Custo Total</th>
+                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">% Part.</th>
+                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">% Acum.</th>
+                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Classe</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -268,7 +268,7 @@ const Dashboard: React.FC<DashboardProps> = ({ budget, settings, onNavigate }) =
                         {item.name}
                       </span>
                       {item.shortId && (
-                        <span className="text-[10px] text-gray-400 font-medium leading-none">ID: {item.shortId}</span>
+                        <span className="text-xs text-gray-400 font-medium leading-none">ID: {item.shortId}</span>
                       )}
                     </div>
                   </td>
@@ -292,7 +292,7 @@ const Dashboard: React.FC<DashboardProps> = ({ budget, settings, onNavigate }) =
                     </div>
                   </td>
                   <td className="px-6 py-3 text-center">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${item.classe === 'A' ? 'bg-blue-100 text-blue-700' :
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${item.classe === 'A' ? 'bg-blue-100 text-blue-700' :
                       item.classe === 'B' ? 'bg-emerald-100 text-emerald-700' :
                         'bg-gray-100 text-gray-600'
                       }`}>

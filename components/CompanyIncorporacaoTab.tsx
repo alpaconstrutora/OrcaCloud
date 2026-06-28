@@ -76,13 +76,13 @@ const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string 
     <div>
         <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">{label}</label>
         {children}
-        {hint && <p className="text-[10px] text-gray-400 mt-1">{hint}</p>}
+        {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
     </div>
 );
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <div>
-        <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">{title}</p>
+        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">{title}</p>
         {children}
     </div>
 );

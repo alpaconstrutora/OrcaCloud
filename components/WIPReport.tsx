@@ -21,7 +21,7 @@ function KPI({ label, value, sub, variant = 'neutral' }: {
     }
     return (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
             <p className={`text-xl font-black mt-1 ${colors[variant]}`}>{value}</p>
             {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
         </div>
@@ -97,7 +97,7 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
 
     const Th = ({ label, k, right }: { label: string; k: keyof WIPLine; right?: boolean }) => (
         <th
-            className={`px-4 py-3 cursor-pointer select-none hover:bg-slate-100 transition-colors text-[10px] font-black text-slate-400 uppercase tracking-widest ${right ? 'text-right' : ''}`}
+            className={`px-4 py-3 cursor-pointer select-none hover:bg-slate-100 transition-colors text-xs font-black text-slate-400 uppercase tracking-widest ${right ? 'text-right' : ''}`}
             onClick={() => handleSort(k)}
         >
             {label}<SortIcon k={k} />
@@ -109,7 +109,7 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
             {/* Filtros */}
             <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm">
                 <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Posição em</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Posição em</label>
                     <input
                         type="date"
                         value={dateTo}
@@ -205,7 +205,7 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                                         <td className="px-4 py-3 text-sm text-right tabular-nums text-emerald-700 font-semibold">
                                             {fmt(r.receita_reconhecida)}
                                             {r.receitas_pendentes > 0 && (
-                                                <span className="block text-[10px] font-normal text-slate-400">
+                                                <span className="block text-xs font-normal text-slate-400">
                                                     +{fmt(r.receitas_pendentes)} pend.
                                                 </span>
                                             )}
@@ -213,7 +213,7 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                                         <td className="px-4 py-3 text-sm text-right tabular-nums text-red-600">
                                             {fmt(r.custo_incorrido)}
                                             {r.custos_pendentes > 0 && (
-                                                <span className="block text-[10px] font-normal text-slate-400">
+                                                <span className="block text-xs font-normal text-slate-400">
                                                     +{fmt(r.custos_pendentes)} pend.
                                                 </span>
                                             )}
@@ -228,7 +228,7 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                                                 }
                                                 {fmt(margem)}
                                             </span>
-                                            <span className={`block text-[10px] font-normal ${isNegMargem ? 'text-red-500' : 'text-slate-400'}`}>
+                                            <span className={`block text-xs font-normal ${isNegMargem ? 'text-red-500' : 'text-slate-400'}`}>
                                                 {fmtPct(r.margem_pct)}
                                             </span>
                                         </td>
@@ -255,7 +255,7 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                                 </td>
                                 <td className={`px-4 py-3 text-sm font-black text-right tabular-nums ${totals.margem_bruta >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                                     {fmt(totals.margem_bruta)}
-                                    <span className="block text-[10px] font-normal text-slate-400">{fmtPct(totalMargem)}</span>
+                                    <span className="block text-xs font-normal text-slate-400">{fmtPct(totalMargem)}</span>
                                 </td>
                                 <td className="px-4 py-3 text-sm font-bold text-right tabular-nums text-slate-700">
                                     {fmt(totals.saldo_contrato)}

@@ -362,7 +362,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-white truncate">{req.title}</p>
-                          <span className="text-[10px] text-gray-500">Status: {req.status} • {new Date(req.created_at).toLocaleDateString()}</span>
+                          <span className="text-xs text-gray-500">Status: {req.status} • {new Date(req.created_at).toLocaleDateString()}</span>
                         </div>
                       </div>
                     ))}
@@ -380,7 +380,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                   </p>
                   <div className="h-px bg-white/5 my-1"></div>
                   <div>
-                    <span className="text-[10px] text-gray-500 uppercase block font-bold">Documentação GED</span>
+                    <span className="text-xs text-gray-500 uppercase block font-bold">Documentação GED</span>
                     <span className="text-xs text-gray-300">Todos os projetos e contratos oficiais estão na aba <strong>Documentos</strong>.</span>
                   </div>
                 </div>
@@ -424,7 +424,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                         const isMe = msg.sender_type === 'EXTERNAL';
                         return (
                           <div key={msg.id} className={`flex flex-col max-w-[70%] ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
-                            <span className="text-[10px] text-gray-500 mb-0.5 font-medium">{msg.sender_name}</span>
+                            <span className="text-xs text-gray-500 mb-0.5 font-medium">{msg.sender_name}</span>
                             <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed
                               ${isMe ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-white/5 text-gray-100 rounded-tl-none border border-white/5'}`}>
                               {msg.message}
@@ -470,13 +470,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                   <div key={sd.id} className="bg-[#1c1c1c] border border-white/5 p-4 rounded-2xl flex flex-col gap-3 shadow-md hover:border-white/10 transition-all group">
                     <div className="flex items-start justify-between">
                       <div className="p-2 bg-orange-500/10 text-orange-400 rounded-xl"><FolderOpen className="w-5 h-5" /></div>
-                      <span className="text-[10px] uppercase font-bold text-gray-500">{sd.document?.categoria}</span>
+                      <span className="text-xs uppercase font-bold text-gray-500">{sd.document?.categoria}</span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="text-xs font-bold text-white truncate">{sd.document?.nome}</h4>
-                      <p className="text-[10px] text-gray-500 mt-1 truncate">{sd.document?.descricao || 'Sem descrição'}</p>
+                      <p className="text-xs text-gray-500 mt-1 truncate">{sd.document?.descricao || 'Sem descrição'}</p>
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-gray-500 border-t border-white/5 pt-3 mt-1">
+                    <div className="flex items-center justify-between text-xs text-gray-500 border-t border-white/5 pt-3 mt-1">
                       <span>Compartilhado em: {new Date(sd.shared_at).toLocaleDateString()}</span>
                       {sd.document?.active_version?.storage_path && (
                         <a
@@ -510,20 +510,20 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                   <div key={contract.id} className="bg-[#1c1c1c] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold rounded-md uppercase">
+                        <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold rounded-md uppercase">
                           {contract.nature || 'Contrato'}
                         </span>
-                        <span className="text-[10px] text-gray-500 font-bold">Nº {contract.number}</span>
+                        <span className="text-xs text-gray-500 font-bold">Nº {contract.number}</span>
                       </div>
                       <h4 className="text-xs font-bold text-white truncate">{contract.title || 'Contrato Prestação de Serviços'}</h4>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[10px] text-gray-500">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
                         <span>Vigência: {contract.start_date ? new Date(contract.start_date).toLocaleDateString() : '-'} até {contract.end_date ? new Date(contract.end_date).toLocaleDateString() : '-'}</span>
                         <span>Reajuste: {contract.reajuste_index || 'Sem reajuste'}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
                       <div className="text-left md:text-right">
-                        <span className="text-[10px] text-gray-500 uppercase block font-semibold">Valor Atual</span>
+                        <span className="text-xs text-gray-500 uppercase block font-semibold">Valor Atual</span>
                         <h4 className="text-sm font-black text-white mt-0.5">R$ {Number(contract.current_value).toLocaleString('pt-BR', {minimumFractionDigits:2})}</h4>
                       </div>
                       {contract.signed_contract_url && (
@@ -572,20 +572,20 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                           ${req.priority === 'ALTA' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-gray-500/10 text-gray-400 border-white/5'}`}>
                           {req.priority}
                         </span>
-                        <span className="text-[10px] text-gray-500 font-bold uppercase">{req.type}</span>
+                        <span className="text-xs text-gray-500 font-bold uppercase">{req.type}</span>
                       </div>
                       <h4 className="text-xs font-bold text-white truncate">{req.title}</h4>
-                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">{req.description}</p>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">{req.description}</p>
                     </div>
                     <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
                       <div className="text-left md:text-right">
-                        <span className="text-[10px] text-gray-500 uppercase block font-semibold">Status</span>
-                        <span className={`text-[10px] font-bold mt-1 px-2.5 py-0.5 rounded-full inline-block
+                        <span className="text-xs text-gray-500 uppercase block font-semibold">Status</span>
+                        <span className={`text-xs font-bold mt-1 px-2.5 py-0.5 rounded-full inline-block
                           ${req.status === 'CONCLUIDO' ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
                           {req.status}
                         </span>
                       </div>
-                      <span className="text-[10px] text-gray-500 font-medium">Aberto em: {new Date(req.created_at).toLocaleDateString()}</span>
+                      <span className="text-xs text-gray-500 font-medium">Aberto em: {new Date(req.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                 ))}
@@ -609,7 +609,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
             
             <form onSubmit={handleCreateRequest} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400 uppercase font-bold">Título</label>
+                <label className="text-xs text-gray-400 uppercase font-bold">Título</label>
                 <input
                   required
                   value={newRequest.title}
@@ -620,7 +620,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400 uppercase font-bold">Descrição Detalhada</label>
+                <label className="text-xs text-gray-400 uppercase font-bold">Descrição Detalhada</label>
                 <textarea
                   required
                   rows={3}
@@ -633,7 +633,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400 uppercase font-bold">Tipo</label>
+                  <label className="text-xs text-gray-400 uppercase font-bold">Tipo</label>
                   <select
                     value={newRequest.type}
                     onChange={(e) => setNewRequest({ ...newRequest, type: e.target.value as any })}
@@ -648,7 +648,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400 uppercase font-bold">Prioridade</label>
+                  <label className="text-xs text-gray-400 uppercase font-bold">Prioridade</label>
                   <select
                     value={newRequest.priority}
                     onChange={(e) => setNewRequest({ ...newRequest, priority: e.target.value as any })}

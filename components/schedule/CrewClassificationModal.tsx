@@ -121,7 +121,7 @@ export const CrewClassificationModal: React.FC<CrewClassificationModalProps> = (
 
                 <div className="flex items-start gap-2 px-6 py-3 bg-blue-50/60 border-b border-blue-100">
                     <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-blue-700 leading-relaxed">
+                    <p className="text-xs text-blue-700 leading-relaxed">
                         O <strong>Auto Equipe</strong> usa estas listas para reconhecer mão de obra nas composições e
                         montar a equipe. Adicione cargos fora do padrão SINAPI (ex.: CALCETEIRO, MARMORISTA).
                         Vale para esta organização.
@@ -140,18 +140,18 @@ export const CrewClassificationModal: React.FC<CrewClassificationModalProps> = (
                                 <div key={section.key} className="space-y-2">
                                     <div>
                                         <span className="text-sm font-black text-gray-700">{section.title}</span>
-                                        <p className="text-[10px] text-gray-400">{section.desc}</p>
+                                        <p className="text-xs text-gray-400">{section.desc}</p>
                                     </div>
                                     <div className="flex flex-wrap gap-1.5">
                                         {terms.map(term => (
-                                            <span key={term} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold ${accentChip[section.accent]}`}>
+                                            <span key={term} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-semibold ${accentChip[section.accent]}`}>
                                                 {term}
                                                 <button onClick={() => removeTerm(section.key, term)} className="hover:opacity-60">
                                                     <X className="w-3 h-3" />
                                                 </button>
                                             </span>
                                         ))}
-                                        {terms.length === 0 && <span className="text-[11px] text-gray-300 italic py-1">Nenhum termo</span>}
+                                        {terms.length === 0 && <span className="text-xs text-gray-300 italic py-1">Nenhum termo</span>}
                                     </div>
                                     <div className="flex gap-2">
                                         <input

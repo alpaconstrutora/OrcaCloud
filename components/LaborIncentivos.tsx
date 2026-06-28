@@ -82,7 +82,7 @@ const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects })
                 </div>
                 <div>
                     <h2 className="text-2xl font-black text-slate-900 tracking-tight">Incentivos &amp; Produtividade</h2>
-                    <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest">Gratificações, metas e proteção contra habitualidade</p>
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Gratificações, metas e proteção contra habitualidade</p>
                 </div>
             </div>
 
@@ -92,7 +92,7 @@ const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects })
                     <button
                         key={t.id}
                         onClick={() => setTab(t.id)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${tab === t.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${tab === t.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
                     >
                         <t.icon size={14} /> {t.label}
                     </button>
@@ -114,7 +114,7 @@ const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ chi
     <div className={`bg-white rounded-3xl border border-slate-100 shadow-sm p-6 ${className}`}>{children}</div>
 );
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">{children}</label>
+    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">{children}</label>
 );
 const inputCls = 'w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none';
 
@@ -225,7 +225,7 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
                 <div className="flex gap-2">
                     {(['individual', 'collective'] as const).map(m => (
                         <button key={m} onClick={() => setMode(m)}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-all ${mode === m ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-400 border-slate-100'}`}>
+                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${mode === m ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-400 border-slate-100'}`}>
                             {m === 'individual' ? <User size={14} /> : <Users size={14} />}
                             {m === 'individual' ? 'Individual' : 'Coletivo'}
                         </button>
@@ -261,7 +261,7 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
                             <div className="flex gap-2 mb-2">
                                 {([['fixo', 'Fixo R$'], ['pct', '% do Salário']] as const).map(([v, l]) => (
                                     <button key={v} type="button" onClick={() => setValorTipo(v)}
-                                        className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${valorTipo === v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-100'}`}>
+                                        className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${valorTipo === v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-100'}`}>
                                         {l}
                                     </button>
                                 ))}
@@ -275,12 +275,12 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
                                         <span className="text-sm font-bold text-slate-500 shrink-0">%</span>
                                     </div>
                                     {empSalary !== null && pct > 0 && (
-                                        <p className="text-[10px] text-slate-400 ml-1">
+                                        <p className="text-xs text-slate-400 ml-1">
                                             Salário: R$ {empSalary.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} → <strong className="text-emerald-600">R$ {((pct / 100) * empSalary).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
                                         </p>
                                     )}
                                     {empSalary === null && employeeId && (
-                                        <p className="text-[10px] text-rose-400 ml-1">Salário base não cadastrado para este colaborador.</p>
+                                        <p className="text-xs text-rose-400 ml-1">Salário base não cadastrado para este colaborador.</p>
                                     )}
                                 </div>
                             )}
@@ -300,7 +300,7 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
                             <div className="flex gap-2">
                                 {([['per_member', 'Valor por pessoa'], ['equal', 'Rateio do total']] as const).map(([v, l]) => (
                                     <button key={v} onClick={() => setDistMode(v)}
-                                        className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${distMode === v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-100'}`}>
+                                        className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${distMode === v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-100'}`}>
                                         {l}
                                     </button>
                                 ))}
@@ -346,7 +346,7 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
                         <div key={ev.id} className="flex items-center justify-between p-3 bg-slate-50/60 rounded-xl border border-slate-100">
                             <div className="min-w-0">
                                 <p className="text-xs font-black text-slate-800 truncate">{ev.employee_name || ev.employee_id}</p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate">{ev.description} • {ev.reference_date}</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-tight truncate">{ev.description} • {ev.reference_date}</p>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
                                 <span className="text-xs font-black text-indigo-600">{brl(ev.amount)}</span>
@@ -398,9 +398,9 @@ const ApprovalsTab: React.FC<{ orgId: string }> = ({ orgId }) => {
                         <div key={ev.id} className="flex items-center justify-between gap-3 p-4 bg-amber-50/40 rounded-2xl border border-amber-100">
                             <div className="min-w-0 flex-1">
                                 <p className="text-sm font-black text-slate-800 truncate">{ev.employee_name || ev.employee_id} — <span className="text-indigo-600">{brl(ev.amount)}</span></p>
-                                <p className="text-[11px] font-bold text-slate-500 truncate">{ev.description} • {ev.reference_date}</p>
-                                {ev.justification && <p className="text-[11px] text-slate-400 italic truncate">"{ev.justification}"</p>}
-                                {ev.attachment_url && <a href={ev.attachment_url} target="_blank" rel="noreferrer" className="text-[10px] font-black text-indigo-500 uppercase flex items-center gap-1 mt-0.5"><Paperclip size={10} /> Comprovante</a>}
+                                <p className="text-xs font-bold text-slate-500 truncate">{ev.description} • {ev.reference_date}</p>
+                                {ev.justification && <p className="text-xs text-slate-400 italic truncate">"{ev.justification}"</p>}
+                                {ev.attachment_url && <a href={ev.attachment_url} target="_blank" rel="noreferrer" className="text-xs font-black text-indigo-500 uppercase flex items-center gap-1 mt-0.5"><Paperclip size={10} /> Comprovante</a>}
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                                 <button disabled={busy === ev.id} onClick={() => act(() => incentiveService.approveEvent(ev.id!), ev.id!)}
@@ -449,7 +449,7 @@ const HabitualityTab: React.FC<{ orgId: string }> = ({ orgId }) => {
                     <div className="p-3 bg-rose-100 rounded-2xl"><ShieldAlert className="w-6 h-6 text-rose-600" /></div>
                     <div className="flex-1">
                         <h3 className="text-sm font-black text-rose-900 uppercase tracking-tight">Guarda de Habitualidade</h3>
-                        <p className="text-[11px] font-bold text-rose-500 mt-0.5">
+                        <p className="text-xs font-bold text-rose-500 mt-0.5">
                             {habituals.length} incentivo(s) viraram verba habitual — risco de reflexos (FGTS, INSS, 13º, férias).
                             Passivo anual estimado: <strong>{brl(totalReflexo)}</strong>.
                         </p>
@@ -467,14 +467,14 @@ const HabitualityTab: React.FC<{ orgId: string }> = ({ orgId }) => {
                         <Label>Limiar p/ habitual</Label>
                         <input type="number" min={2} max={12} className={`${inputCls} w-28`} value={threshold} onChange={e => setThreshold(Math.max(2, parseInt(e.target.value) || 3))} />
                     </div>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-3">Pago em ≥ {threshold} dos últimos {windowMonths} meses → habitual</p>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-tight mb-3">Pago em ≥ {threshold} dos últimos {windowMonths} meses → habitual</p>
                 </div>
 
                 {loading ? <div className="flex justify-center py-10"><Loader2 className="animate-spin text-indigo-500" /></div> : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
                             <thead>
-                                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                <tr className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
                                     <th className="py-3 px-2">Colaborador</th>
                                     <th className="py-3 px-2">Incentivo</th>
                                     <th className="py-3 px-2 text-center">Meses pagos</th>
@@ -553,14 +553,14 @@ const RulesTab: React.FC<{ orgId: string; projects: ProjectLite[]; rubrics: Payr
                         <div className="p-2.5 bg-indigo-600 rounded-xl"><Play className="w-4 h-4 text-white" /></div>
                         <div>
                             <h3 className="text-sm font-black text-indigo-900 uppercase tracking-tight">Rodar Regras da Competência</h3>
-                            <p className="text-[10px] font-bold text-indigo-400 uppercase">Gera propostas PENDENTES — nunca paga automaticamente</p>
+                            <p className="text-xs font-bold text-indigo-400 uppercase">Gera propostas PENDENTES — nunca paga automaticamente</p>
                         </div>
                     </div>
                     <div className="flex items-end gap-2 ml-auto">
                         <div><Label>Mês</Label><input type="number" min={1} max={12} className={`${inputCls} w-20`} value={month} onChange={e => setMonth(parseInt(e.target.value) || month)} /></div>
                         <div><Label>Ano</Label><input type="number" className={`${inputCls} w-24`} value={year} onChange={e => setYear(parseInt(e.target.value) || year)} /></div>
                         <button onClick={runRules} disabled={running}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[11px] uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50">
+                            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50">
                             {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap size={14} />} Rodar
                         </button>
                     </div>
@@ -569,7 +569,7 @@ const RulesTab: React.FC<{ orgId: string; projects: ProjectLite[]; rubrics: Payr
                     <div className="mt-4 p-3 bg-white rounded-xl border border-indigo-100 text-xs font-bold text-slate-600">
                         <span className="text-emerald-600">{runResult.created} criados</span> • <span className="text-slate-400">{runResult.skipped} ignorados</span>
                         {runResult.details.slice(0, 8).map((d, i) => (
-                            <div key={i} className="text-[11px] text-slate-400 mt-1">{d.employee_name}: {brl(d.amount)} — {d.reason}</div>
+                            <div key={i} className="text-xs text-slate-400 mt-1">{d.employee_name}: {brl(d.amount)} — {d.reason}</div>
                         ))}
                     </div>
                 )}
@@ -579,7 +579,7 @@ const RulesTab: React.FC<{ orgId: string; projects: ProjectLite[]; rubrics: Payr
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Regras Configuradas</h3>
                 <button onClick={() => setEditing(emptyRule(orgId))}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-800">
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-800">
                     <Plus size={14} /> Nova Regra
                 </button>
             </div>
@@ -594,7 +594,7 @@ const RulesTab: React.FC<{ orgId: string; projects: ProjectLite[]; rubrics: Payr
                                     <span className={`w-2 h-2 rounded-full ${r.active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                                     <p className="text-sm font-black text-slate-800 truncate">{r.name || '(sem nome)'}</p>
                                 </div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">{r.rule_type} • {r.scope} • {r.target_rubric_code}{r.amount ? ` • ${brl(r.amount)}` : ''}</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-tight mt-0.5">{r.rule_type} • {r.scope} • {r.target_rubric_code}{r.amount ? ` • ${brl(r.amount)}` : ''}</p>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
                                 <button onClick={() => incentiveService.toggleRule(r.id!, !r.active).then(load)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg" title={r.active ? 'Desativar' : 'Ativar'}><Power size={15} /></button>
@@ -675,7 +675,7 @@ const RuleEditor: React.FC<{ rule: IncentiveRule; setRule: (r: IncentiveRule) =>
                     <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl">
                         <div><Label>Produtividade mínima (%)</Label><input type="number" className={inputCls} value={c.min_productivity_pct ?? 100} onChange={e => updCond({ min_productivity_pct: parseFloat(e.target.value) || 0 })} /></div>
                         <div><Label>R$ por unidade produzida</Label><input type="number" step="0.01" className={inputCls} value={c.rate_per_unit ?? 0} onChange={e => updCond({ rate_per_unit: parseFloat(e.target.value) || 0 })} /></div>
-                        <div className="col-span-2 flex items-start gap-2 text-[10px] text-slate-400 font-bold"><Info size={12} className="mt-0.5 shrink-0" /> Se "R$/unidade" = 0, usa o valor fixo abaixo.</div>
+                        <div className="col-span-2 flex items-start gap-2 text-xs text-slate-400 font-bold"><Info size={12} className="mt-0.5 shrink-0" /> Se "R$/unidade" = 0, usa o valor fixo abaixo.</div>
                         <div className="col-span-2"><Label>Valor fixo alternativo (R$)</Label><input type="number" step="0.01" className={inputCls} value={rule.amount || ''} onChange={e => upd({ amount: parseFloat(e.target.value) || 0 })} /></div>
                     </div>
                 )}
@@ -683,18 +683,18 @@ const RuleEditor: React.FC<{ rule: IncentiveRule; setRule: (r: IncentiveRule) =>
                     <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl">
                         <div><Label>Dias sem acidente</Label><input type="number" className={inputCls} value={c.dias_sem_acidente ?? 60} onChange={e => updCond({ dias_sem_acidente: parseInt(e.target.value) || 0 })} /></div>
                         <div><Label>Prêmio coletivo (R$/pessoa)</Label><input type="number" step="0.01" className={inputCls} value={rule.amount || ''} onChange={e => upd({ amount: parseFloat(e.target.value) || 0 })} /></div>
-                        <label className="col-span-2 flex items-center gap-2 text-[11px] font-bold text-slate-500 cursor-pointer">
+                        <label className="col-span-2 flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer">
                             <input type="checkbox" checked={(rule.condition as Record<string, unknown>).exclude_quase_acidente !== false} onChange={e => updCond({ exclude_quase_acidente: e.target.checked })} />
                             Ignorar "quase-acidentes" na contagem
                         </label>
-                        <p className="col-span-2 text-[10px] text-slate-400 font-bold flex items-start gap-1"><ShieldAlert size={12} className="mt-0.5 shrink-0" /> Lê o módulo SST (acidentes). Se houve acidente na janela, ninguém do escopo recebe. Restrinja a uma obra no campo "Obra" acima para premiar por canteiro.</p>
+                        <p className="col-span-2 text-xs text-slate-400 font-bold flex items-start gap-1"><ShieldAlert size={12} className="mt-0.5 shrink-0" /> Lê o módulo SST (acidentes). Se houve acidente na janela, ninguém do escopo recebe. Restrinja a uma obra no campo "Obra" acima para premiar por canteiro.</p>
                     </div>
                 )}
                 {!['ASSIDUIDADE', 'PRODUTIVIDADE', 'SEGURANCA'].includes(rule.rule_type) && (
                     <div className="p-4 bg-slate-50 rounded-2xl">
                         <Label>Valor fixo por colaborador do escopo (R$)</Label>
                         <input type="number" step="0.01" className={inputCls} value={rule.amount || ''} onChange={e => upd({ amount: parseFloat(e.target.value) || 0 })} />
-                        <p className="text-[10px] text-slate-400 font-bold mt-2 flex items-center gap-1"><Info size={12} /> Disparo manual: aplica o valor a todos do escopo ao rodar a competência.</p>
+                        <p className="text-xs text-slate-400 font-bold mt-2 flex items-center gap-1"><Info size={12} /> Disparo manual: aplica o valor a todos do escopo ao rodar a competência.</p>
                     </div>
                 )}
 
@@ -731,7 +731,7 @@ const PerformanceTab: React.FC<{ orgId: string }> = ({ orgId }) => {
                     {rows.length === 0 && <p className="text-center py-6 text-slate-300 text-xs font-bold uppercase">Sem dados</p>}
                     {rows.slice(0, 10).map((r, i) => (
                         <div key={r.key} className="flex items-center gap-3">
-                            <span className="w-5 text-[10px] font-black text-slate-400">{i + 1}</span>
+                            <span className="w-5 text-xs font-black text-slate-400">{i + 1}</span>
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between mb-1">
                                     <span className="text-xs font-bold text-slate-700 truncate">{r.name}</span>
@@ -741,7 +741,7 @@ const PerformanceTab: React.FC<{ orgId: string }> = ({ orgId }) => {
                                     <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(r.total / max) * 100}%` }} />
                                 </div>
                             </div>
-                            <span className="text-[10px] text-slate-400 w-10 text-right">{r.count}x</span>
+                            <span className="text-xs text-slate-400 w-10 text-right">{r.count}x</span>
                         </div>
                     ))}
                 </div>
@@ -755,7 +755,7 @@ const PerformanceTab: React.FC<{ orgId: string }> = ({ orgId }) => {
                 <div><Label>De</Label><input type="date" className={inputCls} value={start} onChange={e => setStart(e.target.value)} /></div>
                 <div><Label>Até</Label><input type="date" className={inputCls} value={end} onChange={e => setEnd(e.target.value)} /></div>
                 <div className="ml-auto text-right">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total pago (aprovado)</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Total pago (aprovado)</p>
                     <p className="text-2xl font-black text-indigo-600 flex items-center gap-2 justify-end"><TrendingUp size={20} /> {brl(data?.total || 0)}</p>
                 </div>
             </Card>
@@ -801,7 +801,7 @@ const SimulatorTab: React.FC<{ projects: ProjectLite[] }> = ({ projects }) => {
                     </div>
                     <div><Label>R$ / unidade</Label><input type="number" step="0.01" className={inputCls} value={rate} onChange={e => setRate(parseFloat(e.target.value) || 0)} /></div>
                     <div><Label>Fase (opcional)</Label><input className={inputCls} value={phase} onChange={e => setPhase(e.target.value)} placeholder="Ex: Estrutura" /></div>
-                    <div className="flex items-end"><button onClick={run} disabled={loading || !projectId} className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[11px] uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50">{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator size={14} />} Simular</button></div>
+                    <div className="flex items-end"><button onClick={run} disabled={loading || !projectId} className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50">{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator size={14} />} Simular</button></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div><Label>De</Label><input type="date" className={inputCls} value={start} onChange={e => setStart(e.target.value)} /></div>
@@ -812,9 +812,9 @@ const SimulatorTab: React.FC<{ projects: ProjectLite[] }> = ({ projects }) => {
             {result && (
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Card className="text-center"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Produção total</p><p className="text-3xl font-black text-slate-900">{result.total_qty} <span className="text-sm text-slate-400">{result.unit}</span></p></Card>
-                        <Card className="text-center bg-indigo-50 border-indigo-100"><p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Bônus projetado</p><p className="text-3xl font-black text-indigo-600">{brl(result.projected_bonus)}</p></Card>
-                        <Card className="text-center"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaboradores</p><p className="text-3xl font-black text-slate-900">{result.per_employee.length}</p></Card>
+                        <Card className="text-center"><p className="text-xs font-black text-slate-400 uppercase tracking-widest">Produção total</p><p className="text-3xl font-black text-slate-900">{result.total_qty} <span className="text-sm text-slate-400">{result.unit}</span></p></Card>
+                        <Card className="text-center bg-indigo-50 border-indigo-100"><p className="text-xs font-black text-indigo-400 uppercase tracking-widest">Bônus projetado</p><p className="text-3xl font-black text-indigo-600">{brl(result.projected_bonus)}</p></Card>
+                        <Card className="text-center"><p className="text-xs font-black text-slate-400 uppercase tracking-widest">Colaboradores</p><p className="text-3xl font-black text-slate-900">{result.per_employee.length}</p></Card>
                     </div>
                     <Card>
                         <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-3">Distribuição por Colaborador</h3>

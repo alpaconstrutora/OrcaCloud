@@ -245,7 +245,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
             <button
               onClick={handleSyncFromCommercial}
               disabled={syncingAll || linkedCount === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-700 disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-700 disabled:opacity-40"
             >
               {syncingAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRightLeft className="w-3 h-3" />}
               Sync do Comercial
@@ -253,7 +253,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
             <button
               onClick={handlePublishAll}
               disabled={publishingAll || units.filter(u => !u.commercial_property_id).length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40"
             >
               {publishingAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
               Publicar Todas
@@ -274,7 +274,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
             {byStatus.PERMUTADO > 0  && <div style={{ width: `${(byStatus.PERMUTADO  / totalUnits) * 100}%` }} className="bg-violet-500" />}
           </div>
         )}
-        <div className="mt-2 flex justify-between text-[10px] text-gray-400 font-semibold">
+        <div className="mt-2 flex justify-between text-xs text-gray-400 font-semibold">
           <span>VGV Disponível: {vgvDisponivel > 0 ? fmt(vgvDisponivel) : '—'}</span>
           <span>VGV Vendido+Permutado: {vgvVendido > 0 ? fmt(vgvVendido) : '—'}</span>
         </div>
@@ -326,7 +326,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
                           )}
                         </div>
                       ) : (
-                        <span className="text-gray-300 text-[10px]">Não publicado</span>
+                        <span className="text-gray-300 text-xs">Não publicado</span>
                       )}
                     </td>
                     <td className="py-3 px-4 text-center">
@@ -344,7 +344,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
                         ) : (
                           <button
                             onClick={() => handlePublish(u)}
-                            className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-wider"
+                            className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-black uppercase tracking-wider"
                             title="Publicar no Comercial"
                           >
                             <Upload className="w-3 h-3" /> Publicar
@@ -375,7 +375,7 @@ const KpiCard: React.FC<{ label: string; value: string; sub?: string; color?: st
   <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
     <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">{label}</span>
     <span className={`text-lg font-bold block ${color}`}>{value}</span>
-    {sub && <span className="text-[10px] text-gray-400 font-medium">{sub}</span>}
+    {sub && <span className="text-xs text-gray-400 font-medium">{sub}</span>}
   </div>
 );
 
@@ -384,7 +384,7 @@ const StatusPill: React.FC<{ label: string; count: number; total: number; color:
     <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${color}`} />
     <div>
       <span className="font-bold text-gray-700 text-sm">{count}</span>
-      <span className="text-[10px] text-gray-400 font-semibold ml-1">{label}</span>
+      <span className="text-xs text-gray-400 font-semibold ml-1">{label}</span>
       {total > 0 && <span className="text-[9px] text-gray-300 ml-1">({Math.round((count / total) * 100)}%)</span>}
     </div>
   </div>

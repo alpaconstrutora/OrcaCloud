@@ -84,14 +84,14 @@ const PaymentsPanel: React.FC<PaymentsPanelProps> = ({ organizationId, investorI
         <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Total Aportado</p>
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Total Aportado</p>
                     <div className="flex items-baseline gap-2">
                         <h3 className="text-2xl font-black text-gray-900">{formatCurrency(totalPaid)}</h3>
                         {aporteCount > 0 && <span className="text-xs font-bold text-emerald-500">{paidCount}/{aporteCount}</span>}
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Próximo Vencimento</p>
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Próximo Vencimento</p>
                     <div className="flex items-baseline gap-2">
                         <h3 className="text-2xl font-black text-blue-600">{nextDue ? formatDate(nextDue.due_date) : '—'}</h3>
                         {daysUntil !== null && daysUntil >= 0 && (
@@ -104,7 +104,7 @@ const PaymentsPanel: React.FC<PaymentsPanelProps> = ({ organizationId, investorI
                         <CreditCard size={100} />
                     </div>
                     <div className="relative z-10">
-                        <p className="text-[10px] font-black text-blue-100 uppercase tracking-[0.2em] mb-2">Próxima Parcela</p>
+                        <p className="text-xs font-black text-blue-100 uppercase tracking-[0.2em] mb-2">Próxima Parcela</p>
                         <h3 className="text-2xl font-black">{nextDue ? formatCurrency(Number(nextDue.amount)) : '—'}</h3>
                     </div>
                 </div>
@@ -120,7 +120,7 @@ const PaymentsPanel: React.FC<PaymentsPanelProps> = ({ organizationId, investorI
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
                         <thead className="bg-gray-50/50">
-                            <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                                 <th className="px-8 py-4">Descrição</th>
                                 <th className="px-8 py-4">Tipo</th>
                                 <th className="px-8 py-4">Vencimento</th>
@@ -139,7 +139,7 @@ const PaymentsPanel: React.FC<PaymentsPanelProps> = ({ organizationId, investorI
                                     <td className="px-8 py-5 text-sm font-medium text-gray-600">{formatDate(item.due_date)}</td>
                                     <td className="px-8 py-5 text-sm font-black text-gray-900">{formatCurrency(Number(item.amount))}</td>
                                     <td className="px-8 py-5">
-                                        <div className={`flex items-center justify-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter mx-auto w-fit ${STATUS_STYLE[item.status]}`}>
+                                        <div className={`flex items-center justify-center gap-1.5 px-3 py-1 rounded-full border text-xs font-black uppercase tracking-tighter mx-auto w-fit ${STATUS_STYLE[item.status]}`}>
                                             {statusIcon(item.status)}
                                             {STATUS_LABEL[item.status]}
                                         </div>
@@ -154,7 +154,7 @@ const PaymentsPanel: React.FC<PaymentsPanelProps> = ({ organizationId, investorI
                                                 <Download className="w-4 h-4" />
                                             </button>
                                         ) : (
-                                            <span className="text-[10px] text-gray-300">—</span>
+                                            <span className="text-xs text-gray-300">—</span>
                                         )}
                                     </td>
                                 </tr>

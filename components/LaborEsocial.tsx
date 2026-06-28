@@ -64,9 +64,9 @@ const fmt = {
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300 transition-all';
 const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({ label, children, hint }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
         {children}
-        {hint && <p className="text-[10px] text-slate-400">{hint}</p>}
+        {hint && <p className="text-xs text-slate-400">{hint}</p>}
     </div>
 );
 
@@ -74,7 +74,7 @@ const StatusBadge: React.FC<{ status: EsocialStatus }> = ({ status }) => {
     const cfg = STATUS_CFG[status];
     const Icon = cfg.icon;
     return (
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black ${cfg.color} ${cfg.bg}`}>
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black ${cfg.color} ${cfg.bg}`}>
             <Icon className="w-3 h-3" />
             {cfg.label}
         </span>
@@ -106,7 +106,7 @@ const LifecycleBar: React.FC<{ status: EsocialStatus }> = ({ status }) => {
                 );
             })}
             {isError && (
-                <span className="ml-2 px-2 py-1 rounded-lg text-[10px] font-bold bg-red-100 text-red-700">Erro</span>
+                <span className="ml-2 px-2 py-1 rounded-lg text-xs font-bold bg-red-100 text-red-700">Erro</span>
             )}
         </div>
     );
@@ -566,7 +566,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                     { label: 'Alertas abertos', value: dashboard?.alertas_abertos ?? '–', icon: Bell, color: 'orange' },
                 ].map(({ label, value, icon: Icon, color }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
                         <div className="flex items-center justify-between mt-2">
                             <span className={`text-2xl font-black ${Number(value) > 0 && (color === 'red' || color === 'orange' || color === 'amber') ? `text-${color}-600` : 'text-slate-900'}`}>{value}</span>
                             <div className={`p-2 bg-${color}-50 rounded-xl`}>
@@ -588,10 +588,10 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                 <div className="flex-1 min-w-0">
                                     <p className={`text-sm font-black ${p.color}`}>{alert.titulo}</p>
                                     {alert.descricao && <p className="text-xs text-slate-500 mt-0.5">{alert.descricao}</p>}
-                                    {alert.prazo && <p className="text-[10px] text-slate-400 mt-0.5">Prazo: {fmt.date(alert.prazo)}</p>}
+                                    {alert.prazo && <p className="text-xs text-slate-400 mt-0.5">Prazo: {fmt.date(alert.prazo)}</p>}
                                 </div>
                                 <button onClick={() => resolveAlertMut.mutate(alert.id)}
-                                    className="shrink-0 px-3 py-1.5 text-[11px] font-bold text-slate-600 bg-white hover:bg-slate-100 rounded-lg transition-colors border border-slate-200">
+                                    className="shrink-0 px-3 py-1.5 text-xs font-bold text-slate-600 bg-white hover:bg-slate-100 rounded-lg transition-colors border border-slate-200">
                                     Resolver
                                 </button>
                             </div>
@@ -664,7 +664,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                 <thead>
                                     <tr className="border-b border-slate-50">
                                         {['Evento', 'Descrição', 'Grupo', 'Total', 'OK', 'Erros'].map(h => (
-                                            <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                            <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -740,7 +740,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                 <thead>
                                     <tr className="border-b border-slate-100">
                                         {['Evento', 'Grupo', 'Referência', 'Status', 'Gerado em', 'Ações'].map(h => (
-                                            <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                            <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -759,7 +759,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                                 <tr className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                                                     <td className="px-4 py-3">
                                                         <p className="font-black text-orange-700">{ev.tipo_evento}</p>
-                                                        <p className="text-[10px] text-slate-400">{catalog?.desc ?? ''}</p>
+                                                        <p className="text-xs text-slate-400">{catalog?.desc ?? ''}</p>
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${g.color} ${g.bg}`}>{g.label}</span>
@@ -779,7 +779,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                                                 <button
                                                                     onClick={() => advanceStatusMut.mutate({ id: ev.id, status: nextStatus })}
                                                                     disabled={advanceStatusMut.isPending}
-                                                                    className="px-2 py-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                                                                    className="px-2 py-1 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
                                                                     title={`Avançar para ${STATUS_CFG[nextStatus].label}`}>
                                                                     → {STATUS_CFG[nextStatus].label}
                                                                 </button>
@@ -809,7 +809,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                                                         { label: 'Hash XML', value: ev.xml_hash },
                                                                     ].filter(r => r.value).map(({ label, value }) => (
                                                                         <div key={label}>
-                                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                                                                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
                                                                             <p className="font-mono text-slate-600 truncate">{value}</p>
                                                                         </div>
                                                                     ))}
@@ -850,7 +850,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                 <thead>
                                     <tr className="border-b border-slate-100">
                                         {['Grupo', 'Período', 'Eventos', 'OK', 'Erros', 'Status', 'Protocolo', 'Criado em'].map(h => (
-                                            <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                            <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -872,7 +872,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                                         : <span className="text-slate-300">0</span>}
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${sc.color} ${sc.bg}`}>{sc.label}</span>
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-black ${sc.color} ${sc.bg}`}>{sc.label}</span>
                                                 </td>
                                                 <td className="px-4 py-3 text-slate-400 text-table-body font-mono">{b.protocolo_envio || '–'}</td>
                                                 <td className="px-4 py-3 text-slate-400 text-table-body">{fmt.date(b.created_at)}</td>

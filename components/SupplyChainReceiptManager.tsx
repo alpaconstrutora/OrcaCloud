@@ -94,7 +94,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
             'Divergência': 'bg-red-100 text-red-800',
         };
         return (
-            <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
+            <span className={`px-2 py-1 rounded-full text-xs font-black uppercase tracking-wider ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
                 {status}
             </span>
         );
@@ -186,7 +186,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                     />
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
@@ -216,7 +216,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
             ) : filteredOrders.length > 0 ? (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-widest border-b border-gray-200">
+                        <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs tracking-widest border-b border-gray-200">
                             <tr>
                                 <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Número</th>
                                 <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap">Obra</th>
@@ -288,13 +288,13 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                                                         setSelectedOrder(order);
                                                         setShowReceiptModal(true);
                                                     }}
-                                                    className="flex items-center gap-2 text-indigo-600 px-4 py-2 border border-indigo-100 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-all font-sans"
+                                                    className="flex items-center gap-2 text-indigo-600 px-4 py-2 border border-indigo-100 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-50 transition-all font-sans"
                                                 >
                                                     <Pencil className="w-3 h-3" />
                                                     Editar Checkout
                                                 </button>
                                             ) : (
-                                                <div className="text-[10px] font-black text-gray-300 uppercase tracking-widest border border-dashed border-gray-100 px-4 py-2 rounded-xl">
+                                                <div className="text-xs font-black text-gray-300 uppercase tracking-widest border border-dashed border-gray-100 px-4 py-2 rounded-xl">
                                                     Aguardando Carga
                                                 </div>
                                             )}

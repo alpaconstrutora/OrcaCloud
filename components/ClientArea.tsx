@@ -334,14 +334,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     <div className="-mx-4 bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-10">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5">
-                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Locação</span>
+                                <span className="text-xs font-black text-white uppercase tracking-widest">Locação</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button onClick={() => setActiveTab('manutencao')} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"><Wrench className="w-3.5 h-3.5" /></button>
                                 {portalToken && (
                                     <button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white">
                                         <Bell className="w-3.5 h-3.5" />
-                                        {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[10px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+                                        {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-xs font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                                     </button>
                                 )}
                                 <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-600 font-black text-sm shadow">{(clientProfile?.name || '?').charAt(0)}</div>
@@ -372,7 +372,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <p className="text-[9px] text-blue-200 font-bold mt-0.5">R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
                                 </div>
                             </div>
-                            {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="w-full py-2.5 bg-white text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"><Wallet className="w-3.5 h-3.5" /> Ver Financeiro <ArrowRight className="w-3 h-3" /></button>}
+                            {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="w-full py-2.5 bg-white text-blue-600 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"><Wallet className="w-3.5 h-3.5" /> Ver Financeiro <ArrowRight className="w-3 h-3" /></button>}
                         </div>
                     </div>
                     {/* KPIs flutuantes */}
@@ -393,8 +393,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {reajusteAlert && <div className="mx-4 mt-3 flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl"><AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" /><div><p className="text-sm font-black text-amber-800">Reajuste em {new Date(reajusteAlert.reajuste_proximo! + 'T12:00:00').toLocaleDateString('pt-BR')}</p><p className="text-xs text-amber-600 mt-0.5">{reajusteAlert.title}</p></div></div>}
                     {/* Chamados recentes */}
                     {recentRequests.length > 0 && <div className="px-4 mt-4 pb-6 space-y-2">
-                        <div className="flex items-center justify-between mb-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Últimos Chamados</p>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Ver todos</button>}</div>
-                        {recentRequests.map(req => (<div key={req.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-black text-gray-900 truncate">{req.title}</p><p className="text-[10px] font-bold text-gray-400 mt-0.5">{req.category}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span></div>))}
+                        <div className="flex items-center justify-between mb-2"><p className="text-xs font-black text-gray-400 uppercase tracking-widest">Últimos Chamados</p>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-xs font-black text-blue-500 uppercase tracking-widest">Ver todos</button>}</div>
+                        {recentRequests.map(req => (<div key={req.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-black text-gray-900 truncate">{req.title}</p><p className="text-xs font-bold text-gray-400 mt-0.5">{req.category}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span></div>))}
                     </div>}
                     {/* Empty state + atalhos */}
                     {recentRequests.length === 0 && (
@@ -419,9 +419,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                         <div className="flex items-center gap-4">
                             <div className="text-right">
-                                <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Próximo Vencimento</p>
+                                <p className="text-xs font-black text-blue-200 uppercase tracking-widest">Próximo Vencimento</p>
                                 <p className="text-xl font-black text-white mt-0.5">{nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : 'Em dia'}</p>
-                                {nextDue && <p className="text-[10px] text-blue-200 font-bold">{new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
+                                {nextDue && <p className="text-xs text-blue-200 font-bold">{new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
                             </div>
                             {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="flex items-center gap-2 px-5 py-3 bg-white text-blue-600 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-blue-50 transition-all shadow"><Wallet className="w-4 h-4" /> Financeiro</button>}
                         </div>
@@ -445,12 +445,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {/* Duas colunas: chamados + contratos */}
                     <div className="grid grid-cols-2 gap-6">
                         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Últimos Chamados</h3>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
-                            {recentRequests.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum chamado</p> : <div className="space-y-3">{recentRequests.map(req => (<div key={req.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{req.title}</p><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{req.category}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span></div>))}</div>}
+                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Últimos Chamados</h3>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-xs font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
+                            {recentRequests.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum chamado</p> : <div className="space-y-3">{recentRequests.map(req => (<div key={req.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{req.title}</p><p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{req.category}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span></div>))}</div>}
                         </div>
                         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos</h3>{enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
-                            {shownContracts.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p> : <div className="space-y-3">{shownContracts.slice(0, 3).map(c => { const badge = contractDashBadge(c.status); return (<div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-bold text-gray-900 truncate">{c.title}</p><span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${badge.cls}`}>{badge.label}</span></div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{c.billing_cycle ?? c.contract_type}{c.end_date ? ` · até ${new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}</p></div><span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span></div>); })}</div>}
+                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos</h3>{enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-xs font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
+                            {shownContracts.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p> : <div className="space-y-3">{shownContracts.slice(0, 3).map(c => { const badge = contractDashBadge(c.status); return (<div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-bold text-gray-900 truncate">{c.title}</p><span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${badge.cls}`}>{badge.label}</span></div><p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{c.billing_cycle ?? c.contract_type}{c.end_date ? ` · até ${new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}</p></div><span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span></div>); })}</div>}
                         </div>
                     </div>
                 </div>
@@ -473,9 +473,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {/* Hero */}
                     <div className="-mx-4 bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-10">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5"><span className="text-[10px] font-black text-white uppercase tracking-widest">Serviços</span></div>
+                            <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5"><span className="text-xs font-black text-white uppercase tracking-widest">Serviços</span></div>
                             <div className="flex items-center gap-2">
-                                {portalToken && (<button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"><Bell className="w-3.5 h-3.5" />{unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[10px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}</button>)}
+                                {portalToken && (<button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"><Bell className="w-3.5 h-3.5" />{unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-xs font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}</button>)}
                                 <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-600 font-black text-sm shadow">{(clientProfile?.name || '?').charAt(0)}</div>
                             </div>
                         </div>
@@ -508,8 +508,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {shownContracts.length > 0 ? (
                         <div className="px-4 mt-4 pb-6 space-y-2">
                             <div className="flex items-center justify-between mb-2">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contratos</p>
-                                {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Ver todos</button>}
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Contratos</p>
+                                {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-xs font-black text-blue-500 uppercase tracking-widest">Ver todos</button>}
                             </div>
                             {shownContracts.slice(0, 3).map(c => {
                                 const badge = contractDashBadge(c.status);
@@ -548,16 +548,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <p className="text-indigo-200 text-sm mt-1">Acompanhe seus contratos e serviços</p>
                         </div>
                         <div className="text-right">
-                            <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Total Contratado</p>
+                            <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">Total Contratado</p>
                             <p className="text-2xl font-black text-white mt-0.5">R$ {totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
-                            <p className="text-[10px] text-indigo-200 font-bold mt-0.5">{activeContracts.length} contrato{activeContracts.length !== 1 ? 's' : ''} ativo{activeContracts.length !== 1 ? 's' : ''}</p>
+                            <p className="text-xs text-indigo-200 font-bold mt-0.5">{activeContracts.length} contrato{activeContracts.length !== 1 ? 's' : ''} ativo{activeContracts.length !== 1 ? 's' : ''}</p>
                         </div>
                     </div>
                     {/* Contratos */}
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos</h3>
-                            {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Ver todos</button>}
+                            {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-xs font-black text-indigo-500 uppercase tracking-widest hover:underline">Ver todos</button>}
                         </div>
                         {shownContracts.length === 0 ? (
                             <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p>
@@ -572,7 +572,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <p className="text-sm font-bold text-gray-900 truncate">{c.title}</p>
                                                 <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${badge.cls}`}>{badge.label}</span>
                                             </div>
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase">{c.contract_type}{c.sla_days != null ? ` · SLA ${c.sla_days}d` : ''}</p>
+                                            <p className="text-xs font-bold text-gray-400 uppercase">{c.contract_type}{c.sla_days != null ? ` · SLA ${c.sla_days}d` : ''}</p>
                                         </div>
                                         <span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
                                     </div>
@@ -600,7 +600,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         Sua área exclusiva está pronta para acompanhamento. Assim que os dados da sua obra forem processados, você poderá visualizar o progresso real, fotos e o fluxo financeiro aqui.
                     </p>
                     <div className="mt-10 flex gap-4">
-                        <div className="px-6 py-3 bg-gray-50 rounded-2xl border border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">Aguardando Processamento</div>
+                        <div className="px-6 py-3 bg-gray-50 rounded-2xl border border-gray-100 text-xs font-black text-gray-400 uppercase tracking-widest">Aguardando Processamento</div>
                     </div>
                 </div>
             );
@@ -666,11 +666,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                             <div className="border-t border-gray-50 pt-4 mt-4 grid grid-cols-2 gap-4 text-center">
                                 <div>
-                                    <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Avanço Planejado</div>
+                                    <div className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Avanço Planejado</div>
                                     <div className="text-lg font-black text-gray-400">{plannedProgress}%</div>
                                 </div>
                                 <div className="border-l border-gray-100">
-                                    <div className="text-[10px] text-indigo-500 font-black uppercase tracking-widest mb-1">Desvio de Prazo</div>
+                                    <div className="text-xs text-indigo-500 font-black uppercase tracking-widest mb-1">Desvio de Prazo</div>
                                     <div className="text-lg font-black text-gray-900">0 dia(s)</div>
                                 </div>
                             </div>
@@ -718,7 +718,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 {finalDistribution.length > 0 && (
                                     <div className="w-full space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                                         {finalDistribution.map((item, index) => (
-                                            <div key={`legend-${index}`} className="flex justify-between items-center text-[11px] group">
+                                            <div key={`legend-${index}`} className="flex justify-between items-center text-xs group">
                                                 <div className="flex items-center gap-2 truncate">
                                                     <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                                                     <span className="font-medium text-gray-600 truncate group-hover:text-gray-900 transition-colors uppercase">{item.name}</span>
@@ -750,7 +750,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <span className="text-xl font-black text-blue-700 leading-none">
                                                 {event.date.getDate().toString().padStart(2, '0')}
                                             </span>
-                                            <span className="text-[10px] font-black text-blue-500 uppercase tracking-wider mt-1">
+                                            <span className="text-xs font-black text-blue-500 uppercase tracking-wider mt-1">
                                                 {event.date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase()}
                                             </span>
                                         </div>
@@ -813,7 +813,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <div className="min-w-0 flex-1">
                                         <p className="text-sm font-black text-gray-900 truncate">{contract.title}</p>
                                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                            <span className="text-[10px] font-bold text-gray-400 tabular-nums">R$ {(contract.current_value || contract.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                                            <span className="text-xs font-bold text-gray-400 tabular-nums">R$ {(contract.current_value || contract.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
                                             {reajusteAlerta && <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Reajuste próximo</span>}
                                         </div>
                                     </div>
@@ -856,7 +856,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 >
                                     <div className="flex flex-col gap-1.5 min-w-0">
                                         <span className="text-sm font-black text-gray-900 uppercase truncate group-hover:text-indigo-700 transition-colors">{contract.title}</span>
-                                        <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                        <div className="flex flex-wrap items-center gap-3 text-xs font-bold text-gray-400 uppercase tracking-widest">
                                             {contract.number && <span>Nº {contract.number}</span>}
                                             {contract.contract_type && <span>· {contract.contract_type}</span>}
                                             {contract.start_date && (
@@ -933,7 +933,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
                                     <div>
                                         <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">{c.title}</h2>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Nº {c.number} · {c.contract_type}</p>
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Nº {c.number} · {c.contract_type}</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setViewingContract(null)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
@@ -971,7 +971,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         { label: 'Data de Término', value: c.end_date ? new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado' },
                                     ].map(item => (
                                         <div key={item.label} className="p-4 bg-gray-50 rounded-2xl">
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{item.label}</p>
+                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{item.label}</p>
                                             <p className="text-sm font-black text-gray-900">{item.value}</p>
                                         </div>
                                     ))}
@@ -980,34 +980,34 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 {/* Seção extra: Reajuste e Vigência — Locação */}
                                 {isLocacao && (c.reajuste_index || c.billing_cycle || c.due_day != null) && (
                                     <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-2">
+                                        <p className="text-xs font-black text-blue-500 uppercase tracking-widest flex items-center gap-2">
                                             <TrendingUp className="w-3.5 h-3.5" /> Reajuste e Vigência
                                         </p>
                                         <div className="grid grid-cols-2 gap-3">
                                             {c.billing_cycle && (
                                                 <div className="p-4 bg-blue-50 rounded-2xl">
-                                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Periodicidade</p>
+                                                    <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Periodicidade</p>
                                                     <p className="text-sm font-black text-blue-800">{c.billing_cycle}{c.due_day != null ? ` · Dia ${c.due_day}` : ''}</p>
                                                 </div>
                                             )}
                                             {c.reajuste_index && (
                                                 <div className="p-4 bg-blue-50 rounded-2xl">
-                                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Índice de Reajuste</p>
+                                                    <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Índice de Reajuste</p>
                                                     <p className="text-sm font-black text-blue-800">{c.reajuste_index}</p>
                                                 </div>
                                             )}
                                             {c.reajuste_data_base && (
                                                 <div className="p-4 bg-blue-50 rounded-2xl">
-                                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Data-Base</p>
+                                                    <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Data-Base</p>
                                                     <p className="text-sm font-black text-blue-800">{new Date(c.reajuste_data_base + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
                                                 </div>
                                             )}
                                             {c.reajuste_proximo && (
                                                 <div className={`p-4 rounded-2xl ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'bg-amber-50' : 'bg-blue-50'}`}>
-                                                    <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'text-amber-400' : 'text-blue-400'}`}>Próximo Reajuste</p>
+                                                    <p className={`text-xs font-black uppercase tracking-widest mb-1 ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'text-amber-400' : 'text-blue-400'}`}>Próximo Reajuste</p>
                                                     <p className={`text-sm font-black ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'text-amber-700' : 'text-blue-800'}`}>
                                                         {new Date(c.reajuste_proximo + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                                        {diasParaReajuste !== null && <span className="text-[10px] ml-1">({diasParaReajuste}d)</span>}
+                                                        {diasParaReajuste !== null && <span className="text-xs ml-1">({diasParaReajuste}d)</span>}
                                                     </p>
                                                 </div>
                                             )}
@@ -1018,32 +1018,32 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 {/* Seção extra: Condições de Serviço — Serviços */}
                                 {isServicos && (c.sla_days != null || c.warranty_months != null || c.services_included || c.services_excluded) && (
                                     <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
+                                        <p className="text-xs font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
                                             <ClipboardList className="w-3.5 h-3.5" /> Condições de Serviço
                                         </p>
                                         <div className="grid grid-cols-2 gap-3">
                                             {c.sla_days != null && (
                                                 <div className="p-4 bg-indigo-50 rounded-2xl">
-                                                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">SLA de Atendimento</p>
+                                                    <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-1">SLA de Atendimento</p>
                                                     <p className="text-sm font-black text-indigo-800">{c.sla_days} dia{c.sla_days !== 1 ? 's' : ''}</p>
                                                 </div>
                                             )}
                                             {c.warranty_months != null && (
                                                 <div className="p-4 bg-emerald-50 rounded-2xl">
-                                                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Garantia</p>
+                                                    <p className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-1">Garantia</p>
                                                     <p className="text-sm font-black text-emerald-800">{c.warranty_months} mês{c.warranty_months !== 1 ? 'es' : ''}</p>
                                                 </div>
                                             )}
                                         </div>
                                         {c.services_included && (
                                             <div className="p-4 bg-emerald-50 rounded-2xl">
-                                                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Serviços Incluídos</p>
+                                                <p className="text-xs font-black text-emerald-500 uppercase tracking-widest mb-2">Serviços Incluídos</p>
                                                 <p className="text-sm text-emerald-800 font-medium whitespace-pre-line">{c.services_included}</p>
                                             </div>
                                         )}
                                         {c.services_excluded && (
                                             <div className="p-4 bg-red-50 rounded-2xl">
-                                                <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-2">Serviços Excluídos</p>
+                                                <p className="text-xs font-black text-red-400 uppercase tracking-widest mb-2">Serviços Excluídos</p>
                                                 <p className="text-sm text-red-700 font-medium whitespace-pre-line">{c.services_excluded}</p>
                                             </div>
                                         )}
@@ -1052,7 +1052,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                                 {isMinuta && c.minuta_versions && c.minuta_versions.some(v => v.emitted !== false) && (
                                     <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Versões da Minuta</p>
+                                        <p className="text-xs font-black text-purple-500 uppercase tracking-widest">Versões da Minuta</p>
                                         <div className="space-y-2">
                                             {(() => {
                                                 const emitted = c.minuta_versions!.filter(v => v.emitted !== false);
@@ -1065,7 +1065,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     rel="noopener noreferrer"
                                                     className="flex items-center gap-4 p-4 bg-purple-50 border border-purple-100 rounded-2xl hover:bg-purple-100 transition-all group"
                                                 >
-                                                    <div className="w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center shrink-0 text-white font-black text-[11px]">
+                                                    <div className="w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center shrink-0 text-white font-black text-xs">
                                                         v{ver.v}
                                                     </div>
                                                     <div className="flex-1 min-w-0">
@@ -1075,7 +1075,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                                 <span className="ml-2 px-2 py-0.5 bg-purple-200 text-purple-700 rounded-full text-[9px] font-black uppercase">Atual</span>
                                                             )}
                                                         </p>
-                                                        <p className="text-[10px] text-purple-400 mt-0.5">
+                                                        <p className="text-xs text-purple-400 mt-0.5">
                                                             {new Date(ver.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                             {ver.notes && ` · ${ver.notes}`}
                                                         </p>
@@ -1089,7 +1089,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 )}
                                 {!isMinuta && (docUrl ? (
                                     <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Documento do Contrato</p>
+                                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Documento do Contrato</p>
                                         <a
                                             href={docUrl}
                                             target="_blank"
@@ -1101,7 +1101,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             </div>
                                             <div>
                                                 <p className="text-sm font-black text-indigo-700">Visualizar / Baixar Contrato</p>
-                                                <p className="text-[10px] text-indigo-400 mt-0.5">Clique para abrir o documento</p>
+                                                <p className="text-xs text-indigo-400 mt-0.5">Clique para abrir o documento</p>
                                             </div>
                                             <ChevronRight className="w-4 h-4 text-indigo-400 ml-auto group-hover:translate-x-1 transition-transform" />
                                         </a>
@@ -1208,12 +1208,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <div className="p-2.5 bg-gray-50 rounded-xl group-hover:bg-white transition-colors">
                                         {card.icon}
                                     </div>
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{card.label}</span>
+                                    <span className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">{card.label}</span>
                                 </div>
                                 <div className={`text-3xl font-black ${card.color} tracking-tight mb-2`}>
                                     R$ {card.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </div>
-                                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{card.sub}</div>
+                                <div className="text-xs font-black text-gray-400 uppercase tracking-widest">{card.sub}</div>
                                 {card.progress !== undefined && (
                                     <div className="mt-4 w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                                         <div className="bg-emerald-500 h-full transition-all duration-1000" style={{ width: `${card.progress}%` }} />
@@ -1265,7 +1265,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={() => setShowGenerator(!showGenerator)}
-                                        className={`flex items-center gap-3 px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.15em] transition-all border shadow-sm
+                                        className={`flex items-center gap-3 px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-[0.15em] transition-all border shadow-sm
                                                         ${showGenerator ? 'bg-amber-100 text-amber-600 border-amber-200' : 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100'}
                                                     `}
                                     >
@@ -1307,7 +1307,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         <button
                                             key={t}
                                             onClick={() => setGenConfig({ ...genConfig, type: t as 'VISTA' | 'PARCELADO' })}
-                                            className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
+                                            className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all
                                                 ${genConfig.type === t ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-gray-400 border border-gray-100 hover:border-indigo-200'}
                                             `}
                                         >
@@ -1319,7 +1319,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <div className="grid grid-cols-2 gap-6">
                                     {genConfig.type === 'VISTA' ? (
                                         <div className="col-span-2">
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Data do Pagamento</label>
+                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Data do Pagamento</label>
                                             <input
                                                 type="date"
                                                 value={genConfig.startDate}
@@ -1330,7 +1330,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     ) : (
                                         <>
                                             <div>
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sinal (Entrada)</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Sinal (Entrada)</label>
                                                 <input
                                                     type="number"
                                                     value={genConfig.sinal}
@@ -1339,7 +1339,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Entrega (Chaves)</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Entrega (Chaves)</label>
                                                 <input
                                                     type="number"
                                                     value={genConfig.chaves}
@@ -1348,7 +1348,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Parcelas Mensais</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Parcelas Mensais</label>
                                                 <input
                                                     type="number"
                                                     value={genConfig.numMensais}
@@ -1357,7 +1357,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Data da 1ª Parcela</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Data da 1ª Parcela</label>
                                                 <input
                                                     type="date"
                                                     value={genConfig.startDate}
@@ -1366,7 +1366,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Balão Semestral (Qtd • Valor)</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Balão Semestral (Qtd • Valor)</label>
                                                 <div className="flex gap-2">
                                                     <input
                                                         type="number"
@@ -1385,7 +1385,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 </div>
                                             </div>
                                             <div>
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Balão Anual (Qtd • Valor)</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Balão Anual (Qtd • Valor)</label>
                                                 <div className="flex gap-2">
                                                     <input
                                                         type="number"
@@ -1409,7 +1409,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                                 {genConfig.type === 'PARCELADO' && genConfig.numMensais > 0 && (
                                     <div className="mt-6 p-4 bg-white rounded-xl border border-indigo-100">
-                                        <div className="flex justify-between items-center text-[10px] font-black text-indigo-600 uppercase tracking-widest">
+                                        <div className="flex justify-between items-center text-xs font-black text-indigo-600 uppercase tracking-widest">
                                             <span>Mensalidade Estimada:</span>
                                             <span className="text-sm">
                                                 R$ {((financialInfo.totalValue - genConfig.sinal - genConfig.chaves - (genConfig.numSeme * genConfig.valSeme) - (genConfig.numAnual * genConfig.valAnual)) / genConfig.numMensais).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -1518,7 +1518,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
                                             <div className="flex flex-col gap-2">
                                                 <h4 className="text-lg font-black text-gray-900 tracking-tight uppercase underline decoration-indigo-200/50 underline-offset-4">{String(inst.description ?? '')}</h4>
-                                                <div className="flex items-center gap-3 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                                <div className="flex items-center gap-3 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
                                                     <Calendar className="w-4 h-4 text-indigo-500" />
                                                     VENCIMENTO: {inst.dueDate ? new Date(String(inst.dueDate) + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
                                                 </div>
@@ -1539,7 +1539,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                             handleUpdateFinancial(newInsts);
                                                         }
                                                     }}
-                                                    className={`px-8 py-2 rounded-full text-[10px] font-black uppercase tracking-widest w-fit transition-all border shadow-sm
+                                                    className={`px-8 py-2 rounded-full text-xs font-black uppercase tracking-widest w-fit transition-all border shadow-sm
                                                                 ${inst.status === 'PAID'
                                                             ? 'bg-indigo-600 text-white border-indigo-700'
                                                             : 'bg-amber-50 text-amber-600 border-amber-200 shadow-amber-100/20'}
@@ -1626,7 +1626,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
                                     <table className="w-full text-left">
                                         <thead className="bg-gray-50/50 border-b border-gray-100">
-                                            <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                            <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
                                                 <th className="px-8 py-5">Descrição</th>
                                                 <th className="px-8 py-5">Vencimento</th>
                                                 <th className="px-8 py-5">Valor</th>
@@ -1790,7 +1790,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <p className="text-sm font-black text-gray-900 truncate">{charge.description}</p>
-                                            <p className="text-[10px] font-bold text-gray-400 mt-0.5">{new Date(charge.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                                            <p className="text-xs font-bold text-gray-400 mt-0.5">{new Date(charge.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
                                         </div>
                                         <div className="flex flex-col items-end shrink-0 gap-1">
                                             <span className="text-sm font-black text-gray-900 tabular-nums">R$ {charge.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
@@ -1816,9 +1816,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div key={i} className="bg-white p-7 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
                             <div className="p-3 bg-gray-50 rounded-xl shrink-0">{card.icon}</div>
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{card.label}</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{card.label}</p>
                                 <p className={`text-2xl font-black ${card.color} tracking-tight`}>{card.value}</p>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{card.sub}</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">{card.sub}</p>
                             </div>
                         </div>
                     ))}
@@ -1828,7 +1828,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     <div className="flex items-center justify-between px-8 py-6 border-b border-gray-50">
                         <div>
                             <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Cobranças do Imóvel</h3>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Aluguel, condomínio, IPTU e demais encargos</p>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Aluguel, condomínio, IPTU e demais encargos</p>
                         </div>
                         {isAdmin && (
                             <button
@@ -1855,7 +1855,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     ) : (
                         <table className="w-full text-left">
                             <thead className="bg-gray-50/50 border-b border-gray-100">
-                                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
                                     <th className="px-8 py-4">Descrição</th>
                                     <th className="px-8 py-4">Vencimento</th>
                                     <th className="px-8 py-4">Valor</th>
@@ -1981,11 +1981,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             medicoes.map((med, idx) => (
                                 <div key={med.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${med.status === 'PAID' ? 'bg-emerald-50 text-emerald-500' : 'bg-amber-50 text-amber-500'}`}>
-                                        <span className="text-[11px] font-black">{idx + 1}</span>
+                                        <span className="text-xs font-black">{idx + 1}</span>
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <p className="text-sm font-black text-gray-900 truncate">{med.description}</p>
-                                        <p className="text-[10px] font-bold text-gray-400 mt-0.5">{new Date(med.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                                        <p className="text-xs font-bold text-gray-400 mt-0.5">{new Date(med.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0 gap-1">
                                         <span className="text-sm font-black text-gray-900 tabular-nums">R$ {med.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
@@ -2010,9 +2010,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div key={i} className="bg-white p-7 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
                             <div className="p-3 bg-gray-50 rounded-xl shrink-0">{card.icon}</div>
                             <div className="flex-1">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{card.label}</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{card.label}</p>
                                 <p className={`text-2xl font-black ${card.color} tracking-tight`}>R$ {card.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{card.sub}</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">{card.sub}</p>
                                 {'progress' in card && (
                                     <div className="mt-2 w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
                                         <div className="bg-emerald-500 h-full transition-all duration-1000" style={{ width: `${card.progress}%` }} />
@@ -2027,7 +2027,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     <div className="flex items-center justify-between px-8 py-6 border-b border-gray-50">
                         <div>
                             <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Medições e Faturas</h3>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Etapas medidas, aprovadas e faturadas</p>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Etapas medidas, aprovadas e faturadas</p>
                         </div>
                         {isAdmin && (
                             <button
@@ -2054,7 +2054,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     ) : (
                         <table className="w-full text-left">
                             <thead className="bg-gray-50/50 border-b border-gray-100">
-                                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
                                     <th className="px-8 py-4">Etapa / Medição</th>
                                     <th className="px-8 py-4">Data</th>
                                     <th className="px-8 py-4">Valor</th>
@@ -2067,7 +2067,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <tr key={med.id} className="hover:bg-indigo-50/30 transition-colors group">
                                         <td className="px-8 py-4">
                                             <div className="flex items-center gap-3">
-                                                <span className="w-6 h-6 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black shrink-0">{idx + 1}</span>
+                                                <span className="w-6 h-6 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-lg text-xs font-black shrink-0">{idx + 1}</span>
                                                 <span className="text-sm font-bold text-gray-900 uppercase tracking-tight">{med.description}</span>
                                             </div>
                                         </td>
@@ -2153,7 +2153,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <h3 className="text-2xl font-black tracking-tight uppercase">Acompanhe sua Obra</h3>
                             <p className="text-blue-200 text-sm font-medium mt-1">Avanço físico e cronograma em tempo real.</p>
                         </div>
-                        <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${onTrack ? 'bg-emerald-400/20 text-emerald-200' : 'bg-amber-400/20 text-amber-100'}`}>
+                        <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest ${onTrack ? 'bg-emerald-400/20 text-emerald-200' : 'bg-amber-400/20 text-amber-100'}`}>
                             <div className={`w-2 h-2 rounded-full ${onTrack ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
                             {onTrack ? 'No prazo' : 'Atenção ao ritmo'}
                         </div>
@@ -2202,8 +2202,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </ComposedChart>
                         </ResponsiveContainer>
                         <div className="flex items-center justify-center gap-6 mt-2">
-                            <span className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-sm bg-indigo-200 border border-indigo-400" /> Planejado</span>
-                            <span className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-full bg-emerald-500" /> Realizado (hoje)</span>
+                            <span className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-sm bg-indigo-200 border border-indigo-400" /> Planejado</span>
+                            <span className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-full bg-emerald-500" /> Realizado (hoje)</span>
                         </div>
                     </div>
                 )}
@@ -2233,9 +2233,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                                                 <div className={`h-full rounded-full ${st.dot}`} style={{ width: `${ph.progress}%` }} />
                                             </div>
-                                            <span className="text-[10px] font-black text-gray-400 tabular-nums w-9 text-right">{ph.progress}%</span>
+                                            <span className="text-xs font-black text-gray-400 tabular-nums w-9 text-right">{ph.progress}%</span>
                                         </div>
-                                        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 mt-2">
+                                        <div className="flex items-center gap-2 text-xs font-bold text-gray-400 mt-2">
                                             <Calendar className="w-3 h-3" />
                                             {fmt(ph.start)} <span className="text-gray-300">→</span> {fmt(ph.end)}
                                         </div>
@@ -2259,7 +2259,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Sua Casa, Sua História</h3>
                         <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Cada marco é um passo mais próximo da sua nova vida.</p>
                     </div>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-100/50">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-xs font-black uppercase tracking-widest border border-emerald-100/50">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         No Prazo
@@ -2288,7 +2288,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             : 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-50/50'}
                                     `}>
                                         <div className="flex flex-col gap-1 mb-4">
-                                            <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">{event.groupName}</span>
+                                            <span className="text-xs font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">{event.groupName}</span>
                                             <h4 className="text-2xl font-black text-gray-900 tracking-tight leading-tight uppercase group-hover:text-indigo-600 transition-colors">
                                                 {event.name}
                                             </h4>
@@ -2309,7 +2309,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <div className="mt-1 p-1 bg-white rounded-lg text-indigo-500 shadow-sm">
                                                     <Sparkles className="w-3.5 h-3.5" />
                                                 </div>
-                                                <p className="text-[11px] font-bold text-indigo-700 leading-relaxed italic">
+                                                <p className="text-xs font-bold text-indigo-700 leading-relaxed italic">
                                                     {event.groupName.includes('Estrutura') ? "Nesta fase, a solidez do seu futuro lar está sendo esculpida. É o corpo ganhando força!" :
                                                         event.groupName.includes('Acabamento') ? "O toque final! É hora de imaginar as cores, texturas e a sensação de cada ambiente." :
                                                             "Um marco importante para garantir que tudo saia exatamente como você sonhou."}
@@ -2329,7 +2329,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         </div>
                                                     ))}
                                                 {budget.filter(i => i.group === event.groupName && i.phase.includes(event.name)).length > 5 && (
-                                                    <div className="text-[10px] font-black text-gray-300 uppercase tracking-widest pl-5">
+                                                    <div className="text-xs font-black text-gray-300 uppercase tracking-widest pl-5">
                                                         + {budget.filter(i => i.group === event.groupName && i.phase.includes(event.name)).length - 5} itens adicionais
                                                     </div>
                                                 )}
@@ -2463,7 +2463,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </span>
                                         <div className="flex items-center gap-1.5 mt-1">
                                             <WeatherIcon type={item.weather} />
-                                            <span className="text-[10px] font-bold text-gray-400">{item.temperature || 'N/A'}</span>
+                                            <span className="text-xs font-bold text-gray-400">{item.temperature || 'N/A'}</span>
                                         </div>
                                     </div>
                                     {item.impediments && (
@@ -2508,7 +2508,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     )}
                                 </div>
 
-                                <div className="flex items-center justify-between text-[10px] font-bold text-indigo-600 uppercase pt-4 border-t border-gray-50 mt-4">
+                                <div className="flex items-center justify-between text-xs font-bold text-indigo-600 uppercase pt-4 border-t border-gray-50 mt-4">
                                     <span>Ver detalhes completos</span>
                                     <ChevronRight className="w-3 h-3" />
                                 </div>
@@ -2519,7 +2519,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                         <table className="w-full text-left">
                             <thead className="bg-gray-50/50 border-b border-gray-100">
-                                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                <tr className="text-xs font-black text-gray-400 uppercase tracking-widest">
                                     <th className="px-8 py-5">Data</th>
                                     <th className="px-8 py-5">Clima</th>
                                     <th className="px-8 py-5">Descrição</th>
@@ -2599,7 +2599,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     {/* Left Column: Description & Info */}
                                     <div className="space-y-8">
                                         <section>
-                                            <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-3">Relato do Dia</h4>
+                                            <h4 className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em] mb-3">Relato do Dia</h4>
                                             <div className="p-6 bg-indigo-50/30 border border-indigo-100 rounded-2xl">
                                                 <p className="text-gray-700 leading-relaxed whitespace-pre-wrap font-medium">
                                                     {selectedEntry.description}
@@ -2624,14 +2624,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <div className="text-[9px] font-black text-gray-400 uppercase mb-2">Mão de Obra</div>
                                                 <div className="text-lg font-black text-gray-900">
                                                     {selectedEntry.labor?.reduce((acc, l) => acc + l.quantity, 0) || 0}
-                                                    <span className="text-[10px] font-bold text-gray-400 ml-1 uppercase">Trabalhadores</span>
+                                                    <span className="text-xs font-bold text-gray-400 ml-1 uppercase">Trabalhadores</span>
                                                 </div>
                                             </div>
                                         </div>
 
                                         {selectedEntry.activities && selectedEntry.activities.length > 0 && (
                                             <section>
-                                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Atividades Realizadas</h4>
+                                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Atividades Realizadas</h4>
                                                 <div className="space-y-2">
                                                     {selectedEntry.activities.map((act, idx) => (
                                                         <div key={idx} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl">
@@ -2639,7 +2639,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                                 <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
                                                                 <span className="text-xs font-bold text-gray-700">{act.description}</span>
                                                             </div>
-                                                            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{act.evolution}%</span>
+                                                            <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{act.evolution}%</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -2650,7 +2650,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     {/* Right Column: Media & Documents */}
                                     <div className="space-y-8">
                                         <section>
-                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Galeria de Mídia</h4>
+                                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Galeria de Mídia</h4>
                                             <div className="grid grid-cols-2 gap-3">
                                                 {(selectedEntry.images || []).map((img, idx) => (
                                                     <div key={idx} className="aspect-square rounded-2xl overflow-hidden border border-gray-100 group/img relative cursor-zoom-in">
@@ -2672,14 +2672,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             {(selectedEntry.images?.length === 0 && selectedEntry.videos?.length === 0) && (
                                                 <div className="p-10 border-2 border-dashed border-gray-50 rounded-3xl flex flex-col items-center text-center">
                                                     <CameraIcon className="w-8 h-8 text-gray-100 mb-2" />
-                                                    <span className="text-[10px] font-bold text-gray-300">NENHUMA MÍDIA ANEXADA</span>
+                                                    <span className="text-xs font-bold text-gray-300">NENHUMA MÍDIA ANEXADA</span>
                                                 </div>
                                             )}
                                         </section>
 
                                         {selectedEntry.documents && selectedEntry.documents.length > 0 && (
                                             <section>
-                                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Documentos Anexos</h4>
+                                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Documentos Anexos</h4>
                                                 <div className="space-y-3">
                                                     {selectedEntry.documents.map((doc, idx) => (
                                                         <a
@@ -2759,7 +2759,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         {isAdmin && (
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest mb-3 active:scale-95 transition-transform"
+                                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest mb-3 active:scale-95 transition-transform"
                             >
                                 <Plus className="w-4 h-4" /> Adicionar Documento
                             </button>
@@ -2826,7 +2826,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         {isAdmin && (
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                className="flex items-center gap-3 px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95"
+                                className="flex items-center gap-3 px-8 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-[0.15em] hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95"
                             >
                                 <Plus className="w-4 h-4" />
                                 Adicionar Documento
@@ -2922,7 +2922,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                             <table className="w-full text-left">
                                 <thead className="bg-gray-50/50 border-b border-gray-100">
-                                    <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                    <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
                                         <th className="px-8 py-5">Nome do Arquivo</th>
                                         <th className="px-8 py-5">Categoria</th>
                                         <th className="px-8 py-5">Data de Atualização</th>
@@ -3057,7 +3057,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 <div className="bg-gradient-to-br from-indigo-600 via-indigo-500 to-blue-400 px-5 pt-3 pb-10">
                     <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5 max-w-[180px]">
-                            <span className="text-[10px] font-black text-white uppercase tracking-widest truncate">{settings.name}</span>
+                            <span className="text-xs font-black text-white uppercase tracking-widest truncate">{settings.name}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <button className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white">
@@ -3093,7 +3093,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         {enabledTabIds.includes('financeiro') && (
                         <button
                             onClick={() => setActiveTab('financeiro')}
-                            className="w-full py-2.5 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+                            className="w-full py-2.5 bg-white text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
                         >
                             <Wallet className="w-3.5 h-3.5" />
                             Ver Financeiro
@@ -3109,7 +3109,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     <div className="bg-white rounded-2xl p-5 shadow-lg border border-gray-100">
                         <div className="flex items-start justify-between mb-4">
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Progresso da Obra</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Progresso da Obra</p>
                                 <p className="text-sm font-black text-gray-900 mt-0.5 max-w-[160px] truncate">
                                     {settings.obraPhase || 'Em andamento'}
                                 </p>
@@ -3211,7 +3211,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <p className="text-sm font-black text-gray-900">Atividade Recente</p>
                                 <button
                                     onClick={() => setActiveTab('financeiro')}
-                                    className="flex items-center gap-1 text-[10px] font-black text-indigo-500 uppercase tracking-widest"
+                                    className="flex items-center gap-1 text-xs font-black text-indigo-500 uppercase tracking-widest"
                                 >
                                     Ver tudo <ArrowRight className="w-3 h-3" />
                                 </button>
@@ -3227,7 +3227,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-xs font-black text-gray-900 truncate">{inst.description}</p>
-                                                <p className="text-[10px] text-gray-400 font-bold mt-0.5">
+                                                <p className="text-xs text-gray-400 font-bold mt-0.5">
                                                     {new Date(inst.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                                                 </p>
                                             </div>
@@ -3296,7 +3296,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
                             </p>
                             {finInfo?.paymentMethod && (
-                                <p className="text-[10px] text-indigo-200 font-bold mt-1 uppercase">{finInfo.paymentMethod}</p>
+                                <p className="text-xs text-indigo-200 font-bold mt-1 uppercase">{finInfo.paymentMethod}</p>
                             )}
                         </div>
                         {/* Donut grande */}
@@ -3363,7 +3363,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <button
                                     key={t}
                                     onClick={() => setMobileFinTab(t)}
-                                    className={`flex-1 py-3.5 text-[10px] font-black uppercase tracking-widest transition-all
+                                    className={`flex-1 py-3.5 text-xs font-black uppercase tracking-widest transition-all
                                         ${mobileFinTab === t ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400'}`}
                                 >
                                     {t === 'detalhe' ? 'Parcelas' : 'Histórico'}
@@ -3388,7 +3388,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-xs font-black text-gray-900 truncate">{inst.description}</p>
-                                                <p className="text-[10px] text-gray-400 font-bold mt-0.5">
+                                                <p className="text-xs text-gray-400 font-bold mt-0.5">
                                                     Venc. {new Date(inst.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                                                 </p>
                                             </div>
@@ -3610,7 +3610,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${!msg.is_read ? 'bg-orange-400' : 'bg-gray-200'}`} />
                                                         <div className="min-w-0">
                                                             <p className="text-xs font-black text-gray-900 leading-tight truncate">{msg.title}</p>
-                                                            {msg.body && <p className="text-[10px] text-gray-500 mt-0.5 leading-snug line-clamp-2">{msg.body}</p>}
+                                                            {msg.body && <p className="text-xs text-gray-500 mt-0.5 leading-snug line-clamp-2">{msg.body}</p>}
                                                             <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-1">{new Date(msg.created_at).toLocaleDateString('pt-BR')} · {msg.sender_name}</p>
                                                         </div>
                                                     </div>
@@ -3624,7 +3624,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         {clientProfile && (
                             <button
                                 onClick={() => { setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}
-                                className="flex items-center gap-2 px-3 py-2 md:px-5 md:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl md:rounded-2xl text-[10px] md:text-button font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                                className="flex items-center gap-2 px-3 py-2 md:px-5 md:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl md:rounded-2xl text-xs md:text-button font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
                             >
                                 <UserCircle className="w-4 h-4" />
                                 <span className="hidden sm:inline">Meus Dados</span>
@@ -3676,7 +3676,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 </div>
                                 <div>
                                     <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Meus Dados</h2>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Informações cadastrais</p>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Informações cadastrais</p>
                                 </div>
                             </div>
                             <button onClick={() => setShowMeusDados(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
@@ -3687,7 +3687,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="p-8 space-y-5">
                             {/* Nome */}
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Nome completo</label>
+                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Nome completo</label>
                                 <div className="relative">
                                     <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                     <input
@@ -3702,7 +3702,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <div className="grid grid-cols-2 gap-4">
                                 {/* E-mail */}
                                 <div>
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">E-mail</label>
+                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">E-mail</label>
                                     <div className="relative">
                                         <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                         <input
@@ -3715,7 +3715,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 </div>
                                 {/* Telefone */}
                                 <div>
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Telefone</label>
+                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Telefone</label>
                                     <div className="relative">
                                         <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                         <input
@@ -3730,7 +3730,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                             {/* CPF/CNPJ */}
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
                                     {meusDadosForm.type === 'PJ' ? 'CNPJ' : 'CPF'}
                                 </label>
                                 <div className="relative">
@@ -3745,13 +3745,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </div>
 
                             <div className="border-t border-gray-100 pt-5">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                                     <Home className="w-3.5 h-3.5" /> Endereço
                                 </p>
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="col-span-2">
-                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Logradouro</label>
+                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Logradouro</label>
                                             <input
                                                 type="text"
                                                 placeholder="Rua / Av."
@@ -3761,7 +3761,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Número</label>
+                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Número</label>
                                             <input
                                                 type="text"
                                                 value={meusDadosForm.address_number || ''}
@@ -3772,7 +3772,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Bairro</label>
+                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Bairro</label>
                                             <input
                                                 type="text"
                                                 value={meusDadosForm.neighborhood || ''}
@@ -3781,7 +3781,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">CEP</label>
+                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">CEP</label>
                                             <input
                                                 type="text"
                                                 value={meusDadosForm.zip_code || ''}
@@ -3792,7 +3792,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Cidade</label>
+                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Cidade</label>
                                             <input
                                                 type="text"
                                                 value={meusDadosForm.city || ''}
@@ -3801,7 +3801,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Estado</label>
+                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Estado</label>
                                             <input
                                                 type="text"
                                                 maxLength={2}
@@ -3942,7 +3942,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             onClick={e => e.stopPropagation()}
                         >
                             <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-4" />
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center mb-4">Mais opções</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest text-center mb-4">Mais opções</p>
                             <div className="space-y-2">
                                 {moreTabs.map(tab => {
                                     const isActive = activeTab === tab.id;
@@ -3984,7 +3984,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 </div>
                                 <div>
                                     <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Portal do Cliente</h2>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para o cliente</p>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para o cliente</p>
                                 </div>
                             </div>
                             <button onClick={() => setShowTabConfig(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
@@ -4008,7 +4008,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <span className={isVisible ? 'text-indigo-500' : 'text-gray-300'}>{tab.icon}</span>
                                             <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
                                         </div>
-                                        <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${isVisible ? 'text-indigo-500' : 'text-gray-300'}`}>
+                                        <div className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest ${isVisible ? 'text-indigo-500' : 'text-gray-300'}`}>
                                             {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
                                         </div>
                                     </button>
@@ -4016,7 +4016,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             })}
                         </div>
                         <div className="px-8 pb-8">
-                            <p className="text-[10px] font-bold text-gray-400 text-center uppercase tracking-widest">
+                            <p className="text-xs font-bold text-gray-400 text-center uppercase tracking-widest">
                                 Clique em cada aba para alternar visibilidade do cliente
                             </p>
                         </div>
@@ -4044,7 +4044,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <div className="sticky top-8 space-y-6">
                                                 <div className="flex items-center gap-2 mb-4 px-2">
                                                     <Sparkles className="w-4 h-4 text-indigo-500" />
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Concierge Digital</span>
+                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Concierge Digital</span>
                                                 </div>
                                                 <AIInsightCard
                                                     title={aiInsight.title}
@@ -4087,11 +4087,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="relative group overflow-hidden rounded-[2.5rem] border border-gray-100 shadow-sm bg-white">
-                                    <div className="absolute top-6 left-6 z-20 px-4 py-2 bg-black/60 backdrop-blur-md rounded-xl text-[10px] font-black text-white uppercase tracking-widest">Projeto 3D</div>
+                                    <div className="absolute top-6 left-6 z-20 px-4 py-2 bg-black/60 backdrop-blur-md rounded-xl text-xs font-black text-white uppercase tracking-widest">Projeto 3D</div>
                                     <img src="https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&q=80&w=800" alt="Render" className="w-full aspect-video object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-700" />
                                 </div>
                                 <div className="relative group overflow-hidden rounded-[2.5rem] border border-gray-100 shadow-sm bg-white border-dashed">
-                                    <div className="absolute top-6 left-6 z-20 px-4 py-2 bg-indigo-600 rounded-xl text-[10px] font-black text-white uppercase tracking-widest">Obra Real</div>
+                                    <div className="absolute top-6 left-6 z-20 px-4 py-2 bg-indigo-600 rounded-xl text-xs font-black text-white uppercase tracking-widest">Obra Real</div>
                                     <img src="https://images.unsplash.com/photo-1541888946425-d81bb19480c5?auto=format&fit=crop&q=80&w=800" alt="Real" className="w-full aspect-video object-cover" />
                                     <div className="absolute inset-0 bg-white/10" />
                                 </div>
@@ -4129,7 +4129,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
                                     <p className="text-sm font-black text-gray-700 uppercase tracking-tight mb-2">Assistência e Pós-Obra</p>
                                     <p className="text-xs text-gray-400 font-medium max-w-[260px]">Disponível após a entrega das chaves para abertura de chamados técnicos e garantia.</p>
-                                    <span className="mt-4 px-4 py-2 bg-gray-100 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest">Em breve</span>
+                                    <span className="mt-4 px-4 py-2 bg-gray-100 text-gray-400 rounded-xl text-xs font-black uppercase tracking-widest">Em breve</span>
                                 </div>
                             </div>
                         </div>
@@ -4140,7 +4140,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </div>
                             <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2">Assistência e Pós-Obra</h3>
                             <p className="text-gray-500 max-w-md mx-auto mb-8 font-medium">Este módulo estará disponível após a entrega das chaves para abertura de chamados técnicos e garantia.</p>
-                            <button className="px-8 py-4 bg-gray-100 text-gray-400 rounded-2xl text-[10px] font-black uppercase tracking-widest cursor-not-allowed">
+                            <button className="px-8 py-4 bg-gray-100 text-gray-400 rounded-2xl text-xs font-black uppercase tracking-widest cursor-not-allowed">
                                 Abrir Chamado (Em breve)
                             </button>
                         </div>
@@ -4161,7 +4161,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 </div>
                                 <button
                                     onClick={() => setShowNewRequestForm(true)}
-                                    className="flex items-center gap-2 px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-amber-100 active:scale-95"
+                                    className="flex items-center gap-2 px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-amber-100 active:scale-95"
                                 >
                                     <Plus className="w-4 h-4" /> Abrir Chamado
                                 </button>
@@ -4177,7 +4177,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${card.cls}`}>{card.icon}</div>
                                         <div>
                                             <p className="text-3xl font-black text-gray-900">{card.value}</p>
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
+                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -4197,7 +4197,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         <div key={req.id} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-amber-200 transition-all">
                                             <div className="flex flex-col gap-1.5 min-w-0">
                                                 <span className="text-sm font-black text-gray-900 uppercase tracking-tight">{req.title}</span>
-                                                <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
                                                     <span>{req.category}</span>
                                                     <span>·</span>
                                                     <span>{new Date(req.opened_at + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
@@ -4239,25 +4239,25 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </div>
                                         <div className="p-7 space-y-4">
                                             <div>
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Título *</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Título *</label>
                                                 <input type="text" value={newRequestForm.title} onChange={e => setNewRequestForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex: Torneira com vazamento" className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400" />
                                             </div>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
-                                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Categoria</label>
+                                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Categoria</label>
                                                     <select value={newRequestForm.category} onChange={e => setNewRequestForm(f => ({ ...f, category: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
                                                         {['Elétrica','Hidráulica','Estrutural','Pintura','Serralheria','Geral','Outro'].map(c => <option key={c}>{c}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Prioridade</label>
+                                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Prioridade</label>
                                                     <select value={newRequestForm.priority} onChange={e => setNewRequestForm(f => ({ ...f, priority: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
                                                         {['Baixa','Média','Alta','Urgente'].map(p => <option key={p}>{p}</option>)}
                                                     </select>
                                                 </div>
                                             </div>
                                             <div>
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Descrição</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Descrição</label>
                                                 <textarea value={newRequestForm.description} onChange={e => setNewRequestForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o problema com detalhes..." rows={3} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400 resize-none" />
                                             </div>
                                             <button
@@ -4291,7 +4291,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
             {/* Decorative footer message */}
             <div className="hidden md:block text-center pt-10 pb-6 opacity-30 select-none pointer-events-none">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Poderoso e intuitivo • Opura Platinum © 2026</p>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Poderoso e intuitivo • Opura Platinum © 2026</p>
             </div>
         </div>
     );

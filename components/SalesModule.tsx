@@ -570,7 +570,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     />
                 </div>
                 <div className="absolute top-6 right-6 z-10 flex flex-col gap-2 scale-90 origin-top-right">
-                    <span className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusColor(property.status)} backdrop-blur-xl shadow-xl`}>
+                    <span className={`px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest border ${getStatusColor(property.status)} backdrop-blur-xl shadow-xl`}>
                         {getStatusLabel(property.status)}
                     </span>
                     <div className="flex gap-2">
@@ -594,7 +594,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 <div className="absolute inset-x-0 bottom-0 p-8 bg-gradient-to-t from-black/80 via-black/40 to-transparent text-white">
                     <div className="flex items-center gap-2 mb-2">
                         <MapPin className="w-4 h-4 text-blue-400" />
-                        <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest leading-none">
+                        <span className="text-xs font-black text-blue-200 uppercase tracking-widest leading-none">
                             {property.type === 'BUILDING' ? (property.address.split('-')[1]?.trim() || property.address) : (properties.find(p => p.id === property.parent_id)?.name || 'Unidade Independente')}
                         </span>
                     </div>
@@ -659,7 +659,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         <div className="p-2 bg-blue-600 rounded-xl shadow-lg shadow-blue-600/20">
                             <Building2 className="w-6 h-6 text-white" />
                         </div>
-                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Comercial • Vendas</span>
+                        <span className="text-xs font-black text-blue-400 uppercase tracking-[0.3em]">Comercial • Vendas</span>
                     </div>
                     <h1 className="text-4xl font-black text-white tracking-tight">Venda de Ativos</h1>
                     <p className="text-gray-400 font-medium mt-1">Controle de inventário de vendas, negociações e performance imobiliária.</p>
@@ -714,7 +714,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             {selectedBuildingId && (
                 <div className="flex items-center gap-2 px-6 py-3 bg-blue-600/10 border border-blue-600/20 rounded-2xl w-fit animate-in fade-in slide-in-from-left-4 duration-500">
                     <Building2 className="w-4 h-4 text-blue-600" />
-                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Visualizando: {currentBuilding?.name}</span>
+                    <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Visualizando: {currentBuilding?.name}</span>
                 </div>
             )}
 
@@ -786,7 +786,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     <s.icon className="w-5 h-5" />
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1 group-hover:text-blue-400 transition-colors">{s.label}</span>
+                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-1 group-hover:text-blue-400 transition-colors">{s.label}</span>
                                     <span className="text-lg font-black text-gray-900 leading-none">{s.value}</span>
                                 </div>
                             </div>
@@ -882,7 +882,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             {viewMode === 'list' && (
                                 <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
                                     <table className="w-full text-left border-collapse">
-                                        <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase text-[10px] tracking-widest text-center">
+                                        <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase text-xs tracking-widest text-center">
                                             <tr>
                                                 <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">Imóvel</th>
                                                 <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">Endereço / Referência</th>
@@ -952,7 +952,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-bold text-gray-600">
                                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property.price || 0) / (property.private_area || property.area || 1))}
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-[10px] font-black">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-black">
                                                                 <div className="flex flex-col">
                                                                     <span className="text-gray-900 leading-none mb-1">
                                                                         {property.position_type === 'FRONT' ? '1.03x' : property.position_type === 'BACK' ? '0.97x' : '1.00x'}
@@ -962,7 +962,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                     </span>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-[10px] font-black">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-black">
                                                                 <div className="flex flex-col">
                                                                     <span className="text-gray-900 leading-none mb-1">
                                                                         {property.sun_orientation === 'NORTH' ? '1.02x' : property.sun_orientation === 'EAST' ? '1.01x' : property.sun_orientation === 'WEST' ? '0.99x' : property.sun_orientation === 'SOUTH' ? '0.98x' : '1.00x'}
@@ -976,7 +976,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                 {property.floor ? `${property.floor}º` : 'Térreo'}
                                                             </td>
                                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                                <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusColor(property.status)}`}>
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${getStatusColor(property.status)}`}>
                                                                     {getStatusLabel(property.status)}
                                                                 </span>
                                                             </td>
@@ -1055,30 +1055,30 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     {selectedProperties.length > 0 && (
                         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[90] flex items-center gap-6 px-10 py-6 bg-[#0B1727] border border-white/10 rounded-full shadow-2xl shadow-blue-900/40 animate-in slide-in-from-bottom-10 duration-500">
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest leading-none mb-1">Items Selecionados</span>
+                                <span className="text-xs font-black text-blue-400 uppercase tracking-widest leading-none mb-1">Items Selecionados</span>
                                 <span className="text-xl font-black text-white leading-none">{selectedProperties.length} Imóveis</span>
                             </div>
 
                             <div className="w-px h-10 bg-white/10 mx-2" />
 
                             <div className="flex items-center gap-4">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alterar para:</span>
+                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Alterar para:</span>
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => handleBulkUpdate({ status: PropertyStatus.AVAILABLE })}
-                                        className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                        className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
                                     >
                                         Disponível
                                     </button>
                                     <button
                                         onClick={() => handleBulkUpdate({ status: PropertyStatus.RESERVED })}
-                                        className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                        className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
                                     >
                                         Reservar
                                     </button>
                                     <button
                                         onClick={() => handleBulkUpdate({ status: PropertyStatus.EXCHANGED })}
-                                        className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                        className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
                                     >
                                         Permutar
                                     </button>
@@ -1089,7 +1089,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                 handleBulkUpdate({ price: parseFloat(newPrice) });
                                             }
                                         }}
-                                        className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                        className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
                                     >
                                         Mudar Preço
                                     </button>
@@ -1127,7 +1127,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             <div className="lg:col-span-1 space-y-8 p-8 bg-gray-50 rounded-[2rem] border border-gray-100">
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Velocidade de Vendas</label>
+                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Velocidade de Vendas</label>
                                         <span className="text-sm font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">{simMonthlySales} und/mês</span>
                                     </div>
                                     <input 
@@ -1144,7 +1144,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ajuste de Preço (VGV)</label>
+                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Ajuste de Preço (VGV)</label>
                                         <span className={`text-sm font-black px-2 py-1 rounded-lg ${simPriceAdjust >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
                                             {simPriceAdjust > 0 ? '+' : ''}{simPriceAdjust}%
                                         </span>
@@ -1174,7 +1174,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     </div>
                                     <button 
                                         onClick={() => { setSimMonthlySales(2); setSimPriceAdjust(0); }}
-                                        className="w-full py-3 bg-white text-gray-400 hover:text-gray-900 text-[10px] font-black uppercase tracking-widest rounded-xl border border-gray-200 transition-all"
+                                        className="w-full py-3 bg-white text-gray-400 hover:text-gray-900 text-xs font-black uppercase tracking-widest rounded-xl border border-gray-200 transition-all"
                                     >
                                         Resetar Simulação
                                     </button>
@@ -1236,18 +1236,18 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                 </button>
                                             </div>
                                             <div className="flex items-center gap-2 mb-6">
-                                                <span className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${deal.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                                                <span className={`px-5 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${deal.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
                                                     {deal.status === 'COMPLETED' ? 'Concluído' :
                                                         deal.status === 'PENDING' ? 'Pendente' :
                                                             deal.status === 'CANCELLED' ? 'Cancelado' : 'Em Negociação'}
                                                 </span>
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-auto">
+                                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest ml-auto">
                                                     {new Date(deal.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
                                                 </span>
                                             </div>
 
                                             <div className="mb-8">
-                                                <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest mb-2 inline-block bg-blue-600 text-white shadow-lg shadow-blue-600/20`}>
+                                                <span className={`text-xs font-black px-3 py-1 rounded-lg uppercase tracking-widest mb-2 inline-block bg-blue-600 text-white shadow-lg shadow-blue-600/20`}>
                                                     Venda Direta
                                                 </span>
                                                 <h4 className="text-2xl font-black text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || 'Imóvel em referência'}</h4>
@@ -1264,7 +1264,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
                                             <div className="p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100 flex items-center justify-between mb-6">
                                                 <div className="flex flex-col">
-                                                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Valor do Contrato</span>
+                                                    <span className="text-xs font-black text-blue-500 uppercase tracking-widest mb-1">Valor do Contrato</span>
                                                     <span className="text-3xl font-black text-gray-900">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value)}
                                                     </span>
@@ -1301,18 +1301,18 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-gray-50 border-b border-gray-100 italic">
                                         <tr>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-left">Imóvel</th>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Bloco</th>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center whitespace-nowrap">Á. Priv.</th>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Preço Base</th>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Vlr/m² Base</th>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Andar</th>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Vlr Venda</th>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Vlr Venda/m²</th>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Var. (R$)</th>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center whitespace-nowrap">Var. (%)</th>
-                                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
-                                            <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Ações</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-left">Imóvel</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">Bloco</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center whitespace-nowrap">Á. Priv.</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Preço Base</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Vlr/m² Base</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">Andar</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Vlr Venda</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Vlr Venda/m²</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Var. (R$)</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center whitespace-nowrap">Var. (%)</th>
+                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest">Status</th>
+                                            <th className="px-6 py-4 text-right text-xs font-black text-gray-400 uppercase tracking-widest">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
@@ -1324,7 +1324,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                     <td className="px-6 py-4">
                                                         <div className="flex flex-col">
                                                             <span className="font-black text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || '---'}</span>
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-tighter">
                                                                 {client?.name || 'Não vinculado'}
                                                             </span>
                                                         </div>

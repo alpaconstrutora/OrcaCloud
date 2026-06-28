@@ -18,7 +18,7 @@ interface Props {
 
 const ExpiryBadge: React.FC<{ validade?: string; diasAlerta?: number }> = ({ validade, diasAlerta = 30 }) => {
     if (!validade) return (
-        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">
+        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">
             <Shield className="w-3 h-3" /> Sem validade
         </span>
     );
@@ -26,22 +26,22 @@ const ExpiryBadge: React.FC<{ validade?: string; diasAlerta?: number }> = ({ val
     const data = new Date(validade + 'T00:00:00').toLocaleDateString('pt-BR');
 
     if (diff < 0) return (
-        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
             <CalendarX className="w-3 h-3" /> Vencido {data}
         </span>
     );
     if (diff <= diasAlerta) return (
-        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
             <CalendarClock className="w-3 h-3" /> Vence {diff}d
         </span>
     );
     if (diff <= diasAlerta * 2) return (
-        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
             <CalendarClock className="w-3 h-3" /> Vence {diff}d
         </span>
     );
     return (
-        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700">
             <CalendarCheck className="w-3 h-3" /> Válido {data}
         </span>
     );
@@ -203,12 +203,12 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
                 <div className="flex items-center gap-3">
                     <p className="text-xs font-black uppercase tracking-widest text-gray-500">Documentos</p>
                     {vencidos.length > 0 && (
-                        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
                             <CalendarX className="w-3 h-3" /> {vencidos.length} vencido{vencidos.length > 1 ? 's' : ''}
                         </span>
                     )}
                     {vencendoEm30.length > 0 && (
-                        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
                             <CalendarClock className="w-3 h-3" /> {vencendoEm30.length} vencendo
                         </span>
                     )}
@@ -299,7 +299,7 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
                                 </button>
                             )}
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1">PDF, Word, JPG, PNG. Deixe em branco para registrar sem arquivo.</p>
+                        <p className="text-xs text-gray-400 mt-1">PDF, Word, JPG, PNG. Deixe em branco para registrar sem arquivo.</p>
                     </div>
 
                     <div className="flex justify-end gap-2 pt-1 border-t border-gray-200">
@@ -328,7 +328,7 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
                 <div className="space-y-4">
                     {Object.entries(grouped).map(([tipo, docs]) => (
                         <div key={tipo}>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">
                                 {TIPO_DOCUMENTO_LABELS[tipo as TipoDocumento]}
                             </p>
                             <div className="space-y-2">

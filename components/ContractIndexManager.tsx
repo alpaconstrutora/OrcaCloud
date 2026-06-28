@@ -159,7 +159,7 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
                             <div key={c.id} className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 rounded-xl px-4 py-2.5">
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{c.number} — {c.title}</p>
-                                    <p className="text-[11px] text-gray-400">
+                                    <p className="text-xs text-gray-400">
                                         {c.reajuste_index} · venceu {new Date(c.reajuste_proximo).toLocaleDateString('pt-BR')} · valor atual {fmtCur(c.current_value)}
                                     </p>
                                 </div>
@@ -217,12 +217,12 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
                 </p>
                 <div className="flex gap-3 items-end">
                     <div>
-                        <label className="block text-[11px] text-gray-400 mb-1">Mês de referência</label>
+                        <label className="block text-xs text-gray-400 mb-1">Mês de referência</label>
                         <input type="month" value={newMonth} onChange={e => setNewMonth(e.target.value)}
                             className="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div className="flex-1">
-                        <label className="block text-[11px] text-gray-400 mb-1">Valor do índice</label>
+                        <label className="block text-xs text-gray-400 mb-1">Valor do índice</label>
                         <input type="number" step="0.0001" min="0" value={newValue} onChange={e => setNewValue(e.target.value)}
                             placeholder="ex: 3326.33"
                             className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -249,16 +249,16 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
                         <thead>
                             <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
                                 {tableColumns.visibleColumns.includes('reference') && (
-                                    <SortableHeader colKey="reference" label="Referência" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide" />
+                                    <SortableHeader colKey="reference" label="Referência" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
                                 )}
                                 {tableColumns.visibleColumns.includes('value') && (
-                                    <SortableHeader colKey="value" label="Valor" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-right px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide" />
+                                    <SortableHeader colKey="value" label="Valor" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
                                 )}
                                 {tableColumns.visibleColumns.includes('variation') && (
-                                    <SortableHeader colKey="variation" label="Variação" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-right px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide" />
+                                    <SortableHeader colKey="variation" label="Variação" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
                                 )}
                                 {tableColumns.visibleColumns.includes('source') && (
-                                    <SortableHeader colKey="source" label="Fonte" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide" />
+                                    <SortableHeader colKey="source" label="Fonte" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
                                 )}
                                 {tableColumns.visibleColumns.includes('actions') && <th className="w-8" />}
                             </tr>
@@ -279,7 +279,7 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
                                         {tableColumns.visibleColumns.includes('variation') && (
                                             <td className="px-4 py-2.5 text-right">
                                                 {varPct !== null ? (
-                                                    <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${varPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${varPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                                         {varPct >= 0 ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                                                         {Math.abs(varPct).toFixed(2)}%
                                                     </span>

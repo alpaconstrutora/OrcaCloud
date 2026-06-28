@@ -158,7 +158,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         </div>
                         <div>
                             <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">{title}</h2>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{description}</p>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">{description}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -227,7 +227,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         <form onSubmit={handleSubmit} className="p-8 bg-white border border-blue-100 rounded-3xl shadow-xl shadow-blue-900/5 animate-in fade-in slide-in-from-top-4 duration-300">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className={showCode ? '' : 'md:col-span-2'}>
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Nome / Identificação</label>
+                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Nome / Identificação</label>
                                     <input
                                         type="text"
                                         required
@@ -239,7 +239,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                 </div>
                                 {showCode && (
                                     <div>
-                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Código Contábil</label>
+                                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Código Contábil</label>
                                         <input
                                             type="text"
                                             required
@@ -252,7 +252,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                 )}
                                 {showDescription && (
                                     <div className={showBankDetails ? '' : 'md:col-span-2'}>
-                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Descrição Adicional</label>
+                                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Descrição Adicional</label>
                                         <input
                                             type="text"
                                             value={formData.description || ''}
@@ -265,7 +265,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                 {showBankDetails && (
                                     <>
                                         <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Instituição Bancária</label>
+                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Instituição Bancária</label>
                                             <input
                                                 type="text"
                                                 value={formData.bank || ''}
@@ -276,7 +276,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                         </div>
                                         {organizations && organizations.length > 0 && (
                                             <div className="md:col-span-2">
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Organização</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Organização</label>
                                                 <select
                                                     value={formData.organization_id || ''}
                                                     onChange={(e) => setFormData({ ...formData, organization_id: e.target.value })}
@@ -291,7 +291,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                         )}
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Agência</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Agência</label>
                                                 <input
                                                     type="text"
                                                     value={formData.branch || ''}
@@ -301,7 +301,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Número Conta</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Número Conta</label>
                                                 <input
                                                     type="text"
                                                     value={formData.account_number || ''}
@@ -338,7 +338,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                 <div className="min-w-full inline-block align-middle">
                     <div className="overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-100 border-collapse">
-                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-widest border-b border-gray-200">
+                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs tracking-widest border-b border-gray-200">
                                 <tr>
                                     {showCode && tableColumns.visibleColumns.includes('code') && (
                                         <SortableHeader label="Código" colKey="code" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left w-32" />
@@ -357,7 +357,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                     <tr>
                                         <td colSpan={4} className="px-6 py-20 text-center">
                                             <AlertCircle className="w-12 h-12 text-gray-100 mx-auto mb-4" />
-                                            <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Nenhum registro encontrado</p>
+                                            <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Nenhum registro encontrado</p>
                                         </td>
                                     </tr>
                                 ) : (
@@ -367,7 +367,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                         <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors cursor-pointer ${lvl.rowCls}`} onClick={() => handleEdit(item)}>
                                             {showCode && tableColumns.visibleColumns.includes('code') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <span className={`text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider whitespace-nowrap ${lvl.codeCls}`}>
+                                                    <span className={`text-xs font-black px-2 py-1 rounded uppercase tracking-wider whitespace-nowrap ${lvl.codeCls}`}>
                                                         {item.code || '-'}
                                                     </span>
                                                 </td>
@@ -388,9 +388,9 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                                         {item.description && <p className="font-bold text-gray-500 uppercase tracking-tight line-clamp-1 flex-1">{item.description}</p>}
                                                         {showBankDetails && (item.bank || item.branch || item.account_number) && (
                                                             <div className="flex items-center gap-2 whitespace-nowrap">
-                                                                {item.bank && <span className="text-[10px] font-bold text-blue-600/60 uppercase">Banco: {item.bank}</span>}
-                                                                {item.branch && <span className="text-[10px] font-bold text-gray-400 uppercase">Ag: {item.branch}</span>}
-                                                                {item.account_number && <span className="text-[10px] font-bold text-gray-400 uppercase">Cc: {item.account_number}</span>}
+                                                                {item.bank && <span className="text-xs font-bold text-blue-600/60 uppercase">Banco: {item.bank}</span>}
+                                                                {item.branch && <span className="text-xs font-bold text-gray-400 uppercase">Ag: {item.branch}</span>}
+                                                                {item.account_number && <span className="text-xs font-bold text-gray-400 uppercase">Cc: {item.account_number}</span>}
                                                             </div>
                                                         )}
                                                     </div>

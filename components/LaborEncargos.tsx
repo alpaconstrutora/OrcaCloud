@@ -204,7 +204,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
 
                 {/* Competência compartilhada */}
                 <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
                         <Calendar className="w-3 h-3" /> Competência
                     </label>
                     <input
@@ -236,9 +236,9 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                         <Percent className="w-6 h-6 text-purple-600" />
                     </div>
                     <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contrib. de Terceiros</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Contrib. de Terceiros</p>
                         <p className="text-3xl font-black text-slate-900 tracking-tight">{fmt(totalTerceiroRate)}</p>
-                        <p className="text-[10px] text-slate-400 font-medium">sobre a folha bruta</p>
+                        <p className="text-xs text-slate-400 font-medium">sobre a folha bruta</p>
                     </div>
                 </div>
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 flex items-center gap-4">
@@ -246,9 +246,9 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                         <TrendingUp className="w-6 h-6 text-orange-600" />
                     </div>
                     <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Encargos Patronais</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Encargos Patronais</p>
                         <p className="text-3xl font-black text-slate-900 tracking-tight">{fmt(totalPatronalRate)}</p>
-                        <p className="text-[10px] text-slate-400 font-medium">referência — gerenciado em Rubricas</p>
+                        <p className="text-xs text-slate-400 font-medium">referência — gerenciado em Rubricas</p>
                     </div>
                 </div>
                 <div className="bg-indigo-600 rounded-3xl shadow-lg shadow-indigo-900/20 p-6 flex items-center gap-4">
@@ -256,9 +256,9 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                         <Calculator className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                        <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Encargo Total (ref.)</p>
+                        <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">Encargo Total (ref.)</p>
                         <p className="text-3xl font-black text-white tracking-tight">{fmt(totalGlobalRate)}</p>
-                        <p className="text-[10px] text-indigo-200 font-medium">soma de todas as alíquotas</p>
+                        <p className="text-xs text-indigo-200 font-medium">soma de todas as alíquotas</p>
                     </div>
                 </div>
             </div>
@@ -302,9 +302,9 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                         <table className="w-full">
                             <thead>
                                 <tr className="bg-slate-50 border-b border-slate-100">
-                                    <th className="text-left px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Código</th>
-                                    <th className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Descrição</th>
-                                    <th className="text-right px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Alíquota</th>
+                                    <th className="text-left px-6 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Código</th>
+                                    <th className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Descrição</th>
+                                    <th className="text-right px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Alíquota</th>
                                     <th className="px-6 py-3"></th>
                                 </tr>
                             </thead>
@@ -316,7 +316,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                                     return (
                                         <tr key={tax.code} className="hover:bg-slate-50/60 transition-colors group">
                                             <td className="px-6 py-4">
-                                                <span className="text-[10px] font-black text-slate-500 bg-slate-100 rounded-lg px-2 py-1 font-mono">
+                                                <span className="text-xs font-black text-slate-500 bg-slate-100 rounded-lg px-2 py-1 font-mono">
                                                     {tax.code}
                                                 </span>
                                             </td>
@@ -400,30 +400,30 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                             </div>
                             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl">
                                 <Info className="w-3.5 h-3.5 text-slate-500" />
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Somente leitura</span>
+                                <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Somente leitura</span>
                             </div>
                         </div>
 
                         <table className="w-full">
                             <thead>
                                 <tr className="bg-slate-50 border-b border-slate-100">
-                                    <th className="text-left px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Código</th>
-                                    <th className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Descrição</th>
-                                    <th className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Base de Cálculo</th>
-                                    <th className="text-right px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Alíquota (ref.)</th>
+                                    <th className="text-left px-6 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Código</th>
+                                    <th className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Descrição</th>
+                                    <th className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Base de Cálculo</th>
+                                    <th className="text-right px-6 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Alíquota (ref.)</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
                                 {ENCARGOS_PATRONAIS_REF.map((enc) => (
                                     <tr key={enc.code} className="hover:bg-slate-50/60 transition-colors">
                                         <td className="px-6 py-3.5">
-                                            <span className="text-[10px] font-black text-orange-700 bg-orange-50 border border-orange-100 rounded-lg px-2 py-1 font-mono">
+                                            <span className="text-xs font-black text-orange-700 bg-orange-50 border border-orange-100 rounded-lg px-2 py-1 font-mono">
                                                 {enc.code}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3.5">
                                             <p className="text-sm font-bold text-slate-800">{enc.name}</p>
-                                            <p className="text-[10px] text-slate-400 font-medium">{enc.obs}</p>
+                                            <p className="text-xs text-slate-400 font-medium">{enc.obs}</p>
                                         </td>
                                         <td className="px-4 py-3.5">
                                             <span className="text-xs text-slate-500 font-medium">{enc.base}</span>
@@ -457,7 +457,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                             </div>
                             <div>
                                 <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Calculadora</h3>
-                                <p className="text-[10px] text-slate-400 font-medium">Impacto real por competência</p>
+                                <p className="text-xs text-slate-400 font-medium">Impacto real por competência</p>
                             </div>
                         </div>
 
@@ -474,14 +474,14 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                                 <div>
                                     <p className="text-xs text-amber-700 font-medium">{payrollError}</p>
-                                    <p className="text-[10px] text-amber-500 mt-0.5">Informe o valor manualmente abaixo.</p>
+                                    <p className="text-xs text-amber-500 mt-0.5">Informe o valor manualmente abaixo.</p>
                                 </div>
                             </div>
                         )}
 
                         {!loadingPayroll && payrollSummary && (
                             <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl space-y-2">
-                                <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-1">
+                                <p className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-1">
                                     <Check className="w-3 h-3" /> Folha fechada — {period.split('-').reverse().join('/')}
                                 </p>
                                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
@@ -508,7 +508,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                         {/* Folha bruta — preenchida automaticamente ou editável */}
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Folha Bruta (R$)</label>
+                                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Folha Bruta (R$)</label>
                                 {payrollSummary && (
                                     <button
                                         onClick={() => {
@@ -551,7 +551,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                             <div className="space-y-3">
                                 {/* Contribuições de Terceiros */}
                                 <div className="space-y-1">
-                                    <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest flex items-center gap-1">
+                                    <p className="text-xs font-black text-purple-600 uppercase tracking-widest flex items-center gap-1">
                                         <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block"></span>
                                         Contribuições de Terceiros
                                     </p>
@@ -575,7 +575,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
 
                                 {/* Encargos Patronais */}
                                 <div className="space-y-1 pt-2">
-                                    <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
+                                    <p className="text-xs font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
                                         <span className="w-1.5 h-1.5 rounded-full bg-orange-500 inline-block"></span>
                                         Encargos Patronais (ref.)
                                     </p>

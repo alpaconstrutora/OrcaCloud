@@ -118,7 +118,7 @@ const ScenarioComparison: React.FC<Props> = ({ opportunity: op }) => {
                     <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Cenários de Viabilidade</span>
                 </div>
                 {!hasScenarioParams && (
-                    <span className="text-[10px] text-gray-400 italic">usando variações padrão</span>
+                    <span className="text-xs text-gray-400 italic">usando variações padrão</span>
                 )}
             </div>
 
@@ -135,7 +135,7 @@ const ScenarioComparison: React.FC<Props> = ({ opportunity: op }) => {
                         >
                             {/* Header */}
                             <div className={`flex items-center justify-between px-4 py-3 ${style.header}`}>
-                                <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ${style.text}`}>
+                                <span className={`text-xs font-black uppercase tracking-widest flex items-center gap-1.5 ${style.text}`}>
                                     {style.icon}
                                     {s.label}
                                 </span>
@@ -146,7 +146,7 @@ const ScenarioComparison: React.FC<Props> = ({ opportunity: op }) => {
 
                             {/* ROI destaque */}
                             <div className="px-4 pt-4 pb-2">
-                                <p className={`text-[10px] font-black uppercase tracking-wider mb-0.5 ${isRealista ? 'text-blue-600' : style.accent}`}>ROI</p>
+                                <p className={`text-xs font-black uppercase tracking-wider mb-0.5 ${isRealista ? 'text-blue-600' : style.accent}`}>ROI</p>
                                 <p className={`text-2xl font-black ${isRealista ? 'text-blue-800' : key === 'conservador' ? 'text-red-700' : 'text-emerald-800'}`}>
                                     {fmtPct(s.roi)}
                                 </p>
@@ -163,7 +163,7 @@ const ScenarioComparison: React.FC<Props> = ({ opportunity: op }) => {
                             <div className="px-4 pb-4 space-y-2 pt-2">
                                 {ROWS.filter(r => r.key !== 'roi').map(row => (
                                     <div key={row.key} className={`flex justify-between items-baseline ${row.highlight ? '' : 'opacity-70'}`}>
-                                        <span className="text-[10px] text-gray-500 font-medium">{row.label}</span>
+                                        <span className="text-xs text-gray-500 font-medium">{row.label}</span>
                                         <span className={`text-xs font-bold ${row.highlight
                                             ? (key === 'conservador' ? 'text-red-700' : key === 'realista' ? 'text-blue-700' : 'text-emerald-700')
                                             : 'text-gray-700'

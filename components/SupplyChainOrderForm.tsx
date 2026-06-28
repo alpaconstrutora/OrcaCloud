@@ -553,7 +553,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                             <h1 className="text-xl md:text-3xl font-black text-gray-900 tracking-tight">
                                 {isEditing ? 'Editar Pedido de Compra' : 'Novo Pedido de Compra'}
                             </h1>
-                            <p className="text-gray-400 text-[11px] font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
+                            <p className="text-gray-400 text-xs font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
                                 <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
                                 {isEditing ? 'Gestão de Suprimentos • Edição Executiva' : 'Gestão de Suprimentos • Criação de Pedido'}
                             </p>
@@ -562,7 +562,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     <button
                         onClick={handleSaveOrder}
                         disabled={!selectedSupplierId || !selectedProjectId || (selectedItems.size === 0 && avulsoItems.length === 0)}
-                        className="flex items-center gap-2 bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-900/20 active:scale-95 transition-all"
+                        className="flex items-center gap-2 bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-900/20 active:scale-95 transition-all"
                     >
                         <Save className="w-4 h-4" />
                         <span>Salvar Pedido</span>
@@ -671,19 +671,19 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
                                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 mt-2">
                                         <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Condição de Pagamento</label>
+                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Condição de Pagamento</label>
                                             <div className="flex bg-white rounded-lg p-1 border border-gray-200">
                                                 <button
                                                     type="button"
                                                     onClick={() => setPaymentTermType('Vista')}
-                                                    className={`flex-1 py-1.5 px-3 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                                                 >
                                                     À Vista
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setPaymentTermType('Parcelado')}
-                                                    className={`flex-1 py-1.5 px-3 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                                                 >
                                                     Parcelado
                                                 </button>
@@ -692,7 +692,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
                                         {paymentTermType === 'Vista' ? (
                                             <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Prazo de Pagamento (Dias)</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Prazo de Pagamento (Dias)</label>
                                                 <div className="relative">
                                                     <input
                                                         type="number"
@@ -701,12 +701,12 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                         onChange={(e) => setPaymentDays(parseInt(e.target.value) || 0)}
                                                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
                                                     />
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 uppercase">Dias</div>
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">Dias</div>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Quantidade de Parcelas</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Quantidade de Parcelas</label>
                                                 <div className="relative">
                                                     <input
                                                         type="number"
@@ -715,7 +715,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                         onChange={(e) => setPaymentInstallments(parseInt(e.target.value) || 1)}
                                                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
                                                     />
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 uppercase">X</div>
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">X</div>
                                                 </div>
                                             </div>
                                         )}
@@ -740,7 +740,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] px-1">Conta de Pagamento</label>
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Conta de Pagamento</label>
                                             <div className="relative group">
                                                 <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors pointer-events-none" />
                                                 <select
@@ -756,7 +756,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             </div>
                                         </div>
                                         <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] px-1">Centro de Custo</label>
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Centro de Custo</label>
                                             <HierarchicalSelect
                                                 items={costCenters}
                                                 value={costCenter}
@@ -767,7 +767,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             />
                                         </div>
                                         <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] px-1">Plano de Contas</label>
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Plano de Contas</label>
                                             <HierarchicalSelect
                                                 items={coa}
                                                 value={chartOfAccounts}
@@ -788,7 +788,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             <Package className="w-4 h-4 text-orange-500" />
                                             Itens Avulsos
                                             {avulsoItems.length > 0 && (
-                                                <span className="ml-1 bg-orange-100 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                <span className="ml-1 bg-orange-100 text-orange-700 text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
                                                     {avulsoItems.length}
                                                 </span>
                                             )}
@@ -796,7 +796,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         <button
                                             type="button"
                                             onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
-                                            className="flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
+                                            className="flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
                                         >
                                             <Plus className="w-3.5 h-3.5" />
                                             Item Avulso
@@ -992,13 +992,13 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
                                     {orderItems.length > 0 && (
                                         <div className="space-y-3">
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Itens Detalhados</p>
+                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Itens Detalhados</p>
                                             <div className="max-h-48 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                                                 {orderItems.map(item => (
                                                     <div key={item.code} className="bg-gray-50 p-3 rounded-xl border border-gray-100/50">
                                                         <div className="flex justify-between items-start mb-1">
-                                                            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tight truncate flex-1">{item.description}</span>
-                                                            <span className="text-[10px] font-black text-gray-900 ml-2">{item.quantity} {item.unit}</span>
+                                                            <span className="text-xs font-bold text-blue-600 uppercase tracking-tight truncate flex-1">{item.description}</span>
+                                                            <span className="text-xs font-black text-gray-900 ml-2">{item.quantity} {item.unit}</span>
                                                         </div>
                                                         <div className="flex justify-between items-center text-[9px] text-gray-400 font-medium">
                                                             <span>{item.code} • {formatCurrency(item.unitPrice)}</span>
@@ -1098,7 +1098,7 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                 <div className="px-6 py-5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-base font-black text-gray-900">Gerenciar Unidades</h2>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Unidades de medida</p>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Unidades de medida</p>
                     </div>
                     <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-xl transition-all text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
                 </div>
@@ -1201,7 +1201,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                 <div className="px-8 py-6 bg-orange-50 border-b border-orange-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-lg font-black text-gray-900">{isEditing ? 'Editar Item Avulso' : 'Adicionar Item Avulso'}</h2>
-                        <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mt-0.5">Item não orçado</p>
+                        <p className="text-xs font-bold text-orange-500 uppercase tracking-widest mt-0.5">Item não orçado</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-orange-100 rounded-xl transition-all text-gray-400 hover:text-gray-600">
                         <X className="w-5 h-5" />
@@ -1218,7 +1218,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                         <Search className="w-4 h-4" />
                         Buscar na base de dados
                     </button>
-                    <p className="text-[10px] text-gray-400 -mt-3">Ou preencha os campos abaixo manualmente.</p>
+                    <p className="text-xs text-gray-400 -mt-3">Ou preencha os campos abaixo manualmente.</p>
 
                     <div className="h-px bg-gray-100" />
 

@@ -81,7 +81,7 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
             </div>
 
             {total === 0 && !loading && (
-                <p className="px-1 text-[11px] text-gray-400 font-medium">Nenhum agrupamento provável encontrado.</p>
+                <p className="px-1 text-xs text-gray-400 font-medium">Nenhum agrupamento provável encontrado.</p>
             )}
 
             {/* 1 pagamento → N títulos */}
@@ -89,28 +89,28 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
                 <div key={`b2t-${g.bank.id}-${i}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50/40 border-b border-gray-50">
                         <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Um pagamento liquida vários títulos</span>
+                        <span className="text-xs font-black text-indigo-600 uppercase tracking-widest">Um pagamento liquida vários títulos</span>
                     </div>
                     <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-4">
                         <div>
-                            <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1"><Landmark className="w-3.5 h-3.5" /> Extrato</div>
+                            <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1"><Landmark className="w-3.5 h-3.5" /> Extrato</div>
                             <p className="text-sm font-bold text-gray-800 truncate">{g.bank.description_normalized || g.bank.description_raw}</p>
                             {g.bank.counterparty_name && (
-                                <p className="text-[11px] font-bold text-gray-600 flex items-center gap-1 mt-0.5" title={g.bank.counterparty_name}>
+                                <p className="text-xs font-bold text-gray-600 flex items-center gap-1 mt-0.5" title={g.bank.counterparty_name}>
                                     <Building2 className="w-3 h-3 flex-shrink-0" /><span className="truncate">{g.bank.direction === 'CREDIT' ? 'Pagador' : 'Favorecido'}: {g.bank.counterparty_name}</span>
                                 </p>
                             )}
-                            <p className="text-[11px] text-gray-400 font-medium">{formatDate(g.bank.transaction_date)}</p>
+                            <p className="text-xs text-gray-400 font-medium">{formatDate(g.bank.transaction_date)}</p>
                             <p className={`text-base font-black tabular-nums mt-1 ${g.bank.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>{formatBRL(g.bank.amount)}</p>
                         </div>
                         <div>
-                            <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1"><FileText className="w-3.5 h-3.5" /> {g.titles.length} títulos · soma {formatBRL(g.total)}{Math.abs(g.diff) > 0.01 && <span className="text-amber-500"> (dif {formatBRL(Math.abs(g.diff))})</span>}</div>
+                            <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1"><FileText className="w-3.5 h-3.5" /> {g.titles.length} títulos · soma {formatBRL(g.total)}{Math.abs(g.diff) > 0.01 && <span className="text-amber-500"> (dif {formatBRL(Math.abs(g.diff))})</span>}</div>
                             <div className="space-y-1.5">
                                 {g.titles.map(t => (
                                     <div key={t.id} className="flex items-start justify-between text-sm gap-2">
                                         <div className="min-w-0">
                                             <p className="text-gray-700 truncate">{t.description || t.entity_name || t.party_name || 'Título'}</p>
-                                            <p className="text-[10px] text-gray-400 truncate">
+                                            <p className="text-xs text-gray-400 truncate">
                                                 {partyOf(t) ? <span className="text-indigo-500 font-bold">{partyOf(t)!.label}: {partyOf(t)!.name} · </span> : ''}
                                                 {formatDate(t.due_date || t.transaction_date)}
                                             </p>
@@ -138,28 +138,28 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
                 <div key={`t2b-${g.title.id}-${i}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-purple-50/40 border-b border-gray-50">
                         <Split className="w-3.5 h-3.5 text-purple-500" />
-                        <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest">Vários pagamentos liquidam um título</span>
+                        <span className="text-xs font-black text-purple-600 uppercase tracking-widest">Vários pagamentos liquidam um título</span>
                     </div>
                     <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-4">
                         <div>
-                            <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1"><FileText className="w-3.5 h-3.5" /> Título</div>
+                            <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1"><FileText className="w-3.5 h-3.5" /> Título</div>
                             <p className="text-sm font-bold text-gray-800 truncate">{g.title.description || g.title.entity_name || g.title.party_name || 'Título'}</p>
                             {partyOf(g.title) && (
-                                <p className="text-[11px] font-bold text-indigo-600 flex items-center gap-1 mt-0.5" title={partyOf(g.title)!.name}>
+                                <p className="text-xs font-bold text-indigo-600 flex items-center gap-1 mt-0.5" title={partyOf(g.title)!.name}>
                                     <Building2 className="w-3 h-3 flex-shrink-0" /><span className="truncate">{partyOf(g.title)!.label}: {partyOf(g.title)!.name}</span>
                                 </p>
                             )}
-                            <p className="text-[11px] text-gray-400 font-medium">venc. {formatDate(g.title.due_date || g.title.transaction_date)}</p>
+                            <p className="text-xs text-gray-400 font-medium">venc. {formatDate(g.title.due_date || g.title.transaction_date)}</p>
                             <p className="text-base font-black tabular-nums mt-1 text-gray-900">{formatBRL(g.title.amount)}</p>
                         </div>
                         <div>
-                            <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1"><Landmark className="w-3.5 h-3.5" /> {g.banks.length} pagamentos · soma {formatBRL(g.total)}{Math.abs(g.diff) > 0.01 && <span className="text-amber-500"> (dif {formatBRL(Math.abs(g.diff))})</span>}</div>
+                            <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1"><Landmark className="w-3.5 h-3.5" /> {g.banks.length} pagamentos · soma {formatBRL(g.total)}{Math.abs(g.diff) > 0.01 && <span className="text-amber-500"> (dif {formatBRL(Math.abs(g.diff))})</span>}</div>
                             <div className="space-y-1.5">
                                 {g.banks.map(b => (
                                     <div key={b.id} className="flex items-start justify-between text-sm gap-2">
                                         <div className="min-w-0">
                                             <p className="text-gray-700 truncate">{b.description_normalized || b.description_raw}</p>
-                                            <p className="text-[10px] text-gray-400 truncate">
+                                            <p className="text-xs text-gray-400 truncate">
                                                 {b.counterparty_name ? <span className="text-gray-600 font-bold">{b.direction === 'CREDIT' ? 'Pagador' : 'Favorecido'}: {b.counterparty_name} · </span> : ''}
                                                 {formatDate(b.transaction_date)}
                                             </p>

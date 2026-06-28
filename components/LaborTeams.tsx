@@ -166,7 +166,7 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
                                             <div className="min-w-0">
                                                 <h3 className="font-black text-slate-900 truncate">{team.name}</h3>
                                                 {team.project_name && (
-                                                    <p className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md inline-block font-bold mt-1">{team.project_name}</p>
+                                                    <p className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md inline-block font-bold mt-1">{team.project_name}</p>
                                                 )}
                                             </div>
                                         </div>
@@ -180,7 +180,7 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
                                         </div>
                                     </div>
                                     {foreman && (
-                                        <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-500">
+                                        <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
                                             <Users className="w-3 h-3" />
                                             <span className="font-bold">Encarregado:</span> {foreman.name}
                                         </div>
@@ -200,7 +200,7 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
                                             {(team.members || []).map(m => (
                                                 <div key={m.id} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-xl">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-[10px] font-black">
+                                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-xs font-black">
                                                             {m.name.charAt(0)}
                                                         </div>
                                                         <div>

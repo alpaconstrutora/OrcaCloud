@@ -272,7 +272,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                       {c.status}
                     </span>
                   </div>
-                  <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400">
+                  <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
                     <span>Vence em: {new Date(c.due_date).toLocaleDateString('pt-BR')}</span>
                     {c.completed_at && <span className="text-emerald-600">✓ Comprovado</span>}
                   </div>
@@ -286,7 +286,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
             {selectedChecklist ? (
               <>
                 <div className="border-b border-slate-100 pb-4">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Obrigação Selecionada</span>
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Obrigação Selecionada</span>
                   <h2 className="text-lg font-black text-slate-850 mt-1">{selectedChecklist.title}</h2>
                   <p className="text-xs text-slate-500 mt-1">
                     {selectedChecklist.compliance_rules?.description || 'Envie as evidências e relatórios exigidos para auditoria fiscal.'}
@@ -301,7 +301,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                     
                     <form onSubmit={handleUploadEvidence} className="space-y-4">
                       <div className="space-y-1">
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo de Operação</label>
+                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Tipo de Operação</label>
                         <select
                           value={operationType}
                           onChange={(e) => setOperationType(e.target.value)}
@@ -314,7 +314,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Identificador (NF-e ou Pedido)</label>
+                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Identificador (NF-e ou Pedido)</label>
                         <input
                           type="text"
                           required
@@ -326,7 +326,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Foto / Arquivo Comprovante</label>
+                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Foto / Arquivo Comprovante</label>
                         <input
                           type="file"
                           required
@@ -371,7 +371,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                                 href={ev.evidence_url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-[10px] font-bold text-sky-600 hover:underline"
+                                className="text-xs font-bold text-sky-600 hover:underline"
                               >
                                 Ver Anexo 🔗
                               </a>

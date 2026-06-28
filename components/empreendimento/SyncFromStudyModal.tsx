@@ -127,7 +127,7 @@ const Stat: React.FC<{ icon: any; label: string; value: number }> = ({ icon: Ico
     <div className="p-2 bg-white rounded-xl text-violet-600 border border-gray-100"><Icon className="w-4 h-4" /></div>
     <div>
       <span className="text-xl font-black text-gray-800">{value}</span>
-      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block leading-tight">{label}</span>
+      <span className="text-xs font-bold uppercase tracking-wider text-gray-400 block leading-tight">{label}</span>
     </div>
   </div>
 );

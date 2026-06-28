@@ -137,7 +137,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
         const endDateRaw = project.settings?.endDate || schedule?.endDate;
 
         if (!startDate) return (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gray-100 text-gray-500">
+            <span className="px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-gray-100 text-gray-500">
                 Sem Cronograma
             </span>
         );
@@ -162,7 +162,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
 
         if (obraStatus === 'Finalizado') {
             return (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 flex items-center gap-1 w-fit">
+                <span className="px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-blue-100 text-blue-700 flex items-center gap-1 w-fit">
                     <CheckCircle2 className="w-3 h-3" />
                     Finalizado
                 </span>
@@ -170,12 +170,12 @@ const PlanningList: React.FC<PlanningListProps> = ({
         }
 
         return isDelayed ? (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-100 text-red-700 flex items-center gap-1 w-fit">
+            <span className="px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-red-100 text-red-700 flex items-center gap-1 w-fit">
                 <AlertCircle className="w-3 h-3" />
                 Atrasado
             </span>
         ) : (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700 flex items-center gap-1 w-fit">
+            <span className="px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-700 flex items-center gap-1 w-fit">
                 <CheckCircle2 className="w-3 h-3" />
                 Em Dia
             </span>
@@ -255,28 +255,28 @@ const PlanningList: React.FC<PlanningListProps> = ({
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
                                     {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader colKey="name" label="Planejamento" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]" />
+                                        <SortableHeader colKey="name" label="Planejamento" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]" />
                                     )}
                                     {tableColumns.visibleColumns.includes('budgets') && (
-                                        <SortableHeader colKey="budgets" label="Orçamentos" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]" />
+                                        <SortableHeader colKey="budgets" label="Orçamentos" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]" />
                                     )}
                                     {tableColumns.visibleColumns.includes('client') && (
-                                        <SortableHeader colKey="client" label="Cliente" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]" />
+                                        <SortableHeader colKey="client" label="Cliente" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]" />
                                     )}
                                     {tableColumns.visibleColumns.includes('start') && (
-                                        <SortableHeader colKey="start" label="Início" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
+                                        <SortableHeader colKey="start" label="Início" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
                                     )}
                                     {tableColumns.visibleColumns.includes('end') && (
-                                        <SortableHeader colKey="end" label="Prazo" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
+                                        <SortableHeader colKey="end" label="Prazo" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
                                     )}
                                     {tableColumns.visibleColumns.includes('duration') && (
-                                        <SortableHeader colKey="duration" label="Duração" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
+                                        <SortableHeader colKey="duration" label="Duração" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader colKey="status" label="Status" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]" />
+                                        <SortableHeader colKey="status" label="Status" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]" />
                                     )}
                                     {tableColumns.visibleColumns.includes('actions') && (
-                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
+                                        <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
                                     )}
                                 </tr>
                             </thead>
@@ -321,10 +321,10 @@ const PlanningList: React.FC<PlanningListProps> = ({
                                                         </div>
                                                         <div>
                                                             <div className="text-sm font-bold text-gray-900">{project.name}</div>
-                                                            <div className="text-[10px] text-blue-600 font-bold uppercase tracking-tight">
+                                                            <div className="text-xs text-blue-600 font-bold uppercase tracking-tight">
                                                                 {project.settings?.linkedProjectName || 'Obra não vinculada'}
                                                             </div>
-                                                            <div className="text-[10px] text-gray-400 font-medium uppercase tracking-tight">
+                                                            <div className="text-xs text-gray-400 font-medium uppercase tracking-tight">
                                                                 Modificado em {formatDate(project.updated_at)}
                                                             </div>
                                                         </div>
@@ -336,7 +336,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
                                                     {getLinkedBudgets(project.id).length > 0 ? (
                                                         <div className="flex flex-wrap gap-1">
                                                             {getLinkedBudgets(project.id).map(budget => (
-                                                                <span key={budget.id} className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
+                                                                <span key={budget.id} className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
                                                                     {budget.name}
                                                                 </span>
                                                             ))}
@@ -370,7 +370,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
                                             {tableColumns.visibleColumns.includes('duration') && (
                                                 <td className="px-6 py-4 text-center">
                                                     <span className="text-sm font-bold text-gray-700">
-                                                        {duration || '-'} <span className="text-[10px] text-gray-400 uppercase">Meses</span>
+                                                        {duration || '-'} <span className="text-xs text-gray-400 uppercase">Meses</span>
                                                     </span>
                                                 </td>
                                             )}
@@ -387,7 +387,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
                                                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1.5 group/btn"
                                                         >
                                                             <LayoutDashboard className="w-4 h-4" />
-                                                            <span className="text-[10px] font-black uppercase hidden lg:inline">Abrir Gantt</span>
+                                                            <span className="text-xs font-black uppercase hidden lg:inline">Abrir Gantt</span>
                                                             <ChevronRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
                                                         </button>
                                                         <button

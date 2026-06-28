@@ -375,7 +375,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                     <p className={`text-sm font-black ${selectedEmployee?.id === emp.id ? 'text-white' : 'text-slate-900'}`}>
                                         {emp.name}
                                     </p>
-                                    <p className={`text-[10px] font-bold uppercase ${selectedEmployee?.id === emp.id ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                    <p className={`text-xs font-bold uppercase ${selectedEmployee?.id === emp.id ? 'text-indigo-200' : 'text-slate-400'}`}>
                                         {emp.role || 'Sem Cargo'}
                                     </p>
                                 </div>
@@ -408,7 +408,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                             type="month" 
                                             value={selectedPeriod}
                                             onChange={(e) => setSelectedPeriod(e.target.value)}
-                                            className="bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-[10px] font-black text-indigo-600 outline-none focus:ring-1 focus:ring-indigo-500"
+                                            className="bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-xs font-black text-indigo-600 outline-none focus:ring-1 focus:ring-indigo-500"
                                         />
                                     </div>
                                 </div>
@@ -416,7 +416,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                     <button 
                                         onClick={handleCopyFromPrevious}
                                         disabled={copying || !!saving}
-                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl hover:bg-slate-50 transition-all font-black text-[10px] uppercase tracking-widest disabled:opacity-50"
+                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl hover:bg-slate-50 transition-all font-black text-xs uppercase tracking-widest disabled:opacity-50"
                                     >
                                         {copying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
                                         Copiar Mês Ant.
@@ -441,7 +441,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
 
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Configuração de Rateio (%)</span>
+                                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Configuração de Rateio (%)</span>
                                 </div>
                                 {currentAllocations.length === 0 ? (
                                     <div className="py-8 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-center">
@@ -451,7 +451,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                     currentAllocations.map((alloc, idx) => (
                                         <div key={idx} className="flex flex-col md:flex-row items-center gap-4 p-4 bg-slate-50 rounded-2xl group border border-transparent hover:border-slate-200 transition-all">
                                             <div className="flex-1 w-full">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Projeto / Obra</label>
+                                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Projeto / Obra</label>
                                                 <select 
                                                     value={alloc.project_id}
                                                     onChange={(e) => handleUpdateWorksite(idx, e.target.value)}
@@ -463,7 +463,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                 </select>
                                             </div>
                                             <div className="w-32">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Porcentagem (%)</label>
+                                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Porcentagem (%)</label>
                                                 <input 
                                                     type="number"
                                                     min="0"
@@ -485,7 +485,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
 
                                 <button 
                                     onClick={handleAddAllocation}
-                                    className="w-full py-3 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest"
+                                    className="w-full py-3 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all flex items-center justify-center gap-2 font-black text-xs uppercase tracking-widest"
                                 >
                                     <Plus className="w-3 h-3" /> Adicionar Linha de Rateio
                                 </button>
@@ -541,19 +541,19 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                     {/* Resumo do Custo + Botões Holerite */}
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                         <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
-                                            <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1">Custo Total (Patronal)</p>
+                                            <p className="text-xs font-black text-emerald-700 uppercase tracking-widest mb-1">Custo Total (Patronal)</p>
                                             <p className="text-xl font-black text-emerald-900 font-mono">
                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(closedResult.employer_cost || 0)}
                                             </p>
                                         </div>
                                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Bruto</p>
+                                            <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Bruto</p>
                                             <p className="text-md font-bold text-slate-700 font-mono">
                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(closedResult.gross || 0)}
                                             </p>
                                         </div>
                                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Líquido</p>
+                                            <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Líquido</p>
                                             <p className="text-md font-bold text-slate-700 font-mono">
                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(closedResult.net || 0)}
                                             </p>
@@ -576,14 +576,14 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
 
                                     {/* Form de Classificação Financeira — Salários */}
                                     <div className="space-y-2">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                                             <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
                                             Classificação dos Salários
                                         </p>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-6 bg-slate-50 rounded-2xl border border-slate-200">
                                         {/* Centro de Custo — dropdown com busca */}
                                         <div className="space-y-1.5" ref={costCenterRef}>
-                                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
+                                            <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
                                             {/* Valor selecionado */}
                                             {selectedCostCenter && !costCenterOpen && (() => {
                                                 const sel = costCenters.find((c: CostCenter) => c.name === selectedCostCenter);
@@ -593,7 +593,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                         className="flex items-center gap-2 w-full bg-white border border-emerald-400 rounded-xl px-3 py-2 cursor-pointer hover:border-emerald-500"
                                                     >
                                                         {sel?.code && (
-                                                            <span className="shrink-0 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-0.5 font-mono">
+                                                            <span className="shrink-0 text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-0.5 font-mono">
                                                                 {sel.code}
                                                             </span>
                                                         )}
@@ -641,7 +641,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                         style={{ paddingLeft: 12 + lvl.indent }}
                                                                     >
                                                                         {c.code && (
-                                                                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
+                                                                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
                                                                                 {c.code}
                                                                             </span>
                                                                         )}
@@ -664,7 +664,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
 
                                         {/* Plano de Pagamento — dropdown com busca */}
                                         <div className="space-y-1.5" ref={chartRef}>
-                                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
+                                            <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
                                             {/* Valor selecionado */}
                                             {selectedChartOfAccount && !chartOpen && (() => {
                                                 const sel = chartOfAccounts.find((c: ChartOfAccount) => c.name === selectedChartOfAccount);
@@ -674,7 +674,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                         className="flex items-center gap-2 w-full bg-white border border-emerald-400 rounded-xl px-3 py-2 cursor-pointer hover:border-emerald-500"
                                                     >
                                                         {sel?.code && (
-                                                            <span className="shrink-0 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-0.5 font-mono">
+                                                            <span className="shrink-0 text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-0.5 font-mono">
                                                                 {sel.code}
                                                             </span>
                                                         )}
@@ -722,7 +722,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                         style={{ paddingLeft: 12 + lvl.indent }}
                                                                     >
                                                                         {c.code && (
-                                                                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
+                                                                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
                                                                                 {c.code}
                                                                             </span>
                                                                         )}
@@ -747,7 +747,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
 
                                     {/* Form de Classificação Financeira — Encargos Patronais */}
                                     <div className="space-y-2">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                                             <span className="inline-block w-2 h-2 rounded-full bg-orange-400"></span>
                                             Classificação dos Encargos Patronais
                                             <span className="ml-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded">
@@ -757,7 +757,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-6 bg-orange-50/60 rounded-2xl border border-orange-100">
                                             {/* Centro de Custo — Encargos */}
                                             <div className="space-y-1.5" ref={encargoCostCenterRef}>
-                                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
+                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
                                                 {selectedEncargoCostCenter && !encargoCostCenterOpen && (() => {
                                                     const sel = costCenters.find((c: CostCenter) => c.name === selectedEncargoCostCenter);
                                                     return (
@@ -766,7 +766,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                             className="flex items-center gap-2 w-full bg-white border border-orange-400 rounded-xl px-3 py-2 cursor-pointer hover:border-orange-500"
                                                         >
                                                             {sel?.code && (
-                                                                <span className="shrink-0 text-[10px] font-black text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-2 py-0.5 font-mono">
+                                                                <span className="shrink-0 text-xs font-black text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-2 py-0.5 font-mono">
                                                                     {sel.code}
                                                                 </span>
                                                             )}
@@ -813,7 +813,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                             style={{ paddingLeft: 12 + lvl.indent }}
                                                                         >
                                                                             {c.code && (
-                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
+                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
                                                                                     {c.code}
                                                                                 </span>
                                                                             )}
@@ -833,7 +833,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
 
                                             {/* Plano de Pagamento — Encargos */}
                                             <div className="space-y-1.5" ref={encargoChartRef}>
-                                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
+                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
                                                 {selectedEncargoChartOfAccount && !encargoChartOpen && (() => {
                                                     const sel = chartOfAccounts.find((c: ChartOfAccount) => c.name === selectedEncargoChartOfAccount);
                                                     return (
@@ -842,7 +842,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                             className="flex items-center gap-2 w-full bg-white border border-orange-400 rounded-xl px-3 py-2 cursor-pointer hover:border-orange-500"
                                                         >
                                                             {sel?.code && (
-                                                                <span className="shrink-0 text-[10px] font-black text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-2 py-0.5 font-mono">
+                                                                <span className="shrink-0 text-xs font-black text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-2 py-0.5 font-mono">
                                                                     {sel.code}
                                                                 </span>
                                                             )}
@@ -889,7 +889,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                             style={{ paddingLeft: 12 + lvl.indent }}
                                                                         >
                                                                             {c.code && (
-                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
+                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
                                                                                     {c.code}
                                                                                 </span>
                                                                             )}
@@ -911,7 +911,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
 
                                     {/* Form de Classificação Financeira — Contribuições de Terceiros */}
                                     <div className="space-y-2">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                                             <span className="inline-block w-2 h-2 rounded-full bg-purple-400"></span>
                                             Classificação das Contribuições de Terceiros
                                             <span className="ml-1 text-[9px] font-bold text-purple-600 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded">
@@ -922,7 +922,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-6 bg-purple-50/60 rounded-2xl border border-purple-100">
                                             {/* Centro de Custo — Terceiros */}
                                             <div className="space-y-1.5" ref={terceiroCostCenterRef}>
-                                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
+                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
                                                 {selectedTerceiroCostCenter && !terceiroCostCenterOpen && (() => {
                                                     const sel = costCenters.find((c: CostCenter) => c.name === selectedTerceiroCostCenter);
                                                     return (
@@ -931,7 +931,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                             className="flex items-center gap-2 w-full bg-white border border-purple-400 rounded-xl px-3 py-2 cursor-pointer hover:border-purple-500"
                                                         >
                                                             {sel?.code && (
-                                                                <span className="shrink-0 text-[10px] font-black text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2 py-0.5 font-mono">
+                                                                <span className="shrink-0 text-xs font-black text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2 py-0.5 font-mono">
                                                                     {sel.code}
                                                                 </span>
                                                             )}
@@ -978,7 +978,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                             style={{ paddingLeft: 12 + lvl.indent }}
                                                                         >
                                                                             {c.code && (
-                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
+                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
                                                                                     {c.code}
                                                                                 </span>
                                                                             )}
@@ -998,7 +998,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
 
                                             {/* Plano de Pagamento — Terceiros */}
                                             <div className="space-y-1.5" ref={terceiroChartRef}>
-                                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
+                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
                                                 {selectedTerceiroChartOfAccount && !terceiroChartOpen && (() => {
                                                     const sel = chartOfAccounts.find((c: ChartOfAccount) => c.name === selectedTerceiroChartOfAccount);
                                                     return (
@@ -1007,7 +1007,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                             className="flex items-center gap-2 w-full bg-white border border-purple-400 rounded-xl px-3 py-2 cursor-pointer hover:border-purple-500"
                                                         >
                                                             {sel?.code && (
-                                                                <span className="shrink-0 text-[10px] font-black text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2 py-0.5 font-mono">
+                                                                <span className="shrink-0 text-xs font-black text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2 py-0.5 font-mono">
                                                                     {sel.code}
                                                                 </span>
                                                             )}
@@ -1054,7 +1054,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                             style={{ paddingLeft: 12 + lvl.indent }}
                                                                         >
                                                                             {c.code && (
-                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-[10px] font-black ${lvl.codeCls}`}>
+                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
                                                                                     {c.code}
                                                                                 </span>
                                                                             )}
@@ -1079,23 +1079,23 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                         <div className="space-y-4 p-6 bg-violet-50 rounded-2xl border border-violet-100 animate-in zoom-in-95 duration-200">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <Banknote className="w-4 h-4 text-violet-600" />
-                                                <h4 className="text-[11px] font-black text-violet-900 uppercase tracking-widest">Parcelas Individualizadas</h4>
+                                                <h4 className="text-xs font-black text-violet-900 uppercase tracking-widest">Parcelas Individualizadas</h4>
                                             </div>
-                                            <p className="text-[10px] text-violet-600 font-medium italic">
+                                            <p className="text-xs text-violet-600 font-medium italic">
                                                 Estes lançamentos são registrados como parcelas separadas no financeiro com a data informada.
                                             </p>
                                             {individualizadoItems.map(item => (
                                                 <div key={item.code} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 bg-white rounded-xl border border-violet-100">
                                                     <div className="flex-1">
                                                         <p className="text-sm font-black text-slate-900">{item.name}</p>
-                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{item.code}</p>
+                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{item.code}</p>
                                                     </div>
                                                     <p className="text-sm font-black text-violet-700 font-mono whitespace-nowrap">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.amount)}
                                                     </p>
                                                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 border border-violet-100 rounded-xl">
                                                         <Calendar size={11} className="text-violet-500" />
-                                                        <span className="text-[10px] font-black text-violet-700 whitespace-nowrap">
+                                                        <span className="text-xs font-black text-violet-700 whitespace-nowrap">
                                                             {item.dia_lancamento ? `Dia ${item.dia_lancamento}` : 'Último dia'}
                                                         </span>
                                                     </div>
@@ -1105,7 +1105,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                     )}
 
                                     <div className="border-t border-slate-100 pt-4">
-                                        <p className="text-[11px] text-slate-500 mb-4 italic font-medium">
+                                        <p className="text-xs text-slate-500 mb-4 italic font-medium">
                                             * Serão gerados três lançamentos por obra: <strong>Salários</strong> ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(closedResult.net || 0)}), <strong>Encargos Patronais</strong> ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.max(0, (closedResult.employer_cost || 0) - (closedResult.net || 0)))}) e <strong>Contribuições de Terceiros</strong> ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.round((closedResult.gross || 0) * 0.058 * 100) / 100)}), distribuídos na proporção definida acima.
                                         </p>
                                         <button

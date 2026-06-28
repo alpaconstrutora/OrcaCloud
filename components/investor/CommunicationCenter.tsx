@@ -138,7 +138,7 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="grid grid-cols-2 gap-4">
                         <label className="flex flex-col gap-1 col-span-2">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Título</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Título</span>
                             <input
                                 type="text"
                                 value={form.title || ''}
@@ -148,7 +148,7 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                             />
                         </label>
                         <label className="flex flex-col gap-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tipo</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tipo</span>
                             <select
                                 value={form.type}
                                 onChange={e => setForm(f => ({ ...f, type: e.target.value as AnnouncementType }))}
@@ -169,7 +169,7 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                             <span className="text-sm text-gray-700">Requer aceite digital</span>
                         </label>
                         <label className="flex flex-col gap-1 col-span-2">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Corpo</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Corpo</span>
                             <textarea
                                 rows={4}
                                 value={form.body || ''}
@@ -218,19 +218,19 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                                 >
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                            <span className={`px-2 py-0.5 rounded-full border text-[10px] font-black uppercase tracking-wider ${TYPE_COLORS[item.type]}`}>
+                                            <span className={`px-2 py-0.5 rounded-full border text-xs font-black uppercase tracking-wider ${TYPE_COLORS[item.type]}`}>
                                                 {ANNOUNCEMENT_TYPE_LABELS[item.type]}
                                             </span>
                                             {isDraft && isAdmin && (
-                                                <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold uppercase">Rascunho</span>
+                                                <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-bold uppercase">Rascunho</span>
                                             )}
                                             {needsAck && (
-                                                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold uppercase flex items-center gap-1">
+                                                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold uppercase flex items-center gap-1">
                                                     <Bell className="w-3 h-3" /> Aceite pendente
                                                 </span>
                                             )}
                                             {item.user_acknowledged && (
-                                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase flex items-center gap-1">
+                                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold uppercase flex items-center gap-1">
                                                     <CheckCircle2 className="w-3 h-3" /> Aceito
                                                 </span>
                                             )}

@@ -80,7 +80,7 @@ export const BaselineModal: React.FC<BaselineModalProps> = ({
                                 >
                                     <div>
                                         <div className="font-bold text-gray-800 text-sm">{b.name}</div>
-                                        <div className="text-[10px] text-gray-400">{new Date(b.createdAt).toLocaleString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                                        <div className="text-xs text-gray-400">{new Date(b.createdAt).toLocaleString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {activeBaselineId === b.id && <CheckCircle2 className="w-4 h-4 text-blue-500" />}

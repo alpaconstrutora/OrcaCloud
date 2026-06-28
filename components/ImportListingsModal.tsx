@@ -327,7 +327,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
                 <span className="text-xs text-slate-400 font-semibold block">
                   Linha {currentLine} de {totalLines} processada
                 </span>
-                <span className="text-[11px] text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full font-bold inline-block border border-emerald-100 max-w-xs truncate mt-2">
+                <span className="text-xs text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full font-bold inline-block border border-emerald-100 max-w-xs truncate mt-2">
                   {statusMessage}
                 </span>
               </div>
@@ -338,7 +338,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <p className="text-[10px] text-slate-400 max-w-xs text-center font-medium leading-relaxed">
+              <p className="text-xs text-slate-400 max-w-xs text-center font-medium leading-relaxed">
                 Respeitando o limite de requisições da API do Nominatim (1s por endereço) para prevenir bloqueios de IP.
               </p>
             </div>
@@ -362,7 +362,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
                 </div>
                 <div>
                   <span className="block text-xs font-black text-slate-700 uppercase tracking-wider">Arraste sua planilha ou clique aqui</span>
-                  <span className="block text-[10px] text-slate-400 font-semibold mt-1">Suporta formatos .CSV, .XLSX e .XLS</span>
+                  <span className="block text-xs text-slate-400 font-semibold mt-1">Suporta formatos .CSV, .XLSX e .XLS</span>
                 </div>
               </label>
             </div>
@@ -373,18 +373,18 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
                 <div className="flex items-center gap-2 text-slate-600">
                   <span>📄</span>
                   <span className="font-bold text-slate-800 truncate max-w-xs">{file.name}</span>
-                  <span className="text-[10px] text-slate-400">({rows.length} linhas de dados)</span>
+                  <span className="text-xs text-slate-400">({rows.length} linhas de dados)</span>
                 </div>
                 <button 
                   onClick={() => { setFile(null); setHeaders([]); setRows([]); setMappings({}); }}
-                  className="text-rose-500 hover:underline text-[10px] font-black uppercase tracking-wider"
+                  className="text-rose-500 hover:underline text-xs font-black uppercase tracking-wider"
                 >
                   Alterar Arquivo
                 </button>
               </div>
 
               <div className="space-y-3">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-1.5">
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-1.5">
                   Mapear Colunas da Planilha
                 </h4>
                 
@@ -398,7 +398,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
                       <select
                         value={mappings[field.key] || ''}
                         onChange={(e) => handleMappingChange(field.key, e.target.value)}
-                        className="w-full md:w-48 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                        className="w-full md:w-48 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                       >
                         <option value="">-- Ignorar ou Não Mapeado --</option>
                         {headers.map(h => (

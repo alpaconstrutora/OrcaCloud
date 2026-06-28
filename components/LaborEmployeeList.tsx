@@ -216,7 +216,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                                         </span>
                                                     )}
                                                 </div>
-                                                {emp.cpf && <p className="text-[10px] text-slate-400">{emp.cpf}</p>}
+                                                {emp.cpf && <p className="text-xs text-slate-400">{emp.cpf}</p>}
                                             </div>
                                         </div>
                                     </td>
@@ -230,7 +230,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                     <td className="px-4 py-4">
                                         <div className="flex items-center gap-1.5 min-w-[120px]">
                                             <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                            <span className="text-[10px] font-bold text-slate-500 truncate" title={organizations.find(o => o.id === emp.org_id)?.name || 'Desconhecida'}>
+                                            <span className="text-xs font-bold text-slate-500 truncate" title={organizations.find(o => o.id === emp.org_id)?.name || 'Desconhecida'}>
                                                 {organizations.find(o => o.id === emp.org_id)?.name || 'Desconhecida'}
                                             </span>
                                         </div>
@@ -238,14 +238,14 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                 )}
                                 {tableColumns.visibleColumns.includes('contract') && (
                                     <td className="px-4 py-4">
-                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${CONTRACT_COLORS[emp.contract_type]}`}>
+                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-black ${CONTRACT_COLORS[emp.contract_type]}`}>
                                             {CONTRACT_LABELS[emp.contract_type]}
                                         </span>
                                     </td>
                                 )}
                                 {tableColumns.visibleColumns.includes('status') && (
                                     <td className="px-4 py-4">
-                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${STATUS_COLORS[emp.status]}`}>
+                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-black ${STATUS_COLORS[emp.status]}`}>
                                             {emp.status}
                                         </span>
                                     </td>
@@ -257,7 +257,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                                 R$ {emp.base_salary.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </span>
                                         ) : (
-                                            <span className="text-[10px] text-slate-300 font-bold">—</span>
+                                            <span className="text-xs text-slate-300 font-bold">—</span>
                                         )}
                                     </td>
                                 )}
@@ -272,7 +272,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                         {emp.hourly_cost > 0 && (
                                             <div className="flex items-center justify-end gap-1 mt-0.5">
                                                 <Clock className="w-3 h-3 text-slate-300" />
-                                                <span className="text-[10px] text-slate-400">
+                                                <span className="text-xs text-slate-400">
                                                     {(emp.hourly_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/h
                                                 </span>
                                             </div>
@@ -320,7 +320,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                     </tbody>
                 </table>
                 {filtered.length > 0 && (
-                    <div className="px-6 py-3 bg-slate-50/80 border-t border-slate-100 text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center justify-between">
+                    <div className="px-6 py-3 bg-slate-50/80 border-t border-slate-100 text-xs text-slate-400 font-bold uppercase tracking-widest flex items-center justify-between">
                         <span>{filtered.length} colaboradores</span>
                         <span className="flex items-center gap-1">
                             <Building2 className="w-3 h-3" />

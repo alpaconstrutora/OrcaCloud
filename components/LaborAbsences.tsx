@@ -38,7 +38,7 @@ const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded
 
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
         {children}
     </div>
 );
@@ -278,7 +278,7 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
                     {/* Validações CLT — erros */}
                     {cltErrors.length > 0 && (
                         <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1">
-                            <p className="text-[10px] font-black text-rose-700 uppercase tracking-widest flex items-center gap-1">
+                            <p className="text-xs font-black text-rose-700 uppercase tracking-widest flex items-center gap-1">
                                 <AlertTriangle className="w-3 h-3" /> Violação CLT — não pode prosseguir
                             </p>
                             {cltErrors.map((e, i) => (
@@ -290,7 +290,7 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
                     {/* Validações CLT — avisos */}
                     {cltWarnings.length > 0 && (
                         <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
-                            <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-1">
+                            <p className="text-xs font-black text-amber-700 uppercase tracking-widest flex items-center gap-1">
                                 <AlertTriangle className="w-3 h-3" /> Atenção CLT
                             </p>
                             {cltWarnings.map((w, i) => (
@@ -305,7 +305,7 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
 
                     {/* Upload atestado */}
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">
                             Atestado / Documento (opcional)
                         </label>
                         <div
@@ -408,7 +408,7 @@ const NewPeriodForm: React.FC<NewPeriodFormProps> = ({ orgId, employees, onClose
                     <InputGroup label="Início do Período Aquisitivo *">
                         <input type="date" value={periodoInicio} onChange={e => setPeriodoInicio(e.target.value)} className={inputCls} />
                     </InputGroup>
-                    <p className="text-[11px] text-slate-400">O período fim e o vencimento serão calculados automaticamente (+1 ano e +2 anos).</p>
+                    <p className="text-xs text-slate-400">O período fim e o vencimento serão calculados automaticamente (+1 ano e +2 anos).</p>
                 </div>
                 <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50/50">
                     <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
@@ -534,13 +534,13 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                         <p className="text-xs font-black text-emerald-900 uppercase tracking-tight">
                             {vacationReady.length} colaborador{vacationReady.length > 1 ? 'es' : ''} com férias disponíveis para agendar
                         </p>
-                        <p className="text-[11px] text-emerald-700 mt-1">
+                        <p className="text-xs text-emerald-700 mt-1">
                             {vacationReady.slice(0, 3).map(v => `${v.employee_name} (${v.dias_restantes}d disponíveis · vence ${v.vencimento})`).join(' · ')}
                             {vacationReady.length > 3 && ` e mais ${vacationReady.length - 3}…`}
                         </p>
                         <button
                             onClick={() => setView('balances')}
-                            className="mt-2 text-[10px] font-black text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
+                            className="mt-2 text-xs font-black text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
                         >
                             Ver saldos →
                         </button>
@@ -556,7 +556,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                         <p className="text-xs font-black text-amber-900 uppercase tracking-tight">
                             {vacationAlerts.length} período{vacationAlerts.length > 1 ? 's' : ''} de férias vencendo em 60 dias — risco de pagamento em dobro
                         </p>
-                        <p className="text-[11px] text-amber-700 mt-1">
+                        <p className="text-xs text-amber-700 mt-1">
                             {vacationAlerts.slice(0, 3).map(a => `${a.employee_name} (vence ${a.vencimento})`).join(' · ')}
                             {vacationAlerts.length > 3 && ` e mais ${vacationAlerts.length - 3}…`}
                         </p>
@@ -574,7 +574,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
             { label: 'Alertas de Vencimento',   value: vacationAlerts.length, color: 'text-rose-700', bg: 'bg-rose-50' },
                 ].map(({ label, value, color, bg }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
                         <p className={`text-2xl font-black ${color} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
                     </div>
                 ))}
@@ -670,8 +670,8 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-3 flex-wrap">
                                                     <span className="text-sm font-black text-slate-900">{absence.employee_name || '—'}</span>
-                                                    <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${tipo.bg} ${tipo.color}`}>{tipo.label}</span>
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${status.bg} ${status.color}`}>{status.label}</span>
+                                                    <span className={`px-2 py-0.5 rounded-lg text-xs font-black ${tipo.bg} ${tipo.color}`}>{tipo.label}</span>
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-black ${status.bg} ${status.color}`}>{status.label}</span>
                                                 </div>
                                                 <div className="flex items-center gap-4 mt-1 flex-wrap">
                                                     <span className="text-xs text-slate-500 font-medium">
@@ -688,7 +688,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                                                     )}
                                                 </div>
                                                 {absence.rejection_reason && (
-                                                    <p className="text-[11px] text-rose-600 font-bold mt-1">Motivo: {absence.rejection_reason}</p>
+                                                    <p className="text-xs text-rose-600 font-bold mt-1">Motivo: {absence.rejection_reason}</p>
                                                 )}
                                             </div>
                                             {/* Ações */}
@@ -698,13 +698,13 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                                                         <button
                                                             onClick={() => approveMutation.mutate(absence.id)}
                                                             disabled={approveMutation.isPending}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-[10px] font-black transition-all"
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-black transition-all"
                                                         >
                                                             <Check className="w-3 h-3" /> Aprovar
                                                         </button>
                                                         <button
                                                             onClick={() => setRejectTarget(absence.id)}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-[10px] font-black transition-all"
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-xs font-black transition-all"
                                                         >
                                                             <X className="w-3 h-3" /> Rejeitar
                                                         </button>
@@ -713,7 +713,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                                                 {absence.status === 'APROVADO' && (
                                                     <button
                                                         onClick={() => { if (confirm('Cancelar esta ausência?')) cancelMutation.mutate(absence.id); }}
-                                                        className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-black transition-all"
+                                                        className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-black transition-all"
                                                     >
                                                         <RotateCcw className="w-3 h-3" /> Cancelar
                                                     </button>
@@ -752,7 +752,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                             <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/50">
                                     {['Colaborador', 'Período Aquisitivo', 'Prazo Concessivo', 'Direito', 'Gozados', 'Vendidos', 'Restantes', 'Status'].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -778,10 +778,10 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                                                     return (
                                                         <div className="space-y-1">
                                                             <div className="flex items-center justify-between gap-2">
-                                                                <span className={`text-[10px] font-black ${vencido ? 'text-rose-700' : vencendo ? 'text-amber-700' : 'text-slate-600'}`}>
+                                                                <span className={`text-xs font-black ${vencido ? 'text-rose-700' : vencendo ? 'text-amber-700' : 'text-slate-600'}`}>
                                                                     {vencido ? '⚠ Vencido' : vencendo ? `⏰ ${daysLeft}d restantes` : `${daysLeft}d restantes`}
                                                                 </span>
-                                                                <span className="text-[10px] text-slate-400">{bal.vencimento}</span>
+                                                                <span className="text-xs text-slate-400">{bal.vencimento}</span>
                                                             </div>
                                                             <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                                                 <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
@@ -799,7 +799,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
                                                     bal.status === 'ABERTO'  ? 'bg-emerald-100 text-emerald-700' :
                                                     bal.status === 'PARCIAL' ? 'bg-amber-100 text-amber-700' :
                                                     bal.status === 'GOZADO'  ? 'bg-slate-100 text-slate-500' :

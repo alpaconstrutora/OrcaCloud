@@ -14,11 +14,11 @@ const CUBMarketPanel: React.FC = () => {
                         <Map className="w-5 h-5 text-blue-600" />
                         Painel CUB Interstadual
                     </h3>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Custo Unitário Básico por Região</p>
+                    <p className="text-xs text-gray-400 font-bold uppercase mt-1">Custo Unitário Básico por Região</p>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-xl border border-gray-100 shadow-sm">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[10px] font-black text-gray-600 uppercase">Valores Reais</span>
+                    <span className="text-xs font-black text-gray-600 uppercase">Valores Reais</span>
                 </div>
             </div>
 
@@ -36,13 +36,13 @@ const CUBMarketPanel: React.FC = () => {
                             )}
                         </div>
 
-                        <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">CUB/m²</p>
+                        <p className="text-xs font-bold text-gray-400 uppercase mb-1">CUB/m²</p>
                         <p className="text-lg font-black text-gray-900 group-hover:text-blue-600 transition-colors">
                             R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </p>
 
                         <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
-                            <span className={`text-[10px] font-black ${item.change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            <span className={`text-xs font-black ${item.change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                 {item.change > 0 ? '+' : ''}{item.change}%
                             </span>
                             <ArrowRight className="w-3 h-3 text-gray-300 group-hover:text-blue-400 transition-colors" />
@@ -52,7 +52,7 @@ const CUBMarketPanel: React.FC = () => {
             </div>
 
             <div className="px-8 py-4 bg-gray-50/50 border-t border-gray-50">
-                <p className="text-[10px] text-gray-400 font-medium italic">
+                <p className="text-xs text-gray-400 font-medium italic">
                     * Dados atualizados mensalmente com base nos informativos do Sinduscon de cada estado.
                 </p>
             </div>

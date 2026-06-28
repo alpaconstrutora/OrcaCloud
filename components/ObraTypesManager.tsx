@@ -177,7 +177,7 @@ const TypeRow: React.FC<{
         <span className="text-xs text-slate-400 font-mono">{type.slug}</span>
         {type.description && <p className="text-xs text-slate-500 truncate">{type.description}</p>}
         {isOverride && (
-          <span className="text-[10px] text-indigo-500 font-semibold">personalizado</span>
+          <span className="text-xs text-indigo-500 font-semibold">personalizado</span>
         )}
       </div>
       <div className="flex items-center gap-1">

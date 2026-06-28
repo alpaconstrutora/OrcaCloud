@@ -56,7 +56,7 @@ const HoldingsList: React.FC<Props> = ({
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <table className="w-full text-left">
                     <thead className="bg-gray-50/50 border-b border-gray-100">
-                        <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                             <th className="px-6 py-4">Empreendimento</th>
                             <th className="px-6 py-4 text-center">Status</th>
                             <th className="px-6 py-4 text-center">Cotas</th>
@@ -80,7 +80,7 @@ const HoldingsList: React.FC<Props> = ({
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                    <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-wider">
+                                    <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-bold uppercase tracking-wider">
                                         {proj.status}
                                     </span>
                                 </td>
@@ -90,7 +90,7 @@ const HoldingsList: React.FC<Props> = ({
                                         <div className="flex-1 bg-gray-100 h-1.5 rounded-full overflow-hidden">
                                             <div className="bg-blue-600 h-full" style={{ width: `${proj.progress}%` }} />
                                         </div>
-                                        <span className="text-[10px] font-bold text-gray-400">{proj.progress}%</span>
+                                        <span className="text-xs font-bold text-gray-400">{proj.progress}%</span>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-right font-black text-gray-900">
@@ -112,7 +112,7 @@ const HoldingsList: React.FC<Props> = ({
                         onClick={() => onSelectAsset(proj)}
                     >
                         <div className="h-40 bg-slate-100 relative">
-                            <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                            <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs font-black text-blue-600 uppercase tracking-widest">
                                 {proj.status}
                             </div>
                         </div>
@@ -120,11 +120,11 @@ const HoldingsList: React.FC<Props> = ({
                             <h4 className="text-xl font-bold text-gray-900 mb-4">{proj.name}</h4>
                             <div className="flex justify-between items-center mb-6">
                                 <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Cotas</p>
+                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Cotas</p>
                                     <p className="font-bold text-gray-900 text-lg">{proj.cota}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Rendimento</p>
+                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Rendimento</p>
                                     <p className="font-bold text-emerald-600 text-lg">{proj.yield || '—'}</p>
                                 </div>
                             </div>
@@ -138,7 +138,7 @@ const HoldingsList: React.FC<Props> = ({
                             </div>
                             <div>
                                 <div className="flex justify-between items-center mb-2">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Progresso da Obra</span>
+                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Progresso da Obra</span>
                                     <span className="text-sm font-bold text-blue-600">{proj.progress}%</span>
                                 </div>
                                 <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">

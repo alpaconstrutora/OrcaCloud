@@ -188,7 +188,7 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
 
                     {/* Banco */}
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">
                             Banco
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -215,7 +215,7 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
 
                     {/* Dados da conta */}
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">
                             Dados da Conta
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -252,7 +252,7 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
 
                     {/* PIX */}
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">
                             PIX
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -332,17 +332,17 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
                                         {a.banco_nome ?? a.banco_codigo}
                                     </span>
                                     {a.is_principal && (
-                                        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
                                             <Star className="w-3 h-3" /> Principal
                                         </span>
                                     )}
                                     {a.tipo_conta && (
-                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                                        <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                                             {TIPO_CONTA_LABELS[a.tipo_conta]}
                                         </span>
                                     )}
                                     {!a.ativa && (
-                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">
+                                        <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">
                                             Inativa
                                         </span>
                                     )}
@@ -363,7 +363,7 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
 
                             {a.limite_credito != null && (
                                 <div className="text-right flex-shrink-0 mr-2">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Limite</p>
+                                    <p className="text-xs font-black uppercase tracking-widest text-gray-400">Limite</p>
                                     <p className="text-sm font-black text-gray-700">
                                         {a.limite_credito.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                     </p>

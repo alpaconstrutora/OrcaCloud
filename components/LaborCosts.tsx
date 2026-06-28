@@ -117,7 +117,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                     <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
                         className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2" />
                 </div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{workingDays} dias úteis</span>
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{workingDays} dias úteis</span>
                 <div className="flex items-center gap-1.5 ml-auto">
                     {([
                         { id: 'employees', label: 'Por Colaborador', icon: Users },
@@ -138,35 +138,35 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                     <div className="p-2.5 bg-slate-50 rounded-xl w-fit mb-3">
                         <DollarSign className="w-5 h-5 text-slate-500" />
                     </div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Custo Estimado (Folha)</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Custo Estimado (Folha)</p>
                     <p className="text-xl font-black text-slate-900">{formatCurrency(totalEstimated)}</p>
-                    <p className="text-[10px] text-slate-400 mt-1">{activeEmployees.length} colaborador(es) ativo(s)</p>
+                    <p className="text-xs text-slate-400 mt-1">{activeEmployees.length} colaborador(es) ativo(s)</p>
                 </div>
                 <div className="bg-white p-5 rounded-2xl border border-indigo-100 shadow-sm">
                     <div className="p-2.5 bg-indigo-50 rounded-xl w-fit mb-3">
                         <DollarSign className="w-5 h-5 text-indigo-600" />
                     </div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Custo Real Aprovado</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Custo Real Aprovado</p>
                     <p className="text-xl font-black text-slate-900">{formatCurrency(totalReal)}</p>
-                    <p className="text-[10px] text-slate-400 mt-1">{(summary?.totalHours || 0).toFixed(0)}h registradas</p>
+                    <p className="text-xs text-slate-400 mt-1">{(summary?.totalHours || 0).toFixed(0)}h registradas</p>
                 </div>
                 <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
                     <div className={`p-2.5 rounded-xl w-fit mb-3 ${realizationPct > 100 ? 'bg-rose-50' : 'bg-emerald-50'}`}>
                         <TrendingUp className={`w-5 h-5 ${realizationPct > 100 ? 'text-rose-600' : 'text-emerald-600'}`} />
                     </div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">% Realizado</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">% Realizado</p>
                     <p className={`text-xl font-black ${realizationPct > 100 ? 'text-rose-700' : 'text-slate-900'}`}>
                         {totalEstimated > 0 ? `${realizationPct.toFixed(1)}%` : '—'}
                     </p>
-                    <p className="text-[10px] text-slate-400 mt-1">do custo estimado</p>
+                    <p className="text-xs text-slate-400 mt-1">do custo estimado</p>
                 </div>
                 <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
                     <div className="p-2.5 bg-amber-50 rounded-xl w-fit mb-3">
                         <TrendingUp className="w-5 h-5 text-amber-600" />
                     </div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Horas Extras Aprovadas</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Horas Extras Aprovadas</p>
                     <p className="text-xl font-black text-slate-900">{(summary?.totalOvertimeHours || 0).toFixed(0)}h</p>
-                    <p className="text-[10px] text-slate-400 mt-1">
+                    <p className="text-xs text-slate-400 mt-1">
                         {summary && summary.totalHours > 0 ? `Custo médio: ${formatCurrency(totalReal / summary.totalHours)}/h` : 'sem registros aprovados'}
                     </p>
                 </div>
@@ -178,7 +178,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                     <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
                     <div>
                         <p className="text-xs font-black text-amber-800">Nenhum registro de ponto aprovado para este período</p>
-                        <p className="text-[11px] text-amber-600 mt-0.5">
+                        <p className="text-xs text-amber-600 mt-0.5">
                             O custo estimado (R$ {formatCurrency(totalEstimated)}) é baseado no custo/salário dos colaboradores.
                             Para registrar o custo real, registre as horas na aba PONTO e aprove os lançamentos.
                         </p>
@@ -193,7 +193,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                         <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest">
                             Custo de Mão de Obra {view === 'employees' ? 'por Colaborador' : view === 'projects' ? 'por Obra' : 'por Equipe'}
                         </h3>
-                        <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        <div className="flex items-center gap-4 text-xs font-black uppercase tracking-widest text-slate-400">
                             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-slate-300 inline-block" /> Estimado</span>
                             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-indigo-500 inline-block" /> Real</span>
                         </div>
@@ -236,7 +236,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                             <div className="mt-8 p-6 bg-indigo-50 rounded-3xl border border-indigo-100">
                                 <Users className="w-8 h-8 text-indigo-600 mx-auto mb-3" />
                                 <h4 className="text-sm font-black text-slate-900 uppercase">Colaboradores Legados</h4>
-                                <p className="text-[11px] text-slate-500 mt-2 mb-4">
+                                <p className="text-xs text-slate-500 mt-2 mb-4">
                                     Encontramos {legacyCount} colaboradores no sistema antigo. Importe-os agora!
                                 </p>
                                 <button onClick={onMigrate}
@@ -274,7 +274,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                                     <tr key={est.employee_id} className="hover:bg-slate-50/50 transition-all">
                                         <td className="px-6 py-3">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-black"
+                                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-black"
                                                     style={{ background: COLORS[i % COLORS.length] }}>
                                                     {est.name.charAt(0)}
                                                 </div>
@@ -289,7 +289,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                                                     <div className="h-full rounded-full transition-all"
                                                         style={{ width: `${Math.min(pct, 100)}%`, background: isOver ? '#f43f5e' : COLORS[i % COLORS.length] }} />
                                                 </div>
-                                                <span className={`text-[10px] font-black w-10 text-right ${isOver ? 'text-rose-600' : 'text-slate-500'}`}>
+                                                <span className={`text-xs font-black w-10 text-right ${isOver ? 'text-rose-600' : 'text-slate-500'}`}>
                                                     {real ? `${pct.toFixed(0)}%` : '—'}
                                                 </span>
                                             </div>

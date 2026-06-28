@@ -149,7 +149,7 @@ const LaborDocumentModal: React.FC<LaborDocumentModalProps> = ({ employees, orgI
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Colaborador */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Colaborador</label>
+                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Colaborador</label>
                             {isEdit ? (
                                 <div className="w-full px-4 py-3 bg-slate-100 rounded-xl text-sm font-bold text-slate-500 cursor-not-allowed">
                                     {editDoc?.employee_name || 'Colaborador'}
@@ -171,7 +171,7 @@ const LaborDocumentModal: React.FC<LaborDocumentModalProps> = ({ employees, orgI
 
                         {/* Categoria */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Categoria</label>
+                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Categoria</label>
                             <select
                                 value={form.category}
                                 onChange={(e) => setForm({ ...form, category: e.target.value as DocumentCategory })}
@@ -187,7 +187,7 @@ const LaborDocumentModal: React.FC<LaborDocumentModalProps> = ({ employees, orgI
 
                     {/* Título */}
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Título do Documento</label>
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Título do Documento</label>
                         <input
                             type="text"
                             placeholder="Ex: ASO Periódico 2024"
@@ -201,7 +201,7 @@ const LaborDocumentModal: React.FC<LaborDocumentModalProps> = ({ employees, orgI
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Data de Vencimento */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center justify-between">
+                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1 flex items-center justify-between">
                                 Vencimento
                                 <span className="text-[9px] text-slate-300 normal-case font-medium">Opcional</span>
                             </label>
@@ -219,7 +219,7 @@ const LaborDocumentModal: React.FC<LaborDocumentModalProps> = ({ employees, orgI
                         {/* File Upload — apenas no modo criação */}
                         {!isEdit && (
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Arquivo (PDF, JPG, PNG)</label>
+                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Arquivo (PDF, JPG, PNG)</label>
                                 <div
                                     onClick={() => fileInputRef.current?.click()}
                                     className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${file ? 'border-emerald-300 bg-emerald-50 text-emerald-600' : 'border-slate-200 bg-slate-50 text-slate-400 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600'}`}
@@ -232,7 +232,7 @@ const LaborDocumentModal: React.FC<LaborDocumentModalProps> = ({ employees, orgI
                                     ) : (
                                         <div className="flex flex-col items-center gap-1">
                                             <Upload className="w-5 h-5" />
-                                            <span className="text-[10px] font-black uppercase">Fazer Upload</span>
+                                            <span className="text-xs font-black uppercase">Fazer Upload</span>
                                         </div>
                                     )}
                                     <input
@@ -249,7 +249,7 @@ const LaborDocumentModal: React.FC<LaborDocumentModalProps> = ({ employees, orgI
 
                     {/* Observações */}
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Observações</label>
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Observações</label>
                         <textarea
                             rows={3}
                             value={form.notes}
@@ -260,7 +260,7 @@ const LaborDocumentModal: React.FC<LaborDocumentModalProps> = ({ employees, orgI
                     </div>
 
                     {!isEdit && (
-                        <div className="p-4 bg-indigo-50 rounded-2xl flex gap-3 text-indigo-700 text-[11px] font-bold border border-indigo-100">
+                        <div className="p-4 bg-indigo-50 rounded-2xl flex gap-3 text-indigo-700 text-xs font-bold border border-indigo-100">
                             <Info className="w-4 h-4 shrink-0" />
                             <p>O arquivo será armazenado com segurança e o vencimento será monitorado automaticamente no seu Dashboard.</p>
                         </div>

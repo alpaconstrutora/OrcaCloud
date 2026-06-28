@@ -50,27 +50,27 @@ const CompanyCard: React.FC<{
                     <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-black text-gray-900 text-sm truncate">{data.razao_social}</p>
                         {data.is_headquarters && (
-                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Sede</span>
+                            <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Sede</span>
                         )}
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                        <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-full ${
                             data.status === 'ativa' ? 'bg-green-100 text-green-700' :
                             data.status === 'encerrada' ? 'bg-red-100 text-red-600' :
                             'bg-gray-100 text-gray-500'
                         }`}>{data.status}</span>
                     </div>
-                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-wide">
+                    <p className="text-xs text-gray-400 font-black uppercase tracking-wide">
                         {COMPANY_TIPO_LABELS[data.tipo]}
                         {data.regime_tributario && ` · ${REGIME_TRIBUTARIO_LABELS[data.regime_tributario]}`}
                     </p>
                 </div>
                 <div className="flex gap-1.5 flex-shrink-0">
                     {data.docs_vencidos > 0 && (
-                        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
                             <CalendarX className="w-3 h-3" />{data.docs_vencidos}
                         </span>
                     )}
                     {data.docs_vencendo > 0 && (
-                        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
                             <CalendarClock className="w-3 h-3" />{data.docs_vencendo}
                         </span>
                     )}
@@ -80,21 +80,21 @@ const CompanyCard: React.FC<{
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-0 divide-x divide-y divide-gray-100">
                 <div className="px-4 py-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Obras</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-0.5">Obras</p>
                     <p className="text-xl font-black text-gray-900">{data.qtd_obras}</p>
                     {hasTarget && target.qtd_obras_meta != null && (
                         <div className="mt-1 space-y-0.5">
                             <ProgressBar value={data.qtd_obras} max={target.qtd_obras_meta} color="bg-blue-500" />
-                            <p className="text-[10px] text-gray-400">meta {target.qtd_obras_meta}</p>
+                            <p className="text-xs text-gray-400">meta {target.qtd_obras_meta}</p>
                         </div>
                     )}
                 </div>
                 <div className="px-4 py-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Contratos</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-0.5">Contratos</p>
                     <p className="text-xl font-black text-gray-900">{data.qtd_contratos}</p>
                 </div>
                 <div className="px-4 py-3 col-span-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Receita Contratada</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-0.5">Receita Contratada</p>
                     <p className="text-xl font-black text-gray-900">{brl(data.receita_contratada)}</p>
                     {hasTarget && target.faturamento_meta != null && (
                         <div className="mt-1 space-y-0.5">
@@ -102,7 +102,7 @@ const CompanyCard: React.FC<{
                                 value={data.receita_contratada}
                                 max={target.faturamento_meta}
                                 color={data.receita_contratada >= target.faturamento_meta ? 'bg-green-500' : 'bg-blue-500'} />
-                            <p className="text-[10px] text-gray-400">
+                            <p className="text-xs text-gray-400">
                                 meta {brl(target.faturamento_meta)}
                                 {' · '}{pct((data.receita_contratada / target.faturamento_meta) * 100) ?? ''}
                             </p>
@@ -110,15 +110,15 @@ const CompanyCard: React.FC<{
                     )}
                 </div>
                 <div className="px-4 py-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Pedidos Aprov.</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-0.5">Pedidos Aprov.</p>
                     <p className="text-lg font-black text-gray-900">{data.compras_aprovadas}</p>
                 </div>
                 <div className="px-4 py-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Sócios</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-0.5">Sócios</p>
                     <p className="text-lg font-black text-gray-900">{data.qtd_socios}</p>
                 </div>
                 <div className="px-4 py-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Contas</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-0.5">Contas</p>
                     <p className="text-lg font-black text-gray-900">{data.qtd_contas}</p>
                 </div>
             </div>
@@ -126,12 +126,12 @@ const CompanyCard: React.FC<{
             {/* Meta do ano se houver */}
             {hasTarget && target.margem_alvo_pct != null && (
                 <div className="px-4 py-2 bg-blue-50/50 border-t border-blue-100 flex items-center gap-4">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">Meta {anoAtual}</span>
+                    <span className="text-xs font-black uppercase tracking-widest text-blue-600">Meta {anoAtual}</span>
                     {target.margem_alvo_pct != null && (
-                        <span className="text-[10px] text-blue-600">Margem alvo: <strong>{pct(target.margem_alvo_pct)}</strong></span>
+                        <span className="text-xs text-blue-600">Margem alvo: <strong>{pct(target.margem_alvo_pct)}</strong></span>
                     )}
                     {target.ebitda_alvo != null && (
-                        <span className="text-[10px] text-blue-600">EBITDA: <strong>{brl(target.ebitda_alvo)}</strong></span>
+                        <span className="text-xs text-blue-600">EBITDA: <strong>{brl(target.ebitda_alvo)}</strong></span>
                     )}
                 </div>
             )}
@@ -197,7 +197,7 @@ const CompanyGroupDashboard: React.FC<Props> = ({ orgId, onBack }) => {
                     <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight italic border-l-4 border-blue-600 pl-4">
                         Dashboard do Grupo
                     </h2>
-                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-1 pl-4">
+                    <p className="text-gray-400 text-xs font-black uppercase tracking-widest mt-1 pl-4">
                         Visão consolidada de todas as empresas
                     </p>
                 </div>
@@ -232,7 +232,7 @@ const CompanyGroupDashboard: React.FC<Props> = ({ orgId, onBack }) => {
                                 <div className={`w-8 h-8 rounded-xl ${kpi.bg} flex items-center justify-center mb-2`}>
                                     <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
                                 </div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{kpi.label}</p>
+                                <p className="text-xs font-black uppercase tracking-widest text-gray-400">{kpi.label}</p>
                                 <p className={`text-lg font-black ${kpi.color}`}>{kpi.value}</p>
                             </div>
                         ))}

@@ -341,7 +341,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                         </div>
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo de Folha</label>
+                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Tipo de Folha</label>
                                 <select
                                     id="payroll_type"
                                     className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
@@ -358,7 +358,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                                 </select>
                             </div>
                             <div id="payroll_subtype_container" className="space-y-2" style={{ display: 'none' }}>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Parcela (13º)</label>
+                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Parcela (13º)</label>
                                 <select id="payroll_subtype" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500">
                                     <option value="1_parcela">1ª Parcela (50%)</option>
                                     <option value="2_parcela">2ª Parcela (Integral com desc.)</option>
@@ -366,12 +366,12 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Início do Período</label>
+                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Início do Período</label>
                                     <input id="payroll_start" type="date" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                                         defaultValue={new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]} />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fim do Período</label>
+                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Fim do Período</label>
                                     <input id="payroll_end" type="date" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                                         defaultValue={new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]} />
                                 </div>
@@ -380,7 +380,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
 
                         {(!orgId || orgId === 'all') && (
                             <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
-                                <p className="text-[10px] font-black text-indigo-700 uppercase tracking-widest leading-relaxed text-center">
+                                <p className="text-xs font-black text-indigo-700 uppercase tracking-widest leading-relaxed text-center">
                                     O sistema identificará automaticamente as empresas com funcionários ativos e gerará as folhas individuais em lote.
                                 </p>
                             </div>

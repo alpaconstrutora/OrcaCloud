@@ -157,7 +157,7 @@ const ReformasCronograma: React.FC<ReformasCronogramaProps> = ({ userId }) => {
 
       {/* Adicionar nova Etapa */}
       <form onSubmit={handleCreateItem} className="bg-[#0D1224] p-4 border border-white/5 rounded-2xl space-y-3.5 shadow-md">
-        <span className="text-[10px] font-black uppercase tracking-widest text-orange-500 block">
+        <span className="text-xs font-black uppercase tracking-widest text-orange-500 block">
           Adicionar Nova Etapa
         </span>
 

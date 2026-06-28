@@ -121,7 +121,7 @@ const KanbanCard: React.FC<{
           onClick={() => onViewDetail(wo.id)}
         >
           {wo.code && (
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">
               {wo.code}
             </p>
           )}
@@ -131,15 +131,15 @@ const KanbanCard: React.FC<{
           </p>
 
           {wo.phase && (
-            <p className="text-[10px] text-slate-400 mt-1 truncate">{wo.phase}</p>
+            <p className="text-xs text-slate-400 mt-1 truncate">{wo.phase}</p>
           )}
 
           {/* Progress */}
           {wo.completion_pct > 0 && (
             <div className="mt-2">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] text-slate-400">Progresso</span>
-                <span className="text-[10px] font-bold text-slate-600">{wo.completion_pct}%</span>
+                <span className="text-xs text-slate-400">Progresso</span>
+                <span className="text-xs font-bold text-slate-600">{wo.completion_pct}%</span>
               </div>
               <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
                 <div
@@ -157,7 +157,7 @@ const KanbanCard: React.FC<{
               {wo.responsible?.name && (
                 <div className="flex items-center gap-1 min-w-0">
                   <User className="w-3 h-3 text-slate-300 flex-shrink-0" />
-                  <span className="text-[10px] text-slate-400 truncate">
+                  <span className="text-xs text-slate-400 truncate">
                     {wo.responsible.name.split(' ')[0]}
                   </span>
                 </div>
@@ -166,18 +166,18 @@ const KanbanCard: React.FC<{
 
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {openNCs > 0 && (
-                <span className="flex items-center gap-0.5 text-[10px] font-bold text-red-500">
+                <span className="flex items-center gap-0.5 text-xs font-bold text-red-500">
                   <AlertTriangle className="w-3 h-3" />
                   {openNCs}
                 </span>
               )}
               {isOverdue ? (
-                <span className="flex items-center gap-0.5 text-[10px] font-bold text-red-500">
+                <span className="flex items-center gap-0.5 text-xs font-bold text-red-500">
                   <Calendar className="w-3 h-3" />
                   Atr.
                 </span>
               ) : wo.planned_end_date ? (
-                <span className="text-[10px] text-slate-400">
+                <span className="text-xs text-slate-400">
                   {new Date(wo.planned_end_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                 </span>
               ) : null}

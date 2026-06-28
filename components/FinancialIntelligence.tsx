@@ -96,9 +96,9 @@ function AlertCard({ alert }: { alert: FinancialAlert }) {
 function KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
     return (
         <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{label}</p>
+            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">{label}</p>
             <p className={`text-xl font-black ${color ?? 'text-gray-900'}`}>{value}</p>
-            {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
+            {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
         </div>
     );
 }
@@ -363,7 +363,7 @@ function ScheduleCard({
                     ))}
                 </div>
                 {schedule.last_sent_at && (
-                    <p className="text-[10px] text-gray-400 mt-1">
+                    <p className="text-xs text-gray-400 mt-1">
                         Último envio: {new Date(schedule.last_sent_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                     </p>
                 )}
@@ -665,7 +665,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                                 <thead className="bg-gray-50 border-b border-gray-100">
                                                     <tr>
                                                         {['Obra', 'Receita Real.', 'Custo Real.', 'Margem', 'AR Pendente', 'AP Pendente', 'Saldo Proj.', 'Risco'].map(h => (
-                                                            <th key={h} className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">
+                                                            <th key={h} className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">
                                                                 {h}
                                                             </th>
                                                         ))}
@@ -863,7 +863,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                                 { label: `Saldo Final (${horizon}d)`, value: summary.saldoFinal, color: summary.saldoFinal < 0 ? 'text-red-600' : 'text-violet-700' },
                                             ].map(k => (
                                                 <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-4">
-                                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{k.label}</p>
+                                                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">{k.label}</p>
                                                     <p className={`text-base font-black ${k.color}`}>{fmt(k.value, true)}</p>
                                                 </div>
                                             ))}

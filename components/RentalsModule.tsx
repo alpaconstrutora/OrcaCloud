@@ -411,7 +411,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     />
                 </div>
                 <div className="absolute top-6 right-6 z-10 flex flex-col gap-2 scale-90 origin-top-right">
-                    <span className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusColor(property.status)} backdrop-blur-xl shadow-xl`}>
+                    <span className={`px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest border ${getStatusColor(property.status)} backdrop-blur-xl shadow-xl`}>
                         {getStatusLabel(property.status)}
                     </span>
                     <div className="flex gap-2">
@@ -435,7 +435,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 <div className="absolute inset-x-0 bottom-0 p-8 bg-gradient-to-t from-black/80 via-black/40 to-transparent text-white">
                     <div className="flex items-center gap-2 mb-2">
                         <MapPin className="w-4 h-4 text-blue-400" />
-                        <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest leading-none">
+                        <span className="text-xs font-black text-blue-200 uppercase tracking-widest leading-none">
                             {property.type === 'BUILDING' ? (property.address.split('-')[1]?.trim() || property.address) : (properties.find(p => p.id === property.parent_id)?.name || 'Unidade Independente')}
                         </span>
                     </div>
@@ -512,14 +512,14 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             <div className="p-2 bg-blue-600 rounded-xl shadow-lg shadow-blue-600/20">
                                 <Building2 className="w-6 h-6 text-white" />
                             </div>
-                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">
+                            <span className="text-xs font-black text-blue-400 uppercase tracking-[0.3em]">
                                 {currentBuilding ? `Edifício: ${currentBuilding.name}` : 'Comercial • Aluguéis'}
                             </span>
                         </div>
                         <h1 className="text-4xl font-black text-white tracking-tight">
                             {currentBuilding ? 'Gestão de Unidades' : 'Gestão de Locações'}
                         </h1>
-                        <p className="text-white/40 font-bold mt-2 uppercase text-[10px] tracking-widest">
+                        <p className="text-white/40 font-bold mt-2 uppercase text-xs tracking-widest">
                             {currentBuilding ? `Administração de ativos para ${currentBuilding.name}` : 'Controle de inventário, ocupação e performance imobiliária.'}
                         </p>
                     </div>
@@ -587,7 +587,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     <s.icon className="w-5 h-5" />
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{s.label}</span>
+                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{s.label}</span>
                                     <span className="text-xl font-black text-gray-900 leading-none">{s.value}</span>
                                 </div>
                             </div>
@@ -652,7 +652,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             {viewMode === 'list' && (
                                 <div className="bg-white border border-gray-100 rounded-3xl overflow-hidden shadow-sm">
                                     <table className="w-full text-left border-collapse">
-                                        <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase text-[10px] tracking-widest">
+                                        <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase text-xs tracking-widest">
                                             <tr>
                                                 <th className="px-6 py-4 border-r border-gray-100 last:border-r-0">Imóvel</th>
                                                 {!selectedBuildingId ? (
@@ -717,7 +717,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                                     const pct = bUnits.length > 0 ? (rentedCount / bUnits.length) * 100 : 0;
                                                                     return (
                                                                         <div className="flex flex-col items-center gap-1">
-                                                                            <span className="text-[10px] font-black text-blue-600">{pct.toFixed(0)}%</span>
+                                                                            <span className="text-xs font-black text-blue-600">{pct.toFixed(0)}%</span>
                                                                             <div className="w-12 h-1 bg-gray-100 rounded-full overflow-hidden">
                                                                                 <div className="h-full bg-blue-500" style={{ width: `${pct}%` }} />
                                                                             </div>
@@ -813,30 +813,30 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     {selectedProperties.length > 0 && (
                         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[90] flex items-center gap-6 px-10 py-6 bg-[#0B1727] border border-white/10 rounded-full shadow-2xl shadow-blue-900/40 animate-in slide-in-from-bottom-10 duration-500">
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest leading-none mb-1">Items Selecionados</span>
+                                <span className="text-xs font-black text-blue-400 uppercase tracking-widest leading-none mb-1">Items Selecionados</span>
                                 <span className="text-xl font-black text-white leading-none">{selectedProperties.length} Imóveis</span>
                             </div>
 
                             <div className="w-px h-10 bg-white/10 mx-2" />
 
                             <div className="flex items-center gap-4">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alterar para:</span>
+                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Alterar para:</span>
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => handleBulkUpdate({ status: PropertyStatus.AVAILABLE })}
-                                        className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                        className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
                                     >
                                         Disponível
                                     </button>
                                     <button
                                         onClick={() => handleBulkUpdate({ status: PropertyStatus.RESERVED })}
-                                        className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                        className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
                                     >
                                         Reservar
                                     </button>
                                     <button
                                         onClick={() => handleBulkUpdate({ status: PropertyStatus.EXCHANGED })}
-                                        className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                        className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
                                     >
                                         Permutar
                                     </button>
@@ -847,7 +847,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                 handleBulkUpdate({ price: parseFloat(newPrice) });
                                             }
                                         }}
-                                        className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                        className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
                                     >
                                         Mudar Preço
                                     </button>
@@ -903,13 +903,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                 </button>
                                             </div>
                                             <div className="flex items-center gap-2 mb-6">
-                                                <span className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${deal.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                                                <span className={`px-5 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${deal.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
                                                     {deal.status === 'COMPLETED' ? 'Concluído' :
                                                         deal.status === 'PENDING' ? 'Pendente' :
                                                             deal.status === 'CANCELLED' ? 'Cancelado' : 'Pendente'}
                                                 </span>
                                                 <div className="flex flex-col items-end ml-auto">
-                                                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">#{deal.id.substring(0, 8).toUpperCase()}</span>
+                                                    <span className="text-xs font-black text-blue-600 uppercase tracking-widest">#{deal.id.substring(0, 8).toUpperCase()}</span>
                                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
                                                         {new Date(deal.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                     </span>
@@ -917,7 +917,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                             </div>
 
                                             <div className="mb-8">
-                                                <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest mb-2 inline-block bg-purple-600 text-white shadow-lg shadow-purple-600/20`}>
+                                                <span className={`text-xs font-black px-3 py-1 rounded-lg uppercase tracking-widest mb-2 inline-block bg-purple-600 text-white shadow-lg shadow-purple-600/20`}>
                                                     Locação Ativa
                                                 </span>
                                                 <h4 className="text-2xl font-black text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || 'Imóvel em referência'}</h4>
@@ -931,7 +931,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
                                             <div className="p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100 flex items-center justify-between mb-6">
                                                 <div className="flex flex-col">
-                                                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Valor do Contrato</span>
+                                                    <span className="text-xs font-black text-blue-500 uppercase tracking-widest mb-1">Valor do Contrato</span>
                                                     <span className="text-3xl font-black text-gray-900">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value)}
                                                     </span>
@@ -968,14 +968,14 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-gray-50 border-b border-gray-100 italic">
                                         <tr>
-                                            <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">ID</th>
-                                            <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Imóvel</th>
-                                            <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Cliente</th>
-                                            <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Tipo</th>
-                                            <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Valor</th>
-                                            <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Data</th>
-                                            <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Status</th>
-                                            <th className="px-8 py-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Ações</th>
+                                            <th className="px-8 py-6 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">ID</th>
+                                            <th className="px-8 py-6 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Imóvel</th>
+                                            <th className="px-8 py-6 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Cliente</th>
+                                            <th className="px-8 py-6 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Tipo</th>
+                                            <th className="px-8 py-6 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Valor</th>
+                                            <th className="px-8 py-6 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Data</th>
+                                            <th className="px-8 py-6 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Status</th>
+                                            <th className="px-8 py-6 text-right text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
@@ -985,7 +985,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                             return (
                                                 <tr key={deal.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}>
                                                     <td className="px-8 py-6">
-                                                        <span className="font-mono text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 shadow-sm">#{deal.id.substring(0, 8).toUpperCase()}</span>
+                                                        <span className="font-mono text-xs font-black text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 shadow-sm">#{deal.id.substring(0, 8).toUpperCase()}</span>
                                                     </td>
                                                     <td className="px-8 py-6">
                                                         <span className="font-black text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || '---'}</span>

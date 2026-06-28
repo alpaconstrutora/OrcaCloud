@@ -230,7 +230,7 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                             <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                                 <FileText className="w-6 h-6" />
                             </div>
-                            <div className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
+                            <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
                                 DOC
                             </div>
                         </div>
@@ -239,7 +239,7 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                                 <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Modelos de Documento</h2>
                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Tipo:</span>
-                                    <span className="text-[10px] font-bold text-gray-600 uppercase">Template .docx</span>
+                                    <span className="text-xs font-bold text-gray-600 uppercase">Template .docx</span>
                                 </div>
                             </div>
                             <p className="text-sm text-gray-500 font-medium leading-tight">

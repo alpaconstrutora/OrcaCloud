@@ -513,7 +513,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                             </span>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleAddItem(category); }}
-                                                className="p-1 px-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider bg-white hover:bg-slate-200 text-indigo-600 border border-slate-200 rounded-md transition-all active:scale-95"
+                                                className="p-1 px-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-wider bg-white hover:bg-slate-200 text-indigo-600 border border-slate-200 rounded-md transition-all active:scale-95"
                                             >
                                                 <Plus className="w-3 h-3" />
                                                 Novo
@@ -525,7 +525,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                         <div className="p-0 border-t border-slate-200">
                                             <table className="w-full text-left bg-white">
                                                 <thead>
-                                                    <tr className="bg-slate-50/50 text-[10px] font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">
+                                                    <tr className="bg-slate-50/50 text-xs font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">
                                                         <th className="px-6 py-3 w-1/2">Rubrica / Linha de Custo</th>
                                                         <th className="px-6 py-3 w-1/4">Tipo</th>
                                                         <th className="px-6 py-3 w-1/4">Valor</th>
@@ -547,7 +547,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                 />
                                                             </td>
                                                             <td className="px-6 py-3">
-                                                                <span className={`inline-flex items-center px-2 py-1 text-[10px] font-black tracking-wider uppercase rounded-md ${item.value_type === 'percent'
+                                                                <span className={`inline-flex items-center px-2 py-1 text-xs font-black tracking-wider uppercase rounded-md ${item.value_type === 'percent'
                                                                     ? 'bg-amber-100 text-amber-700'
                                                                     : 'bg-emerald-100 text-emerald-700'
                                                                     }`}>

@@ -64,7 +64,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                 <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Prevista Total</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Prevista Total</p>
                             <p className="text-2xl font-black text-gray-900 mt-1">{formatCurrency(totals.predicted)}</p>
                         </div>
                         <div className="p-4 bg-gray-50 rounded-2xl"><TrendingUp className="w-6 h-6 text-gray-400" /></div>
@@ -77,7 +77,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                 <div className="bg-white rounded-2xl border border-blue-100 p-6 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Liberada</p>
+                            <p className="text-xs font-black text-blue-400 uppercase tracking-[0.2em]">Liberada</p>
                             <p className="text-2xl font-black text-blue-700 mt-1">{formatCurrency(totals.released)}</p>
                         </div>
                         <div className="p-4 bg-blue-50 rounded-2xl"><CheckCircle2 className="w-6 h-6 text-blue-500" /></div>
@@ -90,7 +90,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                 <div className="bg-white rounded-2xl border border-emerald-100 p-6 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em]">Paga</p>
+                            <p className="text-xs font-black text-emerald-400 uppercase tracking-[0.2em]">Paga</p>
                             <p className="text-2xl font-black text-emerald-700 mt-1">{formatCurrency(totals.paid)}</p>
                         </div>
                         <div className="p-4 bg-emerald-50 rounded-2xl"><DollarSign className="w-6 h-6 text-emerald-500" /></div>
@@ -138,13 +138,13 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold text-gray-900">Unidade {comm.unit_number} {comm.block ? `• ${comm.block}` : ''}</p>
-                                            <p className="text-[10px] text-gray-400 mt-0.5">Venda: {formatCurrency(comm.sale_value)} • {comm.commission_pct}% comissão</p>
+                                            <p className="text-xs text-gray-400 mt-0.5">Venda: {formatCurrency(comm.sale_value)} • {comm.commission_pct}% comissão</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-4">
                                         <div className="text-right">
                                             <p className="text-sm font-black text-gray-900">{formatCurrency(comm.commission_predicted || 0)}</p>
-                                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${cfg.bg} ${cfg.color}`}>
+                                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${cfg.bg} ${cfg.color}`}>
                                                 <Icon className="w-3 h-3" />{cfg.label}
                                             </span>
                                         </div>
@@ -165,7 +165,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                                                             </div>
                                                             <div>
                                                                 <p className="text-sm font-bold text-gray-900">{m.name}</p>
-                                                                {m.date && <p className="text-[10px] text-gray-400">{new Date(m.date).toLocaleDateString('pt-BR')}</p>}
+                                                                {m.date && <p className="text-xs text-gray-400">{new Date(m.date).toLocaleDateString('pt-BR')}</p>}
                                                             </div>
                                                         </div>
                                                         <span className={`text-sm font-black ${m.paid ? 'text-emerald-600' : 'text-gray-400'}`}>

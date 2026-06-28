@@ -79,7 +79,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                 {/* Header */}
                 <div className="flex items-center justify-between p-8 pb-6 border-b border-gray-100 sticky top-0 bg-white rounded-t-3xl z-10">
                     <div>
-                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                        <span className="text-xs font-black text-blue-600 uppercase tracking-widest">
                             {initial?.id ? 'Editar' : 'Nova'} Oportunidade
                         </span>
                         <h2 className="text-xl font-black text-gray-900 mt-0.5">
@@ -161,7 +161,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         <div className="flex items-center gap-2 mb-3">
                             <Link2 className="w-4 h-4 text-indigo-600" />
                             <span className="text-xs font-black text-indigo-600 uppercase tracking-widest">Obra vinculada</span>
-                            <span className="text-[10px] text-indigo-400 ml-1">(opcional)</span>
+                            <span className="text-xs text-indigo-400 ml-1">(opcional)</span>
                         </div>
                         <p className="text-xs text-indigo-500 mb-3 leading-relaxed">
                             Vincule a uma obra real do ORÇACLOUD para exibir dados ao vivo: progresso físico,
@@ -190,7 +190,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             )}
                         </div>
                         {form.project_id && (
-                            <p className="text-[10px] text-indigo-500 mt-2 flex items-center gap-1">
+                            <p className="text-xs text-indigo-500 mt-2 flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
                                 Dados ao vivo serão exibidos na aba "Obra" do pitch
                             </p>

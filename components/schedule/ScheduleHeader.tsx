@@ -134,7 +134,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     </h1>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5 relative">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Obra:</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Obra:</span>
                     <div className="relative">
                         <button
                             onClick={() => setIsProjectSelectorOpen(!isProjectSelectorOpen)}
@@ -161,7 +161,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                     ))}
                                     {projects.length === 0 && (
                                         <div className="px-4 py-8 text-center">
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase">Nenhuma obra encontrada</p>
+                                            <p className="text-xs font-bold text-gray-400 uppercase">Nenhuma obra encontrada</p>
                                         </div>
                                     )}
                                 </div>
@@ -208,7 +208,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                 <button
                                     key={scale}
                                     onClick={() => setTimeScale(scale)}
-                                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all ${timeScale === scale ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${timeScale === scale ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                 >
                                     {{ day: 'Dia', week: 'Sem', month: 'Mês', year: 'Ano' }[scale]}
                                 </button>
@@ -222,7 +222,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                 <div className="flex items-center gap-1">
                     <button
                         onClick={onAutoSchedule}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-sm"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
                         title="Recalcula todas as datas com base em predecessores e duração"
                     >
                         <Wand2 className="w-3.5 h-3.5" />
@@ -231,7 +231,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
 
                     <button
                         onClick={handleLevelResources}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-indigo-600 hover:bg-indigo-50 border border-indigo-100 rounded-lg text-[11px] font-bold transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-indigo-600 hover:bg-indigo-50 border border-indigo-100 rounded-lg text-xs font-bold transition-all"
                         title="Nivelamento Automático de Recursos"
                     >
                         <Users className="w-3.5 h-3.5" />
@@ -244,7 +244,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                 <div className="flex items-center gap-1">
                     <button
                         onClick={onSyncBudget}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border ${
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                             syncDiffCount > 0
                                 ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 shadow-sm'
                                 : 'text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'
@@ -262,7 +262,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
 
                     <button
                         onClick={onOpenVersions}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border ${
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                             hasNewerBudgetVersion
                                 ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 shadow-sm'
                                 : 'text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'

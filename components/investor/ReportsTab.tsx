@@ -35,7 +35,7 @@ const ReportsTab: React.FC<Props> = ({
                     <div className="flex flex-wrap gap-2 pt-1">
                         <button
                             onClick={() => setFilterCat('todos')}
-                            className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${filterCat === 'todos' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                            className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${filterCat === 'todos' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                         >
                             Todos ({reports.length})
                         </button>
@@ -43,7 +43,7 @@ const ReportsTab: React.FC<Props> = ({
                             <button
                                 key={cat}
                                 onClick={() => setFilterCat(cat)}
-                                className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${filterCat === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                                className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${filterCat === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                             >
                                 {label} ({reports.filter(r => r.category === cat).length})
                             </button>
@@ -105,11 +105,11 @@ const ReportsTab: React.FC<Props> = ({
                                     <span className="font-bold text-gray-700 group-hover:text-gray-900 block">{doc.name}</span>
                                     <div className="flex items-center gap-2 mt-0.5">
                                         {doc.category && (
-                                            <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+                                            <span className="text-xs font-bold uppercase tracking-wider bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
                                                 {REPORT_CATEGORY_LABELS[doc.category]}
                                             </span>
                                         )}
-                                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{doc.report_date}</span>
+                                        <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">{doc.report_date}</span>
                                     </div>
                                 </div>
                             </div>
@@ -153,11 +153,11 @@ const ReportsTab: React.FC<Props> = ({
                             <div className="text-center">
                                 <span className="font-bold text-gray-900 block mb-1 uppercase tracking-tight text-sm">{doc.name}</span>
                                 {doc.category && (
-                                    <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+                                    <span className="text-xs font-bold uppercase tracking-wider bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
                                         {REPORT_CATEGORY_LABELS[doc.category]}
                                     </span>
                                 )}
-                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest block mt-1">{doc.report_date}</span>
+                                <span className="text-xs text-gray-400 font-bold uppercase tracking-widest block mt-1">{doc.report_date}</span>
                             </div>
                             <button
                                 className="mt-4 p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"

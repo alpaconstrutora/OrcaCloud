@@ -58,7 +58,7 @@ const RECEBER_COLUMNS: ColumnConfig[] = [
 
 function StatusBadge({ status }: { status: string }) {
     return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest border ${STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
             {status === 'VENCIDO' && <AlertCircle className="w-2.5 h-2.5 mr-1" />}
             {STATUS_LABEL[status] ?? status}
         </span>
@@ -433,13 +433,13 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                 <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-2">Encargos por atraso</label>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <span className="text-[10px] text-gray-400 font-bold">Multa (%)</span>
+                                        <span className="text-xs text-gray-400 font-bold">Multa (%)</span>
                                         <input type="number" min={0} step="0.1" value={fine}
                                             onChange={e => setFine(e.target.value)}
                                             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
                                     </div>
                                     <div>
-                                        <span className="text-[10px] text-gray-400 font-bold">Juros ao mês (%)</span>
+                                        <span className="text-xs text-gray-400 font-bold">Juros ao mês (%)</span>
                                         <input type="number" min={0} step="0.1" value={interest}
                                             onChange={e => setInterest(e.target.value)}
                                             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
@@ -450,13 +450,13 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                 <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-2">Desconto p/ pagamento antecipado</label>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <span className="text-[10px] text-gray-400 font-bold">Desconto (%)</span>
+                                        <span className="text-xs text-gray-400 font-bold">Desconto (%)</span>
                                         <input type="number" min={0} step="0.1" value={discount}
                                             onChange={e => setDiscount(e.target.value)}
                                             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
                                     </div>
                                     <div>
-                                        <span className="text-[10px] text-gray-400 font-bold">Até (dias antes)</span>
+                                        <span className="text-xs text-gray-400 font-bold">Até (dias antes)</span>
                                         <input type="number" min={0} step="1" value={discountDays}
                                             onChange={e => setDiscountDays(e.target.value)}
                                             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
@@ -511,7 +511,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                     </button>
                                 ) : (
                                     <div className="space-y-3">
-                                        <p className="text-[11px] text-amber-700 font-semibold bg-amber-50 rounded-lg p-2.5 leading-snug">
+                                        <p className="text-xs text-amber-700 font-semibold bg-amber-50 rounded-lg p-2.5 leading-snug">
                                             O boleto atual será <b>cancelado no Asaas</b> e um novo será emitido com os dados corrigidos.
                                         </p>
                                         {err && <p className="text-xs text-red-600 font-semibold bg-red-50 rounded-lg p-3">{err}</p>}
@@ -790,7 +790,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                         { label: 'Recebido (mês)', value: summary.recebidoMes, color: 'text-green-700' },
                     ].map(k => (
                         <div key={k.label} className="bg-gray-50 rounded-xl p-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">{k.label}</p>
+                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-0.5">{k.label}</p>
                             <p className={`text-base font-black ${k.color}`}>{fmt(k.value)}</p>
                         </div>
                     ))}
@@ -812,9 +812,9 @@ export default function ContasReceberManager({ organizationId, organizations, on
                         <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {inadimplencia.map(f => (
                                 <div key={f.faixa} className="bg-white rounded-lg p-2 border border-red-100">
-                                    <p className="text-[10px] text-red-500 font-bold uppercase">{f.faixa}</p>
+                                    <p className="text-xs text-red-500 font-bold uppercase">{f.faixa}</p>
                                     <p className="text-sm font-black text-red-700">{fmt(f.valor)}</p>
-                                    <p className="text-[10px] text-red-400">{f.count} título{f.count !== 1 ? 's' : ''}</p>
+                                    <p className="text-xs text-red-400">{f.count} título{f.count !== 1 ? 's' : ''}</p>
                                 </div>
                             ))}
                         </div>
@@ -842,7 +842,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                             <button
                                 key={s}
                                 onClick={() => setStatusFilter(s)}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+                                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all ${
                                     statusFilter === s
                                         ? 'bg-blue-600 text-white'
                                         : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -914,7 +914,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                     <th
                                         key={col.label}
                                         onClick={() => col.key && handleSort(col.key as keyof Receivable)}
-                                        className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap ${col.key ? 'cursor-pointer hover:text-gray-800 select-none' : ''}`}
+                                        className={`px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-gray-500 whitespace-nowrap ${col.key ? 'cursor-pointer hover:text-gray-800 select-none' : ''}`}
                                     >
                                         <span className="flex items-center gap-1">
                                             {col.label}
@@ -953,7 +953,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                                 {!isRecebido && (
                                                     <button
                                                         onClick={() => setBaixando(r)}
-                                                        className="px-2.5 py-1 bg-green-50 hover:bg-green-100 text-green-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                                        className="px-2.5 py-1 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
                                                     >
                                                         <Check className="w-3 h-3" /> Baixar
                                                     </button>
@@ -962,7 +962,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                                     charges[r.id] ? (
                                                         <button
                                                             onClick={() => setEmitindo(r)}
-                                                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
                                                             title="Ver cobrança emitida"
                                                         >
                                                             <FileText className="w-3 h-3" /> Cobrança
@@ -970,7 +970,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                                     ) : (
                                                         <button
                                                             onClick={() => setEmitindo(r)}
-                                                            className="px-2.5 py-1 bg-violet-50 hover:bg-violet-100 text-violet-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                                            className="px-2.5 py-1 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
                                                             title="Emitir boleto/PIX via Asaas"
                                                         >
                                                             <FileText className="w-3 h-3" /> Emitir
@@ -982,7 +982,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                                         value={r.business_status}
                                                         disabled={changingStatus === r.id}
                                                         onChange={e => handleChangeStatus(r.id, e.target.value)}
-                                                        className="text-[10px] font-bold border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none cursor-pointer"
+                                                        className="text-xs font-bold border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none cursor-pointer"
                                                     >
                                                         {(['PREVISTO','EMITIDO','ENVIADO','PARCIAL','RENEGOCIADO','CANCELADO'] as const).map(s => (
                                                             <option key={s} value={s}>{STATUS_LABEL[s]}</option>

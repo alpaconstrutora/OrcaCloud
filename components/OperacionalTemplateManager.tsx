@@ -82,13 +82,13 @@ const ItemRow: React.FC<{
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-slate-800 truncate">{item.description}</p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${GATE_COLORS[item.gate]}`}>
+            <span className={`text-xs font-black px-1.5 py-0.5 rounded ${GATE_COLORS[item.gate]}`}>
               {GATE_OPTIONS.find(g => g.value === item.gate)?.label}
             </span>
-            {item.category && <span className="text-[10px] text-slate-400">{item.category}</span>}
-            {item.required && <span className="text-[10px] font-bold text-red-500">Obrigatório</span>}
-            {item.requires_photo && <span className="text-[10px] font-bold text-purple-500">Foto</span>}
-            <span className="text-[10px] text-slate-400">
+            {item.category && <span className="text-xs text-slate-400">{item.category}</span>}
+            {item.required && <span className="text-xs font-bold text-red-500">Obrigatório</span>}
+            {item.requires_photo && <span className="text-xs font-bold text-purple-500">Foto</span>}
+            <span className="text-xs text-slate-400">
               {SEVERITY_OPTIONS.find(s => s.value === item.severity)?.label}
             </span>
           </div>

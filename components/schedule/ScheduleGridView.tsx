@@ -386,7 +386,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                     {item.sinapiItem.description}
                                                 </div>
                                                 {node.nature && (
-                                                    <span className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${TASK_NATURE_META[node.nature].badge}`} title={`Natureza: ${TASK_NATURE_META[node.nature].label}`}>
+                                                    <span className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold ${TASK_NATURE_META[node.nature].badge}`} title={`Natureza: ${TASK_NATURE_META[node.nature].label}`}>
                                                         <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: TASK_NATURE_META[node.nature].color }} />
                                                         {TASK_NATURE_META[node.nature].label}
                                                     </span>
@@ -427,7 +427,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 <button onClick={() => handleClearItem(item.id)} className="text-button text-red-400 hover:text-red-500 hover:underline cursor-pointer">Limpar</button>
                                             </div>
                                         </td>
-                                        <td className="px-1 py-2 text-center text-[11px] font-medium text-gray-500">{node.wbsCode || ''}</td>
+                                        <td className="px-1 py-2 text-center text-xs font-medium text-gray-500">{node.wbsCode || ''}</td>
                                         <td className={`px-1 py-2 text-center font-medium transition-all ${itemSchedule.isCritical ? 'text-red-600 bg-red-50' : 'text-gray-400 bg-gray-50/50'}`}>
                                             <div className="flex items-center justify-center gap-1">
                                                 {node.uid}
@@ -642,7 +642,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-1 py-3 text-center text-[11px] font-medium text-gray-500">{node.wbsCode || ''}</td>
+                                        <td className="px-1 py-3 text-center text-xs font-medium text-gray-500">{node.wbsCode || ''}</td>
                                         <td className={`px-1 py-3 text-center font-medium ${node.isCritical ? 'text-red-500 bg-red-50' : 'text-gray-400'}`}>{node.uid}</td>
                                         <td className="px-1 py-1 text-center group/pred relative" onClick={(e) => e.stopPropagation()}>
                                             <input

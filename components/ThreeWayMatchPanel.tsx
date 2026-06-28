@@ -27,7 +27,7 @@ const STATUS: Record<MatchStatus, { label: string; color: string; bg: string; Ic
 function StatusBadge({ status, small }: { status: MatchStatus; small?: boolean }) {
   const s = STATUS[status];
   return (
-    <span className={`inline-flex items-center gap-1 border rounded-full px-2 py-0.5 font-bold ${small ? 'text-[10px]' : 'text-xs'} ${s.bg} ${s.color}`}>
+    <span className={`inline-flex items-center gap-1 border rounded-full px-2 py-0.5 font-bold ${small ? 'text-xs' : 'text-xs'} ${s.bg} ${s.color}`}>
       <s.Icon className={small ? 'w-2.5 h-2.5' : 'w-3 h-3'} />
       {s.label}
     </span>
@@ -66,7 +66,7 @@ function TotalsRow({ data }: { data: ThreeWayMatchData }) {
         const s = STATUS[col.status];
         return (
           <div key={col.label} className={`rounded-2xl border p-3 ${s.bg}`}>
-            <p className={`text-[10px] font-black uppercase tracking-wider ${s.color}`}>{col.label}</p>
+            <p className={`text-xs font-black uppercase tracking-wider ${s.color}`}>{col.label}</p>
             <p className={`text-lg font-black mt-1 ${s.color}`}>{fmt(col.value)}</p>
             <StatusBadge status={col.status} small />
           </div>
@@ -129,13 +129,13 @@ export const ThreeWayMatchPanel: React.FC<Props> = ({ orderId }) => {
               {/* NF-es vinculadas */}
               {data.invoices.length > 0 && (
                 <div className="mb-4 space-y-1.5">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Notas fiscais vinculadas</p>
+                  <p className="text-xs font-black uppercase tracking-wider text-slate-400">Notas fiscais vinculadas</p>
                   {data.invoices.map(inv => (
                     <div key={inv.id} className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
                       <span className="text-xs font-semibold text-slate-700">{inv.issuerName}</span>
                       <div className="flex items-center gap-3">
                         <span className="text-xs font-bold text-emerald-700">{fmt(inv.total)}</span>
-                        <span className="text-[10px] text-slate-400">{fmtDate(inv.approvedAt)}</span>
+                        <span className="text-xs text-slate-400">{fmtDate(inv.approvedAt)}</span>
                       </div>
                     </div>
                   ))}
@@ -145,7 +145,7 @@ export const ThreeWayMatchPanel: React.FC<Props> = ({ orderId }) => {
               {data.invoices.length === 0 && (
                 <div className="mb-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
                   <p className="text-xs font-bold text-amber-700">Nenhuma NF-e vinculada a este pedido ainda.</p>
-                  <p className="text-[11px] text-amber-600 mt-0.5">Ao aprovar uma nota fiscal, vincule ao pedido para fechar o match.</p>
+                  <p className="text-xs text-amber-600 mt-0.5">Ao aprovar uma nota fiscal, vincule ao pedido para fechar o match.</p>
                 </div>
               )}
 
@@ -155,10 +155,10 @@ export const ThreeWayMatchPanel: React.FC<Props> = ({ orderId }) => {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-slate-100">
-                        <th className="pb-2 pr-3 font-black text-[10px] uppercase tracking-wider text-slate-400 min-w-[180px]">Item</th>
-                        <th className="pb-2 px-3 font-black text-[10px] uppercase tracking-wider text-slate-400 text-right">Pedido</th>
-                        <th className="pb-2 px-3 font-black text-[10px] uppercase tracking-wider text-slate-400 text-right">Recebido</th>
-                        <th className="pb-2 pl-3 font-black text-[10px] uppercase tracking-wider text-slate-400 text-right">Valor NF</th>
+                        <th className="pb-2 pr-3 font-black text-xs uppercase tracking-wider text-slate-400 min-w-[180px]">Item</th>
+                        <th className="pb-2 px-3 font-black text-xs uppercase tracking-wider text-slate-400 text-right">Pedido</th>
+                        <th className="pb-2 px-3 font-black text-xs uppercase tracking-wider text-slate-400 text-right">Recebido</th>
+                        <th className="pb-2 pl-3 font-black text-xs uppercase tracking-wider text-slate-400 text-right">Valor NF</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -166,11 +166,11 @@ export const ThreeWayMatchPanel: React.FC<Props> = ({ orderId }) => {
                         <tr key={line.code}>
                           <td className="py-2.5 pr-3">
                             <p className="font-semibold text-slate-800 leading-tight">{line.description}</p>
-                            <p className="text-slate-400 text-[10px]">{line.code} · {line.unit}</p>
+                            <p className="text-slate-400 text-xs">{line.code} · {line.unit}</p>
                           </td>
                           <td className="py-2.5 px-3 text-right">
                             <p className="font-bold text-slate-700">{fmtQty(line.orderedQty)}</p>
-                            <p className="text-slate-400 text-[10px]">{fmt(line.orderedValue)}</p>
+                            <p className="text-slate-400 text-xs">{fmt(line.orderedValue)}</p>
                           </td>
                           <td className="py-2.5 px-3">
                             <div className="flex flex-col items-end gap-1">

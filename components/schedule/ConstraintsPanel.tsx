@@ -175,7 +175,7 @@ export const ConstraintsPanel: React.FC<Props> = ({ organizationId, projectId, h
                 ].map(kpi => (
                     <div key={kpi.label} className={`${kpi.bg} border ${kpi.border} rounded-xl px-4 py-3`}>
                         <div className={`text-2xl font-black ${kpi.color}`}>{kpi.value}</div>
-                        <div className="text-[11px] font-medium text-gray-500 mt-0.5">{kpi.label}</div>
+                        <div className="text-xs font-medium text-gray-500 mt-0.5">{kpi.label}</div>
                     </div>
                 ))}
             </div>
@@ -193,14 +193,14 @@ export const ConstraintsPanel: React.FC<Props> = ({ organizationId, projectId, h
                 <div className="flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-red-500" />
                     <h2 className="text-sm font-bold text-gray-800">Quadro de Restrições</h2>
-                    <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
                         {openConstraints.length} abertas
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setShowResolved(v => !v)}
-                        className="text-[11px] font-medium text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
+                        className="text-xs font-medium text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
                     >
                         {showResolved ? 'Ocultar resolvidas' : 'Ver resolvidas'}
                     </button>
@@ -209,7 +209,7 @@ export const ConstraintsPanel: React.FC<Props> = ({ organizationId, projectId, h
                     </button>
                     <button
                         onClick={() => { setAddingFor('__new__'); setForm(EMPTY_FORM); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg transition-all shadow-sm"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all shadow-sm"
                     >
                         <Plus className="w-3.5 h-3.5" />
                         Nova restrição
@@ -256,7 +256,7 @@ export const ConstraintsPanel: React.FC<Props> = ({ organizationId, projectId, h
                                 >
                                     <Icon className={`w-4 h-4 ${cfg.color} shrink-0`} />
                                     <span className={`text-sm font-bold ${cfg.color}`}>{cfg.label}</span>
-                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${open.length > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
+                                    <span className={`text-xs font-black px-1.5 py-0.5 rounded-full ${open.length > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
                                         {open.length} {open.length === 1 ? 'aberta' : 'abertas'}
                                     </span>
                                     <ChevronDown className={`w-4 h-4 ml-auto ${cfg.color} transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -265,7 +265,7 @@ export const ConstraintsPanel: React.FC<Props> = ({ organizationId, projectId, h
                                 {isExpanded && (
                                     <div className="divide-y divide-gray-100 bg-white">
                                         {all.length === 0 ? (
-                                            <div className="px-4 py-8 text-center text-[11px] text-gray-400">
+                                            <div className="px-4 py-8 text-center text-xs text-gray-400">
                                                 Nenhuma restrição de {cfg.label.toLowerCase()}
                                             </div>
                                         ) : (
@@ -295,7 +295,7 @@ export const ConstraintsPanel: React.FC<Props> = ({ organizationId, projectId, h
                                         ) : (
                                             <button
                                                 onClick={() => { setAddingFor(cat); setForm({ ...EMPTY_FORM, category: cat }); }}
-                                                className="w-full flex items-center gap-2 px-4 py-2.5 text-[11px] font-medium text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                                                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-medium text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
                                             >
                                                 <Plus className="w-3.5 h-3.5" />
                                                 Adicionar restrição de {cfg.label.toLowerCase()}
@@ -336,15 +336,15 @@ const ConstraintRow: React.FC<{
                     {c.description}
                 </p>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-                    <span className="text-[10px] text-gray-400 truncate">{itemName}</span>
+                    <span className="text-xs text-gray-400 truncate">{itemName}</span>
                     {c.responsible && (
-                        <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                        <span className="text-xs text-gray-500 flex items-center gap-1">
                             <Users className="w-3 h-3" />
                             {c.responsible}
                         </span>
                     )}
                     {c.dueDate && (
-                        <span className={`text-[10px] flex items-center gap-1 ${overdue ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
+                        <span className={`text-xs flex items-center gap-1 ${overdue ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
                             <Clock className="w-3 h-3" />
                             {fmtDate(c.dueDate)}
                             {overdue && ' • VENCIDA'}
@@ -389,7 +389,7 @@ const NewConstraintForm: React.FC<{
     <div className="bg-white border border-blue-100 rounded-xl p-4 space-y-3 shadow-sm">
         <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Atividade *</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Atividade *</label>
                 <select
                     value={form.scheduleItemId}
                     onChange={e => onChange({ scheduleItemId: e.target.value })}
@@ -404,7 +404,7 @@ const NewConstraintForm: React.FC<{
 
             {!fixedCategory && (
                 <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Categoria *</label>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Categoria *</label>
                     <select
                         value={form.category}
                         onChange={e => onChange({ category: e.target.value as ConstraintCategory })}
@@ -418,7 +418,7 @@ const NewConstraintForm: React.FC<{
             )}
 
             <div className={fixedCategory ? 'col-span-2' : ''}>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Responsável</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Responsável</label>
                 <input
                     type="text"
                     value={form.responsible}
@@ -429,7 +429,7 @@ const NewConstraintForm: React.FC<{
             </div>
 
             <div className="col-span-2">
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Descrição *</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Descrição *</label>
                 <input
                     type="text"
                     value={form.description}
@@ -441,7 +441,7 @@ const NewConstraintForm: React.FC<{
             </div>
 
             <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Prazo para remoção</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Prazo para remoção</label>
                 <input
                     type="date"
                     value={form.dueDate}
@@ -454,7 +454,7 @@ const NewConstraintForm: React.FC<{
         <div className="flex items-center justify-end gap-2 pt-1">
             <button
                 onClick={onCancel}
-                className="px-3 py-1.5 text-[11px] font-medium text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-all"
+                className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-all"
             >
                 <X className="w-3.5 h-3.5 inline mr-1" />
                 Cancelar
@@ -462,7 +462,7 @@ const NewConstraintForm: React.FC<{
             <button
                 onClick={onSave}
                 disabled={saving || !form.description.trim() || !form.scheduleItemId}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                 Salvar

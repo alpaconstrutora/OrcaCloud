@@ -171,7 +171,7 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                                 {/* Preview Area */}
                                 <div className={`h-36 bg-gradient-to-br ${gradient} flex items-center justify-center relative overflow-hidden`}>
                                     <Icon className="w-12 h-12 text-white/30" />
-                                    <div className="absolute top-3 right-3 px-2 py-1 rounded-lg bg-black/30 backdrop-blur-sm text-white text-[10px] font-bold">
+                                    <div className="absolute top-3 right-3 px-2 py-1 rounded-lg bg-black/30 backdrop-blur-sm text-white text-xs font-bold">
                                         v{mat.version}
                                     </div>
                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
@@ -185,16 +185,16 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
 
                                 {/* Info */}
                                 <div className="p-4">
-                                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${cfg.bg} ${cfg.color} mb-2`}>
+                                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${cfg.bg} ${cfg.color} mb-2`}>
                                         <Icon className="w-3 h-3" />{cfg.label}
                                     </div>
                                     <h3 className="text-sm font-bold text-gray-900 leading-tight mb-1 line-clamp-2">{mat.title}</h3>
-                                    <p className="text-[10px] text-gray-400">{mat.project_name || 'Geral'}</p>
+                                    <p className="text-xs text-gray-400">{mat.project_name || 'Geral'}</p>
 
                                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
                                         <div className="flex items-center gap-1 text-gray-400">
                                             <Eye className="w-3.5 h-3.5" />
-                                            <span className="text-[10px] font-bold">{mat.views_count} views</span>
+                                            <span className="text-xs font-bold">{mat.views_count} views</span>
                                         </div>
                                         <div className="flex gap-1">
                                             <button onClick={() => { setEditingMaterial(mat); setIsMaterialModalOpen(true); }} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer text-gray-400 hover:text-indigo-600" title="Editar">
@@ -218,12 +218,12 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                     <table className="w-full">
                         <thead>
                             <tr className="bg-gray-50 border-b border-gray-100">
-                                <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Material</th>
-                                <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Tipo</th>
-                                <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Versão</th>
-                                <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Views</th>
-                                <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Atualizado</th>
-                                <th className="text-left p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Ações</th>
+                                <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Material</th>
+                                <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Tipo</th>
+                                <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Versão</th>
+                                <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Views</th>
+                                <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Atualizado</th>
+                                <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -234,10 +234,10 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                                     <tr key={mat.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="p-4">
                                             <p className="text-sm font-bold text-gray-900">{mat.title}</p>
-                                            <p className="text-[10px] text-gray-400">{mat.project_name || 'Geral'}</p>
+                                            <p className="text-xs text-gray-400">{mat.project_name || 'Geral'}</p>
                                         </td>
                                         <td className="p-4">
-                                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${cfg.bg} ${cfg.color}`}>
+                                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${cfg.bg} ${cfg.color}`}>
                                                 <Icon className="w-3 h-3" />{cfg.label}
                                             </span>
                                         </td>

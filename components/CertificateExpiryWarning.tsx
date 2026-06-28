@@ -56,7 +56,7 @@ export default CertificateExpiryWarning;
 // Versão badge inline (para usar em cards da lista)
 export const CertificateBadge: React.FC<{ validade?: string }> = ({ validade }) => {
     if (!validade) return (
-        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">
+        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">
             <Shield className="w-3 h-3" /> Sem cert.
         </span>
     );
@@ -64,25 +64,25 @@ export const CertificateBadge: React.FC<{ validade?: string }> = ({ validade }) 
     const diffDias = Math.ceil((new Date(validade + 'T00:00:00').getTime() - Date.now()) / 86400000);
 
     if (diffDias < 0) return (
-        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
             <ShieldX className="w-3 h-3" /> Cert. vencido
         </span>
     );
 
     if (diffDias <= 30) return (
-        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
             <ShieldAlert className="w-3 h-3" /> Vence em {diffDias}d
         </span>
     );
 
     if (diffDias <= 60) return (
-        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
             <ShieldAlert className="w-3 h-3" /> Vence em {diffDias}d
         </span>
     );
 
     return (
-        <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700">
             <ShieldCheck className="w-3 h-3" /> Cert. OK
         </span>
     );

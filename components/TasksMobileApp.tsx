@@ -123,12 +123,12 @@ const TaskCard = React.memo<{
         </div>
         <div className="flex items-center gap-1.5">
           {dateStr && (
-            <span className={`text-[11px] font-semibold ${overdue ? 'text-red-500' : 'text-slate-400'}`}>
+            <span className={`text-xs font-semibold ${overdue ? 'text-red-500' : 'text-slate-400'}`}>
               Até {dateStr}
             </span>
           )}
           {context && (
-            <span className="text-[11px] text-slate-300 truncate">· {context}</span>
+            <span className="text-xs text-slate-300 truncate">· {context}</span>
           )}
         </div>
       </div>
@@ -170,7 +170,7 @@ const EspacosScreen = React.memo<{
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-slate-800">{space.name}</p>
-          <p className="text-[11px] text-slate-400 font-medium">{space.task_count ?? 0} tarefa{space.task_count !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-slate-400 font-medium">{space.task_count ?? 0} tarefa{space.task_count !== 1 ? 's' : ''}</p>
         </div>
         <ChevronRight className="w-4 h-4 text-slate-200" />
       </button>
@@ -422,12 +422,12 @@ const TaskEditSheet: React.FC<{
           <div>
             <div className="flex items-center gap-1.5 mb-1.5">
               <Tag className="w-3 h-3 text-slate-400" />
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prioridade</p>
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Prioridade</p>
             </div>
             <div className="grid grid-cols-4 gap-1.5">
               {([1, 2, 3, 4] as const).map(v => (
                 <button key={v} onClick={() => setPriority(v)}
-                  className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wide border transition-all
+                  className={`py-2 rounded-xl text-xs font-black uppercase tracking-wide border transition-all
                     ${priority === v ? 'text-white border-transparent shadow-md' : 'bg-white text-slate-400 border-slate-100'}`}
                   style={priority === v ? { backgroundColor: PRIORITY_COLOR[v] } : undefined}
                 >
@@ -442,14 +442,14 @@ const TaskEditSheet: React.FC<{
             <div>
               <div className="flex items-center gap-1.5 mb-1.5">
                 <CheckCircle2 className="w-3 h-3 text-slate-400" />
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</p>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Status</p>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {statuses.map(s => (
                   <button
                     key={s.id}
                     onClick={() => setStatusId(statusId === s.id ? '' : s.id)}
-                    className="px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all"
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all"
                     style={statusId === s.id
                       ? { backgroundColor: s.color + '22', color: s.color, borderColor: s.color + '44' }
                       : { backgroundColor: 'white', color: '#94a3b8', borderColor: '#f1f5f9' }}
@@ -466,7 +466,7 @@ const TaskEditSheet: React.FC<{
             <div>
               <div className="flex items-center gap-1.5 mb-1.5">
                 <User className="w-3 h-3 text-slate-400" />
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Responsável</p>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Responsável</p>
               </div>
               <select
                 value={assigneeId}
@@ -485,7 +485,7 @@ const TaskEditSheet: React.FC<{
           <div>
             <div className="flex items-center gap-1.5 mb-1.5">
               <AlignLeft className="w-3 h-3 text-slate-400" />
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Descrição</p>
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Descrição</p>
             </div>
             <textarea
               value={desc}
@@ -777,7 +777,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
 
       {/* Status bar */}
       <div className="flex items-center justify-between px-5 pt-3 pb-1 bg-white flex-shrink-0">
-        <span className="text-[11px] font-black text-slate-700">{timeStr}</span>
+        <span className="text-xs font-black text-slate-700">{timeStr}</span>
         <div className="flex items-center gap-1.5">
           <div className="flex gap-0.5 items-end h-3">
             {[3, 5, 7, 9].map((h, i) => (
@@ -815,7 +815,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
             )}
             <div className="flex-1 min-w-0">
               {selectedFolder && (
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5 truncate">
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5 truncate">
                   {selectedSpace?.name}
                 </p>
               )}
@@ -877,7 +877,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
                     ${filterTab === key ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}
                 >
                   {label}
-                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md
+                  <span className={`text-xs font-black px-1.5 py-0.5 rounded-md
                     ${filterTab === key ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
                     {count}
                   </span>

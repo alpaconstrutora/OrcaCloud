@@ -246,11 +246,11 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                         <div>
                             <div className="flex items-center gap-2 mb-2">
-                                <span className="bg-blue-500/30 text-blue-100 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border border-blue-400/30">
+                                <span className="bg-blue-500/30 text-blue-100 text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-widest border border-blue-400/30">
                                     Status: {settings.obraStatus || 'Em Andamento'}
                                 </span>
                                 {settings.code && (
-                                    <span className="bg-white/20 text-white text-[10px] font-black font-mono px-2 py-0.5 rounded-full border border-white/30">
+                                    <span className="bg-white/20 text-white text-xs font-black font-mono px-2 py-0.5 rounded-full border border-white/30">
                                         #{settings.code}
                                     </span>
                                 )}
@@ -261,7 +261,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
 
                         <div className="flex items-center gap-4">
                             <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
-                                <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-1">Custo Orçado</p>
+                                <p className="text-xs font-black text-blue-200 uppercase tracking-widest mb-1">Custo Orçado</p>
                                 <p className="text-xl font-black text-white">
                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBudgetVal)}
                                 </p>
@@ -306,7 +306,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                 <div className="lg:col-span-2 space-y-6">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-black text-gray-900 tracking-tight">Centros de Gestão</h2>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Acesse os módulos da sua obra</p>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Acesse os módulos da sua obra</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -374,23 +374,23 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                         {/* Financeiro */}
                         {(settings.valorEstimado || settings.valorContratado || settings.margemAlvo) && (
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><DollarSign className="w-3 h-3" />Gestão Financeira</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><DollarSign className="w-3 h-3" />Gestão Financeira</p>
                                 <div className="grid grid-cols-3 gap-3">
                                     {settings.valorEstimado != null && (
                                         <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Estimado</p>
+                                            <p className="text-xs text-gray-400 font-bold uppercase">Estimado</p>
                                             <p className="text-sm font-black text-gray-900 mt-0.5">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(settings.valorEstimado)}</p>
                                         </div>
                                     )}
                                     {settings.valorContratado != null && (
                                         <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Contratado</p>
+                                            <p className="text-xs text-gray-400 font-bold uppercase">Contratado</p>
                                             <p className="text-sm font-black text-gray-900 mt-0.5">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(settings.valorContratado)}</p>
                                         </div>
                                     )}
                                     {settings.margemAlvo != null && (
                                         <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Margem Alvo</p>
+                                            <p className="text-xs text-gray-400 font-bold uppercase">Margem Alvo</p>
                                             <p className="text-sm font-black text-emerald-700 mt-0.5">{settings.margemAlvo}%</p>
                                         </div>
                                     )}
@@ -401,7 +401,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                         {/* Equipe */}
                         {(settings.mestreObras || settings.encarregado || settings.tecnicoSeguranca || settings.almoxarife) && (
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Users className="w-3 h-3" />Equipe de Campo</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Users className="w-3 h-3" />Equipe de Campo</p>
                                 <div className="grid grid-cols-2 gap-2">
                                     {[
                                         { label: 'Mestre', value: settings.mestreObras },
@@ -410,7 +410,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                                         { label: 'Almoxarife', value: settings.almoxarife },
                                     ].filter(i => i.value).map(({ label, value }) => (
                                         <div key={label} className="flex items-center gap-2">
-                                            <span className="text-[10px] font-black text-gray-400 uppercase w-24 shrink-0">{label}</span>
+                                            <span className="text-xs font-black text-gray-400 uppercase w-24 shrink-0">{label}</span>
                                             <span className="text-xs font-bold text-gray-800">{value}</span>
                                         </div>
                                     ))}
@@ -421,7 +421,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                         {/* Indicadores do tipo */}
                         {template && template.indicators.length > 0 && (
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><BarChart2 className="w-3 h-3" />KPIs para este tipo de obra</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><BarChart2 className="w-3 h-3" />KPIs para este tipo de obra</p>
                                 <div className="flex flex-wrap gap-2">
                                     {template.indicators.map(ind => (
                                         <span key={ind.key} className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-700">
@@ -435,7 +435,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                         {/* Painel de documentação com status */}
                         {(template?.required_docs?.length || settings.artRrt || settings.alvara || settings.matriculaCNO) ? (
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><FileText className="w-3 h-3" />Painel de Documentação</p>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><FileText className="w-3 h-3" />Painel de Documentação</p>
                                 <div className="space-y-1.5">
                                     {(() => {
                                         // Build unified doc list: template required_docs + fallback fixed fields
@@ -467,8 +467,8 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                                                             ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                                                             : <Circle className="w-3.5 h-3.5 text-gray-300 shrink-0" />}
                                                     <span className={`flex-1 font-medium ${obtained ? 'text-emerald-800' : doc.required ? 'text-amber-800' : 'text-gray-500'}`}>{doc.name}</span>
-                                                    {value && <span className="font-mono text-[10px] text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded truncate max-w-[120px]">{value}</span>}
-                                                    {!obtained && <span className={`text-[10px] font-bold ${doc.required ? 'text-amber-600' : 'text-gray-400'}`}>{doc.required ? 'Pendente' : 'Opcional'}</span>}
+                                                    {value && <span className="font-mono text-xs text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded truncate max-w-[120px]">{value}</span>}
+                                                    {!obtained && <span className={`text-xs font-bold ${doc.required ? 'text-amber-600' : 'text-gray-400'}`}>{doc.required ? 'Pendente' : 'Opcional'}</span>}
                                                 </div>
                                             );
                                         });
@@ -483,7 +483,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                 <div className="space-y-6">
                     <div>
                         <h2 className="text-xl font-black text-gray-900 tracking-tight">Mural da Obra</h2>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Alertas e notificações recentes</p>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-1">Alertas e notificações recentes</p>
                     </div>
 
                     <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden h-full flex flex-col">
@@ -504,7 +504,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                                     </div>
                                     <div>
                                         <p className="text-sm font-bold text-gray-800 leading-snug group-hover:text-blue-600 transition-colors">{msg.text}</p>
-                                        <div className="flex items-center gap-1 mt-1 font-bold text-[10px] text-gray-400 uppercase tracking-widest">
+                                        <div className="flex items-center gap-1 mt-1 font-bold text-xs text-gray-400 uppercase tracking-widest">
                                             <Clock className="w-3 h-3" />
                                             {msg.time}
                                         </div>
@@ -514,7 +514,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                         </div>
 
                         <div className="p-6 bg-gray-50/50 border-t border-gray-100">
-                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Próximos Marcos</h4>
+                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Próximos Marcos</h4>
                             <div className="space-y-3">
                                 {loading ? (
                                     <div className="space-y-2 animate-pulse">
@@ -529,10 +529,10 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                                                 }`}></div>
                                             <span className="text-xs font-bold text-gray-700">{milestone.title}</span>
                                         </div>
-                                        <span className="text-[10px] font-black text-gray-400">{milestone.date}</span>
+                                        <span className="text-xs font-black text-gray-400">{milestone.date}</span>
                                     </div>
                                 )) : (
-                                    <p className="text-[10px] text-gray-400 font-bold uppercase italic">Nenhum marco pendente</p>
+                                    <p className="text-xs text-gray-400 font-bold uppercase italic">Nenhum marco pendente</p>
                                 )}
                             </div>
                         </div>

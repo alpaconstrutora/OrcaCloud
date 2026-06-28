@@ -66,11 +66,11 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-black text-gray-900 tracking-tight">{e.name}</h1>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600">
+                <span className="text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600">
                   {STATUS_LABELS[e.status]}
                 </span>
                 {e.tipo && (
-                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-gray-500/10 text-gray-600">
+                  <span className="text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-gray-500/10 text-gray-600">
                     {TIPO_LABELS[e.tipo] || e.tipo}
                   </span>
                 )}
@@ -221,7 +221,7 @@ const Row: React.FC<{ label: string; value?: string }> = ({ label, value }) => (
 
 const Metric: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="bg-gray-50/60 border border-gray-100 rounded-2xl p-4">
-    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{label}</span>
+    <span className="text-xs font-black uppercase tracking-widest text-gray-400 block mb-1">{label}</span>
     <span className="text-lg font-bold text-gray-800">{value}</span>
   </div>
 );

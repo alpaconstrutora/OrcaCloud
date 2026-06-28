@@ -253,7 +253,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                             {/* New request form */}
                             {showNewReq ? (
                                 <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 space-y-3">
-                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Novo Chamado</p>
+                                    <p className="text-xs font-black text-blue-600 uppercase tracking-widest">Novo Chamado</p>
                                     <input className="w-full rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-400" placeholder="Título *" value={newReq.title} onChange={e => setNewReq(p => ({ ...p, title: e.target.value }))} />
                                     <textarea className="w-full rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-400 resize-none" rows={2} placeholder="Descrição" value={newReq.description} onChange={e => setNewReq(p => ({ ...p, description: e.target.value }))} />
                                     <div className="grid grid-cols-2 gap-3">
@@ -293,7 +293,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                     <div className="flex items-start justify-between gap-3 mb-3">
                                         <div className="min-w-0">
                                             <p className="text-sm font-black text-gray-900 uppercase tracking-tight truncate">{req.title}</p>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
+                                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">
                                                 {req.category} · {new Date(req.opened_at + 'T12:00:00').toLocaleDateString('pt-BR')}
                                             </p>
                                         </div>
@@ -329,7 +329,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                             <div className="flex items-center justify-between">
                                                 <label className="flex items-center gap-2 cursor-pointer select-none">
                                                     <input type="checkbox" checked={notifyClient} onChange={e => setNotifyClient(e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
-                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1"><Bell className="w-3 h-3" /> Notificar cliente</span>
+                                                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-1"><Bell className="w-3 h-3" /> Notificar cliente</span>
                                                 </label>
                                                 <div className="flex gap-2">
                                                     <button onClick={() => saveReq(req.id)} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all">
@@ -342,7 +342,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                     ) : (
                                         <div className="flex items-center gap-2">
                                             <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${REQ_STATUS_COLORS[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span>
-                                            {req.assigned_to && <span className="text-[10px] text-gray-400 font-bold">· {req.assigned_to}</span>}
+                                            {req.assigned_to && <span className="text-xs text-gray-400 font-bold">· {req.assigned_to}</span>}
                                         </div>
                                     )}
                                 </div>
@@ -353,7 +353,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                             {/* New OS form */}
                             {showNewOs ? (
                                 <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 space-y-3">
-                                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Nova Ordem de Serviço</p>
+                                    <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">Nova Ordem de Serviço</p>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Número *</label>
@@ -413,7 +413,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                         </div>
                                     </div>
                                     {os.description && <p className="text-xs text-gray-500 mb-3 leading-relaxed">{os.description}</p>}
-                                    <div className="flex items-center gap-3 text-[10px] text-gray-400 font-bold mb-2">
+                                    <div className="flex items-center gap-3 text-xs text-gray-400 font-bold mb-2">
                                         {os.scheduled_date && <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(os.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
                                         {os.value != null && <span className="flex items-center gap-1">R$ {os.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
                                     </div>
@@ -443,7 +443,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                             <div className="flex items-center justify-between">
                                                 <label className="flex items-center gap-2 cursor-pointer select-none">
                                                     <input type="checkbox" checked={notifyClient} onChange={e => setNotifyClient(e.target.checked)} className="w-4 h-4 rounded accent-indigo-600" />
-                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1"><Bell className="w-3 h-3" /> Notificar cliente</span>
+                                                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-1"><Bell className="w-3 h-3" /> Notificar cliente</span>
                                                 </label>
                                                 <div className="flex gap-2">
                                                     <button onClick={() => saveOs(os.id)} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all">
@@ -456,7 +456,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                     ) : (
                                         <div className="flex items-center gap-2">
                                             <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${OS_STATUS_COLORS[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span>
-                                            {os.assigned_to && <span className="text-[10px] text-gray-400 font-bold">· {os.assigned_to}</span>}
+                                            {os.assigned_to && <span className="text-xs text-gray-400 font-bold">· {os.assigned_to}</span>}
                                         </div>
                                     )}
                                 </div>
@@ -467,7 +467,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
 
                 {/* Footer */}
                 <div className="px-8 py-4 border-t border-gray-100 flex items-center justify-between shrink-0">
-                    <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">
+                    <span className="text-xs font-black text-gray-300 uppercase tracking-widest">
                         {activeTab === 'requests' ? `${requests.length} chamado${requests.length !== 1 ? 's' : ''}` : `${orders.length} OS`}
                     </span>
                     <button onClick={onClose} className="px-5 py-2 border border-gray-200 text-gray-500 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Fechar</button>

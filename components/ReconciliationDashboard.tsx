@@ -39,7 +39,7 @@ function KPICard({ label, value, icon: Icon, iconBg, hint, tone = 'neutral' }: K
                 <div className="min-w-0">
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
                     <p className={`text-xl font-black mt-0.5 tabular-nums ${valueColor}`}>{formatBRL(value)}</p>
-                    {hint && <p className="text-[11px] text-gray-400 mt-1 font-medium">{hint}</p>}
+                    {hint && <p className="text-xs text-gray-400 mt-1 font-medium">{hint}</p>}
                 </div>
             </div>
         </div>
@@ -131,7 +131,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                     Saldo Bancário vs. Contábil
                 </h4>
                 <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Posição em</label>
+                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Posição em</label>
                     <input
                         type="date"
                         value={asOf}
@@ -218,12 +218,12 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
             {/* Tabela por conta */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-50">
-                    <h5 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Conciliação por Conta Bancária</h5>
+                    <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Conciliação por Conta Bancária</h5>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">
+                            <tr className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">
                                 <th className="text-left  px-5 py-3">Conta</th>
                                 <th className="text-right px-3 py-3">Saldo Inicial</th>
                                 <th className="text-right px-3 py-3">Saldo Bancário</th>
@@ -242,7 +242,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                     <tr key={acc.account_id} className="hover:bg-gray-50/50">
                                         <td className="px-5 py-3">
                                             <p className="font-bold text-gray-800">{acc.account_name}</p>
-                                            {acc.bank_name && <p className="text-[11px] text-gray-400 font-medium">{acc.bank_name}</p>}
+                                            {acc.bank_name && <p className="text-xs text-gray-400 font-medium">{acc.bank_name}</p>}
                                         </td>
                                         <td className="px-3 py-3 text-right">
                                             {isEditing ? (
@@ -259,7 +259,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                                         value={editDate}
                                                         onChange={e => setEditDate(e.target.value)}
                                                         title="Data de início (opcional)"
-                                                        className="w-28 px-2 py-1 rounded border border-gray-200 text-right text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-28 px-2 py-1 rounded border border-gray-200 text-right text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     />
                                                 </div>
                                             ) : (
@@ -324,7 +324,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                         {(data?.accounts ?? []).length > 0 && totals && (
                             <tfoot>
                                 <tr className="border-t-2 border-gray-100 bg-gray-50/50 font-black text-gray-900">
-                                    <td className="px-5 py-3 text-[11px] uppercase tracking-widest text-gray-500">Total</td>
+                                    <td className="px-5 py-3 text-xs uppercase tracking-widest text-gray-500">Total</td>
                                     <td className="px-3 py-3 text-right tabular-nums">{formatBRL(totals.opening_balance)}</td>
                                     <td className="px-3 py-3 text-right tabular-nums">{formatBRL(totals.bank_balance)}</td>
                                     <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{formatBRL(totals.reconciled_balance)}</td>
@@ -345,17 +345,17 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="px-5 py-3 border-b border-gray-50 flex items-center gap-2">
                         <Building2 className="w-4 h-4 text-indigo-500" />
-                        <h5 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                        <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">
                             Caixa Consolidado por Empresa
                         </h5>
-                        <span className="text-[10px] text-gray-300 font-bold">
+                        <span className="text-xs text-gray-300 font-bold">
                             {consolidated.totals.empresa_count} empresa(s) · {consolidated.totals.account_count} conta(s)
                         </span>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">
+                                <tr className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">
                                     <th className="text-left  px-5 py-3">Empresa</th>
                                     <th className="text-right px-3 py-3">Contas</th>
                                     <th className="text-right px-3 py-3">Saldo Bancário</th>
@@ -380,7 +380,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-gray-100 bg-gray-50/50 font-black text-gray-900">
-                                    <td className="px-5 py-3 text-[11px] uppercase tracking-widest text-gray-500">Grupo</td>
+                                    <td className="px-5 py-3 text-xs uppercase tracking-widest text-gray-500">Grupo</td>
                                     <td className="px-3 py-3 text-right tabular-nums">{consolidated.totals.account_count}</td>
                                     <td className="px-3 py-3 text-right tabular-nums">{formatBRL(consolidated.totals.bank_balance)}</td>
                                     <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{formatBRL(consolidated.totals.reconciled_balance)}</td>
@@ -398,15 +398,15 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="px-5 py-3 border-b border-gray-50 flex items-center gap-2">
                         <HardHat className="w-4 h-4 text-orange-500" />
-                        <h5 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                        <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">
                             Caixa Realizado por Obra
                         </h5>
-                        <span className="text-[10px] text-gray-300 font-bold">conciliado até a data</span>
+                        <span className="text-xs text-gray-300 font-bold">conciliado até a data</span>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">
+                                <tr className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">
                                     <th className="text-left  px-5 py-3">Obra</th>
                                     <th className="text-right px-3 py-3">Entradas</th>
                                     <th className="text-right px-3 py-3">Saídas</th>

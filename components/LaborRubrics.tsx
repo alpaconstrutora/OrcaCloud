@@ -155,7 +155,7 @@ const LaborRubrics: React.FC = () => {
         return (
             <div className="flex flex-col items-center justify-center p-20 space-y-4">
                 <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Carregando Rubricas...</p>
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Carregando Rubricas...</p>
             </div>
         );
     }
@@ -205,7 +205,7 @@ const LaborRubrics: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2 ml-auto">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inativos</span>
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Inativos</span>
                     <button 
                         onClick={() => setShowInactive(!showInactive)}
                         className={`w-12 h-6 rounded-full relative transition-colors ${showInactive ? 'bg-indigo-500' : 'bg-slate-200'}`}
@@ -220,11 +220,11 @@ const LaborRubrics: React.FC = () => {
                 <table className="w-full text-left">
                     <thead>
                         <tr className="bg-slate-50/50">
-                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cód / Nome</th>
-                            <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo</th>
-                            <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Incidências</th>
-                            <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ações</th>
+                            <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase tracking-widest">Cód / Nome</th>
+                            <th className="px-6 py-5 text-xs font-black text-slate-400 uppercase tracking-widest">Tipo</th>
+                            <th className="px-6 py-5 text-xs font-black text-slate-400 uppercase tracking-widest">Incidências</th>
+                            <th className="px-6 py-5 text-xs font-black text-slate-400 uppercase tracking-widest">Status</th>
+                            <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase tracking-widest text-right">Ações</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -242,7 +242,7 @@ const LaborRubrics: React.FC = () => {
                                         </div>
                                         <div>
                                             <p className="text-sm font-black text-slate-900">{r.name}</p>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{r.code}</p>
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{r.code}</p>
                                         </div>
                                     </div>
                                 </td>
@@ -279,12 +279,12 @@ const LaborRubrics: React.FC = () => {
                                         {r.active ? (
                                             <div className="flex items-center gap-1.5 text-emerald-600">
                                                 <CheckCircle2 size={14} />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Ativo</span>
+                                                <span className="text-xs font-black uppercase tracking-widest">Ativo</span>
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-1.5 text-slate-400">
                                                 <XCircle size={14} />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Inativo</span>
+                                                <span className="text-xs font-black uppercase tracking-widest">Inativo</span>
                                             </div>
                                         )}
                                     </div>
@@ -333,7 +333,7 @@ const LaborRubrics: React.FC = () => {
                                         <Shield className="text-indigo-400" />
                                         {editingRubric ? 'Editar Rubrica' : 'Nova Rubrica'}
                                     </h3>
-                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Configurações de incidência tributária</p>
+                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Configurações de incidência tributária</p>
                                 </div>
                                 <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-white/10 rounded-xl transition-all">
                                     <X size={24} />
@@ -344,19 +344,19 @@ const LaborRubrics: React.FC = () => {
                                 <div className="flex gap-4">
                                     <button 
                                         onClick={() => setActiveTab('form')}
-                                        className={`pb-2 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'form' ? 'text-white border-indigo-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                                        className={`pb-2 text-xs font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'form' ? 'text-white border-indigo-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
                                     >
                                         Configuração
                                     </button>
                                     <button 
                                         onClick={() => setActiveTab('calculation')}
-                                        className={`pb-2 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'calculation' ? 'text-white border-indigo-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                                        className={`pb-2 text-xs font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'calculation' ? 'text-white border-indigo-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
                                     >
                                         Cálculo
                                     </button>
                                     <button 
                                         onClick={() => setActiveTab('history')}
-                                        className={`pb-2 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'history' ? 'text-white border-indigo-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                                        className={`pb-2 text-xs font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'history' ? 'text-white border-indigo-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
                                     >
                                         Histórico de Alterações
                                     </button>
@@ -388,7 +388,7 @@ const LaborRubrics: React.FC = () => {
                                     {/* Form Grid */}
                                     <div className="grid grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Código</label>
+                                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Código</label>
                                             <input 
                                                 type="text"
                                                 disabled={!!editingRubric}
@@ -400,7 +400,7 @@ const LaborRubrics: React.FC = () => {
                                             {editingRubric && <p className="text-[9px] text-slate-400 font-bold ml-1 italic">* Código não pode ser alterado após criação.</p>}
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome</label>
+                                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Nome</label>
                                             <input 
                                                 type="text"
                                                 placeholder="EX: Salário Base"
@@ -411,7 +411,7 @@ const LaborRubrics: React.FC = () => {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Rubrica</label>
+                                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Rubrica</label>
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                                 {['provento', 'desconto', 'encargo', 'informativa'].map(t => (
                                                     <button
@@ -432,7 +432,7 @@ const LaborRubrics: React.FC = () => {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Configurações</label>
+                                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Configurações</label>
                                             <div className="flex flex-wrap items-center gap-3">
                                                 <button 
                                                     onClick={() => setFormData({ ...formData, active: !formData.active })}
@@ -441,7 +441,7 @@ const LaborRubrics: React.FC = () => {
                                                     }`}
                                                 >
                                                     {formData.active ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
-                                                    <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">{formData.active ? 'Ativa' : 'Inativa'}</span>
+                                                    <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap">{formData.active ? 'Ativa' : 'Inativa'}</span>
                                                 </button>
                                                 
                                                 <button 
@@ -451,7 +451,7 @@ const LaborRubrics: React.FC = () => {
                                                     }`}
                                                 >
                                                     <Calculator size={16} />
-                                                    <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Automática</span>
+                                                    <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap">Automática</span>
                                                 </button>
 
                                                 <button
@@ -462,7 +462,7 @@ const LaborRubrics: React.FC = () => {
                                                     title="Se ativado, esta rubrica será incluída automaticamente para TODOS os colaboradores CLT"
                                                 >
                                                     <Users size={16} />
-                                                    <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Padrão CLT</span>
+                                                    <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap">Padrão CLT</span>
                                                 </button>
 
                                                 <button
@@ -473,13 +473,13 @@ const LaborRubrics: React.FC = () => {
                                                     title="Se ativado, ao fechar a folha este lançamento é registrado separadamente no financeiro por funcionário"
                                                 >
                                                     <Banknote size={16} />
-                                                    <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Lançamento Individualizado</span>
+                                                    <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap">Lançamento Individualizado</span>
                                                 </button>
                                             </div>
 
                                             {formData.lancamento_individualizado && (
                                                 <div className="space-y-2 mt-3 animate-in zoom-in-95 duration-200">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
                                                         <Calendar size={11} className="text-violet-500" />
                                                         Dia do Lançamento no Financeiro
                                                     </label>
@@ -506,7 +506,7 @@ const LaborRubrics: React.FC = () => {
                                     {/* Incidences Matrix */}
                                     <div className="bg-slate-50 p-6 rounded-[32px] space-y-4">
                                         <div className="flex items-center justify-between">
-                                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                                 <TrendingUp size={14} className="text-indigo-500" /> Matriz de Incidência Tributária
                                             </h4>
                                             {formData.type === 'desconto' && (
@@ -538,7 +538,7 @@ const LaborRubrics: React.FC = () => {
                                                         <div className={`p-2 rounded-lg ${active ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
                                                             <tax.icon size={16} />
                                                         </div>
-                                                        <span className="text-[10px] font-black uppercase tracking-widest">{tax.label}</span>
+                                                        <span className="text-xs font-black uppercase tracking-widest">{tax.label}</span>
                                                         <div className={`w-8 h-4 rounded-full relative transition-colors ${active ? 'bg-indigo-500' : 'bg-slate-200'}`}>
                                                             <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${active ? 'left-4.5' : 'left-0.5'}`} />
                                                         </div>
@@ -559,13 +559,13 @@ const LaborRubrics: React.FC = () => {
                                         <Calculator className="text-indigo-600 mt-1" size={20} />
                                         <div>
                                             <h4 className="text-sm font-black text-indigo-900 tracking-tight">Motor de Cálculo Automático</h4>
-                                            <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-1">Configuração de fórmulas e parâmetros</p>
+                                            <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-1">Configuração de fórmulas e parâmetros</p>
                                         </div>
                                     </div>
 
                                     <div className="space-y-6">
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Cálculo</label>
+                                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Cálculo</label>
                                             <div className="grid grid-cols-4 gap-2">
                                                 {[
                                                     { id: 'manual', label: 'Manual' },
@@ -580,7 +580,7 @@ const LaborRubrics: React.FC = () => {
                                                             calculation_type: t.id as any,
                                                             is_automatic: t.id !== 'manual' 
                                                         })}
-                                                        className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                                                        className={`py-3 rounded-2xl text-xs font-black uppercase tracking-widest border transition-all ${
                                                             formData.calculation_type === t.id 
                                                             ? 'bg-slate-900 text-white border-slate-900 shadow-lg' 
                                                             : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'
@@ -594,7 +594,7 @@ const LaborRubrics: React.FC = () => {
 
                                         {formData.calculation_type === 'fixed' && (
                                             <div className="space-y-2 animate-in zoom-in-95 duration-200">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor Unitário Fixo</label>
+                                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Valor Unitário Fixo</label>
                                                 <div className="relative">
                                                     <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                                     <input 
@@ -608,14 +608,14 @@ const LaborRubrics: React.FC = () => {
                                                         className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all"
                                                     />
                                                 </div>
-                                                <p className="text-[10px] text-slate-400 font-bold ml-1 italic">Este valor será aplicado automaticamente em todas as folhas.</p>
+                                                <p className="text-xs text-slate-400 font-bold ml-1 italic">Este valor será aplicado automaticamente em todas as folhas.</p>
                                             </div>
                                         )}
 
                                         {formData.calculation_type === 'percentage' && (
                                             <div className="grid grid-cols-2 gap-6 animate-in zoom-in-95 duration-200">
                                                 <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Base de Cálculo</label>
+                                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Base de Cálculo</label>
                                                     <select 
                                                         value={formData.calculation_config?.base || 'SALARIO'}
                                                         onChange={(e) => setFormData({ 
@@ -630,7 +630,7 @@ const LaborRubrics: React.FC = () => {
                                                     </select>
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Percentual (%)</label>
+                                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Percentual (%)</label>
                                                     <div className="relative">
                                                         <input 
                                                             type="number"
@@ -652,7 +652,7 @@ const LaborRubrics: React.FC = () => {
                                         {formData.calculation_type === 'formula' && (
                                             <div className="space-y-4 animate-in zoom-in-95 duration-200">
                                                 <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fórmula Customizada</label>
+                                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Fórmula Customizada</label>
                                                     <textarea 
                                                         placeholder="Ex: SALARIO * 0.05"
                                                         value={formData.formula || ''}
@@ -663,7 +663,7 @@ const LaborRubrics: React.FC = () => {
                                                 <div className="bg-amber-50 p-4 rounded-3xl border border-amber-100">
                                                     <div className="flex items-center gap-2 mb-2">
                                                         <Calculator size={14} className="text-amber-600" />
-                                                        <span className="text-[10px] font-black text-amber-900 uppercase tracking-widest">Variáveis Disponíveis</span>
+                                                        <span className="text-xs font-black text-amber-900 uppercase tracking-widest">Variáveis Disponíveis</span>
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-x-2 gap-y-2">
                                                         {['SALARIO', 'HE50_HRS', 'HE100_HRS', 'AD_NOT_HRS', 'HOURLY_RATE', 'PERC', 'VALOR'].map(v => (
@@ -690,7 +690,7 @@ const LaborRubrics: React.FC = () => {
                                                 <Info className="text-slate-400 mt-1" size={20} />
                                                 <div>
                                                     <h4 className="text-sm font-black text-slate-700 tracking-tight">Lançamento Comercial/Manual</h4>
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
                                                         O valor desta rubrica não é calculado automaticamente. Ele deve ser informado mensalmente via tela de Lançamentos ou Eventos de Folha.
                                                     </p>
                                                 </div>
@@ -730,7 +730,7 @@ const LaborRubrics: React.FC = () => {
                                     ) : (
                                         <div className="p-12 text-center text-slate-400">
                                             <Search className="mx-auto mb-3 opacity-20" />
-                                            <p className="text-[10px] font-black uppercase tracking-wider">Nenhum histórico encontrado para esta rubrica.</p>
+                                            <p className="text-xs font-black uppercase tracking-wider">Nenhum histórico encontrado para esta rubrica.</p>
                                         </div>
                                     )}
                                 </div>

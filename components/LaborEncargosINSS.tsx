@@ -277,7 +277,7 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
 
                 {/* Cabeçalho do relatório */}
                 <div className="px-8 pt-7 pb-5 border-b border-slate-100 bg-slate-50/50 print:bg-white">
-                    <div className="flex justify-between items-start text-[11px] text-slate-500 font-medium mb-4">
+                    <div className="flex justify-between items-start text-xs text-slate-500 font-medium mb-4">
                         <div className="space-y-0.5">
                             <p className="font-black text-slate-800 text-sm uppercase">{orgName}</p>
                         </div>
@@ -288,7 +288,7 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                         </div>
                     </div>
                     <div className="text-center space-y-0.5">
-                        <p className="text-[10px] text-slate-500 font-medium">Folha Mensal &nbsp;·&nbsp; Competência: <strong>{periodLabel}</strong></p>
+                        <p className="text-xs text-slate-500 font-medium">Folha Mensal &nbsp;·&nbsp; Competência: <strong>{periodLabel}</strong></p>
                     </div>
                 </div>
 
@@ -301,21 +301,21 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                         </h2>
 
                         {/* EMPREGADOS */}
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                             <Users className="w-3.5 h-3.5" /> Empregados
                         </p>
                         <div className="overflow-x-auto">
                             <table className="w-full text-xs border-collapse">
                                 <thead>
                                     <tr className="bg-slate-100 border-y border-slate-200">
-                                        <th className="text-left px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-[10px] w-8">Cód.</th>
-                                        <th className="text-left px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-[10px]">Nome do empregado</th>
-                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-[10px]">Base cálculo</th>
-                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-[10px]">Excedente</th>
-                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-[10px]">Ded.sal.mat.13</th>
-                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-[10px]">Deduções</th>
-                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-[10px]">Taxa</th>
-                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-[10px]">Valor</th>
+                                        <th className="text-left px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-xs w-8">Cód.</th>
+                                        <th className="text-left px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-xs">Nome do empregado</th>
+                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-xs">Base cálculo</th>
+                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-xs">Excedente</th>
+                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-xs">Ded.sal.mat.13</th>
+                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-xs">Deduções</th>
+                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-xs">Taxa</th>
+                                        <th className="text-right px-3 py-2 font-black text-slate-600 uppercase tracking-wider text-xs">Valor</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -343,7 +343,7 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                                 {/* Totais empregados */}
                                 <tfoot>
                                     <tr className="border-t border-slate-200 bg-slate-50">
-                                        <td colSpan={2} className="px-3 py-2 text-[10px] font-black text-slate-600 uppercase">
+                                        <td colSpan={2} className="px-3 py-2 text-xs font-black text-slate-600 uppercase">
                                             Empregados: {data.empregados.length} &nbsp; Total:
                                         </td>
                                         <td className="px-3 py-2 text-right font-mono font-black text-slate-800">{fmtN(data.totalBase)}</td>
@@ -354,7 +354,7 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                                         <td className="px-3 py-2 text-right font-mono font-black text-slate-800">{fmtN(data.totalSegurados)}</td>
                                     </tr>
                                     <tr className="border-t border-slate-100 bg-slate-50">
-                                        <td colSpan={2} className="px-3 py-2 text-[10px] font-black text-slate-500 uppercase">
+                                        <td colSpan={2} className="px-3 py-2 text-xs font-black text-slate-500 uppercase">
                                             Contribuintes: {data.contribuintes.length} &nbsp; Total:
                                         </td>
                                         <td className="px-3 py-2 text-right font-mono text-slate-400">0,00</td>
@@ -365,7 +365,7 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                                         <td className="px-3 py-2 text-right font-mono text-slate-400">0,00</td>
                                     </tr>
                                     <tr className="border-t-2 border-slate-300 bg-slate-100">
-                                        <td colSpan={2} className="px-3 py-2 text-[10px] font-black text-slate-700 uppercase">
+                                        <td colSpan={2} className="px-3 py-2 text-xs font-black text-slate-700 uppercase">
                                             Total: {data.empregados.length + data.contribuintes.length} &nbsp; Total:
                                         </td>
                                         <td className="px-3 py-2 text-right font-mono font-black text-slate-900">{fmtN(data.totalBase)}</td>
@@ -389,17 +389,17 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                             <table className="w-full text-xs border-collapse">
                                 <thead>
                                     <tr className="bg-slate-100 border-y border-slate-200">
-                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Base cálculo</th>
-                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Excedente</th>
-                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Segurados</th>
-                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Contribuintes</th>
-                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">
+                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Base cálculo</th>
+                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Excedente</th>
+                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Segurados</th>
+                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Contribuintes</th>
+                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">
                                             RAT ({fmtPct(data.ratRate * 100)}%)
                                         </th>
-                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Empresa (20%)</th>
-                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Deduções</th>
-                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Terceiros</th>
-                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-[10px]">Total</th>
+                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Empresa (20%)</th>
+                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Deduções</th>
+                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Terceiros</th>
+                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Total</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -438,8 +438,8 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                         {/* Total geral em destaque */}
                         <div className="mt-4 p-5 bg-indigo-600 rounded-2xl flex items-center justify-between">
                             <div>
-                                <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Total INSS + Encargos</p>
-                                <p className="text-[10px] text-indigo-300 font-medium mt-0.5">
+                                <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">Total INSS + Encargos</p>
+                                <p className="text-xs text-indigo-300 font-medium mt-0.5">
                                     Segurados + RAT + Empresa + Terceiros
                                 </p>
                             </div>
@@ -447,7 +447,7 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                         </div>
 
                         {/* Legenda */}
-                        <p className="text-[10px] text-slate-400 font-medium mt-4 italic">
+                        <p className="text-xs text-slate-400 font-medium mt-4 italic">
                             * RAT, INSS Patronal e Terceiros calculados sobre a Base de Cálculo do INSS.
                             RAT a {fmtPct(data.ratRate * 100)}% (risco médio) — ajuste via Rubricas.
                             INSS Patronal fixo em 20% (Regime Geral).

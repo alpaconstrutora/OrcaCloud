@@ -140,7 +140,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
     return (
       <div className="flex flex-col items-center justify-center p-8 min-h-[400px] bg-[#F3F7F9]">
         <div className="w-8 h-8 border-4 border-[#D47A55] border-t-transparent rounded-full animate-spin mb-3" />
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando Escritório...</span>
+        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Sincronizando Escritório...</span>
       </div>
     );
   }
@@ -225,7 +225,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
               <select
                 value={periodo}
                 onChange={e => setPeriodo(e.target.value)}
-                className="appearance-none bg-white border border-slate-200/60 rounded-xl pl-3.5 pr-9 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 outline-none focus:border-[#D47A55] cursor-pointer shadow-sm"
+                className="appearance-none bg-white border border-slate-200/60 rounded-xl pl-3.5 pr-9 py-2.5 text-xs font-black uppercase tracking-widest text-slate-600 outline-none focus:border-[#D47A55] cursor-pointer shadow-sm"
               >
                 <option>Última Semana</option>
                 <option>Último Mês</option>
@@ -235,7 +235,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-3 pointer-events-none" />
             </div>
 
-            <button className="flex items-center gap-2 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#D47A55]/20 hover:shadow-[#D47A55]/30 active:scale-[0.98] transition-all">
+            <button className="flex items-center gap-2 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-[#D47A55]/20 hover:shadow-[#D47A55]/30 active:scale-[0.98] transition-all">
               <Download className="w-3.5 h-3.5" />
               Exportar
             </button>
@@ -248,7 +248,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`relative px-4 py-3 text-[11px] font-black uppercase tracking-widest transition-colors ${
+              className={`relative px-4 py-3 text-xs font-black uppercase tracking-widest transition-colors ${
                 activeTab === tab ? 'text-[#D47A55]' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
@@ -278,7 +278,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
             <div className="mt-3 text-2xl font-black text-slate-800 tracking-tight truncate">{kpi.value}</div>
             <div className="mt-2.5 flex items-center gap-2">
               <span
-                className={`flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-md ${
+                className={`flex items-center gap-0.5 text-xs font-black px-1.5 py-0.5 rounded-md ${
                   kpi.up ? 'text-emerald-600 bg-emerald-50' : 'text-rose-500 bg-rose-50'
                 }`}
               >
@@ -297,7 +297,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
         {/* Funil comercial (substitui Top Countries Customers) */}
         <div className="bg-white border border-slate-200/50 p-5 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5 text-[#D47A55]" /> Funil de Projetos
             </h2>
             <button onClick={() => onNavigate('CRM')} className="text-slate-300 hover:text-[#D47A55]">
@@ -307,7 +307,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
 
           <div className="flex items-end gap-2 mb-5">
             <span className="text-3xl font-black text-slate-800 tracking-tight">{BRL(stats.pipeline)}</span>
-            <span className="flex items-center gap-0.5 text-[10px] font-black text-emerald-600 mb-1.5">
+            <span className="flex items-center gap-0.5 text-xs font-black text-emerald-600 mb-1.5">
               <TrendingUp className="w-3 h-3" /> {stats.conversao}% conversão
             </span>
           </div>
@@ -315,7 +315,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
           <div className="space-y-3.5">
             {funil.map(stage => (
               <div key={stage.status} className="space-y-1.5">
-                <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-2 font-bold text-slate-600">
                     <span className="w-2 h-2 rounded-full" style={{ background: stage.color }} />
                     {stage.label}
@@ -337,7 +337,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
         {/* Horas por projeto (substitui Top Traffic by Source — chips) */}
         <div className="bg-white border border-slate-200/50 p-5 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-[#D47A55]" /> Horas por Projeto
             </h2>
             <button onClick={() => onNavigate('TIMESHEET')} className="text-slate-300 hover:text-[#D47A55]">
@@ -346,7 +346,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
           </div>
 
           {horasPorProjeto.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-center py-10 text-[11px] text-slate-400">
+            <div className="h-full flex items-center justify-center text-center py-10 text-xs text-slate-400">
               Nenhuma hora lançada ainda.
             </div>
           ) : (
@@ -357,12 +357,12 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
                   className="flex items-center justify-between gap-2 bg-slate-50/60 border border-slate-100 rounded-2xl px-3 py-2.5"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center font-black text-[10px] ${CHIP_PALETTE[i % CHIP_PALETTE.length]}`}>
+                    <span className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center font-black text-xs ${CHIP_PALETTE[i % CHIP_PALETTE.length]}`}>
                       {p.nome.charAt(0).toUpperCase()}
                     </span>
-                    <span className="text-[11px] font-bold text-slate-600 truncate">{p.nome}</span>
+                    <span className="text-xs font-bold text-slate-600 truncate">{p.nome}</span>
                   </div>
-                  <span className="text-[11px] font-black text-slate-800 shrink-0">{COMPACT(p.horas)}h</span>
+                  <span className="text-xs font-black text-slate-800 shrink-0">{COMPACT(p.horas)}h</span>
                 </div>
               ))}
             </div>
@@ -373,7 +373,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
       {/* ── Tabela: Propostas Recentes (substitui Recent Invoices) ─────── */}
       <div className="bg-white border border-slate-200/50 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Propostas Recentes</h2>
+          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Propostas Recentes</h2>
           <div className="flex items-center gap-2">
             <button className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/70 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#D47A55] transition-colors">
               <Filter className="w-3 h-3" /> Filtrar
@@ -385,7 +385,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
         </div>
 
         {recentes.length === 0 ? (
-          <div className="text-center py-12 text-[11px] text-slate-400">Nenhuma proposta cadastrada ainda.</div>
+          <div className="text-center py-12 text-xs text-slate-400">Nenhuma proposta cadastrada ainda.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -409,24 +409,24 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
                       onClick={() => onNavigate('CRM')}
                       className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 cursor-pointer transition-colors group"
                     >
-                      <td className="px-5 py-3.5 text-[11px] font-black text-slate-400">{idx + 1}</td>
+                      <td className="px-5 py-3.5 text-xs font-black text-slate-400">{idx + 1}</td>
                       <td className="px-3 py-3.5">
                         <div className="flex items-center gap-2.5">
-                          <span className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center font-black text-[10px] ${CHIP_PALETTE[idx % CHIP_PALETTE.length]}`}>
+                          <span className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center font-black text-xs ${CHIP_PALETTE[idx % CHIP_PALETTE.length]}`}>
                             {(l.nome_cliente || '?').charAt(0).toUpperCase()}
                           </span>
-                          <span className="text-[11px] font-black text-slate-700 group-hover:text-[#D47A55] transition-colors truncate max-w-[140px]">
+                          <span className="text-xs font-black text-slate-700 group-hover:text-[#D47A55] transition-colors truncate max-w-[140px]">
                             {l.nome_cliente}
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-3.5 text-[11px] font-medium text-slate-500 truncate max-w-[120px]">
+                      <td className="px-3 py-3.5 text-xs font-medium text-slate-500 truncate max-w-[120px]">
                         {l.contato || '—'}
                       </td>
-                      <td className="px-3 py-3.5 text-[11px] font-medium text-slate-500 truncate max-w-[180px] hidden md:table-cell">
+                      <td className="px-3 py-3.5 text-xs font-medium text-slate-500 truncate max-w-[180px] hidden md:table-cell">
                         {l.briefing || 'Sem briefing'}
                       </td>
-                      <td className="px-3 py-3.5 text-[11px] font-medium text-slate-500 hidden sm:table-cell">
+                      <td className="px-3 py-3.5 text-xs font-medium text-slate-500 hidden sm:table-cell">
                         {new Date(l.created_at).toLocaleDateString('pt-BR')}
                       </td>
                       <td className="px-3 py-3.5">
@@ -438,7 +438,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
                           {meta.label}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-right text-[11px] font-black text-slate-800">
+                      <td className="px-5 py-3.5 text-right text-xs font-black text-slate-800">
                         {BRL(l.valor_estimado)}
                       </td>
                     </tr>

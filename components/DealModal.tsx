@@ -294,7 +294,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-100 ring-2 ring-white">
                                 <Briefcase className="w-6 h-6 text-white" />
                             </div>
-                            <div className="text-[10px] font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 shadow-sm uppercase tracking-tighter">
+                            <div className="text-xs font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 shadow-sm uppercase tracking-tighter">
                                 {formData.type === 'SALE' ? 'VENDA' : formData.type === 'RENTAL' ? 'ALUGUEL' : 'SERVIÇO'}
                             </div>
                         </div>
@@ -306,7 +306,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </h2>
                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white rounded-md border border-gray-100 shadow-sm">
                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Status:</span>
-                                    <span className={`text-[10px] font-black uppercase ${formData.status === 'COMPLETED' ? 'text-green-600' :
+                                    <span className={`text-xs font-black uppercase ${formData.status === 'COMPLETED' ? 'text-green-600' :
                                         formData.status === 'CANCELLED' ? 'text-red-500' : 'text-purple-600'
                                         }`}>
                                         {formData.status?.replace('_', ' ')}
@@ -321,7 +321,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                     <div className="flex items-center gap-8 shrink-0">
                         <div className="text-right">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Tipo de Acordo</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Tipo de Acordo</p>
                             <div className="flex items-center gap-2 justify-end">
                                 <TrendingUp className="w-4 h-4 text-purple-400" />
                                 <span className="text-lg font-black text-purple-600 uppercase tracking-tighter">
@@ -331,7 +331,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         </div>
                         <div className="h-10 w-px bg-gray-200" />
                         <div className="text-right">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Valor Total</p>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Valor Total</p>
                             <div className="flex items-baseline gap-1 text-purple-600">
                                 <span className="text-xs font-bold font-mono">R$</span>
                                 <span className="text-3xl font-black">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(formData.value || 0)}</span>
@@ -341,7 +341,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             <>
                                 <div className="h-10 w-px bg-gray-200" />
                                 <div className="text-right">
-                                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1 leading-none">Comissão Corretor</p>
+                                    <p className="text-xs font-black text-amber-500 uppercase tracking-widest mb-1 leading-none">Comissão Corretor</p>
                                     <div className="flex items-baseline gap-1 text-amber-600">
                                         <span className="text-xs font-bold font-mono">R$</span>
                                         <span className="text-xl font-black">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(formData.broker_commission_value || 0)}</span>
@@ -439,13 +439,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <div className="flex-1">
                                                 <div className="flex items-center justify-between mb-2">
                                                     <p className="text-lg font-black text-gray-900 tracking-tight">{selectedProperty.name}</p>
-                                                    <span className="text-[10px] font-black bg-white px-2 py-1 rounded-lg border border-gray-100 text-purple-600 shadow-sm uppercase tracking-widest">Ativo Disponível</span>
+                                                    <span className="text-xs font-black bg-white px-2 py-1 rounded-lg border border-gray-100 text-purple-600 shadow-sm uppercase tracking-widest">Ativo Disponível</span>
                                                 </div>
                                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-relaxed">{selectedProperty.address}</p>
                                                 <div className="flex items-center gap-4 mt-4">
                                                     <div className="flex items-center gap-1.5 text-gray-400">
                                                         <Maximize2 className="w-3.5 h-3.5" />
-                                                        <span className="text-[10px] font-black tracking-widest">{selectedProperty.area} m²</span>
+                                                        <span className="text-xs font-black tracking-widest">{selectedProperty.area} m²</span>
                                                     </div>
                                                     <div className="h-3 w-px bg-gray-200" />
                                                     <p className="text-sm font-black text-purple-600 font-mono">R$ {(selectedProperty.price || 0).toLocaleString('pt-BR')}</p>
@@ -456,7 +456,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                 <div className="h-3 w-px bg-gray-200" />
                                                                 <div className="flex items-center gap-1.5 text-gray-400">
                                                                     <Layers className="w-3.5 h-3.5" />
-                                                                    <span className="text-[10px] font-black tracking-widest truncate max-w-[140px]">{proj.name}</span>
+                                                                    <span className="text-xs font-black tracking-widest truncate max-w-[140px]">{proj.name}</span>
                                                                 </div>
                                                             </>
                                                         ) : null;
@@ -514,7 +514,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                                 {/* Valor */}
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Valor do Fechamento</label>
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Valor do Fechamento</label>
                                     <div className="relative group">
                                         <span className="absolute left-8 top-1/2 -translate-y-1/2 font-mono font-bold text-purple-300 group-focus-within:text-white transition-colors">BRL</span>
                                         <input
@@ -539,7 +539,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 {/* Datas */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Data Efetiva</label>
+                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Data Efetiva</label>
                                         <div className="relative">
                                             <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                             <input
@@ -551,7 +551,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Vencimento Pagto.</label>
+                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Vencimento Pagto.</label>
                                         <div className="relative">
                                             <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" />
                                             <input
@@ -566,7 +566,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                                 {/* Forma de Pagamento */}
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Forma de Pagamento</label>
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Forma de Pagamento</label>
                                     <select
                                         value={formData.payment_method}
                                         onChange={(e) => {
@@ -596,7 +596,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Entrada (BRL)</label>
+                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Entrada (BRL)</label>
                                                 <input
                                                     type="number"
                                                     value={formData.down_payment || ''}
@@ -606,7 +606,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Nº Parcelas</label>
+                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Nº Parcelas</label>
                                                 <input
                                                     type="number"
                                                     min="1" max="120"
@@ -619,12 +619,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                                         <div>
                                             <div className="flex items-center justify-between mb-3">
-                                                <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest">Plano de Pagamento</h4>
+                                                <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest">Plano de Pagamento</h4>
                                                 <button
                                                     type="button"
                                                     onClick={handleGenerateInstallments}
                                                     disabled={loading}
-                                                    className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${loading ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-100 text-purple-700 hover:bg-purple-200 active:scale-95'}`}
+                                                    className={`px-4 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${loading ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-100 text-purple-700 hover:bg-purple-200 active:scale-95'}`}
                                                 >
                                                     {loading ? 'Verificando...' : 'Gerar Parcelas'}
                                                 </button>
@@ -635,7 +635,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     {formData.custom_installments.map((inst, index) => (
                                                         <div key={inst.id} className="grid grid-cols-12 gap-2 p-2 bg-white border border-purple-100 rounded-xl items-center shadow-sm">
                                                             <div className="col-span-1 flex justify-center">
-                                                                <span className="text-[10px] font-black text-gray-400">{index + 1}</span>
+                                                                <span className="text-xs font-black text-gray-400">{index + 1}</span>
                                                             </div>
                                                             <div className="col-span-5">
                                                                 <input
@@ -650,7 +650,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                 />
                                                             </div>
                                                             <div className="col-span-6 relative">
-                                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">R$</span>
+                                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R$</span>
                                                                 <input
                                                                     type="number"
                                                                     value={inst.value}
@@ -665,7 +665,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         </div>
                                                     ))}
                                                     <div className="flex justify-between items-center p-3 mt-2 bg-gray-50 rounded-xl border border-gray-100">
-                                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Soma das Parcelas</span>
+                                                        <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Soma das Parcelas</span>
                                                         <span className={`text-sm font-black ${Math.abs((formData.custom_installments.reduce((sum, i) => sum + i.value, 0) + (formData.down_payment || 0)) - (formData.value || 0)) < 0.01 ? 'text-green-600' : 'text-amber-600'}`}>
                                                             Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                                                                 formData.custom_installments.reduce((sum, i) => sum + i.value, 0) + (formData.down_payment || 0)
@@ -728,15 +728,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <p className="text-sm font-black text-gray-900 truncate">{selectedBroker.name}</p>
                                             <div className="flex items-center gap-3 mt-0.5">
                                                 {selectedBroker.creci && (
-                                                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">CRECI: {selectedBroker.creci}</span>
+                                                    <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">CRECI: {selectedBroker.creci}</span>
                                                 )}
                                                 {selectedBroker.agency_name && (
-                                                    <span className="text-[10px] font-bold text-gray-400 truncate">{selectedBroker.agency_name}</span>
+                                                    <span className="text-xs font-bold text-gray-400 truncate">{selectedBroker.agency_name}</span>
                                                 )}
                                             </div>
                                         </div>
                                         <div className="text-right shrink-0">
-                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Comissão padrão</span>
+                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest block">Comissão padrão</span>
                                             <span className="text-lg font-black text-amber-600">{selectedBroker.commission_rate || 0}%</span>
                                         </div>
                                     </div>
@@ -745,7 +745,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 {formData.broker_id && (
                                     <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-300">
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">
                                                 <Percent className="w-3 h-3 inline mr-1" />% Comissão
                                             </label>
                                             <div className="relative">
@@ -771,7 +771,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Valor da Comissão</label>
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Valor da Comissão</label>
                                             <div className="relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-500 font-mono">R$</span>
                                                 <input
@@ -794,7 +794,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Forma de Pagto.</label>
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Forma de Pagto.</label>
                                             <select
                                                 value={formData.broker_payment_method || ''}
                                                 onChange={(e) => setFormData({ ...formData, broker_payment_method: e.target.value })}
@@ -810,7 +810,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Data de Pagto.</label>
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Data de Pagto.</label>
                                             <input
                                                 type="date"
                                                 value={formData.broker_payment_due_date || formData.date || ''}
@@ -833,7 +833,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             <div className="grid grid-cols-12 gap-8">
                                 <div className="col-span-12 lg:col-span-5 space-y-6">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">
+                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">
                                             {formData.type === 'SALE' ? 'Nº Contrato de Compra e Venda' :
                                                 formData.type === 'RENTAL' ? 'Nº Contrato de Locação' : 'Nº Contrato de Prestação de Serviço'}
                                         </label>
@@ -852,12 +852,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     {/* Ponte → Contrato de Venda (somente SALE, negociação já salva) */}
                                     {formData.type === 'SALE' && formData.id && (
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Contrato de Venda</label>
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Contrato de Venda</label>
                                             {salesContract ? (
                                                 <div className="p-5 bg-emerald-50 rounded-3xl border border-emerald-100 flex gap-4 items-start">
                                                     <Check className="w-6 h-6 text-emerald-500 shrink-0 mt-0.5" />
                                                     <div className="min-w-0">
-                                                        <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-1">Contrato Gerado</p>
+                                                        <p className="text-xs font-black text-emerald-800 uppercase tracking-widest mb-1">Contrato Gerado</p>
                                                         <p className="text-xs text-emerald-700 leading-relaxed">
                                                             Nº <span className="font-black">{salesContract.number}</span> · {salesContract.status}.
                                                             Disponível em <span className="font-bold">Vendas de Ativos → Contratos</span> e no Portal do Cliente.
@@ -876,7 +876,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 </button>
                                             )}
                                             {contractError && (
-                                                <p className="text-[11px] font-bold text-red-500 px-2 flex items-center gap-1">
+                                                <p className="text-xs font-bold text-red-500 px-2 flex items-center gap-1">
                                                     <AlertCircle className="w-3 h-3" /> {contractError}
                                                 </p>
                                             )}
@@ -886,7 +886,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 flex gap-4">
                                         <AlertCircle className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" />
                                         <div>
-                                            <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">Aviso de Disponibilidade</p>
+                                            <p className="text-xs font-black text-amber-800 uppercase tracking-widest mb-1">Aviso de Disponibilidade</p>
                                             <p className="text-xs text-amber-700 leading-relaxed">
                                                 O status "{formData.type === 'RENTAL' ? 'Alugado' : 'Vendido'}" altera automaticamente a visibilidade do ativo no catálogo público.
                                             </p>
@@ -895,7 +895,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
 
                                 <div className="col-span-12 lg:col-span-7 space-y-4">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1 block">Etapa da Negociação</label>
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1 block">Etapa da Negociação</label>
                                     <DealWorkflowBar
                                         currentStatus={(formData.status as DealWorkflowStatus) || 'IN_NEGOTIATION'}
                                         deal={formData}
@@ -971,7 +971,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         <div className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-300">
                             <Info className="w-5 h-5" />
                         </div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] max-w-xs leading-relaxed">
+                        <p className="text-xs font-black uppercase tracking-[0.2em] max-w-xs leading-relaxed">
                             Aprovação sistêmica obrigatória para fechamentos acima da margem de tabela permitida.
                         </p>
                     </div>

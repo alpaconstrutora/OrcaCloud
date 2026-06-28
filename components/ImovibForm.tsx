@@ -154,7 +154,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
 
                     <div className="space-y-5">
                         <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Nome do Empreendimento / SPE *</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Nome do Empreendimento / SPE *</label>
                             <input
                                 type="text"
                                 name="name"
@@ -167,7 +167,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                         </div>
 
                         <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">CNPJ da SPE (se houver)</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">CNPJ da SPE (se houver)</label>
                             <input
                                 type="text"
                                 name="cnpj"
@@ -179,7 +179,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                         </div>
 
                         <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Incorporadora / Desenvolvedor</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Incorporadora / Desenvolvedor</label>
                             <input
                                 type="text"
                                 name="developer"
@@ -192,7 +192,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Gestor do Projeto</label>
+                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Gestor do Projeto</label>
                                 <input
                                     type="text"
                                     name="manager"
@@ -203,7 +203,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                                 />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Versão do Modelo</label>
+                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Versão do Modelo</label>
                                 <input
                                     type="text"
                                     name="version"
@@ -227,7 +227,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
 
                     <div className="space-y-5">
                         <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Segmento</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Segmento</label>
                             <select
                                 name="segment"
                                 value={formData.segment || ''}
@@ -240,7 +240,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                         </div>
 
                         <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Subclassificação Padrão</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Subclassificação Padrão</label>
                             <select
                                 name="sub_classification"
                                 value={formData.sub_classification || ''}
@@ -253,7 +253,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                         </div>
 
                         <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Fase do Empreendimento</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Fase do Empreendimento</label>
                             <select
                                 name="phase"
                                 value={formData.phase || ''}
@@ -266,7 +266,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                         </div>
 
                         <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Modalidade de Desenvolvimento</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Modalidade de Desenvolvimento</label>
                             <select
                                 name="development_modality"
                                 value={formData.development_modality || ''}
@@ -291,7 +291,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
 
                     <div className="space-y-5">
                         <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Zoneamento Atual</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Zoneamento Atual</label>
                             <input
                                 type="text"
                                 name="zoning"
@@ -304,7 +304,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">CA Básico</label>
+                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">CA Básico</label>
                                 <input
                                     type="number"
                                     name="ca_basic"
@@ -315,7 +315,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                                 />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">CA Máximo</label>
+                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">CA Máximo</label>
                                 <input
                                     type="number"
                                     name="ca_max"
@@ -328,7 +328,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                         </div>
 
                         <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Taxa de Ocupação (%)</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Taxa de Ocupação (%)</label>
                             <div className="relative">
                                 <input
                                     type="number"
@@ -361,7 +361,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                         {(formData.ca_basic && formData.ca_max && formData.ca_max > formData.ca_basic) ? (
                             <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-start gap-3">
                                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                                <p className="text-[10px] font-bold text-amber-700 uppercase leading-snug">
+                                <p className="text-xs font-bold text-amber-700 uppercase leading-snug">
                                     Atenção: A diferença entre o CA Máximo e Básico indica potencial necessidade de compra de outorga onerosa no Módulo 3.
                                 </p>
                             </div>

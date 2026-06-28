@@ -99,12 +99,12 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
                 <div className="flex items-center gap-2">
                     <FlaskConical className="w-4 h-4 text-purple-500" />
                     <h2 className="text-sm font-bold text-gray-800">Cenários salvos</h2>
-                    <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
                         {scenarios.length}
                     </span>
                 </div>
                 {scenarios.length > 1 && (
-                    <p className="text-[11px] text-gray-400">
+                    <p className="text-xs text-gray-400">
                         {selected.size > 0
                             ? `${selected.size} selecionados para comparar`
                             : 'Clique nos cenários para selecionar até 3 para comparar'}
@@ -123,8 +123,8 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
                                 {/* Base column */}
                                 <th className="text-center px-4 py-3 min-w-[160px]">
                                     <div className="flex flex-col items-center gap-1">
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-wide">Planejamento Atual</span>
-                                        <span className="text-[10px] text-gray-400">{fmtDate(baseEndDate)}</span>
+                                        <span className="text-xs font-black text-gray-400 uppercase tracking-wide">Planejamento Atual</span>
+                                        <span className="text-xs text-gray-400">{fmtDate(baseEndDate)}</span>
                                     </div>
                                 </th>
 
@@ -138,11 +138,11 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
                                         <div className="flex flex-col items-center gap-1">
                                             <div className="flex items-center gap-1.5">
                                                 {selected.has(s.id) && <CheckCircle2 className="w-3.5 h-3.5 text-purple-500" />}
-                                                <span className={`text-[11px] font-black ${selected.has(s.id) ? 'text-purple-700' : 'text-gray-700'}`}>
+                                                <span className={`text-xs font-black ${selected.has(s.id) ? 'text-purple-700' : 'text-gray-700'}`}>
                                                     {s.name}
                                                 </span>
                                             </div>
-                                            <span className="text-[10px] text-gray-400">
+                                            <span className="text-xs text-gray-400">
                                                 {new Date(s.createdAt).toLocaleDateString('pt-BR')}
                                             </span>
                                         </div>
@@ -204,7 +204,7 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
                                         <div className="flex flex-col items-center gap-0.5">
                                             <span className="font-bold text-gray-700">{fmtCurrency(s.result.totalCost)}</span>
                                             {!!delta && (
-                                                <span className={`text-[10px] font-bold ${delta > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                <span className={`text-xs font-bold ${delta > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                                                     {delta > 0 ? '+' : ''}{fmtCurrency(delta)}
                                                 </span>
                                             )}
@@ -226,7 +226,7 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
                                         <div className="flex flex-col items-center gap-0.5">
                                             <span className="font-bold text-gray-700">{n}</span>
                                             {!!delta && (
-                                                <span className={`text-[10px] font-bold ${delta > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                                                <span className={`text-xs font-bold ${delta > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
                                                     {delta > 0 ? `+${delta}` : delta}
                                                 </span>
                                             )}
@@ -239,21 +239,21 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
                             <tr>
                                 <td className="px-4 py-3 sticky left-0 bg-white" />
                                 <td className="px-4 py-3 text-center">
-                                    <span className="text-[10px] text-gray-400 italic">planejamento atual</span>
+                                    <span className="text-xs text-gray-400 italic">planejamento atual</span>
                                 </td>
                                 {displayScenarios.map(s => (
                                     <td key={s.id} className="px-4 py-3 text-center">
                                         <div className="flex flex-col items-center gap-2">
                                             <button
                                                 onClick={() => setConfirmApply(s)}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold rounded-lg transition-all shadow-sm"
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-all shadow-sm"
                                             >
                                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                                 Aplicar cenário
                                             </button>
                                             <button
                                                 onClick={() => setConfirmDelete(s.id)}
-                                                className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                                                className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
                                             >
                                                 <Trash2 className="w-3 h-3" />
                                                 Excluir
@@ -270,7 +270,7 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
             {/* Scenario cards (all) */}
             {scenarios.length > 3 && (
                 <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Todos os cenários</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Todos os cenários</p>
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                         {scenarios.map(s => (
                             <div
@@ -282,8 +282,8 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
                                     <p className="text-xs font-bold text-gray-800 truncate">{s.name}</p>
                                     {selected.has(s.id) && <CheckCircle2 className="w-4 h-4 text-purple-500 shrink-0" />}
                                 </div>
-                                <p className="text-[10px] text-gray-400 mt-0.5">{new Date(s.createdAt).toLocaleDateString('pt-BR')}</p>
-                                <p className="text-[11px] font-semibold text-gray-700 mt-1">{fmtDate(s.result.endDate)}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">{new Date(s.createdAt).toLocaleDateString('pt-BR')}</p>
+                                <p className="text-xs font-semibold text-gray-700 mt-1">{fmtDate(s.result.endDate)}</p>
                             </div>
                         ))}
                     </div>
@@ -341,15 +341,15 @@ const MetricRow: React.FC<{
 );
 
 const DeltaBadge: React.FC<{ days: number }> = ({ days }) => {
-    if (!days) return <span className="text-[10px] text-gray-400">sem impacto</span>;
+    if (!days) return <span className="text-xs text-gray-400">sem impacto</span>;
     if (days > 0) return (
-        <span className="text-[10px] font-bold text-red-600 flex items-center gap-0.5">
+        <span className="text-xs font-bold text-red-600 flex items-center gap-0.5">
             <TrendingUp className="w-3 h-3" />
             +{days}d
         </span>
     );
     return (
-        <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5">
+        <span className="text-xs font-bold text-emerald-600 flex items-center gap-0.5">
             <TrendingDown className="w-3 h-3" />
             {days}d
         </span>

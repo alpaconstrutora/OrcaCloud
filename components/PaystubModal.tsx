@@ -164,7 +164,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                         </div>
                         <div>
                             <h3 className="text-lg font-black text-slate-900 uppercase">Recibo de Pagamento</h3>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">
                                 {run?.type === 'adiantamento' ? 'Adiantamento — ' : 'Referência: '}{formatMonthYear(run?.start_date || '')}
                             </p>
                         </div>
@@ -173,14 +173,14 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                         <button 
                             onClick={handleDownloadPDF}
                             disabled={exporting}
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 disabled:opacity-50 transition-all font-black text-[10px] uppercase tracking-widest"
+                            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 disabled:opacity-50 transition-all font-black text-xs uppercase tracking-widest"
                         >
                             {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                             PDF
                         </button>
                         <button 
                             onClick={handlePrint}
-                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-black text-[10px] uppercase tracking-widest"
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-black text-xs uppercase tracking-widest"
                         >
                             <Printer className="w-3 h-3" /> Imprimir
                         </button>
@@ -198,8 +198,8 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                         <div className="p-6 border-b border-slate-200 flex justify-between items-start bg-slate-50/50">
                             <div className="space-y-1">
                                 <h4 className="text-sm font-black text-slate-900 uppercase">Opura Pro</h4>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">CNPJ: 00.000.000/0001-00</p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Endereço: Unidade Operacional - Obra Garden</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase">CNPJ: 00.000.000/0001-00</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase">Endereço: Unidade Operacional - Obra Garden</p>
                             </div>
                             <div className="text-right">
                                 <span className="px-3 py-1 bg-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest">
@@ -262,8 +262,8 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                                         return (
                                         <tr key={idx} className="border-b border-slate-50 last:border-0">
                                             <td className="py-3 px-4 font-bold text-slate-400">{(item.code || '???').substring(0, 3)}</td>
-                                            <td className="py-3 px-4 font-black text-slate-900 uppercase text-[11px] leading-tight">{displayName}</td>
-                                            <td className="py-3 px-4 text-center font-bold text-slate-600 italic text-[10px]">
+                                            <td className="py-3 px-4 font-black text-slate-900 uppercase text-xs leading-tight">{displayName}</td>
+                                            <td className="py-3 px-4 text-center font-bold text-slate-600 italic text-xs">
                                                 {item.reference ? 
                                                     (typeof item.reference === 'number' ? 
                                                         `${(item.reference > 1 ? item.reference : item.reference * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1 })}%` : 
@@ -274,7 +274,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                                                 {item.type === 'provento' ? (
                                                     <span className="text-slate-900">R$ {(item.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                 ) : (item.type === 'informativa' || item.type === 'encargo') ? (
-                                                    <span className="text-slate-400 font-bold italic text-[10px]">R$ {(item.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    <span className="text-slate-400 font-bold italic text-xs">R$ {(item.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                 ) : ''}
                                             </td>
                                             <td className="py-3 px-4 text-right font-black">
@@ -299,15 +299,15 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                         <div className="bg-slate-50 border-t border-slate-200">
                             <div className="grid grid-cols-1 md:grid-cols-3">
                                 <div className="p-6 border-r border-slate-200">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Total de Vencimentos</p>
+                                    <p className="text-xs font-black text-slate-400 uppercase mb-1">Total de Vencimentos</p>
                                     <p className="text-lg font-black text-slate-900">R$ {result.gross.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                                 <div className="p-6 border-r border-slate-200">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Total de Descontos</p>
+                                    <p className="text-xs font-black text-slate-400 uppercase mb-1">Total de Descontos</p>
                                     <p className="text-lg font-black text-rose-500">R$ {result.discounts.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                                 <div className="p-6 bg-slate-900">
-                                    <p className="text-[10px] font-black text-slate-400/60 uppercase mb-1">Valor Líquido a Receber</p>
+                                    <p className="text-xs font-black text-slate-400/60 uppercase mb-1">Valor Líquido a Receber</p>
                                     <p className="text-2xl font-black text-white">R$ {result.net.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                             </div>
@@ -346,11 +346,11 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                     <div className="hidden print:block mt-20">
                         <div className="flex justify-between items-end gap-20">
                             <div className="flex-1 border-t border-slate-900 pt-4 text-center">
-                                <p className="text-[10px] font-black uppercase text-slate-900">Assinatura do Colaborador</p>
+                                <p className="text-xs font-black uppercase text-slate-900">Assinatura do Colaborador</p>
                                 <p className="text-[8px] text-slate-500 mt-1">Declaro ter recebido a importância líquida discriminada neste recibo</p>
                             </div>
                             <div className="flex-1 border-t border-slate-900 pt-4 text-center">
-                                <p className="text-[10px] font-black uppercase text-slate-900">Data e Local</p>
+                                <p className="text-xs font-black uppercase text-slate-900">Data e Local</p>
                                 <p className="text-xs font-bold text-slate-900 mt-2">____/____/________ __________________</p>
                             </div>
                         </div>

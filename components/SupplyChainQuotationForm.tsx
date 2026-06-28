@@ -484,7 +484,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                             <h1 className="text-3xl font-black text-gray-900 tracking-tight">
                                 {editingQuotationId ? 'Editar Solicitação de Cotação' : 'Nova Solicitação de Cotação'}
                             </h1>
-                            <p className="text-gray-400 text-[11px] font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
+                            <p className="text-gray-400 text-xs font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
                                 <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
                                 {editingQuotationId ? 'Gestão de Suprimentos • Edição Executiva' : 'Gestão de Suprimentos • Criação de Cotação'}
                             </p>
@@ -493,7 +493,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                     <button
                         onClick={handleSubmit}
                         disabled={loading || (selectedItems.size + formData.items.length) === 0}
-                        className="flex items-center gap-2 bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-900/20 active:scale-95 transition-all"
+                        className="flex items-center gap-2 bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-900/20 active:scale-95 transition-all"
                     >
                         <Save className="w-4 h-4" />
                         <span>{editingQuotationId ? 'Salvar Alterações' : 'Disparar Cotação'}</span>
@@ -625,19 +625,19 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
 
                                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 mt-2">
                                         <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Condição de Pagamento</label>
+                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Condição de Pagamento</label>
                                             <div className="flex bg-white rounded-lg p-1 border border-gray-200">
                                                 <button
                                                     type="button"
                                                     onClick={() => setFormData(prev => ({ ...prev, paymentTermType: 'Vista' }))}
-                                                    className={`flex-1 py-1.5 px-3 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                                                 >
                                                     À Vista
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setFormData(prev => ({ ...prev, paymentTermType: 'Parcelado' }))}
-                                                    className={`flex-1 py-1.5 px-3 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                                                 >
                                                     Parcelado
                                                 </button>
@@ -646,7 +646,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
 
                                         {formData.paymentTermType === 'Vista' ? (
                                             <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Prazo de Pagamento (Dias)</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Prazo de Pagamento (Dias)</label>
                                                 <div className="relative">
                                                     <input
                                                         type="number"
@@ -655,12 +655,12 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                         onChange={e => setFormData(prev => ({ ...prev, paymentDays: parseInt(e.target.value) || 0 }))}
                                                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
                                                     />
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 uppercase">Dias</div>
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">Dias</div>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Quantidade de Parcelas</label>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Quantidade de Parcelas</label>
                                                 <div className="relative">
                                                     <input
                                                         type="number"
@@ -669,7 +669,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                         onChange={e => setFormData(prev => ({ ...prev, paymentInstallments: parseInt(e.target.value) || 1 }))}
                                                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
                                                     />
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 uppercase">X</div>
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">X</div>
                                                 </div>
                                             </div>
                                         )}
@@ -685,7 +685,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                         Itens do Orçamento
                                     </h3>
                                     {projectData && (
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                                             Selecione os itens para cotação
                                         </p>
                                     )}
@@ -902,7 +902,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                     <div className="w-2 h-2 bg-blue-500 rounded-full" />
                                                 )}
                                             </div>
-                                            <p className="text-[10px] font-bold text-gray-400 truncate">{sup.email || 'Sem e-mail'}</p>
+                                            <p className="text-xs font-bold text-gray-400 truncate">{sup.email || 'Sem e-mail'}</p>
                                         </button>
                                     ))}
                                 </div>
@@ -931,13 +931,13 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
 
                                     {quotationItems.length > 0 && (
                                         <div className="space-y-3">
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Itens do Orçamento</p>
+                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Itens do Orçamento</p>
                                             <div className="max-h-48 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                                                 {quotationItems.map(item => (
                                                     <div key={item.code} className="bg-gray-50 p-3 rounded-xl border border-gray-100/50">
                                                         <div className="flex justify-between items-start mb-1">
-                                                            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tight truncate flex-1">{item.description}</span>
-                                                            <span className="text-[10px] font-black text-gray-900 ml-2">{item.quantity} {item.unit}</span>
+                                                            <span className="text-xs font-bold text-blue-600 uppercase tracking-tight truncate flex-1">{item.description}</span>
+                                                            <span className="text-xs font-black text-gray-900 ml-2">{item.quantity} {item.unit}</span>
                                                         </div>
                                                         <div className="flex justify-between items-center text-[9px] text-gray-400 font-medium">
                                                             <span>{item.code} • {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitPrice)}</span>

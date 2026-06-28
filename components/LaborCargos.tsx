@@ -317,7 +317,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                         }`}
                     >
                         <Icon className="w-4 h-4" />{label}
-                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${
+                        <span className={`text-xs font-black px-1.5 py-0.5 rounded-md ${
                             activeTab === key ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-200 text-slate-500'
                         }`}>
                             {key === 'cargos' ? roles.length : funcoes.length}
@@ -354,7 +354,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                         ].map(({ label, val, icon: Icon, color }) => (
                             <div key={label} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
                                     <h3 className="text-3xl font-black text-slate-900 mt-1">{val}</h3>
                                 </div>
                                 <div className={`p-3 bg-${color}-50 rounded-xl`}><Icon className={`w-6 h-6 text-${color}-600`} /></div>
@@ -370,7 +370,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                         <div className="space-y-6">
                             {niveis.map(nivel => (
                                 <div key={nivel}>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3">Nível {nivel}</span>
+                                    <span className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-3">Nível {nivel}</span>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {roles.filter(r => r.nivel_hierarquico === nivel).map(role => {
                                             const occupants = employees.filter(e => e.role_id === role.id && e.status === 'ATIVO');
@@ -382,18 +382,18 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                                 <div key={role.id} className="bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-md p-4 rounded-2xl transition-all flex items-start justify-between gap-3">
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md">{role.codigo || 'S/C'}</span>
+                                                            <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md">{role.codigo || 'S/C'}</span>
                                                             <h4 className="font-black text-sm text-slate-900">{role.nome}</h4>
                                                         </div>
                                                         {funcao && (
-                                                            <div className={`mt-1.5 flex items-center gap-1 text-[10px] font-bold text-${cat?.color ?? 'slate'}-700 bg-${cat?.color ?? 'slate'}-50 border border-${cat?.color ?? 'slate'}-100 px-2 py-0.5 rounded-md w-fit`}>
+                                                            <div className={`mt-1.5 flex items-center gap-1 text-xs font-bold text-${cat?.color ?? 'slate'}-700 bg-${cat?.color ?? 'slate'}-50 border border-${cat?.color ?? 'slate'}-100 px-2 py-0.5 rounded-md w-fit`}>
                                                                 <Wrench className="w-2.5 h-2.5" />{funcao.nome}
                                                             </div>
                                                         )}
                                                         {role.descricao && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{role.descricao}</p>}
 
                                                         {faixa && (
-                                                            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-violet-700 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-lg w-fit font-bold">
+                                                            <div className="mt-2 flex items-center gap-1.5 text-xs text-violet-700 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-lg w-fit font-bold">
                                                                 <DollarSign className="w-3 h-3" />
                                                                 {faixa}{role.salario_maximo ? ` – ${BRL(role.salario_maximo)}` : ''}
                                                             </div>
@@ -402,28 +402,28 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                                         {role.competencias?.length > 0 && (
                                                             <div className="mt-2 flex flex-wrap gap-1">
                                                                 {role.competencias.slice(0, 3).map((c, i) => (
-                                                                    <span key={i} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-md font-medium flex items-center gap-1">
+                                                                    <span key={i} className="text-xs bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-md font-medium flex items-center gap-1">
                                                                         <Star className="w-2.5 h-2.5" />{c}
                                                                     </span>
                                                                 ))}
                                                                 {role.competencias.length > 3 && (
-                                                                    <span className="text-[10px] text-slate-400 px-1">+{role.competencias.length - 3}</span>
+                                                                    <span className="text-xs text-slate-400 px-1">+{role.competencias.length - 3}</span>
                                                                 )}
                                                             </div>
                                                         )}
 
                                                         {proximo && (
-                                                            <div className="mt-2 flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
+                                                            <div className="mt-2 flex items-center gap-1 text-xs text-emerald-700 font-bold">
                                                                 <ChevronRight className="w-3 h-3" />Trilha: {proximo.nome}
                                                             </div>
                                                         )}
 
                                                         <div className="mt-3 flex flex-wrap gap-1.5">
                                                             {occupants.length === 0 ? (
-                                                                <span className="text-[10px] bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded-md font-bold">Vago</span>
+                                                                <span className="text-xs bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded-md font-bold">Vago</span>
                                                             ) : (
                                                                 occupants.map(occ => (
-                                                                    <span key={occ.id} className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-md font-bold">{occ.name}</span>
+                                                                    <span key={occ.id} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-md font-bold">{occ.name}</span>
                                                                 ))
                                                             )}
                                                         </div>
@@ -456,7 +456,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                         ].map(({ label, val, icon: Icon, color }) => (
                             <div key={label} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
                                     <h3 className="text-3xl font-black text-slate-900 mt-1">{val}</h3>
                                 </div>
                                 <div className={`p-3 bg-${color}-50 rounded-xl`}><Icon className={`w-6 h-6 text-${color}-600`} /></div>
@@ -477,7 +477,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                 return (
                                     <React.Fragment key={cat.value}>
                                         <div className="md:col-span-2 lg:col-span-3">
-                                            <span className={`text-[10px] font-black uppercase tracking-widest text-${cat.color}-600 flex items-center gap-1.5`}>
+                                            <span className={`text-xs font-black uppercase tracking-widest text-${cat.color}-600 flex items-center gap-1.5`}>
                                                 <Tag className="w-3 h-3" />{cat.label}
                                             </span>
                                         </div>
@@ -487,15 +487,15 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                                 <div key={f.id} className="bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-md p-4 rounded-2xl transition-all flex items-start justify-between gap-3">
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className={`text-[10px] bg-${cat.color}-50 text-${cat.color}-700 border border-${cat.color}-100 font-bold px-2 py-0.5 rounded-md`}>{cat.label}</span>
+                                                            <span className={`text-xs bg-${cat.color}-50 text-${cat.color}-700 border border-${cat.color}-100 font-bold px-2 py-0.5 rounded-md`}>{cat.label}</span>
                                                             <h4 className="font-black text-sm text-slate-900">{f.nome}</h4>
                                                         </div>
                                                         {f.descricao && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{f.descricao}</p>}
                                                         <div className="mt-2">
                                                             {cargosCount === 0 ? (
-                                                                <span className="text-[10px] text-slate-400 italic">Não atribuída a nenhum cargo</span>
+                                                                <span className="text-xs text-slate-400 italic">Não atribuída a nenhum cargo</span>
                                                             ) : (
-                                                                <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-md font-bold">
+                                                                <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-md font-bold">
                                                                     {cargosCount} cargo{cargosCount > 1 ? 's' : ''}
                                                                 </span>
                                                             )}
@@ -576,7 +576,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                                 );
                                             })}
                                         </select>
-                                        <p className="text-[10px] text-slate-400">Associe à função que este cargo desempenha.</p>
+                                        <p className="text-xs text-slate-400">Associe à função que este cargo desempenha.</p>
                                     </div>
                                 )}
                                 <div className="space-y-1">

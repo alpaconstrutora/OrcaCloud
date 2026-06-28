@@ -61,7 +61,7 @@ const InlineForm: React.FC<InlineFormProps> = ({ initial = EMPTY_FORM, onSave, o
 
     return (
         <div className="mt-2 ml-6 bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">{title}</p>
+            <p className="text-xs font-black uppercase tracking-widest text-blue-600">{title}</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <input className={cls} placeholder="Nome do departamento *"
                     value={form.nome} onChange={e => set('nome', e.target.value)} />
@@ -149,12 +149,12 @@ const DeptNode: React.FC<NodeProps> = ({
                         {node.nome}
                     </span>
                     {node.responsavel_nome && (
-                        <span className="ml-2 text-[10px] font-black uppercase tracking-wide text-gray-400">
+                        <span className="ml-2 text-xs font-black uppercase tracking-wide text-gray-400">
                             {node.responsavel_nome}
                         </span>
                     )}
                     {node.descricao && (
-                        <p className="text-[10px] text-gray-400 truncate">{node.descricao}</p>
+                        <p className="text-xs text-gray-400 truncate">{node.descricao}</p>
                     )}
                 </div>
 
@@ -327,7 +327,7 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
             <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                     <p className="text-xs font-black uppercase tracking-widest text-gray-500">Organograma</p>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                    <span className="text-xs font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                         {depts.length} departamento{depts.length !== 1 ? 's' : ''}
                     </span>
                 </div>
@@ -385,14 +385,14 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
             {/* Legenda de cores */}
             {depts.length > 0 && (
                 <div className="flex items-center gap-4 flex-wrap pt-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Legenda</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400">Legenda</p>
                     {[...new Set(depts.map(d => d.cor))].map(cor => {
                         const first = depts.find(d => d.cor === cor && !d.parent_id);
                         if (!first) return null;
                         return (
                             <div key={cor} className="flex items-center gap-1.5">
                                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cor }} />
-                                <span className="text-[10px] text-gray-500 font-black">{first.nome}</span>
+                                <span className="text-xs text-gray-500 font-black">{first.nome}</span>
                             </div>
                         );
                     })}

@@ -95,7 +95,7 @@ const TaskSpaceBottomSheet: React.FC<Props> = ({
         <div className="overflow-y-auto px-4 py-3 space-y-1" style={{ maxHeight: 'calc(80vh - 80px)' }}>
 
           {/* ── INBOX ──────────────────────────────────────────────────── */}
-          <p className="px-2 pt-1 pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Inbox</p>
+          <p className="px-2 pt-1 pb-2 text-xs font-black text-slate-400 uppercase tracking-widest">Inbox</p>
 
           {([
             ['today',   'Hoje',          <Calendar      className="w-4 h-4" />, todayCount  ],
@@ -138,7 +138,7 @@ const TaskSpaceBottomSheet: React.FC<Props> = ({
           {/* ── ESPAÇOS ────────────────────────────────────────────────── */}
           {spaces.length > 0 && (
             <>
-              <p className="px-2 pt-4 pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Espaços</p>
+              <p className="px-2 pt-4 pb-2 text-xs font-black text-slate-400 uppercase tracking-widest">Espaços</p>
 
               {spaces.map(space => {
                 const isExpanded    = expandedSpaces.has(space.id)

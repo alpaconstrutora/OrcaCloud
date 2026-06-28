@@ -78,25 +78,25 @@ const BrokerRanking: React.FC<BrokerRankingProps> = ({ brokerEmail }) => {
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                            <p className="text-[10px] text-indigo-200 font-bold uppercase">Vendas</p>
+                            <p className="text-xs text-indigo-200 font-bold uppercase">Vendas</p>
                             <p className="text-xl font-black">{me.sales_count}<span className="text-sm font-bold text-indigo-300">/{me.goal_sales}</span></p>
                             <div className="mt-1.5 bg-white/20 rounded-full h-1.5">
                                 <div className="bg-emerald-400 rounded-full h-1.5 transition-all" style={{ width: `${Math.min(100, (me.sales_count / me.goal_sales) * 100)}%` }} />
                             </div>
                         </div>
                         <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                            <p className="text-[10px] text-indigo-200 font-bold uppercase">Volume</p>
+                            <p className="text-xs text-indigo-200 font-bold uppercase">Volume</p>
                             <p className="text-xl font-black">{formatCurrency(me.sales_volume)}</p>
                             <div className="mt-1.5 bg-white/20 rounded-full h-1.5">
                                 <div className="bg-amber-400 rounded-full h-1.5 transition-all" style={{ width: `${Math.min(100, (me.sales_volume / me.goal_volume) * 100)}%` }} />
                             </div>
                         </div>
                         <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                            <p className="text-[10px] text-indigo-200 font-bold uppercase">Leads Convertidos</p>
+                            <p className="text-xs text-indigo-200 font-bold uppercase">Leads Convertidos</p>
                             <p className="text-xl font-black">{me.leads_converted}</p>
                         </div>
                         <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                            <p className="text-[10px] text-indigo-200 font-bold uppercase">Propostas</p>
+                            <p className="text-xs text-indigo-200 font-bold uppercase">Propostas</p>
                             <p className="text-xl font-black">{me.proposals_sent}</p>
                         </div>
                     </div>
@@ -109,7 +109,7 @@ const BrokerRanking: React.FC<BrokerRankingProps> = ({ brokerEmail }) => {
                                     <div key={badge.id} title={badge.description}
                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 rounded-full backdrop-blur-sm hover:bg-white/20 transition-colors cursor-default">
                                         <Icon className="w-3.5 h-3.5 text-amber-400" />
-                                        <span className="text-[10px] font-bold text-white">{badge.name}</span>
+                                        <span className="text-xs font-bold text-white">{badge.name}</span>
                                     </div>
                                 );
                             })}
@@ -147,7 +147,7 @@ const BrokerRanking: React.FC<BrokerRankingProps> = ({ brokerEmail }) => {
                                     </div>
                                     <div>
                                         <p className={`text-sm font-bold ${isMe ? 'text-indigo-700' : 'text-gray-900'}`}>
-                                            {entry.broker_name} {isMe && <span className="text-[10px] text-indigo-400 ml-1">(você)</span>}
+                                            {entry.broker_name} {isMe && <span className="text-xs text-indigo-400 ml-1">(você)</span>}
                                         </p>
                                         <div className="flex gap-1 mt-0.5">
                                             {entry.badges.slice(0, 3).map(b => {
@@ -159,15 +159,15 @@ const BrokerRanking: React.FC<BrokerRankingProps> = ({ brokerEmail }) => {
                                 </div>
                                 <div className="flex items-center gap-8 text-right">
                                     <div>
-                                        <p className="text-[10px] font-black text-gray-400 uppercase">Vendas</p>
+                                        <p className="text-xs font-black text-gray-400 uppercase">Vendas</p>
                                         <p className="text-sm font-black text-gray-900">{entry.sales_count}</p>
                                     </div>
                                     <div className="hidden md:block">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase">Volume</p>
+                                        <p className="text-xs font-black text-gray-400 uppercase">Volume</p>
                                         <p className="text-sm font-black text-gray-900">{formatCurrency(entry.sales_volume)}</p>
                                     </div>
                                     <div className="hidden md:block">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase">Conversão</p>
+                                        <p className="text-xs font-black text-gray-400 uppercase">Conversão</p>
                                         <p className="text-sm font-black text-gray-900">{entry.leads_converted}</p>
                                     </div>
                                 </div>

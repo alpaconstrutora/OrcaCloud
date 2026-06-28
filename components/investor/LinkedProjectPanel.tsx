@@ -84,7 +84,7 @@ const LinkedProjectPanel: React.FC<Props> = ({ projectId, organizationId, costEs
             {/* ── Progresso físico ─────────────────────────────────── */}
             <div className="bg-[#0B1727] rounded-2xl p-6 text-white">
                 <div className="flex items-center justify-between mb-4">
-                    <span className="text-[10px] font-black text-blue-300 uppercase tracking-widest">Progresso Físico</span>
+                    <span className="text-xs font-black text-blue-300 uppercase tracking-widest">Progresso Físico</span>
                     <span className="text-3xl font-black">{physicalProgress}%</span>
                 </div>
                 <div className="h-3 bg-white/10 rounded-full overflow-hidden mb-3">
@@ -108,14 +108,14 @@ const LinkedProjectPanel: React.FC<Props> = ({ projectId, organizationId, costEs
             {/* ── Custo realizado vs estimado ───────────────────── */}
             {financials && (
                 <div>
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3">Custo: realizado vs estimado</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-3">Custo: realizado vs estimado</span>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-                            <p className="text-[10px] font-black text-amber-600 uppercase tracking-wider mb-1">Custo realizado</p>
+                            <p className="text-xs font-black text-amber-600 uppercase tracking-wider mb-1">Custo realizado</p>
                             <p className="text-xl font-black text-amber-900">{fmtBRLCompact(financials.custo_realizado)}</p>
                         </div>
                         <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
-                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Custo estimado</p>
+                            <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-1">Custo estimado</p>
                             <p className="text-xl font-black text-gray-800">
                                 {costEstimate ? fmtBRLCompact(costEstimate) : '—'}
                             </p>
@@ -143,11 +143,11 @@ const LinkedProjectPanel: React.FC<Props> = ({ projectId, organizationId, costEs
                     {financials.receita_realizada > 0 && (
                         <div className="mt-3 grid grid-cols-2 gap-3">
                             <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-wider mb-1">Receita realizada</p>
+                                <p className="text-xs font-black text-blue-600 uppercase tracking-wider mb-1">Receita realizada</p>
                                 <p className="text-xl font-black text-blue-900">{fmtBRLCompact(financials.receita_realizada)}</p>
                             </div>
                             <div className={`rounded-2xl p-4 border ${financials.resultado_liquido >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
-                                <p className={`text-[10px] font-black uppercase tracking-wider mb-1 ${financials.resultado_liquido >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                <p className={`text-xs font-black uppercase tracking-wider mb-1 ${financials.resultado_liquido >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                     Resultado líquido
                                 </p>
                                 <p className={`text-xl font-black ${financials.resultado_liquido >= 0 ? 'text-emerald-900' : 'text-red-700'}`}>
@@ -162,7 +162,7 @@ const LinkedProjectPanel: React.FC<Props> = ({ projectId, organizationId, costEs
             {/* ── Timeline ─────────────────────────────────────────── */}
             {milestones.length > 0 && (
                 <div>
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3">Cronograma da obra</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-3">Cronograma da obra</span>
                     <div className="bg-gray-50 rounded-2xl p-4">
                         <ObraTimeline
                             projectId={projectId}
@@ -176,7 +176,7 @@ const LinkedProjectPanel: React.FC<Props> = ({ projectId, organizationId, costEs
             {/* ── Galeria ──────────────────────────────────────────── */}
             {hasGallery ? (
                 <div>
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3">Evolução visual da obra</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-3">Evolução visual da obra</span>
                     <ProjectGallery images={project.diaryImages} allowFallback={false} />
                 </div>
             ) : (

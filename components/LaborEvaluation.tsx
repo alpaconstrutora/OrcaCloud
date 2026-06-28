@@ -48,7 +48,7 @@ const RESP_TIPO_LABELS: Record<ResponseTipo, string> = {
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-violet-100 focus:border-violet-300 transition-all';
 const FieldLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{children}</label>
+    <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{children}</label>
 );
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5"><FieldLabel>{label}</FieldLabel>{children}</div>
@@ -178,7 +178,7 @@ const CycleForm: React.FC<CycleFormProps> = ({ orgId, cycle, onClose, onSaved })
                         <div className="space-y-2">
                             {competencias.map((c, i) => (
                                 <div key={c.id} className="flex items-start gap-2 p-3 bg-slate-50 rounded-xl">
-                                    <span className="text-[10px] font-black text-slate-400 mt-2 w-4 shrink-0">{i + 1}</span>
+                                    <span className="text-xs font-black text-slate-400 mt-2 w-4 shrink-0">{i + 1}</span>
                                     <div className="flex-1 grid grid-cols-3 gap-2">
                                         <input className={`${inputCls} col-span-2`} placeholder="Nome da competência"
                                             value={c.nome} onChange={e => updateComp(c.id, 'nome', e.target.value)} />
@@ -186,7 +186,7 @@ const CycleForm: React.FC<CycleFormProps> = ({ orgId, cycle, onClose, onSaved })
                                             value={c.categoria || ''} onChange={e => updateComp(c.id, 'categoria', e.target.value)} />
                                     </div>
                                     <div className="flex items-center gap-1 mt-1.5 shrink-0">
-                                        <span className="text-[10px] text-slate-400 font-bold">Peso</span>
+                                        <span className="text-xs text-slate-400 font-bold">Peso</span>
                                         <select className="text-form-input font-bold border border-slate-200 rounded-lg px-1.5 py-1 bg-white outline-none"
                                             value={c.peso} onChange={e => updateComp(c.id, 'peso', Number(e.target.value))}>
                                             {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
@@ -294,7 +294,7 @@ const EvalForm: React.FC<EvalFormProps> = ({ response, competencias, onClose, on
                                     <div>
                                         <p className="text-sm font-bold text-slate-800">{comp.nome}</p>
                                         {comp.categoria && (
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{comp.categoria}</span>
+                                            <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">{comp.categoria}</span>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -574,7 +574,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                     { label: 'Taxa conclusão', value: `${taxa}%`, color: 'blue', icon: TrendingUp },
                 ].map(({ label, value, color, icon: Icon }) => (
                     <div key={label} className={`bg-white p-4 rounded-2xl border border-slate-100 shadow-sm`}>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
                         <div className="flex items-center justify-between mt-2">
                             <span className="text-2xl font-black text-slate-900">{value}</span>
                             <div className={`p-2 bg-${color}-50 rounded-xl`}>
@@ -613,7 +613,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                             <thead>
                                 <tr className="border-b border-slate-100">
                                     {['Avaliado', 'Avaliador', 'Tipo', 'Nota', 'Status', ''].map(h => (
-                                        <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -637,12 +637,12 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                                                 ) : <span className="text-slate-300">–</span>}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${statusCfg.cls}`}>{statusCfg.label}</span>
+                                                <span className={`px-2 py-1 rounded-lg text-xs font-black ${statusCfg.cls}`}>{statusCfg.label}</span>
                                             </td>
                                             <td className="px-4 py-3">
                                                 {r.status !== 'CONCLUIDA' && cycle.status === 'ATIVO' && (
                                                     <button onClick={() => setEvalForm(r)}
-                                                        className="px-3 py-1.5 text-[11px] font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors">
+                                                        className="px-3 py-1.5 text-xs font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors">
                                                         Avaliar
                                                     </button>
                                                 )}
@@ -679,7 +679,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                             <thead>
                                 <tr className="border-b border-slate-100">
                                     {['#', 'Colaborador', 'Self', 'Gestor', 'Pares', 'Final', 'Classificação'].map(h => (
-                                        <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -691,7 +691,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                                             <td className="px-4 py-3 text-slate-400 font-black text-table-body">#{i + 1}</td>
                                             <td className="px-4 py-3">
                                                 <p className="font-bold text-slate-800">{r.employee_nome || '–'}</p>
-                                                {r.employee_cargo && <p className="text-[10px] text-slate-400">{r.employee_cargo}</p>}
+                                                {r.employee_cargo && <p className="text-xs text-slate-400">{r.employee_cargo}</p>}
                                             </td>
                                             <td className="px-4 py-3 font-bold text-slate-600">{r.nota_self?.toFixed(2) ?? '–'}</td>
                                             <td className="px-4 py-3 font-bold text-slate-600">{r.nota_gestor?.toFixed(2) ?? '–'}</td>
@@ -699,7 +699,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                                             <td className="px-4 py-3 text-xl font-black text-violet-700">{r.nota_final?.toFixed(2) ?? '–'}</td>
                                             <td className="px-4 py-3">
                                                 {cls && (
-                                                    <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${cls.color} ${cls.bg}`}>
+                                                    <span className={`px-2 py-1 rounded-lg text-xs font-black ${cls.color} ${cls.bg}`}>
                                                         {cls.label}
                                                     </span>
                                                 )}
@@ -838,7 +838,7 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
                     { label: 'PDI concluídos', value: pdiConcluidos, icon: Check, color: 'blue' },
                 ].map(({ label, value, icon: Icon, color }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
                         <div className="flex items-center justify-between mt-2">
                             <span className="text-2xl font-black text-slate-900">{value}</span>
                             <div className={`p-2 bg-${color}-50 rounded-xl`}>
@@ -884,11 +884,11 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <p className="font-black text-slate-800">{cycle.nome}</p>
-                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black ${STATUS.color} ${STATUS.bg}`}>
+                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-black ${STATUS.color} ${STATUS.bg}`}>
                                             <span className={`w-1.5 h-1.5 rounded-full ${STATUS.dot}`} />
                                             {STATUS.label}
                                         </span>
-                                        <span className="text-[10px] text-slate-400 font-bold">{TIPO_LABELS[cycle.tipo]}</span>
+                                        <span className="text-xs text-slate-400 font-bold">{TIPO_LABELS[cycle.tipo]}</span>
                                     </div>
                                     <p className="text-xs text-slate-400 mt-0.5">
                                         {new Date(cycle.periodo_inicio).toLocaleDateString('pt-BR')} → {new Date(cycle.periodo_fim).toLocaleDateString('pt-BR')}
@@ -941,7 +941,7 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
                                 <thead>
                                     <tr className="border-b border-slate-100">
                                         {['Colaborador', 'Competência', 'Ação', 'Prazo', 'Progresso', 'Status', ''].map(h => (
-                                            <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                            <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -966,7 +966,7 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${sc.color} ${sc.bg}`}>{sc.label}</span>
+                                                    <span className={`px-2 py-1 rounded-lg text-xs font-black ${sc.color} ${sc.bg}`}>{sc.label}</span>
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-1">

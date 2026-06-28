@@ -143,21 +143,21 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="grid grid-cols-3 gap-4">
                         <label className="flex flex-col gap-1 col-span-3 md:col-span-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Nome da SPE</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nome da SPE</span>
                             <input type="text" value={entityForm.name}
                                 onChange={e => setEntityForm(f => ({ ...f, name: e.target.value }))}
                                 className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Ex: SPE Empreendimento Cambuí I" />
                         </label>
                         <label className="flex flex-col gap-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">CNPJ</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">CNPJ</span>
                             <input type="text" value={entityForm.cnpj || ''}
                                 onChange={e => setEntityForm(f => ({ ...f, cnpj: e.target.value }))}
                                 className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="00.000.000/0001-00" />
                         </label>
                         <label className="flex flex-col gap-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Capital Social (R$)</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Capital Social (R$)</span>
                             <input type="number" min="0" step="0.01" value={entityForm.capital_social || ''}
                                 onChange={e => setEntityForm(f => ({ ...f, capital_social: parseFloat(e.target.value) || 0 }))}
                                 className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -225,7 +225,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                         {pts.length > 0 && (
                                             <table className="w-full text-left">
                                                 <thead>
-                                                    <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                    <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                                                         <th className="pb-2">Sócio</th>
                                                         <th className="pb-2 text-right">%</th>
                                                         <th className="pb-2 text-right">Chamado</th>
@@ -251,7 +251,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                                                             <select
                                                                                 value={ci.type}
                                                                                 onChange={e => setCapitalInput(c => ({ ...c, [p.id!]: { ...ci, type: e.target.value as 'call' | 'payment' } }))}
-                                                                                className="px-1 py-1 border border-gray-200 rounded text-[10px]"
+                                                                                className="px-1 py-1 border border-gray-200 rounded text-xs"
                                                                             >
                                                                                 <option value="call">Chamar</option>
                                                                                 <option value="payment">Pagar</option>
@@ -282,7 +282,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                         {isAdmin && (
                                             <div className="flex flex-wrap gap-3 items-end pt-2 border-t border-gray-50">
                                                 <label className="flex flex-col gap-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Investidor</span>
+                                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Investidor</span>
                                                     <select
                                                         value={partnerForm[entity.id!]?.investor_id || ''}
                                                         onChange={e => setPartnerForm(f => ({ ...f, [entity.id!]: { ...f[entity.id!], investor_id: e.target.value } }))}
@@ -293,7 +293,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                                     </select>
                                                 </label>
                                                 <label className="flex flex-col gap-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Participação (%)</span>
+                                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Participação (%)</span>
                                                     <input type="number" min="0" max="100" step="0.01"
                                                         value={partnerForm[entity.id!]?.ownership_pct || ''}
                                                         onChange={e => setPartnerForm(f => ({ ...f, [entity.id!]: { ...f[entity.id!], ownership_pct: parseFloat(e.target.value) || 0 } }))}
@@ -302,7 +302,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                                     />
                                                 </label>
                                                 <label className="flex flex-col gap-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Capital Chamado (R$)</span>
+                                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Capital Chamado (R$)</span>
                                                     <input type="number" min="0" step="0.01"
                                                         value={partnerForm[entity.id!]?.capital_calls_total || ''}
                                                         onChange={e => setPartnerForm(f => ({ ...f, [entity.id!]: { ...f[entity.id!], capital_calls_total: parseFloat(e.target.value) || 0 } }))}

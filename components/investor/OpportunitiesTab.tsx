@@ -148,7 +148,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                     <div className="bg-[#0B1727] rounded-2xl p-5 text-white col-span-2 md:col-span-1">
                         <div className="flex items-center gap-2 mb-2">
                             <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
-                            <span className="text-[10px] font-black text-blue-300 uppercase tracking-widest">VGV Pipeline</span>
+                            <span className="text-xs font-black text-blue-300 uppercase tracking-widest">VGV Pipeline</span>
                         </div>
                         <p className="text-2xl font-black">{fmtVgv(totalVgv)}</p>
                         <p className="text-xs text-white/40 mt-1">{activeOpps.length} oportunidade{activeOpps.length !== 1 ? 's' : ''} ativas</p>
@@ -156,14 +156,14 @@ const OpportunitiesTab: React.FC<Props> = ({
                     <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5">
                         <div className="flex items-center gap-2 mb-2">
                             <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</span>
+                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total</span>
                         </div>
                         <p className="text-2xl font-black text-gray-900">{opportunities.length}</p>
                         <p className="text-xs text-gray-400 mt-1">{opportunities.filter(o => o.is_published).length} publicadas</p>
                     </div>
                     <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 col-span-2">
                         <div className="flex items-center gap-2 mb-3">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Por status</span>
+                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Por status</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {statusCounts.length > 0 ? statusCounts.map(({ status, count }) => (
@@ -227,17 +227,17 @@ const OpportunitiesTab: React.FC<Props> = ({
                                         {/* Badges */}
                                         <div className="flex flex-wrap gap-2 mb-3">
                                             {op.status && (
-                                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
+                                                <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
                                                     {OPPORTUNITY_STATUS_LABELS[op.status]}
                                                 </span>
                                             )}
                                             {op.opportunity_type && (
-                                                <span className="px-2.5 py-1 bg-white/10 text-white/60 rounded-full text-[10px] font-bold">
+                                                <span className="px-2.5 py-1 bg-white/10 text-white/60 rounded-full text-xs font-bold">
                                                     {OPPORTUNITY_TYPE_LABELS[op.opportunity_type]}
                                                 </span>
                                             )}
                                             {isAdmin && !op.is_published && (
-                                                <span className="px-2.5 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-[10px] font-bold">
+                                                <span className="px-2.5 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-bold">
                                                     Rascunho
                                                 </span>
                                             )}
@@ -321,7 +321,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                             <table className="w-full text-left">
                                 <thead className="bg-gray-50/50 border-b border-gray-100">
-                                    <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                    <tr className="text-xs font-black text-gray-400 uppercase tracking-widest">
                                         <th className="px-6 py-4">Oportunidade</th>
                                         <th className="px-6 py-4">Status</th>
                                         <th className="px-6 py-4">VGV</th>
@@ -338,13 +338,13 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                     <span className="font-bold text-gray-900">{op.title}</span>
                                                     {op.subtitle && <span className="text-xs text-gray-500 line-clamp-1">{op.subtitle}</span>}
                                                     {isAdmin && !op.is_published && (
-                                                        <span className="text-[10px] text-yellow-600 font-bold mt-0.5">Rascunho</span>
+                                                        <span className="text-xs text-yellow-600 font-bold mt-0.5">Rascunho</span>
                                                     )}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 {op.status && (
-                                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
                                                         {OPPORTUNITY_STATUS_LABELS[op.status]}
                                                     </span>
                                                 )}

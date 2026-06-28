@@ -81,7 +81,7 @@ export const OfficesFinanceiro: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center p-8 min-h-[400px] bg-[#F3F7F9]">
         <div className="w-8 h-8 border-4 border-[#D47A55] border-t-transparent rounded-full animate-spin mb-3" />
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Carregando Financeiro...</span>
+        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando Financeiro...</span>
       </div>
     );
   }
@@ -121,7 +121,7 @@ export const OfficesFinanceiro: React.FC = () => {
       <div className="bg-white border border-slate-200/50 p-5 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Evolução Mensal</h2>
+            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Evolução Mensal</h2>
             <p className="text-xs font-black text-slate-800 mt-0.5">Fluxo de Caixa — Semestre Atual</p>
           </div>
           <button className="text-slate-300 hover:text-[#D47A55]">
@@ -168,7 +168,7 @@ export const OfficesFinanceiro: React.FC = () => {
       {/* ── Tabela de Parcelas ────────────────────────────────────────────── */}
       <div className="bg-white border border-slate-200/50 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cronograma de Parcelas</h2>
+          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Cronograma de Parcelas</h2>
           <div className="flex items-center gap-2">
             <button className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/70 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#D47A55] transition-colors">
               <Filter className="w-3 h-3" /> Filtrar
@@ -177,7 +177,7 @@ export const OfficesFinanceiro: React.FC = () => {
         </div>
 
         {installments.length === 0 ? (
-          <div className="text-center py-12 text-[11px] text-slate-400">Nenhuma fatura registrada.</div>
+          <div className="text-center py-12 text-xs text-slate-400">Nenhuma fatura registrada.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -194,16 +194,16 @@ export const OfficesFinanceiro: React.FC = () => {
                 {installments.map(inst => (
                   <tr key={inst.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors">
                     <td className="px-5 py-3.5">
-                      <span className="block text-[11px] font-black text-slate-700 truncate max-w-[150px] md:max-w-xs">{inst.projectName}</span>
+                      <span className="block text-xs font-black text-slate-700 truncate max-w-[150px] md:max-w-xs">{inst.projectName}</span>
                     </td>
                     <td className="px-3 py-3.5">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Parcela {inst.parcela}</span>
+                      <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Parcela {inst.parcela}</span>
                     </td>
                     <td className="px-3 py-3.5 text-right">
-                      <span className="text-[11px] font-black text-slate-800">{BRL(inst.valor)}</span>
+                      <span className="text-xs font-black text-slate-800">{BRL(inst.valor)}</span>
                     </td>
                     <td className="px-3 py-3.5 hidden sm:table-cell">
-                      <span className="text-[11px] font-medium text-slate-500">{new Date(inst.vencimento).toLocaleDateString('pt-BR')}</span>
+                      <span className="text-xs font-medium text-slate-500">{new Date(inst.vencimento).toLocaleDateString('pt-BR')}</span>
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`inline-flex items-center gap-1 text-[8.5px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${STATUS_STYLE[inst.status]}`}>
@@ -228,7 +228,7 @@ export const OfficesFinanceiro: React.FC = () => {
           ].map(t => (
             <div key={t.label} className="flex items-center gap-1.5">
               <span className="text-[8.5px] font-black uppercase tracking-widest text-slate-400">{t.label}:</span>
-              <span className={`text-[11px] font-black ${t.color}`}>{t.value}</span>
+              <span className={`text-xs font-black ${t.color}`}>{t.value}</span>
             </div>
           ))}
         </div>

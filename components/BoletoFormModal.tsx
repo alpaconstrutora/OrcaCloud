@@ -497,7 +497,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 {/* Organização — obrigatória para salvar */}
                                 {organizations.length > 0 && (
                                     <div className={`p-3 rounded-xl border ${organizationId ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200'}`}>
-                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">
                                             Organização *
                                         </label>
                                         <select
@@ -694,10 +694,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     <>
                                         {boleto.sugestao_supplier_id && supplierId === boleto.sugestao_supplier_id && (
                                             <div className="flex items-center gap-2 mb-1.5">
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-widest">
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold uppercase tracking-widest">
                                                     <CheckCircle2 className="w-3 h-3" /> Sugerido via CNPJ
                                                 </span>
-                                                <button type="button" onClick={() => setSupplierId('')} className="text-[10px] text-gray-400 hover:text-gray-600 underline">limpar</button>
+                                                <button type="button" onClick={() => setSupplierId('')} className="text-xs text-gray-400 hover:text-gray-600 underline">limpar</button>
                                             </div>
                                         )}
                                         <div className="flex gap-2">
@@ -731,12 +731,12 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         {/* Mini-formulário de cadastro rápido */}
                                         {showNovoFornecedor && (
                                             <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
-                                                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700 flex items-center gap-1.5">
+                                                <p className="text-xs font-bold uppercase tracking-widest text-blue-700 flex items-center gap-1.5">
                                                     <UserPlus className="w-3 h-3" /> Cadastrar novo fornecedor
                                                 </p>
 
                                                 <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Razão Social *</label>
+                                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Razão Social *</label>
                                                     <input
                                                         type="text"
                                                         required
@@ -749,7 +749,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <div>
-                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">CNPJ / CPF</label>
+                                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">CNPJ / CPF</label>
                                                         <input
                                                             type="text"
                                                             value={novoForn.document}
@@ -759,7 +759,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Tipo</label>
+                                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Tipo</label>
                                                         <select
                                                             value={novoForn.type}
                                                             onChange={e => setNovoForn(p => ({ ...p, type: e.target.value as 'PJ' | 'PF' }))}
@@ -772,7 +772,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                 </div>
 
                                                 <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Categoria</label>
+                                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Categoria</label>
                                                     <select
                                                         value={novoForn.category}
                                                         onChange={e => setNovoForn(p => ({ ...p, category: e.target.value }))}
@@ -786,10 +786,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
                                                 {/* Endereço */}
                                                 <div className="pt-1 border-t border-blue-100">
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Endereço</p>
+                                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Endereço</p>
                                                     <div className="grid grid-cols-3 gap-2 mb-2">
                                                         <div className="col-span-2">
-                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Rua / Logradouro</label>
+                                                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Rua / Logradouro</label>
                                                             <input
                                                                 type="text"
                                                                 value={novoForn.street}
@@ -799,7 +799,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                             />
                                                         </div>
                                                         <div>
-                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Número</label>
+                                                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Número</label>
                                                             <input
                                                                 type="text"
                                                                 value={novoForn.number}
@@ -811,7 +811,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2 mb-2">
                                                         <div>
-                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Bairro</label>
+                                                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Bairro</label>
                                                             <input
                                                                 type="text"
                                                                 value={novoForn.neighborhood}
@@ -821,7 +821,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                             />
                                                         </div>
                                                         <div>
-                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">CEP</label>
+                                                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">CEP</label>
                                                             <input
                                                                 type="text"
                                                                 value={novoForn.zip_code}
@@ -834,7 +834,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                     </div>
                                                     <div className="grid grid-cols-3 gap-2">
                                                         <div className="col-span-2">
-                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Cidade</label>
+                                                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Cidade</label>
                                                             <input
                                                                 type="text"
                                                                 value={novoForn.city}
@@ -844,7 +844,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                             />
                                                         </div>
                                                         <div>
-                                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">UF</label>
+                                                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">UF</label>
                                                             <select
                                                                 value={novoForn.state}
                                                                 onChange={e => setNovoForn(p => ({ ...p, state: e.target.value }))}
@@ -989,7 +989,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
 const FormField: React.FC<React.PropsWithChildren<{ label: string; icon?: React.ComponentType<{ className?: string }> }>> = ({ label, icon: Icon, children }) => (
     <div>
-        <label className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-widest text-gray-500 mb-1">
+        <label className="flex items-center gap-1.5 text-xs uppercase font-bold tracking-widest text-gray-500 mb-1">
             {Icon && <Icon className="w-3 h-3" />}
             {label}
         </label>
@@ -999,11 +999,11 @@ const FormField: React.FC<React.PropsWithChildren<{ label: string; icon?: React.
 
 const ReadOnlyField: React.FC<{ label: string; value: string; icon?: React.ComponentType<{ className?: string }>; mono?: boolean }> = ({ label, value, icon: Icon, mono }) => (
     <div>
-        <label className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-widest text-gray-500 mb-1">
+        <label className="flex items-center gap-1.5 text-xs uppercase font-bold tracking-widest text-gray-500 mb-1">
             {Icon && <Icon className="w-3 h-3" />}
             {label}
         </label>
-        <div className={`px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm text-gray-700 ${mono ? 'font-mono text-[10px]' : ''} truncate`}>
+        <div className={`px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm text-gray-700 ${mono ? 'font-mono text-xs' : ''} truncate`}>
             {value}
         </div>
     </div>
@@ -1023,7 +1023,7 @@ const MultaJurosFields: React.FC<MultaJurosFieldsProps> = ({
     const temDados = multa || multaPercentual || jurosDia;
     return (
         <details open={!!temDados} className="group">
-            <summary className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-widest text-gray-400 cursor-pointer select-none list-none mb-2">
+            <summary className="flex items-center gap-1.5 text-xs uppercase font-bold tracking-widest text-gray-400 cursor-pointer select-none list-none mb-2">
                 <span className="group-open:rotate-90 inline-block transition-transform">▶</span>
                 Multa &amp; Juros
                 {temDados && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />}
@@ -1067,7 +1067,7 @@ const MultaJurosFields: React.FC<MultaJurosFieldsProps> = ({
                     </div>
                 </FormField>
                 <div className="flex items-end pb-1">
-                    <p className="text-[10px] text-gray-400 leading-tight">
+                    <p className="text-xs text-gray-400 leading-tight">
                         Extraídos do texto do boleto.<br />
                         Confidence baixa — revise antes de aprovar.
                     </p>

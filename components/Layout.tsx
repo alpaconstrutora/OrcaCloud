@@ -50,7 +50,7 @@ const NavItem = ({ id, icon: Icon, label, badge, forceFull, onClickOverride }: {
         {!effectivelyCollapsed && <span>{label}</span>}
       </div>
       {!effectivelyCollapsed && badge !== undefined && (
-        <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500/20 text-orange-500'}`}>{badge}</span>
+        <span className={`px-1.5 py-0.5 rounded-md text-xs font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500/20 text-orange-500'}`}>{badge}</span>
       )}
       {effectivelyCollapsed && badge !== undefined && (
         <div className={`absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full border-2 ${t.badgeBgRing}`} />
@@ -63,7 +63,7 @@ const NavItem = ({ id, icon: Icon, label, badge, forceFull, onClickOverride }: {
 const NavGroup = ({ label, forceFull }: { label: string; forceFull?: boolean }) => {
   const { isCollapsed, t } = useNavCtx();
   if (isCollapsed && !forceFull) return <div className={`h-px ${t.divider} my-4 mx-4`} />;
-  return <div className="px-3 mt-4 mb-1.5"><span className={`text-[11px] font-semibold uppercase tracking-wider ${t.groupLabel}`}>{label}</span></div>;
+  return <div className="px-3 mt-4 mb-1.5"><span className={`text-xs font-semibold uppercase tracking-wider ${t.groupLabel}`}>{label}</span></div>;
 };
 
 const NavDropdown = ({ label, icon: Icon, isOpen, onToggle, children, hasActiveChild }: {
@@ -100,7 +100,7 @@ const DropdownItem = ({ id, label, icon: Icon, badge }: {
     <a href={viewUrl(id)} onClick={handleClick} className={`flex items-center w-full px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-lg ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}`}>
       {Icon && <Icon className="w-4 h-4 mr-3 shrink-0" strokeWidth={2} />}
       <span className="flex-1 text-left">{label}</span>
-      {badge !== undefined && badge > 0 && <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ml-1 ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500 text-white'}`}>{badge}</span>}
+      {badge !== undefined && badge > 0 && <span className={`px-1.5 py-0.5 rounded-md text-xs font-bold ml-1 ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500 text-white'}`}>{badge}</span>}
     </a>
   );
 };
@@ -631,7 +631,7 @@ const Layout: React.FC<LayoutProps> = ({
                             <div className="truncate font-semibold">
                               {c.nome_fantasia ?? c.razao_social}
                             </div>
-                            <div className={`text-[10px] truncate ${t.userEmail}`}>
+                            <div className={`text-xs truncate ${t.userEmail}`}>
                               {c.cnpj ?? c.tipo}
                             </div>
                           </div>
@@ -956,7 +956,7 @@ const Layout: React.FC<LayoutProps> = ({
                     <span className={`text-sm font-semibold truncate ${t.userName}`}>
                       {profile.email?.split('@')[0] ?? 'Usuário'}
                     </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-orange-500 text-white px-1.5 py-0.5 rounded">PRO</span>
+                    <span className="text-xs font-bold uppercase tracking-wider bg-orange-500 text-white px-1.5 py-0.5 rounded">PRO</span>
                   </div>
                   <div className={`text-xs truncate ${t.userEmail}`}>{profile.email ?? profile.role}</div>
                 </div>
@@ -1017,7 +1017,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" forceFull />
 
               <div className="space-y-1 mb-4">
-                <div className="px-4 py-2 text-[10px] font-black text-gray-500 uppercase tracking-widest">Especialidades</div>
+                <div className="px-4 py-2 text-xs font-black text-gray-500 uppercase tracking-widest">Especialidades</div>
                 {(mod.pro       || isDev) && <NavItem id="pro-dashboard"      icon={Briefcase} label="ÒPURA Pro"      forceFull />}
                 {(mod.offices   || isDev) && <NavItem id="offices-dashboard"  icon={Palette}   label="ÒPURA Offices"  forceFull />}
                 {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" forceFull />}
@@ -1028,7 +1028,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
                 <div className="space-y-1 mb-4">
-                  <div className="px-4 py-2 text-[10px] font-black text-gray-500 uppercase tracking-widest">Portais</div>
+                  <div className="px-4 py-2 text-xs font-black text-gray-500 uppercase tracking-widest">Portais</div>
                   <NavItem id="client-properties" icon={Building2} label="Meus Imóveis" forceFull />
                   <NavItem id="investor-area" icon={TrendingUp} label="Área do Investidor" forceFull />
                   <NavItem id="supplier-area" icon={Truck} label="Portal do Fornecedor" forceFull />
@@ -1084,7 +1084,7 @@ const Layout: React.FC<LayoutProps> = ({
                   const classification = childSettings?.classification as string | undefined;
                   return (
                     <>
-                      <span className="text-[10px] md:text-xs font-bold text-blue-500 uppercase tracking-tighter">
+                      <span className="text-xs md:text-xs font-bold text-blue-500 uppercase tracking-tighter">
                         {classification === 'OBRA' ? 'Obra Atual' : 'Orçamento Atual'}
                       </span>
                       <div className="flex items-center gap-2">

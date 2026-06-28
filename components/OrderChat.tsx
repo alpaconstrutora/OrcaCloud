@@ -82,7 +82,7 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser }) => {
                     <Send className="w-3 h-3 text-indigo-500" />
                     Chat do Pedido
                 </h3>
-                <span className="text-[10px] font-bold text-gray-400">{messages.length} mensagens</span>
+                <span className="text-xs font-bold text-gray-400">{messages.length} mensagens</span>
             </div>
 
             <div
@@ -92,7 +92,7 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser }) => {
                 {messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center space-y-2 opacity-40">
                         <Send className="w-8 h-8 text-gray-300" />
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Inicie uma conversa sobre este pedido</p>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Inicie uma conversa sobre este pedido</p>
                     </div>
                 ) : (
                     messages.map((msg) => {
@@ -101,7 +101,7 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser }) => {
                         if (msg.isSystem) {
                             return (
                                 <div key={msg.id} className="flex justify-center">
-                                    <div className="bg-amber-50 text-amber-700 px-4 py-1.5 rounded-full text-[10px] font-bold border border-amber-100/50 flex items-center gap-2">
+                                    <div className="bg-amber-50 text-amber-700 px-4 py-1.5 rounded-full text-xs font-bold border border-amber-100/50 flex items-center gap-2">
                                         <Bot className="w-3 h-3" />
                                         {msg.message}
                                     </div>
@@ -116,7 +116,7 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser }) => {
                                         <div className={`p-1.5 rounded-xl ${isMe ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500 shadow-sm'}`}>
                                             <User className="w-3.5 h-3.5" />
                                         </div>
-                                        <span className="text-[10px] font-black text-gray-900 uppercase tracking-tight">{msg.senderName}</span>
+                                        <span className="text-xs font-black text-gray-900 uppercase tracking-tight">{msg.senderName}</span>
                                         <span className="text-[8px] font-bold text-gray-300">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                     </div>
                                     <div className={`p-4 rounded-3xl text-sm font-medium leading-relaxed shadow-sm ${isMe

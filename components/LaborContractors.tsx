@@ -15,7 +15,7 @@ import { STALE } from '../lib/queryClient';
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
         {children}
     </div>
 );
@@ -134,7 +134,7 @@ const ContractorForm: React.FC<ContractorFormProps> = ({ orgId, contractor, onCl
                         </InputGroup>
                     </div>
                     <div>
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Retenções Padrão (%)</p>
+                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Retenções Padrão (%)</p>
                         <div className="grid grid-cols-3 gap-4">
                             <InputGroup label="INSS (%)">
                                 <input type="number" min="0" max="100" step="0.1" value={form.retencao_inss_pct} onChange={e => set('retencao_inss_pct', parseFloat(e.target.value) || 0)} className={inputCls} />
@@ -159,7 +159,7 @@ const ContractorForm: React.FC<ContractorFormProps> = ({ orgId, contractor, onCl
                         </InputGroup>
                     </div>
                     <div>
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Dados Bancários</p>
+                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Dados Bancários</p>
                         <div className="grid grid-cols-2 gap-4">
                             <InputGroup label="Banco">
                                 <input value={form.banco_nome || ''} onChange={e => set('banco_nome', e.target.value)} className={inputCls} />
@@ -396,7 +396,7 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
                         <p className="text-xs font-black text-amber-900 uppercase tracking-tight">{docAlerts.length} documento{docAlerts.length > 1 ? 's' : ''} vencendo em 30 dias</p>
-                        <p className="text-[11px] text-amber-700 mt-1">{docAlerts.slice(0, 3).map(d => `${d.contractor_name} — ${d.titulo}`).join(' · ')}</p>
+                        <p className="text-xs text-amber-700 mt-1">{docAlerts.slice(0, 3).map(d => `${d.contractor_name} — ${d.titulo}`).join(' · ')}</p>
                     </div>
                 </div>
             )}
@@ -409,7 +409,7 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                     { label: 'Docs Vencendo',          value: docAlerts.length,       bg: 'bg-rose-50',    text: 'text-rose-700' },
                 ].map(({ label, value, bg, text }) => (
                     <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
                         <p className={`text-2xl font-black ${text} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
                     </div>
                 ))}
@@ -460,7 +460,7 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-bold text-slate-900">{c.razao_social}</p>
                                         <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                                            <span className="text-[10px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg">{TIPO_LABELS[c.tipo]}</span>
+                                            <span className="text-xs font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg">{TIPO_LABELS[c.tipo]}</span>
                                             {c.especialidade && <span className="text-xs text-slate-400">{c.especialidade}</span>}
                                             {c.cnpj && <span className="text-xs text-slate-400 font-mono">{c.cnpj}</span>}
                                         </div>
@@ -494,7 +494,7 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                             <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/50">
                                     {['Empreiteiro', 'Obra', 'Medição', 'Período', 'Bruto', 'Líquido', 'NF', 'Status', ''].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -511,18 +511,18 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                                             <td className="px-4 py-3 text-sm font-black text-emerald-700">R$ {(m.valor_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                             <td className="px-4 py-3 text-table-body text-slate-500">{m.nota_fiscal || '—'}</td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${st.bg} ${st.text}`}>{m.status}</span>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${st.bg} ${st.text}`}>{m.status}</span>
                                             </td>
                                             <td className="px-4 py-3">
                                                 {m.status === 'PENDENTE' && (
                                                     <button onClick={() => updateMeas.mutate({ id: m.id, status: 'APROVADO' })}
-                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-[10px] font-black transition-all">
+                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-black transition-all">
                                                         <CheckCircle2 className="w-3 h-3" /> Aprovar
                                                     </button>
                                                 )}
                                                 {m.status === 'APROVADO' && (
                                                     <button onClick={() => updateMeas.mutate({ id: m.id, status: 'PAGO' })}
-                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-[10px] font-black transition-all">
+                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-black transition-all">
                                                         <DollarSign className="w-3 h-3" /> Pago
                                                     </button>
                                                 )}
@@ -558,7 +558,7 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                                             <p className="text-sm font-bold text-slate-900">{d.contractor_name}</p>
                                             <p className="text-xs text-slate-500">{d.titulo} · Vence {d.data_validade}</p>
                                         </div>
-                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${vencido ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-black ${vencido ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
                                             {vencido ? 'Vencido' : 'Vencendo'}
                                         </span>
                                     </div>

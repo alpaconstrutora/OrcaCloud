@@ -1,7 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Search, Filter, Edit3, UserMinus, UserCheck, Building2, Briefcase, DollarSign, Clock, ChevronDown, ChevronUp, Trash2, Share2 } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import LaborEmployeeSharing from './LaborEmployeeSharing';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Colaborador', sortable: true },
+    { key: 'role', label: 'Função', sortable: true },
+    { key: 'organization', label: 'Organização', sortable: false },
+    { key: 'contract', label: 'Vínculo', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'salary', label: 'Salário Base', sortable: true },
+    { key: 'cost', label: 'Custo/Dia', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
 
 interface LaborEmployeeListProps {
     employees: Employee[];
@@ -36,17 +48,31 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
     const [sortBy, setSortBy] = useState<'name' | 'cost'>('name');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
     const [sharingEmployee, setSharingEmployee] = useState<Employee | null>(null);
+    const tableColumns = useTableColumns(LABOR_EMPLOYEE_COLUMNS, 'laborEmployeeListColumns');
 
-    const filtered = employees
+    const filtered = useMemo(() => employees
         .filter(e => filterStatus === 'ALL' || e.status === filterStatus)
         .filter(e => filterContract === 'ALL' || e.contract_type === filterContract)
         .filter(e => !search || e.name.toLowerCase().includes(search.toLowerCase()) || e.role.toLowerCase().includes(search.toLowerCase()) || (e.cpf || '').replace(/\D/g, '').includes(search.replace(/\D/g, '')))
         .sort((a, b) => {
+            // tableColumns sort takes priority over legacy sort dropdowns
+            if (tableColumns.sortColumn) {
+                const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                switch (tableColumns.sortColumn) {
+                    case 'name': return dir * a.name.localeCompare(b.name);
+                    case 'role': return dir * a.role.localeCompare(b.role);
+                    case 'contract': return dir * a.contract_type.localeCompare(b.contract_type);
+                    case 'status': return dir * a.status.localeCompare(b.status);
+                    case 'salary': return dir * ((a.base_salary || 0) - (b.base_salary || 0));
+                    case 'cost': return dir * ((a.daily_cost || 0) - (b.daily_cost || 0));
+                    default: return 0;
+                }
+            }
             let cmp = 0;
             if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
             else cmp = (a.daily_cost || 0) - (b.daily_cost || 0);
             return sortDir === 'asc' ? cmp : -cmp;
-        });
+        }), [employees, filterStatus, filterContract, search, sortBy, sortDir, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const handleToggleStatus = async (emp: Employee) => {
         try {
@@ -116,6 +142,14 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                         {Object.entries(CONTRACT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                 </div>
+                <ColumnConfigButton
+                    columns={LABOR_EMPLOYEE_COLUMNS.filter(c => c.key !== 'organization' || organizations.length > 1)}
+                    visibleColumns={tableColumns.visibleColumns}
+                    showColumnConfig={tableColumns.showColumnConfig}
+                    onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                    onToggleColumn={tableColumns.toggleColumn}
+                    onReset={tableColumns.resetColumns}
+                />
             </div>
 
             {/* Table */}
@@ -123,28 +157,36 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                 <table className="w-full">
                     <thead className="bg-slate-50/80 border-b border-slate-100">
                         <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                            <th className="px-6 py-4 text-left">
-                                <button onClick={() => handleSort('name')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">
-                                    Colaborador <SortIcon col="name" />
-                                </button>
-                            </th>
-                            <th className="px-4 py-4 text-left">Função</th>
-                            {organizations.length > 1 && <th className="px-4 py-4 text-left">Organização</th>}
-                            <th className="px-4 py-4 text-left">Vínculo</th>
-                            <th className="px-4 py-4 text-left">Status</th>
-                            <th className="px-4 py-4 text-right">Salário Base</th>
-                            <th className="px-4 py-4 text-right">
-                                <button onClick={() => handleSort('cost')} className="flex items-center gap-1 ml-auto hover:text-slate-700 transition-colors">
-                                    Custo/Dia <SortIcon col="cost" />
-                                </button>
-                            </th>
-                            <th className="px-6 py-4 text-right">Ações</th>
+                            {tableColumns.visibleColumns.includes('name') && (
+                                <SortableHeader label="Colaborador" colKey="name" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-4 text-left" />
+                            )}
+                            {tableColumns.visibleColumns.includes('role') && (
+                                <SortableHeader label="Função" colKey="role" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-4 text-left" />
+                            )}
+                            {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && (
+                                <SortableHeader label="Organização" colKey="organization" sortable={false} className="px-4 py-4 text-left" />
+                            )}
+                            {tableColumns.visibleColumns.includes('contract') && (
+                                <SortableHeader label="Vínculo" colKey="contract" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-4 text-left" />
+                            )}
+                            {tableColumns.visibleColumns.includes('status') && (
+                                <SortableHeader label="Status" colKey="status" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-4 text-left" />
+                            )}
+                            {tableColumns.visibleColumns.includes('salary') && (
+                                <SortableHeader label="Salário Base" colKey="salary" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-4 text-right" />
+                            )}
+                            {tableColumns.visibleColumns.includes('cost') && (
+                                <SortableHeader label="Custo/Dia" colKey="cost" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-4 text-right" />
+                            )}
+                            {tableColumns.visibleColumns.includes('actions') && (
+                                <SortableHeader label="Ações" colKey="actions" sortable={false} className="px-6 py-4 text-right" />
+                            )}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                         {filtered.length === 0 && (
                             <tr>
-                                <td colSpan={organizations.length > 1 ? 9 : 8} className="px-6 py-16 text-center text-slate-400">
+                                <td colSpan={tableColumns.visibleColumns.length} className="px-6 py-16 text-center text-slate-400">
                                     <div className="flex flex-col items-center gap-2">
                                         <Briefcase className="w-10 h-10 opacity-20" />
                                         <p className="font-medium">Nenhum colaborador encontrado</p>
@@ -155,32 +197,36 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                         )}
                         {filtered.map(emp => (
                             <tr key={emp.id} className="group hover:bg-slate-50/50 transition-all">
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-sm">
-                                            {emp.name.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-1.5">
-                                                <p className="text-sm font-bold text-slate-900">{emp.name}</p>
-                                                {(emp.shared_orgs?.length ?? 0) > 0 && (
-                                                    <span
-                                                        title={`Disponível em ${emp.shared_orgs!.length} organização${emp.shared_orgs!.length > 1 ? 'ões' : ''} adicional${emp.shared_orgs!.length > 1 ? 'is' : ''}`}
-                                                        className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded-full text-[9px] font-black"
-                                                    >
-                                                        <Share2 className="w-2.5 h-2.5" />
-                                                        {emp.shared_orgs!.length}
-                                                    </span>
-                                                )}
+                                {tableColumns.visibleColumns.includes('name') && (
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-sm">
+                                                {emp.name.charAt(0).toUpperCase()}
                                             </div>
-                                            {emp.cpf && <p className="text-[10px] text-slate-400">{emp.cpf}</p>}
+                                            <div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <p className="text-sm font-bold text-slate-900">{emp.name}</p>
+                                                    {(emp.shared_orgs?.length ?? 0) > 0 && (
+                                                        <span
+                                                            title={`Disponível em ${emp.shared_orgs!.length} organização${emp.shared_orgs!.length > 1 ? 'ões' : ''} adicional${emp.shared_orgs!.length > 1 ? 'is' : ''}`}
+                                                            className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded-full text-[9px] font-black"
+                                                        >
+                                                            <Share2 className="w-2.5 h-2.5" />
+                                                            {emp.shared_orgs!.length}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {emp.cpf && <p className="text-[10px] text-slate-400">{emp.cpf}</p>}
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4">
-                                    <span className="text-xs font-bold text-slate-600">{emp.role}</span>
-                                </td>
-                                {organizations.length > 1 && (
+                                    </td>
+                                )}
+                                {tableColumns.visibleColumns.includes('role') && (
+                                    <td className="px-4 py-4">
+                                        <span className="text-xs font-bold text-slate-600">{emp.role}</span>
+                                    </td>
+                                )}
+                                {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && (
                                     <td className="px-4 py-4">
                                         <div className="flex items-center gap-1.5 min-w-[120px]">
                                             <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -190,75 +236,85 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                         </div>
                                     </td>
                                 )}
-                                <td className="px-4 py-4">
-                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${CONTRACT_COLORS[emp.contract_type]}`}>
-                                        {CONTRACT_LABELS[emp.contract_type]}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-4">
-                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${STATUS_COLORS[emp.status]}`}>
-                                        {emp.status}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-4 text-right">
-                                    {emp.base_salary > 0 ? (
-                                        <span className="text-xs font-black text-slate-900">
-                                            R$ {emp.base_salary.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                {tableColumns.visibleColumns.includes('contract') && (
+                                    <td className="px-4 py-4">
+                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${CONTRACT_COLORS[emp.contract_type]}`}>
+                                            {CONTRACT_LABELS[emp.contract_type]}
                                         </span>
-                                    ) : (
-                                        <span className="text-[10px] text-slate-300 font-bold">—</span>
-                                    )}
-                                </td>
-                                <td className="px-4 py-4 text-right">
-                                    <div className="flex items-center justify-end gap-1">
-                                        <DollarSign className="w-3 h-3 text-slate-400" />
-                                        <span className="text-xs font-black text-slate-900">
-                                            {(emp.daily_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </td>
+                                )}
+                                {tableColumns.visibleColumns.includes('status') && (
+                                    <td className="px-4 py-4">
+                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${STATUS_COLORS[emp.status]}`}>
+                                            {emp.status}
                                         </span>
-                                    </div>
-                                    {emp.hourly_cost > 0 && (
-                                        <div className="flex items-center justify-end gap-1 mt-0.5">
-                                            <Clock className="w-3 h-3 text-slate-300" />
-                                            <span className="text-[10px] text-slate-400">
-                                                {(emp.hourly_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/h
+                                    </td>
+                                )}
+                                {tableColumns.visibleColumns.includes('salary') && (
+                                    <td className="px-4 py-4 text-right">
+                                        {emp.base_salary > 0 ? (
+                                            <span className="text-xs font-black text-slate-900">
+                                                R$ {emp.base_salary.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] text-slate-300 font-bold">—</span>
+                                        )}
+                                    </td>
+                                )}
+                                {tableColumns.visibleColumns.includes('cost') && (
+                                    <td className="px-4 py-4 text-right">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <DollarSign className="w-3 h-3 text-slate-400" />
+                                            <span className="text-xs font-black text-slate-900">
+                                                {(emp.daily_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </span>
                                         </div>
-                                    )}
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center justify-end gap-2">
-                                        <button
-                                            onClick={() => onEdit(emp)}
-                                            className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
-                                            title="Editar"
-                                        >
-                                            <Edit3 className="w-3.5 h-3.5" />
-                                        </button>
-                                        {organizations.length > 1 && (
-                                            <button
-                                                onClick={() => setSharingEmployee(emp)}
-                                                className={`p-1.5 rounded-lg transition-colors ${(emp.shared_orgs?.length ?? 0) > 0 ? 'bg-violet-100 text-violet-600 hover:bg-violet-200' : 'bg-slate-50 text-slate-400 hover:bg-violet-50 hover:text-violet-600'}`}
-                                                title="Disponibilizar para outras organizações"
-                                            >
-                                                <Share2 className="w-3.5 h-3.5" />
-                                            </button>
+                                        {emp.hourly_cost > 0 && (
+                                            <div className="flex items-center justify-end gap-1 mt-0.5">
+                                                <Clock className="w-3 h-3 text-slate-300" />
+                                                <span className="text-[10px] text-slate-400">
+                                                    {(emp.hourly_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/h
+                                                </span>
+                                            </div>
                                         )}
-                                        <button
-                                            onClick={() => handleToggleStatus(emp)}
-                                            className={`p-1.5 rounded-lg transition-colors ${emp.status === 'ATIVO' ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
-                                            title={emp.status === 'ATIVO' ? 'Inativar' : 'Reativar'}
-                                        >
-                                            {emp.status === 'ATIVO' ? <UserMinus className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteEmployee(emp)}
-                                            className="p-1.5 bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors"
-                                            title="Excluir Permanentemente"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                </td>
+                                    </td>
+                                )}
+                                {tableColumns.visibleColumns.includes('actions') && (
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center justify-end gap-2">
+                                            <button
+                                                onClick={() => onEdit(emp)}
+                                                className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
+                                                title="Editar"
+                                            >
+                                                <Edit3 className="w-3.5 h-3.5" />
+                                            </button>
+                                            {organizations.length > 1 && (
+                                                <button
+                                                    onClick={() => setSharingEmployee(emp)}
+                                                    className={`p-1.5 rounded-lg transition-colors ${(emp.shared_orgs?.length ?? 0) > 0 ? 'bg-violet-100 text-violet-600 hover:bg-violet-200' : 'bg-slate-50 text-slate-400 hover:bg-violet-50 hover:text-violet-600'}`}
+                                                    title="Disponibilizar para outras organizações"
+                                                >
+                                                    <Share2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => handleToggleStatus(emp)}
+                                                className={`p-1.5 rounded-lg transition-colors ${emp.status === 'ATIVO' ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
+                                                title={emp.status === 'ATIVO' ? 'Inativar' : 'Reativar'}
+                                            >
+                                                {emp.status === 'ATIVO' ? <UserMinus className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteEmployee(emp)}
+                                                className="p-1.5 bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors"
+                                                title="Excluir Permanentemente"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                )}
                             </tr>
                         ))}
                     </tbody>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     FileText,
     Upload,
@@ -19,6 +19,15 @@ import {
 import { invoiceService } from '../services/invoiceService';
 import { orderService } from '../services/orderService';
 import { Invoice, Supplier, PurchaseOrder } from '../types';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+const INVOICE_COLUMNS: ColumnConfig[] = [
+    { key: 'fileName', label: 'Arquivo', sortable: true },
+    { key: 'createdAt', label: 'Data', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'order', label: 'Pedido Vinculado', sortable: false },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
 
 interface InvoiceManagerProps {
     supplier: Supplier;
@@ -33,6 +42,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
     const [error, setError] = useState<string | null>(null);
     const [dragActive, setDragActive] = useState(false);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+    const tableColumns = useTableColumns(INVOICE_COLUMNS, 'invoiceManagerColumns');
 
     useEffect(() => {
         loadData();
@@ -54,6 +64,19 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
             setLoading(false);
         }
     };
+
+    const sortedInvoices = useMemo(() => {
+        if (!tableColumns.sortColumn) return invoices;
+        return [...invoices].sort((a, b) => {
+            const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+            switch (tableColumns.sortColumn) {
+                case 'fileName': return dir * a.fileName.localeCompare(b.fileName);
+                case 'createdAt': return dir * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                case 'status': return dir * a.status.localeCompare(b.status);
+                default: return 0;
+            }
+        });
+    }, [invoices, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const loadInvoices = async () => {
         try {
@@ -272,6 +295,16 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                 <Table2 className="w-4 h-4" />
                             </button>
                         </div>
+                        {viewMode === 'list' && (
+                            <ColumnConfigButton
+                                columns={INVOICE_COLUMNS}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        )}
                     </div>
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{invoices.length} Arquivos</span>
                 </div>
@@ -282,8 +315,33 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                     </div>
                 ) : invoices.length > 0 ? (
                     viewMode === 'list' ? (
-                        <div className="divide-y divide-gray-50">
-                            {invoices.map((invoice) => {
+                        <div>
+                            {/* Sort header row */}
+                            <div className="flex items-center gap-4 px-6 py-2 bg-gray-50/60 border-b border-gray-50">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr>
+                                            {tableColumns.visibleColumns.includes('fileName') && (
+                                                <SortableHeader label="Arquivo" colKey="fileName" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('createdAt') && (
+                                                <SortableHeader label="Data" colKey="createdAt" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('status') && (
+                                                <SortableHeader label="Status" colKey="status" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('order') && (
+                                                <SortableHeader label="Pedido" colKey="order" sortable={false} className="px-4 py-2 text-left" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('actions') && (
+                                                <SortableHeader label="" colKey="actions" sortable={false} className="px-4 py-2" />
+                                            )}
+                                        </tr>
+                                    </thead>
+                                </table>
+                            </div>
+                            <div className="divide-y divide-gray-50">
+                            {sortedInvoices.map((invoice) => {
                                 const linkedOrder = orders.find(o => o.id === invoice.orderId);
 
                                 return (
@@ -293,15 +351,21 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                                 <FileText className="w-6 h-6" />
                                             </div>
                                             <div>
-                                                <h5 className="text-sm font-black text-gray-900 truncate max-w-[200px]">{invoice.fileName}</h5>
+                                                {tableColumns.visibleColumns.includes('fileName') && (
+                                                    <h5 className="text-sm font-black text-gray-900 truncate max-w-[200px]">{invoice.fileName}</h5>
+                                                )}
                                                 <div className="flex items-center gap-3 mt-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                                        {new Date(invoice.createdAt).toLocaleDateString()}
-                                                    </span>
-                                                    <span className="w-1 h-1 bg-gray-200 rounded-full"></span>
-                                                    {getStatusBadge(invoice.status)}
+                                                    {tableColumns.visibleColumns.includes('createdAt') && (
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                            {new Date(invoice.createdAt).toLocaleDateString()}
+                                                        </span>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('createdAt') && tableColumns.visibleColumns.includes('status') && (
+                                                        <span className="w-1 h-1 bg-gray-200 rounded-full"></span>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('status') && getStatusBadge(invoice.status)}
 
-                                                    {linkedOrder && (
+                                                    {tableColumns.visibleColumns.includes('order') && linkedOrder && (
                                                         <>
                                                             <span className="w-1 h-1 bg-gray-200 rounded-full"></span>
                                                             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg text-[9px] font-black uppercase tracking-tight border border-indigo-100">
@@ -314,41 +378,46 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                         </div>
 
                                         <div className="flex items-center gap-3">
-                                            <div className="opacity-0 group-hover:opacity-100 transition-all">
-                                                <select
-                                                    value={invoice.orderId || ""}
-                                                    onChange={(e) => handleLinkOrder(invoice.id, e.target.value)}
-                                                    className="bg-white border-gray-100 text-[10px] font-black uppercase tracking-tight text-gray-400 focus:ring-0 cursor-pointer rounded-xl py-1.5"
-                                                >
-                                                    <option value="">Vincular Pedido</option>
-                                                    {orders.map(order => (
-                                                        <option key={order.id} value={order.id}>{order.number}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
+                                            {tableColumns.visibleColumns.includes('order') && (
+                                                <div className="opacity-0 group-hover:opacity-100 transition-all">
+                                                    <select
+                                                        value={invoice.orderId || ""}
+                                                        onChange={(e) => handleLinkOrder(invoice.id, e.target.value)}
+                                                        className="bg-white border-gray-100 text-[10px] font-black uppercase tracking-tight text-gray-400 focus:ring-0 cursor-pointer rounded-xl py-1.5"
+                                                    >
+                                                        <option value="">Vincular Pedido</option>
+                                                        {orders.map(order => (
+                                                            <option key={order.id} value={order.id}>{order.number}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
 
-                                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                <a
-                                                    href={invoiceService.getInvoiceUrl(invoice.filePath)}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="p-3 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all active:scale-95"
-                                                    title="Visualizar"
-                                                >
-                                                    <Eye className="w-4 h-4" />
-                                                </a>
-                                                <button
-                                                    onClick={() => handleDelete(invoice)}
-                                                    className="p-3 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-red-600 hover:border-red-100 shadow-sm transition-all active:scale-95"
-                                                    title="Excluir"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
+                                            {tableColumns.visibleColumns.includes('actions') && (
+                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                    <a
+                                                        href={invoiceService.getInvoiceUrl(invoice.filePath)}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="p-3 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all active:scale-95"
+                                                        title="Visualizar"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                    </a>
+                                                    <button
+                                                        onClick={() => handleDelete(invoice)}
+                                                        className="p-3 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-red-600 hover:border-red-100 shadow-sm transition-all active:scale-95"
+                                                        title="Excluir"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 );
                             })}
+                            </div>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-8 bg-gray-50/30">

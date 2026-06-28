@@ -8,6 +8,17 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { WorkOrderStatus, WorkOrderPriority } from '../types/operational-control'
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils'
+
+const OPERACIONAL_COLUMNS: ColumnConfig[] = [
+  { key: 'title', label: 'Código / Título', sortable: true },
+  { key: 'phase', label: 'Etapa', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'deadline', label: 'Prazo', sortable: true },
+  { key: 'progress', label: 'Avanço', sortable: true },
+  { key: 'cost', label: 'Custo Real', sortable: true },
+  { key: 'actions', label: '', sortable: false },
+]
 
 interface WorkOrderRow {
   id: string
@@ -116,6 +127,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
   const [phaseFilter, setPhaseFilter] = useState<string>('all')
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards')
+  const tableColumns = useTableColumns(OPERACIONAL_COLUMNS, 'operacionalListColumns')
 
   const load = async () => {
     setIsLoading(true)
@@ -153,7 +165,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
   }, [workOrders])
 
   const filtered = useMemo(() => {
-    return workOrders.filter(wo => {
+    const list = workOrders.filter(wo => {
       if (statusFilter !== 'all' && wo.status !== statusFilter) return false
       if (phaseFilter !== 'all' && wo.phase !== phaseFilter) return false
       if (overdueOnly && !isOverdue(wo)) return false
@@ -163,7 +175,20 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
       }
       return true
     })
-  }, [workOrders, statusFilter, phaseFilter, overdueOnly, search])
+    if (!tableColumns.sortColumn) return list
+    return [...list].sort((a, b) => {
+      const dir = tableColumns.sortDirection === 'asc' ? 1 : -1
+      switch (tableColumns.sortColumn) {
+        case 'title': return dir * a.title.localeCompare(b.title)
+        case 'phase': return dir * ((a.phase ?? '').localeCompare(b.phase ?? ''))
+        case 'status': return dir * a.status.localeCompare(b.status)
+        case 'deadline': return dir * ((a.planned_end_date ?? '').localeCompare(b.planned_end_date ?? ''))
+        case 'progress': return dir * (a.completion_pct - b.completion_pct)
+        case 'cost': return dir * ((a.actual_total_cost ?? 0) - (b.actual_total_cost ?? 0))
+        default: return 0
+      }
+    })
+  }, [workOrders, statusFilter, phaseFilter, overdueOnly, search, tableColumns.sortColumn, tableColumns.sortDirection])
 
   // KPIs do topo
   const kpis = useMemo(() => ({
@@ -279,6 +304,17 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
             <List className="w-4 h-4" />
           </button>
         </div>
+
+        {viewMode === 'list' && (
+          <ColumnConfigButton
+            columns={OPERACIONAL_COLUMNS}
+            visibleColumns={tableColumns.visibleColumns}
+            showColumnConfig={tableColumns.showColumnConfig}
+            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+            onToggleColumn={tableColumns.toggleColumn}
+            onReset={tableColumns.resetColumns}
+          />
+        )}
 
         <button
           onClick={onCreateNew}
@@ -401,13 +437,27 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
-                  <th className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Código / Título</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden md:table-cell">Etapa</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden lg:table-cell">Prazo</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden lg:table-cell">Avanço</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xl:table-cell">Custo Real</th>
-                  <th className="px-4 py-3" />
+                  {tableColumns.visibleColumns.includes('title') && (
+                    <SortableHeader label="Código / Título" colKey="title" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3" />
+                  )}
+                  {tableColumns.visibleColumns.includes('phase') && (
+                    <SortableHeader label="Etapa" colKey="phase" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 hidden md:table-cell" />
+                  )}
+                  {tableColumns.visibleColumns.includes('status') && (
+                    <SortableHeader label="Status" colKey="status" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3" />
+                  )}
+                  {tableColumns.visibleColumns.includes('deadline') && (
+                    <SortableHeader label="Prazo" colKey="deadline" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 hidden lg:table-cell" />
+                  )}
+                  {tableColumns.visibleColumns.includes('progress') && (
+                    <SortableHeader label="Avanço" colKey="progress" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 hidden lg:table-cell" />
+                  )}
+                  {tableColumns.visibleColumns.includes('cost') && (
+                    <SortableHeader label="Custo Real" colKey="cost" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 hidden xl:table-cell" />
+                  )}
+                  {tableColumns.visibleColumns.includes('actions') && (
+                    <th className="px-4 py-3" />
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -422,50 +472,64 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                       onClick={() => onViewDetail(wo.id)}
                       className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${overdue ? 'bg-red-50/30' : ''}`}
                     >
-                      <td className="px-4 py-3">
-                        <div className="flex items-start gap-2">
-                          <Zap className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${pColor}`} />
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              {wo.code && (
-                                <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                                  {wo.code}
-                                </span>
-                              )}
-                              {openNcs > 0 && (
-                                <span className="text-[10px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
-                                  {openNcs} NC
-                                </span>
+                      {tableColumns.visibleColumns.includes('title') && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-start gap-2">
+                            <Zap className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${pColor}`} />
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                {wo.code && (
+                                  <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {wo.code}
+                                  </span>
+                                )}
+                                {openNcs > 0 && (
+                                  <span className="text-[10px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                                    {openNcs} NC
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm font-bold text-slate-900 mt-0.5 leading-snug line-clamp-1">{wo.title}</p>
+                              {wo.team && (
+                                <p className="text-[10px] text-slate-400 font-medium">{(wo.team as { name: string }).name}</p>
                               )}
                             </div>
-                            <p className="text-sm font-bold text-slate-900 mt-0.5 leading-snug line-clamp-1">{wo.title}</p>
-                            {wo.team && (
-                              <p className="text-[10px] text-slate-400 font-medium">{(wo.team as { name: string }).name}</p>
-                            )}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        <span className="text-xs text-slate-500 font-medium">{wo.phase ?? '—'}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={wo.status} />
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        <div className={`text-xs font-bold ${overdue ? 'text-red-600' : 'text-slate-600'}`}>
-                          {overdue && <AlertTriangle className="w-3 h-3 inline mr-1" />}
-                          {fmtDate(wo.planned_end_date)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell w-32">
-                        <ProgressBar pct={wo.completion_pct} />
-                      </td>
-                      <td className="px-4 py-3 hidden xl:table-cell">
-                        <span className="text-xs font-bold text-slate-700">{fmtCurrency(wo.actual_total_cost)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <ArrowRight className="w-4 h-4 text-slate-300" />
-                      </td>
+                        </td>
+                      )}
+                      {tableColumns.visibleColumns.includes('phase') && (
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <span className="text-xs text-slate-500 font-medium">{wo.phase ?? '—'}</span>
+                        </td>
+                      )}
+                      {tableColumns.visibleColumns.includes('status') && (
+                        <td className="px-4 py-3">
+                          <StatusBadge status={wo.status} />
+                        </td>
+                      )}
+                      {tableColumns.visibleColumns.includes('deadline') && (
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          <div className={`text-xs font-bold ${overdue ? 'text-red-600' : 'text-slate-600'}`}>
+                            {overdue && <AlertTriangle className="w-3 h-3 inline mr-1" />}
+                            {fmtDate(wo.planned_end_date)}
+                          </div>
+                        </td>
+                      )}
+                      {tableColumns.visibleColumns.includes('progress') && (
+                        <td className="px-4 py-3 hidden lg:table-cell w-32">
+                          <ProgressBar pct={wo.completion_pct} />
+                        </td>
+                      )}
+                      {tableColumns.visibleColumns.includes('cost') && (
+                        <td className="px-4 py-3 hidden xl:table-cell">
+                          <span className="text-xs font-bold text-slate-700">{fmtCurrency(wo.actual_total_cost)}</span>
+                        </td>
+                      )}
+                      {tableColumns.visibleColumns.includes('actions') && (
+                        <td className="px-4 py-3">
+                          <ArrowRight className="w-4 h-4 text-slate-300" />
+                        </td>
+                      )}
                     </tr>
                   )
                 })}

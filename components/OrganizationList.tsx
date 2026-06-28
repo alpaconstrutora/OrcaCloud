@@ -5,6 +5,14 @@ import {
     Activity, Users, UserPlus,
     TrendingUp, HandCoins, Filter, Truck, Settings, Send
 } from 'lucide-react';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+const ORG_LIST_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Organização', sortable: true },
+    { key: 'contact', label: 'Contato', sortable: true },
+    { key: 'cnpj', label: 'CNPJ', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Organization, BudgetEntry } from '../types';
 import { supabase } from '../lib/supabase';
@@ -65,6 +73,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
     const [sortBy, setSortBy] = useState<string>('name-asc');
     const [managingOrgId, setManagingOrgId] = useState<string | null>(null);
+    const tableColumns = useTableColumns(ORG_LIST_COLUMNS, 'organizationListColumns');
     const { activeOrganizationId, setActiveOrganizationId } = useStore();
 
     const handleResendInviteFromList = async (orgId: string, email: string, name: string, role: string) => {
@@ -138,12 +147,22 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                 org.website?.toLowerCase().includes(searchTerm.toLowerCase())
             )
             .sort((a, b) => {
+                // tableColumns sort takes priority over the legacy sortBy dropdown
+                if (tableColumns.sortColumn) {
+                    const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                    switch (tableColumns.sortColumn) {
+                        case 'name': return dir * a.name.localeCompare(b.name);
+                        case 'contact': return dir * ((a.email || '').localeCompare(b.email || ''));
+                        case 'cnpj': return dir * ((a.cnpj || '').localeCompare(b.cnpj || ''));
+                        default: return 0;
+                    }
+                }
                 if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
                 if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
                 if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
                 return 0;
             });
-    }, [organizations, searchTerm, sortBy]);
+    }, [organizations, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     return (
         <div className="space-y-8">
@@ -246,6 +265,16 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                     <Table2 className="w-5 h-5" />
                                 </button>
                             </div>
+                            {viewMode === 'list' && (
+                                <ColumnConfigButton
+                                    columns={ORG_LIST_COLUMNS}
+                                    visibleColumns={tableColumns.visibleColumns}
+                                    showColumnConfig={tableColumns.showColumnConfig}
+                                    onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                    onToggleColumn={tableColumns.toggleColumn}
+                                    onReset={tableColumns.resetColumns}
+                                />
+                            )}
                         </div>
                     </div>
 
@@ -255,10 +284,18 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] border-b border-gray-100">
-                                            <th className="px-8 py-5">Organização</th>
-                                            <th className="px-8 py-5">Contato</th>
-                                            <th className="px-8 py-5">CNPJ</th>
-                                            <th className="px-8 py-5 text-center">Ações</th>
+                                            {tableColumns.visibleColumns.includes('name') && (
+                                                <SortableHeader label="Organização" colKey="name" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-8 py-5" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('contact') && (
+                                                <SortableHeader label="Contato" colKey="contact" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-8 py-5" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('cnpj') && (
+                                                <SortableHeader label="CNPJ" colKey="cnpj" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-8 py-5" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('actions') && (
+                                                <SortableHeader label="Ações" colKey="actions" sortable={false} className="px-8 py-5 text-center" />
+                                            )}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
@@ -266,32 +303,40 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                             onClick={() => { setActiveOrganizationId(null); setManagingOrgId(null); }}
                                             className={`hover:bg-blue-50/30 transition-all duration-200 group cursor-pointer ${!activeOrganizationId ? 'bg-blue-50/50' : ''}`}
                                         >
-                                            <td className="px-8 py-4">
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-2 transition-all duration-300 ${!activeOrganizationId ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
-                                                        <Activity className="w-5 h-5" />
+                                            {tableColumns.visibleColumns.includes('name') && (
+                                                <td className="px-8 py-4">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-2 transition-all duration-300 ${!activeOrganizationId ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
+                                                            <Activity className="w-5 h-5" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-2 uppercase">
+                                                                TODAS AS ORGANIZAÇÕES
+                                                                {!activeOrganizationId && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
+                                                            </p>
+                                                            <span className="text-[10px] text-gray-400 font-medium">Visão consolidada do grupo</span>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-2 uppercase">
-                                                            TODAS AS ORGANIZAÇÕES
-                                                            {!activeOrganizationId && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
-                                                        </p>
-                                                        <span className="text-[10px] text-gray-400 font-medium">Visão consolidada do grupo</span>
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('contact') && (
+                                                <td className="px-8 py-4 text-[10px] text-gray-400 font-black uppercase tracking-widest italic">Global</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('cnpj') && (
+                                                <td className="px-8 py-4">---</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('actions') && (
+                                                <td className="px-8 py-4">
+                                                    <div className="flex items-center justify-center">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(null); setManagingOrgId(null); }}
+                                                            className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${!activeOrganizationId ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                                        >
+                                                            {!activeOrganizationId ? 'ATIVO' : 'SELECIONAR'}
+                                                        </button>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-8 py-4 text-[10px] text-gray-400 font-black uppercase tracking-widest italic">Global</td>
-                                            <td className="px-8 py-4">---</td>
-                                            <td className="px-8 py-4">
-                                                <div className="flex items-center justify-center">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(null); setManagingOrgId(null); }}
-                                                        className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${!activeOrganizationId ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-                                                    >
-                                                        {!activeOrganizationId ? 'ATIVO' : 'SELECIONAR'}
-                                                    </button>
-                                                </div>
-                                            </td>
+                                                </td>
+                                            )}
                                         </tr>
                                         {filteredOrganizations.map(org => {
                                             const isActive = activeOrganizationId === org.id;
@@ -299,51 +344,59 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                 <tr key={org.id} className={`hover:bg-blue-50/30 transition-all duration-200 group cursor-pointer ${isActive ? 'bg-blue-50/50' : ''}`}
                                                     onClick={() => setActiveOrganizationId(org.id)}
                                                 >
-                                                    <td className="px-8 py-4">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-2 transition-all duration-300 ${isActive ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
-                                                                <Building2 className="w-5 h-5" />
+                                                    {tableColumns.visibleColumns.includes('name') && (
+                                                        <td className="px-8 py-4">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-2 transition-all duration-300 ${isActive ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
+                                                                    <Building2 className="w-5 h-5" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-2 uppercase">
+                                                                        {org.name}
+                                                                        {isActive && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
+                                                                    </p>
+                                                                </div>
                                                             </div>
-                                                            <div>
-                                                                <p className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-2 uppercase">
-                                                                    {org.name}
-                                                                    {isActive && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
-                                                                </p>
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('contact') && (
+                                                        <td className="px-8 py-4">
+                                                            <div className="flex items-center gap-2 text-[10px] text-gray-500 font-bold uppercase">
+                                                                <Mail className="w-3.5 h-3.5 text-gray-400" />
+                                                                {org.email || '---'}
                                                             </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-8 py-4">
-                                                        <div className="flex items-center gap-2 text-[10px] text-gray-500 font-bold uppercase">
-                                                            <Mail className="w-3.5 h-3.5 text-gray-400" />
-                                                            {org.email || '---'}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-8 py-4">
-                                                        <span className="text-[10px] font-black text-gray-600 font-mono bg-gray-100/50 px-3 py-1 rounded-lg border border-gray-100">
-                                                            {org.cnpj || '---'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-8 py-4">
-                                                        <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(org.id); }}
-                                                                className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${isActive ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-                                                            >
-                                                                {isActive ? 'ATIVO' : 'SELECIONAR'}
-                                                            </button>
-                                                            <InlineDisclosureMenu
-                                                                menuItems={[
-                                                                    {
-                                                                        icon: <Settings className="w-[18px] h-[18px]" />,
-                                                                        label: 'Detalhes',
-                                                                        onClick: () => { setManagingOrgId(org.id); onTabChange('settings'); },
-                                                                    },
-                                                                ]}
-                                                                showDelete
-                                                                onDelete={() => onDelete(org.id)}
-                                                            />
-                                                        </div>
-                                                    </td>
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('cnpj') && (
+                                                        <td className="px-8 py-4">
+                                                            <span className="text-[10px] font-black text-gray-600 font-mono bg-gray-100/50 px-3 py-1 rounded-lg border border-gray-100">
+                                                                {org.cnpj || '---'}
+                                                            </span>
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('actions') && (
+                                                        <td className="px-8 py-4">
+                                                            <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(org.id); }}
+                                                                    className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${isActive ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                                                >
+                                                                    {isActive ? 'ATIVO' : 'SELECIONAR'}
+                                                                </button>
+                                                                <InlineDisclosureMenu
+                                                                    menuItems={[
+                                                                        {
+                                                                            icon: <Settings className="w-[18px] h-[18px]" />,
+                                                                            label: 'Detalhes',
+                                                                            onClick: () => { setManagingOrgId(org.id); onTabChange('settings'); },
+                                                                        },
+                                                                    ]}
+                                                                    showDelete
+                                                                    onDelete={() => onDelete(org.id)}
+                                                                />
+                                                            </div>
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             );
                                         })}

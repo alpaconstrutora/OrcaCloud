@@ -3,6 +3,8 @@ import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink } from '../../s
 import { projectService } from '../../services/projectService';
 import type { NfeInvoice, NfeInvoiceWithItems, ProcessingStatus } from '../../types/fiscal';
 import { supabase } from '../../lib/supabase';
+import { validateNfe, summarizeAlerts } from '../../services/taxValidationService';
+import { TaxValidationPanel } from './TaxValidationPanel';
 
 interface Props {
   organizationId: string;
@@ -190,19 +192,25 @@ function DocumentDetail({
   onToast: (msg: string, type: 'ok' | 'err') => void;
 }) {
   const [invoice, setInvoice] = useState(initialInvoice);
-  const [tab, setTab] = useState<'data' | 'items' | 'logs'>('data');
+  const [tab, setTab] = useState<'data' | 'items' | 'validation' | 'logs'>('data');
   const [detail, setDetail] = useState<NfeInvoiceWithItems | null>(null);
   const [loading, setLoading] = useState(false);
   const [showApproveModal, setShowApproveModal] = useState(false);
+  const [alerts, setAlerts] = useState<ReturnType<typeof validateNfe>>([]);
 
   useEffect(() => {
-    if (tab === 'items' && !detail) {
+    if ((tab === 'items' || tab === 'validation') && !detail) {
       setLoading(true);
       getNfeInvoiceWithItems(invoice.id)
-        .then(setDetail)
+        .then(d => {
+          setDetail(d);
+          if (d) setAlerts(validateNfe(d));
+        })
         .finally(() => setLoading(false));
     }
   }, [tab, invoice.id, detail]);
+
+  const alertSummary = summarizeAlerts(alerts);
 
   const currentStep = STEP_ORDER[invoice.document_status] ?? -1;
   const isError = ['failed', 'dead_letter'].includes(invoice.document_status);
@@ -219,6 +227,32 @@ function DocumentDetail({
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Badge status={invoice.document_status} />
+          {alertSummary.critical > 0 && (
+            <span
+              style={{
+                fontSize: 11, fontWeight: 800, textTransform: 'uppercase',
+                background: 'var(--fred)', color: '#fff', padding: '4px 10px', borderRadius: 8,
+                cursor: 'pointer',
+              }}
+              onClick={() => setTab('validation')}
+              title="Ver alertas tributários"
+            >
+              ⚠ {alertSummary.critical} crítico{alertSummary.critical > 1 ? 's' : ''}
+            </span>
+          )}
+          {alertSummary.warning > 0 && alertSummary.critical === 0 && (
+            <span
+              style={{
+                fontSize: 11, fontWeight: 800, textTransform: 'uppercase',
+                background: '#d97706', color: '#fff', padding: '4px 10px', borderRadius: 8,
+                cursor: 'pointer',
+              }}
+              onClick={() => setTab('validation')}
+              title="Ver alertas tributários"
+            >
+              ⚠ {alertSummary.warning} atenção
+            </span>
+          )}
           {canApprove && (
             <button
               className="f-btn f-btn-primary f-btn-sm"
@@ -257,18 +291,31 @@ function DocumentDetail({
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {(['data', 'items', 'logs'] as const).map(t => (
-          <button
-            key={t}
-            className={`f-btn f-btn-sm ${tab === t ? 'f-btn-primary' : 'f-btn-ghost'}`}
-            onClick={() => setTab(t)}
-          >
-            {t === 'data'  ? 'Dados extraídos' :
-             t === 'items' ? `Itens (${detail?.items.length ?? '…'})` :
-             'Logs'}
-          </button>
-        ))}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {(['data', 'items', 'validation', 'logs'] as const).map(t => {
+          const isActive = tab === t;
+          const label =
+            t === 'data'       ? 'Dados extraídos' :
+            t === 'items'      ? `Itens (${detail?.items.length ?? '…'})` :
+            t === 'validation' ? (
+              alertSummary.total > 0
+                ? `Validação ⚠ ${alertSummary.total}`
+                : 'Validação'
+            ) :
+            'Logs';
+
+          const hasCritical = t === 'validation' && alertSummary.critical > 0;
+          return (
+            <button
+              key={t}
+              className={`f-btn f-btn-sm ${isActive ? 'f-btn-primary' : 'f-btn-ghost'}`}
+              onClick={() => setTab(t)}
+              style={hasCritical && !isActive ? { borderColor: 'var(--fred)', color: 'var(--fred)' } : {}}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {tab === 'data' && (
@@ -366,6 +413,16 @@ function DocumentDetail({
             </div>
           )}
         </div>
+      )}
+
+      {tab === 'validation' && (
+        invoice.document_status !== 'completed' ? (
+          <div className="f-card" style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--ftext3)' }}>
+            A validação tributária só está disponível para NF-es processadas com sucesso.
+          </div>
+        ) : (
+          <TaxValidationPanel alerts={alerts} loading={loading} />
+        )
       )}
 
       {tab === 'logs' && (

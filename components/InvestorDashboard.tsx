@@ -201,12 +201,30 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 progress: p.settings?.obraProgress || 0,
             };
         });
+        // Rendimento Mensal real: média mensal de dividendos/distribuições liquidados
+        const totalDividends = Object.values(summaries).reduce((s, sm) => s + sm.totalDividends, 0);
+        const totalContributed = Object.values(summaries).reduce((s, sm) => s + sm.totalContributed, 0);
+        // Meses desde o primeiro aporte liquidado
+        const firstPaid = investorContributions
+            .filter(c => c.type === 'aporte' && c.status === 'liquidado' && c.paid_date)
+            .map(c => new Date(c.paid_date!).getTime())
+            .sort((a, b) => a - b)[0];
+        const monthsElapsed = firstPaid
+            ? Math.max(1, Math.round((Date.now() - firstPaid) / (1000 * 60 * 60 * 24 * 30)))
+            : 0;
+        const monthlyYieldPct = monthsElapsed > 0 && totalContributed > 0
+            ? ((totalDividends / totalContributed) / monthsElapsed) * 100
+            : null;
+
         return {
             equity: totalEquity.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
             activeWorks: activeProjects.length,
             holdings,
+            monthlyYieldPct,
+            totalContributed,
+            totalDividends,
         };
-    }, [activeProjects, summaries]);
+    }, [activeProjects, summaries, investorContributions]);
 
     // Série histórica construída a partir de aportes reais (investor_contributions)
     const historicalData = React.useMemo((): HistoricalPoint[] => {
@@ -583,19 +601,15 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         cubValue={cubValue}
                         equity={stats.equity}
                         activeWorks={stats.activeWorks}
-                        monthlyYield={settings.investorData?.summary?.monthlyYield}
+                        monthlyYieldPct={stats.monthlyYieldPct}
+                        totalContributed={stats.totalContributed}
+                        totalDividends={stats.totalDividends}
                         historicalData={historicalData}
                         holdings={stats.holdings}
                         isAdmin={isAdmin}
-                        showSelic={showSelic} showIpca={showIpca} showIgpm={showIgpm}
-                        onToggleSelic={() => setShowSelic(v => !v)}
-                        onToggleIpca={() => setShowIpca(v => !v)}
-                        onToggleIgpm={() => setShowIgpm(v => !v)}
                         loadingAI={loadingAI}
                         aiInsight={aiInsight}
-                        onEditField={handleUpdateSummary}
                         onNavigateToHoldings={() => setActiveTab('holdings')}
-                        openInput={openInput}
                     />
                 )}
                 {activeTab === 'simulator' && <InvestmentSimulator />}

@@ -98,8 +98,8 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.name || !formData.email) {
-            alert("Nome e E-mail são obrigatórios.");
+        if (!formData.name) {
+            alert("Nome é obrigatório.");
             return;
         }
 

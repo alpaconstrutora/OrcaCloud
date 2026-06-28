@@ -1,12 +1,11 @@
 import React from 'react';
-import { TrendingUp, DollarSign, Wallet, Building2, ArrowRight } from 'lucide-react';
+import { TrendingUp, Wallet, Building2, ArrowRight } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 import { AIInsight } from '../../services/aiService';
 import AIInsightCard from '../AIInsightCard';
 import { HoldingItem, HistoricalPoint } from './types';
 
 interface Props {
-    cubValue: number;
     equity: string;
     activeWorks: number;
     /** % de rendimento mensal calculado de dividendos/aportes reais. null = sem dados suficientes. */
@@ -24,7 +23,7 @@ interface Props {
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const InvestorSummaryDashboard: React.FC<Props> = ({
-    cubValue, equity, activeWorks,
+    equity, activeWorks,
     monthlyYieldPct, totalContributed, totalDividends,
     historicalData, holdings, isAdmin,
     loadingAI, aiInsight, onNavigateToHoldings,
@@ -43,13 +42,6 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
             color: 'emerald',
             val: monthlyYieldPct != null ? `${monthlyYieldPct.toFixed(2)}% a.m.` : '—',
             sub: totalDividends > 0 ? `${fmt(totalDividends)} distribuídos` : 'Sem distribuições registradas',
-        },
-        {
-            label: 'CUB Referência (R8N)',
-            icon: <DollarSign className="w-5 h-5" />,
-            color: 'indigo',
-            val: cubValue ? fmt(cubValue) : 'Calculando...',
-            sub: 'Calculado via SINAPI',
         },
         {
             label: 'Obras Ativas',

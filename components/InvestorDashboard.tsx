@@ -25,7 +25,7 @@ import ReportsTab from './investor/ReportsTab';
 import { HoldingItem, HistoricalPoint } from './investor/types';
 
 interface InvestorDashboardProps {
-    activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'comunicados' | 'spe' | 'relatorios';
+    activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios';
     settings: ProjectSettings;
     organizationId?: string;
     budget?: BudgetEntry[];
@@ -40,13 +40,14 @@ interface InvestorDashboardProps {
     overrideEnabledTabIds?: string[];
 }
 
-type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'comunicados' | 'spe' | 'relatorios';
+type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios';
 
 const TABS = [
     { id: 'dashboard', label: 'Evolução', icon: <TrendingUp className="w-4 h-4" /> },
     { id: 'simulator', label: 'Simulador', icon: <Calculator className="w-4 h-4" /> },
     { id: 'holdings', label: 'Cotas', icon: <PieChartIcon className="w-4 h-4" /> },
     { id: 'financeiro', label: 'Financeiro', icon: <Wallet className="w-4 h-4" /> },
+    { id: 'fiscal', label: 'Fiscal e Tributário', icon: <FileText className="w-4 h-4" /> },
     { id: 'opportunities', label: 'Oportunidades', icon: <Building2 className="w-4 h-4" /> },
     { id: 'reports', label: 'Documentos', icon: <FileText className="w-4 h-4" /> },
     { id: 'comunicados', label: 'Comunicados', icon: <Bell className="w-4 h-4" /> },
@@ -58,6 +59,7 @@ const TAB_TITLES: Record<TabId, string> = {
     dashboard: 'Meu Patrimônio',
     holdings: 'Minhas Cotas',
     financeiro: 'Gestão Financeira',
+    fiscal: 'Fiscal e Tributário',
     opportunities: 'Oportunidades',
     reports: 'Documentos',
     simulator: 'Inteligência de Investimento',
@@ -595,7 +597,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             <main className="min-h-[500px]">
                 {activeTab === 'dashboard' && (
                     <InvestorSummaryDashboard
-                        cubValue={cubValue}
                         equity={stats.equity}
                         activeWorks={stats.activeWorks}
                         monthlyYieldPct={stats.monthlyYieldPct}
@@ -629,13 +630,14 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             </div>
                             <PaymentsPanel organizationId={orgId} investorId={investorProfile?.id} />
                         </section>
-                        <section>
-                            <div className="flex items-center gap-3 mb-8">
-                                <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-                                <h3 className="text-xl font-black text-gray-900 tracking-tight">Fiscal e Tributário</h3>
-                            </div>
-                            <TaxReport />
-                        </section>
+                    </div>
+                )}
+                {activeTab === 'fiscal' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <TaxReport
+                            investorContributions={investorContributions}
+                            activeProjects={activeProjects}
+                        />
                     </div>
                 )}
                 {activeTab === 'opportunities' && (

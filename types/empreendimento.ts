@@ -8,6 +8,9 @@ export type EmpreendimentoStatus =
 export type EmpreendimentoTipo =
     | 'VERTICAL' | 'HORIZONTAL' | 'MISTO' | 'COND_LOGISTICO' | 'COND_INDUSTRIAL';
 
+export type FloorTipo =
+    | 'SUBSOLO' | 'TERREO' | 'MEZANINO' | 'TIPO' | 'COBERTURA' | 'TECNICO' | 'GARAGEM' | 'OUTRO';
+
 export type UnitPositionType = 'FRENTE' | 'LATERAL' | 'FUNDOS';
 export type UnitSunOrientation = 'NORTE' | 'SUL' | 'LESTE' | 'OESTE';
 export type UnitStatus = 'DISPONIVEL' | 'RESERVADO' | 'PERMUTADO' | 'VENDIDO';
@@ -98,9 +101,27 @@ export interface EmpreendimentoTower {
 export type EmpreendimentoTowerInsert = Omit<EmpreendimentoTower, 'id' | 'created_at' | 'updated_at' | 'units'>;
 export type EmpreendimentoTowerUpdate = Partial<EmpreendimentoTowerInsert>;
 
+export interface EmpreendimentoFloor {
+    id: string;
+    tower_id: string;
+    name: string;
+    tipo: FloorTipo;
+    floor_number: number;
+    repeat_count: number;
+    units_per_floor?: number | null;
+    prefix?: string | null;
+    sort_order: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export type EmpreendimentoFloorInsert = Omit<EmpreendimentoFloor, 'id' | 'created_at' | 'updated_at'>;
+export type EmpreendimentoFloorUpdate = Partial<EmpreendimentoFloorInsert>;
+
 export interface EmpreendimentoUnit {
     id: string;
     tower_id: string;
+    floor_id?: string | null;
     imovib_unit_id?: string | null;
     imovib_instance_id?: string | null;
     name: string;

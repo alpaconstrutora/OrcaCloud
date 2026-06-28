@@ -3,6 +3,7 @@ import { imovibService } from './imovibService';
 import {
     Empreendimento, EmpreendimentoInsert, EmpreendimentoUpdate, EmpreendimentoWithChildren,
     EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoTowerUpdate,
+    EmpreendimentoFloor, EmpreendimentoFloorInsert, EmpreendimentoFloorUpdate,
     EmpreendimentoUnit, EmpreendimentoUnitInsert, EmpreendimentoUnitUpdate,
     EmpreendimentoCommonArea, EmpreendimentoCommonAreaInsert, EmpreendimentoSyncReport,
     UnitStatus, CommonAreaCategory,
@@ -36,7 +37,9 @@ const EMPREENDIMENTO_COLS = 'id, organization_id, name, code, status, tipo, imov
 
 const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, name, floors_count, units_per_floor, construction_cost_sqm, sales_price_sqm, sort_order, created_at, updated_at';
 
-const UNIT_COLS = 'id, tower_id, imovib_unit_id, imovib_instance_id, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, parking_spaces, position_type, sun_orientation, price, status, is_vendavel, commercial_property_id, sort_order, created_at, updated_at';
+const FLOOR_COLS = 'id, tower_id, name, tipo, floor_number, repeat_count, units_per_floor, prefix, sort_order, created_at, updated_at';
+
+const UNIT_COLS = 'id, tower_id, floor_id, imovib_unit_id, imovib_instance_id, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, parking_spaces, position_type, sun_orientation, price, status, is_vendavel, commercial_property_id, sort_order, created_at, updated_at';
 
 const COMMON_AREA_COLS = 'id, empreendimento_id, tower_id, name, category, area, floor, description, is_vendavel, sort_order, created_at, updated_at';
 
@@ -183,6 +186,80 @@ export const empreendimentoService = {
 
         await this.linkTowerToObra(towerId, created.id);
         return created.id;
+    },
+
+    // ── Pavimentos template ──────────────────────────────────────────────────
+    async listFloors(towerId: string): Promise<EmpreendimentoFloor[]> {
+        const { data, error } = await supabase
+            .from('empreendimento_floors')
+            .select(FLOOR_COLS)
+            .eq('tower_id', towerId)
+            .order('sort_order', { ascending: true })
+            .order('floor_number', { ascending: true });
+        if (error) throw new Error(`Failed to fetch floors: ${error.message}`);
+        return data || [];
+    },
+
+    async createFloor(floor: EmpreendimentoFloorInsert): Promise<EmpreendimentoFloor> {
+        const { data, error } = await supabase
+            .from('empreendimento_floors')
+            .insert(floor)
+            .select(FLOOR_COLS)
+            .single();
+        if (error) throw new Error(`Failed to create floor: ${error.message}`);
+        return data;
+    },
+
+    async updateFloor(id: string, updates: EmpreendimentoFloorUpdate): Promise<EmpreendimentoFloor> {
+        const { data, error } = await supabase
+            .from('empreendimento_floors')
+            .update(updates)
+            .eq('id', id)
+            .select(FLOOR_COLS)
+            .single();
+        if (error) throw new Error(`Failed to update floor: ${error.message}`);
+        return data;
+    },
+
+    async deleteFloor(id: string): Promise<void> {
+        const { error } = await supabase.from('empreendimento_floors').delete().eq('id', id);
+        if (error) throw new Error(`Failed to delete floor: ${error.message}`);
+    },
+
+    async deleteUnitsByTower(towerId: string): Promise<void> {
+        const { error } = await supabase.from('empreendimento_units').delete().eq('tower_id', towerId);
+        if (error) throw new Error(`Failed to delete units: ${error.message}`);
+    },
+
+    async generateUnitsFromFloors(tower: EmpreendimentoTower): Promise<EmpreendimentoUnit[]> {
+        const floors = await this.listFloors(tower.id);
+        if (!floors.length) throw new Error('Nenhum pavimento cadastrado para esta torre.');
+
+        const toCreate: EmpreendimentoUnitInsert[] = [];
+        for (const fl of floors) {
+            const upf = fl.units_per_floor ?? tower.units_per_floor ?? 1;
+            for (let rep = 0; rep < fl.repeat_count; rep++) {
+                const floorNum = fl.floor_number + rep;
+                const floorLabel = floorNum < 0
+                    ? `SS${Math.abs(floorNum)}`
+                    : floorNum === 0 ? 'TR' : String(floorNum);
+                for (let u = 1; u <= upf; u++) {
+                    const unitNum = String(u).padStart(2, '0');
+                    const pre = fl.prefix ? `${fl.prefix}-` : '';
+                    toCreate.push({
+                        tower_id: tower.id,
+                        floor_id: fl.id,
+                        name: `${pre}${floorLabel}${unitNum}`,
+                        floor: floorNum,
+                        status: 'DISPONIVEL',
+                        is_vendavel: true,
+                        sort_order: toCreate.length,
+                    });
+                }
+            }
+        }
+
+        return this.bulkUpsertUnits(toCreate);
     },
 
     // ── Unidades ─────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import { useStore } from '../../store/useStore';
 import { EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnit } from '../../types';
 import UnitEditor from './UnitEditor';
+import FloorEditor from './FloorEditor';
 
 interface Props {
   empreendimentoId: string;
@@ -21,9 +22,15 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
   const [editForm, setEditForm] = React.useState({ name: '', floors_count: '', units_per_floor: '' });
   const [form, setForm] = React.useState({ name: '', floors_count: '', units_per_floor: '' });
   const [unitsByTower, setUnitsByTower] = React.useState<Record<string, EmpreendimentoUnit[]>>({});
+  const [unitKeyByTower, setUnitKeyByTower] = React.useState<Record<string, number>>({});
 
   const handleUnitsChange = React.useCallback((towerId: string, units: EmpreendimentoUnit[]) => {
     setUnitsByTower(prev => ({ ...prev, [towerId]: units }));
+  }, []);
+
+  const handleUnitsRegenerated = React.useCallback((towerId: string) => {
+    setUnitsByTower(prev => ({ ...prev, [towerId]: [] }));
+    setUnitKeyByTower(prev => ({ ...prev, [towerId]: (prev[towerId] ?? 0) + 1 }));
   }, []);
 
   const orgProjects = React.useMemo(() => projects.filter(p => {
@@ -262,8 +269,20 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
                 </div>
 
                 {isOpen && !isEditing && (
-                  <div className="border-t border-gray-100 p-4 bg-gray-50/30">
-                    <UnitEditor tower={tower} onUnitsChange={handleUnitsChange} />
+                  <div className="border-t border-gray-100 bg-gray-50/30 divide-y divide-gray-100">
+                    <div className="p-4">
+                      <FloorEditor
+                        tower={tower}
+                        onUnitsRegenerated={() => handleUnitsRegenerated(tower.id)}
+                      />
+                    </div>
+                    <div className="p-4">
+                      <UnitEditor
+                        key={unitKeyByTower[tower.id] ?? 0}
+                        tower={tower}
+                        onUnitsChange={handleUnitsChange}
+                      />
+                    </div>
                   </div>
                 )}
               </div>

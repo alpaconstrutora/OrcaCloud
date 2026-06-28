@@ -125,6 +125,16 @@ export const investorContributionsService = {
         return (data ?? []) as InvestorParticipation[];
     },
 
+    /** Todas as participações de um investidor (visão de portfólio). */
+    async listParticipationsByInvestor(investorId: string): Promise<InvestorParticipation[]> {
+        const { data, error } = await supabase
+            .from('investor_participations')
+            .select(PART_COLS)
+            .eq('investor_id', investorId);
+        if (error) throw error;
+        return (data ?? []) as InvestorParticipation[];
+    },
+
     async saveParticipation(p: InvestorParticipation): Promise<InvestorParticipation> {
         if (p.id) {
             const { data, error } = await supabase

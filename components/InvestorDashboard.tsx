@@ -83,6 +83,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const [opportunities, setOpportunities] = React.useState<InvestorOpportunity[]>([]);
     const [uploadCategory, setUploadCategory] = React.useState<ReportCategory>('relatorio');
     const [summaries, setSummaries] = React.useState<Record<string, InvestorFinancialSummary>>({});
+    const [investorParticipations, setInvestorParticipations] = React.useState<import('../services/investorContributionsService').InvestorParticipation[]>([]);
+    const [investorContributions, setInvestorContributions] = React.useState<import('../services/investorContributionsService').InvestorContribution[]>([]);
     const [selectedAsset, setSelectedAsset] = React.useState<HoldingItem | null>(null);
     const [aiInsight, setAiInsight] = React.useState<AIInsight | null>(null);
     const [loadingAI, setLoadingAI] = React.useState(false);
@@ -151,14 +153,24 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const activeProjects = React.useMemo(() => {
         if (!realProjects.length) return [];
         if (investorProfile?.id) {
-            return realProjects.filter(p =>
-                (p.investor_id ?? p.settings?.investorId) === investorProfile.id &&
-                p.settings?.classification === 'OBRA'
+            // Projetos em que o investidor tem participação registrada (fonte primária)
+            const partIds = new Set(investorParticipations.map(p => p.project_id));
+            // Fallback: campo legacy investor_id / settings.investorId
+            const legacyIds = new Set(
+                realProjects
+                    .filter(p => (p.investor_id ?? p.settings?.investorId) === investorProfile.id)
+                    .map(p => p.id!)
             );
+            const allIds = new Set([...partIds, ...legacyIds]);
+            if (allIds.size > 0) {
+                return realProjects.filter(p => p.id && allIds.has(p.id));
+            }
+            // Sem vínculo nenhum — mostra obras como admin para não ficar vazio
+            return realProjects.filter(p => p.settings?.classification === 'OBRA');
         }
         if (isAdmin) return realProjects.filter(p => p.settings?.classification === 'OBRA');
         return [];
-    }, [realProjects, investorProfile, isAdmin]);
+    }, [realProjects, investorProfile, isAdmin, investorParticipations]);
 
     const stats = React.useMemo(() => {
         let totalEquity = 0;
@@ -196,43 +208,91 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         };
     }, [activeProjects, summaries]);
 
+    // Série histórica construída a partir de aportes reais (investor_contributions)
     const historicalData = React.useMemo((): HistoricalPoint[] => {
-        if (!activeProjects.length) return [];
-        let minDate = new Date();
-        let hasDiary = false;
-        activeProjects.forEach(p => {
-            p.settings?.diaryEntries?.forEach((e: any) => {
-                hasDiary = true;
-                const d = new Date(e.date);
-                if (d < minDate) minDate = d;
+        // Usa contributions com paid_date como fonte primária
+        const paid = investorContributions.filter(c => c.paid_date);
+        if (paid.length === 0) {
+            // Fallback: diaryEntries legadas
+            if (!activeProjects.length) return [];
+            let minDate = new Date();
+            let hasDiary = false;
+            activeProjects.forEach(p => {
+                p.settings?.diaryEntries?.forEach((e: any) => {
+                    hasDiary = true;
+                    const d = new Date(e.date);
+                    if (d < minDate) minDate = d;
+                });
             });
-        });
-        if (!hasDiary) return [];
+            if (!hasDiary) return [];
+            const result: HistoricalPoint[] = [];
+            const now = new Date();
+            let current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+            while (current <= now) {
+                const endOfMonth = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+                const label = current.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+                let totalEquity = 0;
+                activeProjects.forEach(p => {
+                    const projectValue = p.settings?.financialInfo?.totalValue ||
+                        ((p.settings?.area || 0) * (p.settings?.cubRate || 0)) || 0;
+                    const entries = p.settings?.diaryEntries || [];
+                    const until = entries.filter((e: any) => new Date(e.date) <= endOfMonth).length;
+                    const progress = entries.length > 0 ? Math.min(100, (until / entries.length) * 100) : 0;
+                    totalEquity += projectValue * (progress / 100);
+                });
+                const monthLabel = current.toLocaleDateString('en-US', { month: 'short' }).toLowerCase();
+                const yearLabel = String(current.getFullYear());
+                const bm = benchmarkSeries.find((b: any) =>
+                    b.date.toLowerCase().includes(monthLabel) && b.date.includes(yearLabel)
+                ) || { selic: 0, ipca: 0, igpm: 0 };
+                result.push({ month: label, yield: totalEquity, percent: 0, ...bm });
+                current.setMonth(current.getMonth() + 1);
+            }
+            return result;
+        }
+
+        // Série real: acumulado de capital investido por mês (aportes liquidados)
+        const dates = paid.map(c => new Date(c.paid_date!));
+        const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
         const result: HistoricalPoint[] = [];
         const now = new Date();
         let current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+        let cumAporte = 0;
+        let cumDividendo = 0;
+
         while (current <= now) {
             const endOfMonth = new Date(current.getFullYear(), current.getMonth() + 1, 0);
-            const label = current.toLocaleDateString('pt-BR', { month: 'short' });
-            let totalEquity = 0;
-            activeProjects.forEach(p => {
-                const projectValue = p.settings?.financialInfo?.totalValue ||
-                    ((p.settings?.area || 0) * (p.settings?.cubRate || 0)) || 0;
-                const entries = p.settings?.diaryEntries || [];
-                const until = entries.filter((e: any) => new Date(e.date) <= endOfMonth).length;
-                const progress = entries.length > 0 ? Math.min(100, (until / entries.length) * 100) : 0;
-                totalEquity += projectValue * (progress / 100);
+            investorContributions.forEach(c => {
+                if (!c.paid_date || c.status !== 'liquidado') return;
+                const d = new Date(c.paid_date);
+                if (d > endOfMonth) return;
+                // já contabilizado nos meses anteriores via acumulado — recalcula do zero abaixo
             });
+            // Recalcula acumulados até o fim do mês corrente
+            cumAporte = investorContributions
+                .filter(c => c.type === 'aporte' && c.status === 'liquidado' && c.paid_date && new Date(c.paid_date) <= endOfMonth)
+                .reduce((s, c) => s + Number(c.amount), 0);
+            cumDividendo = investorContributions
+                .filter(c => (c.type === 'dividendo' || c.type === 'distribuicao') && c.status === 'liquidado' && c.paid_date && new Date(c.paid_date) <= endOfMonth)
+                .reduce((s, c) => s + Number(c.amount), 0);
+
+            const label = current.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
             const monthLabel = current.toLocaleDateString('en-US', { month: 'short' }).toLowerCase();
             const yearLabel = String(current.getFullYear());
             const bm = benchmarkSeries.find((b: any) =>
                 b.date.toLowerCase().includes(monthLabel) && b.date.includes(yearLabel)
             ) || { selic: 0, ipca: 0, igpm: 0 };
-            result.push({ month: label, yield: totalEquity, percent: 0, ...bm });
+
+            result.push({
+                month: label,
+                yield: cumAporte,           // capital investido acumulado
+                percent: cumAporte > 0 ? (cumDividendo / cumAporte) * 100 : 0,
+                ...bm,
+            });
             current.setMonth(current.getMonth() + 1);
         }
         return result;
-    }, [activeProjects, benchmarkSeries]);
+    }, [activeProjects, benchmarkSeries, investorContributions]);
 
     const filteredHoldings = React.useMemo(() => {
         if (filterStatus === 'Todos') return stats.holdings;
@@ -275,6 +335,44 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 setCubValue(cub);
                 setRealProjects((projectsList || []) as unknown as ProjectData[]);
                 setBenchmarkSeries(marketDataService.getBenchmarkSeries(12));
+
+                const investorId = investorProfile?.id;
+                if (investorId) {
+                    // Carrega participações e contribuições do investidor em uma única rodada
+                    const [parts, contribs] = await Promise.all([
+                        investorContributionsService.listParticipationsByInvestor(investorId),
+                        investorContributionsService.listByInvestor(orgId ?? '', investorId),
+                    ]);
+                    setInvestorParticipations(parts);
+                    setInvestorContributions(contribs);
+
+                    // Deriva summaries localmente (sem N chamadas ao banco)
+                    const projectIds = new Set([
+                        ...parts.map(p => p.project_id),
+                        ...contribs.map(c => c.project_id),
+                    ]);
+                    const computedSummaries: Record<string, InvestorFinancialSummary> = {};
+                    projectIds.forEach(pid => {
+                        const cs = contribs.filter(c => c.project_id === pid);
+                        const part = parts.find(p => p.project_id === pid);
+                        const sum = (type: string, status?: string) =>
+                            cs.filter(c => c.type === type && (!status || c.status === status))
+                              .reduce((acc, c) => acc + Number(c.amount), 0);
+                        const totalContributed = sum('aporte', 'liquidado');
+                        const totalDividends = sum('dividendo', 'liquidado');
+                        const totalWithdrawn = sum('retirada', 'liquidado') + sum('distribuicao', 'liquidado');
+                        const pendingAmount = cs.filter(c => c.type === 'aporte' && (c.status === 'pendente' || c.status === 'atrasado')).reduce((acc, c) => acc + Number(c.amount), 0);
+                        computedSummaries[pid] = {
+                            totalContributed, totalWithdrawn, totalDividends, pendingAmount,
+                            ownershipPct: part?.ownership_pct ?? 0,
+                            committedAmount: part?.committed_amount ?? 0,
+                            roiRealized: (currentValue: number) =>
+                                totalContributed > 0 ? ((currentValue + totalDividends - totalContributed) / totalContributed) * 100 : 0,
+                        };
+                    });
+                    setSummaries(computedSummaries);
+                }
+
                 if (orgId) {
                     const [r, o] = await Promise.all([
                         investorPortalService.listReports(orgId, investorProfile?.id ?? undefined),
@@ -289,27 +387,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         }
         loadData();
     }, [orgId, investorProfile?.id, portalToken]);
-
-    // Carrega resumos financeiros (aporte/participação/ROI) por projeto do investidor
-    React.useEffect(() => {
-        if (portalToken) return; // modo anon: dados já vêm do summary RPC
-        const investorId = investorProfile?.id;
-        if (!investorId || !activeProjects.length) return;
-        let cancelled = false;
-        (async () => {
-            try {
-                const entries = await Promise.all(
-                    activeProjects
-                        .filter(p => p.id)
-                        .map(async p => [p.id!, await investorContributionsService.getInvestorSummary(p.id!, investorId)] as const)
-                );
-                if (!cancelled) setSummaries(Object.fromEntries(entries));
-            } catch (err) {
-                console.error('Error loading investor summaries', err);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [activeProjects, investorProfile]);
 
     React.useEffect(() => {
         if (activeTab === 'dashboard' && !aiInsight) {

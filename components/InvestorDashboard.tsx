@@ -393,7 +393,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 if (orgId) {
                     const [r, o] = await Promise.all([
                         investorPortalService.listReports(orgId, investorProfile?.id ?? undefined),
-                        investorPortalService.listOpportunities(orgId),
+                        investorPortalService.listOpportunities(orgId, !isAdmin),
                     ]);
                     setReports(r);
                     setOpportunities(o);
@@ -646,6 +646,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         isAdmin={isAdmin}
                         viewMode={viewMode}
                         organizationId={orgId}
+                        investorProfile={investorProfile}
                         onViewModeChange={setViewMode}
                         onDelete={handleDeleteOpportunity}
                         onUpdate={(updated) => setOpportunities(prev =>

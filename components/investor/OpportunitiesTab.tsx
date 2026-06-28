@@ -6,6 +6,7 @@ import {
     OPPORTUNITY_TYPE_LABELS,
     investorPortalService,
 } from '../../services/investorPortalService';
+import { Investor } from '../../services/investorService';
 import OpportunityForm from './OpportunityForm';
 import OpportunityDetail from './OpportunityDetail';
 import InterestsPanel from './InterestsPanel';
@@ -15,6 +16,7 @@ interface Props {
     isAdmin: boolean;
     viewMode: 'grid' | 'list';
     organizationId?: string;
+    investorProfile?: Investor | null;
     onViewModeChange: (mode: 'grid' | 'list') => void;
     onDelete: (id: string) => void;
     onUpdate: (updated: InvestorOpportunity) => void;
@@ -31,7 +33,7 @@ const fmtBRL = (v: number | null | undefined) => {
 type AdminTab = 'opportunities' | 'interests';
 
 const OpportunitiesTab: React.FC<Props> = ({
-    opportunities, isAdmin, viewMode, organizationId,
+    opportunities, isAdmin, viewMode, organizationId, investorProfile,
     onViewModeChange, onDelete, onUpdate, openConfirm,
 }) => {
     const [detail, setDetail] = React.useState<InvestorOpportunity | null>(null);
@@ -411,6 +413,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                     opportunity={detail}
                     organizationId={organizationId}
                     isAdmin={isAdmin}
+                    investorProfile={investorProfile}
                     onClose={() => setDetail(null)}
                 />
             )}

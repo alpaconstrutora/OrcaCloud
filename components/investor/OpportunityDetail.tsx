@@ -9,6 +9,7 @@ import {
     OPPORTUNITY_TYPE_LABELS, INTEREST_ROLE_LABELS, INTEREST_STAGE_LABELS,
     investorPortalService,
 } from '../../services/investorPortalService';
+import { Investor } from '../../services/investorService';
 import ScenarioComparison from './ScenarioComparison';
 import LinkedProjectPanel from './LinkedProjectPanel';
 import DataRoomPanel from './DataRoomPanel';
@@ -20,6 +21,7 @@ interface Props {
     organizationId: string;
     isAdmin?: boolean;
     uploadedBy?: string;
+    investorProfile?: Investor | null;
     onClose: () => void;
 }
 
@@ -29,16 +31,16 @@ const ROLES: InterestRole[] = ['investidor', 'arquiteto', 'engenheiro', 'projeti
 type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'fotos' | 'documentos' | 'interesses';
 type FormStep = 'view' | 'form' | 'success';
 
-const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, isAdmin = false, uploadedBy, onClose }) => {
+const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, isAdmin = false, uploadedBy, investorProfile, onClose }) => {
     const [formStep, setFormStep] = React.useState<FormStep>('view');
     const [pitchTab, setPitchTab] = React.useState<PitchTab>('pitch');
     const [saving, setSaving] = React.useState(false);
     const [interests, setInterests] = React.useState<OpportunityInterest[]>([]);
     const [loadingInterests, setLoadingInterests] = React.useState(false);
     const [interest, setInterest] = React.useState({
-        contact_name: '',
-        contact_email: '',
-        contact_phone: '',
+        contact_name: investorProfile?.name ?? '',
+        contact_email: investorProfile?.email ?? '',
+        contact_phone: investorProfile?.phone ?? '',
         role: 'investidor' as InterestRole,
         message: '',
     });

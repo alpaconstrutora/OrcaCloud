@@ -33,7 +33,7 @@ const NBR_TO_SINAPI: Record<string, string> = {
 export interface Investor {
     id: string;
     name: string;
-    email: string;
+    email?: string | null;
     phone?: string;
     document?: string;
     organization_id?: string;

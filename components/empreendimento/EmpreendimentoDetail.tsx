@@ -1,10 +1,11 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import TowerEditor from './TowerEditor';
 import CommonAreaEditor from './CommonAreaEditor';
 import SyncFromStudyModal from './SyncFromStudyModal';
+import { EspelhoVendasTab } from './EspelhoVendasTab';
 
 interface Props {
   empreendimento: Empreendimento;
@@ -31,7 +32,7 @@ const TIPO_LABELS: Record<string, string> = {
   COND_INDUSTRIAL: 'Condomínio Industrial',
 };
 
-type Tab = 'visao' | 'torres' | 'areas';
+type Tab = 'visao' | 'torres' | 'areas' | 'comercial';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced }) => {
   const [tab, setTab] = React.useState<Tab>('visao');
@@ -47,6 +48,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     { id: 'visao', label: 'Visão Geral', icon: FileText },
     { id: 'torres', label: 'Torres & Unidades', icon: Layers },
     { id: 'areas', label: 'Áreas Comuns', icon: Trees },
+    { id: 'comercial', label: 'Espelho de Vendas', icon: ShoppingBag },
   ];
 
   return (
@@ -182,6 +184,10 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
           <CommonAreaEditor key={refreshKey} empreendimentoId={e.id} />
         </div>
+      )}
+
+      {tab === 'comercial' && (
+        <EspelhoVendasTab empreendimento={e} organizationId={organizationId} />
       )}
 
       {syncOpen && (

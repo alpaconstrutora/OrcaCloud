@@ -188,6 +188,15 @@ export const empreendimentoService = {
         return created.id;
     },
 
+    // ── Utilitário F3: todas as unidades do empreendimento (flatten) ─────────
+    async listAllUnitsForEmpreendimento(empreendimentoId: string): Promise<(EmpreendimentoUnit & { _tower_name: string; _tower_project_id?: string | null })[]> {
+        const towers = await this.listTowers(empreendimentoId);
+        const arrays = await Promise.all(towers.map(t => this.listUnits(t.id)));
+        return arrays.flatMap((arr, i) =>
+            arr.map(u => ({ ...u, _tower_name: towers[i].name, _tower_project_id: towers[i].project_id }))
+        );
+    },
+
     // ── Pavimentos template ──────────────────────────────────────────────────
     async listFloors(towerId: string): Promise<EmpreendimentoFloor[]> {
         const { data, error } = await supabase

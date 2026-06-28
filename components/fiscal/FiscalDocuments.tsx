@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { listNfeInvoices, getNfeInvoiceWithItems } from '../../services/nfeService';
+import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink } from '../../services/nfeService';
+import { projectService } from '../../services/projectService';
 import type { NfeInvoice, NfeInvoiceWithItems, ProcessingStatus } from '../../types/fiscal';
+import { supabase } from '../../lib/supabase';
 
 interface Props {
   organizationId: string;
@@ -33,16 +35,133 @@ const STEP_ORDER: Record<string, number> = {
   queued: 0, processing: 1, parsed: 2, normalized: 3, completed: 4,
 };
 
-function DocumentDetail({
+// ── Modal: Gerar Título Financeiro ───────────────────────────────────────────
+function ApproveModal({
   invoice,
-  onBack,
+  projects,
+  organizationId,
+  onClose,
+  onSuccess,
 }: {
   invoice: NfeInvoice;
-  onBack: () => void;
+  projects: { id: string; name: string }[];
+  organizationId: string;
+  onClose: () => void;
+  onSuccess: (updated: NfeInvoice) => void;
 }) {
+  const [projectId, setProjectId] = useState(invoice.project_id ?? '');
+  const [dueDate, setDueDate] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit() {
+    if (!projectId) { setError('Selecione uma obra.'); return; }
+    if (!dueDate)   { setError('Informe a data de vencimento.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const updated = await approveAndLink({
+        invoiceId: invoice.id,
+        organizationId,
+        projectId,
+        dueDate,
+        userId: user?.id ?? '',
+      });
+      onSuccess(updated);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erro ao aprovar');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="f-card"
+        style={{ width: 400, maxWidth: '90vw', margin: 0, padding: 24 }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="f-section-title" style={{ marginBottom: 4 }}>Gerar Título Financeiro</div>
+        <div style={{ fontSize: 13, color: 'var(--ftext3)', marginBottom: 20 }}>
+          {invoice.issuer_name} — {fmt(invoice.total_value)}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
+              Obra / Projeto *
+            </label>
+            <select
+              value={projectId}
+              onChange={e => setProjectId(e.target.value)}
+              className="f-input"
+              style={{ width: '100%' }}
+            >
+              <option value="">Selecione...</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
+              Vencimento *
+            </label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              className="f-input"
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          {error && (
+            <div style={{ color: 'var(--fred)', fontSize: 13, fontWeight: 600 }}>{error}</div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+            <button className="f-btn f-btn-ghost f-btn-sm" onClick={onClose} disabled={saving}>
+              Cancelar
+            </button>
+            <button className="f-btn f-btn-primary f-btn-sm" onClick={handleSubmit} disabled={saving}>
+              {saving ? 'Gerando…' : 'Aprovar e Gerar Título'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Detalhe da NF-e ──────────────────────────────────────────────────────────
+function DocumentDetail({
+  invoice: initialInvoice,
+  projects,
+  organizationId,
+  onBack,
+  onToast,
+}: {
+  invoice: NfeInvoice;
+  projects: { id: string; name: string }[];
+  organizationId: string;
+  onBack: () => void;
+  onToast: (msg: string, type: 'ok' | 'err') => void;
+}) {
+  const [invoice, setInvoice] = useState(initialInvoice);
   const [tab, setTab] = useState<'data' | 'items' | 'logs'>('data');
   const [detail, setDetail] = useState<NfeInvoiceWithItems | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showApproveModal, setShowApproveModal] = useState(false);
 
   useEffect(() => {
     if (tab === 'items' && !detail) {
@@ -55,6 +174,8 @@ function DocumentDetail({
 
   const currentStep = STEP_ORDER[invoice.document_status] ?? -1;
   const isError = ['failed', 'dead_letter'].includes(invoice.document_status);
+  const canApprove = invoice.document_status === 'completed' && !invoice.linked_transaction_id;
+  const linkedProject = projects.find(p => p.id === invoice.project_id);
 
   return (
     <div className="f-page">
@@ -64,8 +185,24 @@ function DocumentDetail({
           <div className="f-page-title" style={{ fontSize: 18 }}>{invoice.issuer_name}</div>
           <div className="f-page-sub" style={{ marginTop: 2 }}>NF-e emitida em {fmtDate(invoice.issue_date)}</div>
         </div>
-        <div style={{ marginLeft: 'auto' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Badge status={invoice.document_status} />
+          {canApprove && (
+            <button
+              className="f-btn f-btn-primary f-btn-sm"
+              onClick={() => setShowApproveModal(true)}
+            >
+              + Gerar Título
+            </button>
+          )}
+          {invoice.linked_transaction_id && (
+            <span style={{
+              fontSize: 11, fontWeight: 800, textTransform: 'uppercase',
+              background: 'var(--fgreen)', color: '#fff', padding: '4px 10px', borderRadius: 8,
+            }}>
+              ✓ Título gerado
+            </span>
+          )}
         </div>
       </div>
 
@@ -120,6 +257,22 @@ function DocumentDetail({
               </div>
             ))}
           </div>
+
+          {/* Vínculo financeiro */}
+          {invoice.linked_transaction_id && (
+            <div style={{
+              marginTop: 20, padding: '12px 16px', borderRadius: 10,
+              background: 'color-mix(in srgb, var(--fgreen) 10%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--fgreen) 30%, transparent)',
+            }}>
+              <div className="f-detail-key" style={{ marginBottom: 6 }}>Vínculo financeiro</div>
+              <div style={{ fontSize: 13, color: 'var(--ftext)' }}>
+                ✓ Título gerado em {fmtDate(invoice.approved_at ?? '')}
+                {linkedProject && <> · Obra: <strong>{linkedProject.name}</strong></>}
+              </div>
+            </div>
+          )}
+
           <div style={{ marginTop: 16 }}>
             <div className="f-detail-key">Chave de acesso</div>
             <div className="f-mono" style={{ marginTop: 4, wordBreak: 'break-all', color: 'var(--ftext2)', fontSize: 12 }}>
@@ -191,26 +344,56 @@ function DocumentDetail({
           </div>
         </div>
       )}
+
+      {showApproveModal && (
+        <ApproveModal
+          invoice={invoice}
+          projects={projects}
+          organizationId={organizationId}
+          onClose={() => setShowApproveModal(false)}
+          onSuccess={updated => {
+            setInvoice(updated);
+            setShowApproveModal(false);
+            onToast('Título financeiro gerado com sucesso!', 'ok');
+          }}
+        />
+      )}
     </div>
   );
 }
 
+// ── Lista de NF-es ────────────────────────────────────────────────────────────
 export function FiscalDocuments({ organizationId, onToast }: Props) {
   const [invoices, setInvoices] = useState<NfeInvoice[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<NfeInvoice | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    listNfeInvoices(organizationId)
-      .then(setInvoices)
+    Promise.all([
+      listNfeInvoices(organizationId),
+      projectService.listProjects(undefined, organizationId),
+    ])
+      .then(([invs, projs]) => {
+        setInvoices(invs);
+        setProjects(projs.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
+      })
       .catch(() => onToast('Erro ao carregar documentos', 'err'))
       .finally(() => setLoading(false));
   }, [organizationId]);
 
   if (selected) {
-    return <DocumentDetail invoice={selected} onBack={() => setSelected(null)} />;
+    return (
+      <DocumentDetail
+        invoice={selected}
+        projects={projects}
+        organizationId={organizationId}
+        onBack={() => setSelected(null)}
+        onToast={onToast}
+      />
+    );
   }
 
   const counts = {
@@ -218,11 +401,14 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
     completed: invoices.filter(i => i.document_status === 'completed').length,
     failed:    invoices.filter(i => ['failed', 'dead_letter'].includes(i.document_status)).length,
     queued:    invoices.filter(i => i.document_status === 'queued').length,
+    linked:    invoices.filter(i => !!i.linked_transaction_id).length,
   };
 
   const shown = invoices.filter(i =>
-    filter === 'all'    ? true :
-    filter === 'failed' ? ['failed', 'dead_letter'].includes(i.document_status) :
+    filter === 'all'      ? true :
+    filter === 'failed'   ? ['failed', 'dead_letter'].includes(i.document_status) :
+    filter === 'linked'   ? !!i.linked_transaction_id :
+    filter === 'pendente' ? i.document_status === 'completed' && !i.linked_transaction_id :
     i.document_status === filter
   );
 
@@ -235,12 +421,14 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
     : 0;
 
   const deadLetterCount = invoices.filter(i => i.document_status === 'dead_letter').length;
+  const pendingLink = counts.completed - counts.linked;
 
   const FILTERS = [
-    { k: 'all',       label: 'Todos',      count: counts.all },
-    { k: 'completed', label: 'Concluídos', count: counts.completed },
-    { k: 'failed',    label: 'Com erro',   count: counts.failed },
-    { k: 'queued',    label: 'Na fila',    count: counts.queued },
+    { k: 'all',       label: 'Todos',            count: counts.all },
+    { k: 'completed', label: 'Processados',       count: counts.completed },
+    { k: 'pendente',  label: 'Aguard. aprovação', count: pendingLink },
+    { k: 'linked',    label: 'Com título',        count: counts.linked },
+    { k: 'failed',    label: 'Com erro',          count: counts.failed },
   ];
 
   return (
@@ -248,16 +436,16 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
       <div className="f-page-header">
         <div className="f-page-title">Documentos fiscais</div>
         <div className="f-page-sub">
-          {counts.all} NF-e registradas • {counts.completed} processadas com sucesso
+          {counts.all} NF-e registradas • {counts.completed} processadas • {counts.linked} com título gerado
         </div>
       </div>
 
       <div className="f-stats-grid">
         {[
-          { label: 'Total ingerido', val: counts.all,           color: 'var(--ftext)' },
-          { label: 'Valor total',    val: fmt(totalValue),      color: 'var(--faccent)' },
-          { label: 'Taxa sucesso',   val: `${successRate}%`,    color: 'var(--fgreen)' },
-          { label: 'Dead letter',    val: deadLetterCount,      color: 'var(--fred)' },
+          { label: 'Total ingerido',      val: counts.all,        color: 'var(--ftext)' },
+          { label: 'Valor total',         val: fmt(totalValue),   color: 'var(--faccent)' },
+          { label: 'Taxa sucesso',        val: `${successRate}%`, color: 'var(--fgreen)' },
+          { label: 'Aguard. aprovação',   val: pendingLink,       color: pendingLink > 0 ? 'var(--fyellow, #d97706)' : 'var(--ftext3)' },
         ].map(s => (
           <div key={s.label} className="f-stat-card">
             <div className="f-stat-val" style={{ color: s.color }}>{s.val}</div>
@@ -303,7 +491,7 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
                   <th>Fornecedor</th>
                   <th>Emissão</th>
                   <th>Valor</th>
-                  <th>Chave de acesso</th>
+                  <th>Título</th>
                   <th></th>
                 </tr>
               </thead>
@@ -322,9 +510,12 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
                       {inv.document_status === 'completed' ? fmt(inv.total_value) : <span style={{ color: 'var(--ftext3)' }}>—</span>}
                     </td>
                     <td>
-                      <span className="f-mono f-truncate" style={{ display: 'block', maxWidth: 160, color: 'var(--ftext3)', fontSize: 10 }}>
-                        {inv.access_key.substring(0, 22)}…
-                      </span>
+                      {inv.linked_transaction_id
+                        ? <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--fgreen)' }}>✓ Gerado</span>
+                        : inv.document_status === 'completed'
+                          ? <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--fyellow, #d97706)' }}>Pendente</span>
+                          : <span style={{ color: 'var(--ftext3)', fontSize: 11 }}>—</span>
+                      }
                     </td>
                     <td>
                       <button
@@ -341,6 +532,17 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
           </div>
         )}
       </div>
+
+      {deadLetterCount > 0 && (
+        <div style={{
+          marginTop: 16, padding: '12px 16px', borderRadius: 10,
+          background: 'color-mix(in srgb, var(--fred) 10%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--fred) 30%, transparent)',
+          fontSize: 13, color: 'var(--fred)', fontWeight: 600,
+        }}>
+          ⚠ {deadLetterCount} documento(s) em dead letter — acesse Jobs para fazer replay.
+        </div>
+      )}
     </div>
   );
 }

@@ -117,10 +117,12 @@ export async function uploadNFe(
 // INVOICES
 // ============================================================
 
+const NFE_COLS = 'id, organization_id, raw_document_id, access_key, issuer_name, issuer_cnpj, recipient_name, recipient_cnpj, issue_date, total_value, document_status, payment_status, created_at, project_id, linked_transaction_id, approved_at, approved_by';
+
 export async function listNfeInvoices(organizationId: string): Promise<NfeInvoice[]> {
   const { data, error } = await supabase
     .from('nfe_invoices')
-    .select('id, organization_id, raw_document_id, access_key, issuer_name, issuer_cnpj, recipient_name, recipient_cnpj, issue_date, total_value, document_status, payment_status, created_at')
+    .select(NFE_COLS)
     .eq('organization_id', organizationId)
     .order('issue_date', { ascending: false });
 
@@ -131,7 +133,7 @@ export async function listNfeInvoices(organizationId: string): Promise<NfeInvoic
 export async function getNfeInvoiceWithItems(invoiceId: string): Promise<NfeInvoiceWithItems | null> {
   const { data: invoice, error: invError } = await supabase
     .from('nfe_invoices')
-    .select('id, organization_id, raw_document_id, access_key, issuer_name, issuer_cnpj, recipient_name, recipient_cnpj, issue_date, total_value, document_status, payment_status, created_at')
+    .select(NFE_COLS)
     .eq('id', invoiceId)
     .single<NfeInvoice>();
 
@@ -231,4 +233,67 @@ export async function toggleClassificationRule(
     .eq('id', ruleId);
 
   if (error) throw new Error(error.message);
+}
+
+// ============================================================
+// F1 — APROVAR NF-e E GERAR TÍTULO FINANCEIRO
+// Cria internal_transaction (DEBIT/PENDING) e vincula à nota.
+// ============================================================
+
+export async function approveAndLink(params: {
+  invoiceId: string;
+  organizationId: string;
+  projectId: string;
+  dueDate: string;   // YYYY-MM-DD
+  userId: string;
+}): Promise<NfeInvoice> {
+  const { invoiceId, organizationId, projectId, dueDate, userId } = params;
+
+  // 1. Buscar a nota para pegar valor e fornecedor
+  const { data: invoice, error: fetchErr } = await supabase
+    .from('nfe_invoices')
+    .select(NFE_COLS)
+    .eq('id', invoiceId)
+    .single<NfeInvoice>();
+
+  if (fetchErr || !invoice) throw new Error('NF-e não encontrada');
+  if (invoice.linked_transaction_id) throw new Error('NF-e já possui título financeiro vinculado');
+  if (invoice.document_status !== 'completed') throw new Error('NF-e ainda não foi processada com sucesso');
+
+  // 2. Criar o título em internal_transactions
+  const { data: tx, error: txErr } = await supabase
+    .from('internal_transactions')
+    .insert({
+      organization_id: organizationId,
+      project_id:      projectId,
+      source_system:   'NFE',
+      reference_id:    invoiceId,
+      transaction_date: dueDate,
+      amount:          invoice.total_value,
+      direction:       'DEBIT',
+      description:     `NF-e ${invoice.issuer_name} — ${invoice.access_key.slice(0, 8)}`,
+      category:        'Material',
+      status:          'PENDING',
+    })
+    .select('id')
+    .single<{ id: string }>();
+
+  if (txErr || !tx) throw new Error(`Erro ao criar título: ${txErr?.message}`);
+
+  // 3. Vincular a nota ao título
+  const { data: updated, error: updErr } = await supabase
+    .from('nfe_invoices')
+    .update({
+      linked_transaction_id: tx.id,
+      project_id:            projectId,
+      approved_at:           new Date().toISOString(),
+      approved_by:           userId,
+      payment_status:        'approved',
+    })
+    .eq('id', invoiceId)
+    .select(NFE_COLS)
+    .single<NfeInvoice>();
+
+  if (updErr || !updated) throw new Error(`Erro ao atualizar NF-e: ${updErr?.message}`);
+  return updated;
 }

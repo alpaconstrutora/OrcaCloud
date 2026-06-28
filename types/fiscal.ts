@@ -117,6 +117,11 @@ export interface NfeInvoice {
   document_status: string;
   payment_status: string;
   created_at: string;
+  // F1 — vínculo financeiro
+  project_id: string | null;
+  linked_transaction_id: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
 }
 
 export interface NfeInvoiceItem {

@@ -184,6 +184,33 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
     const [sortBy, setSortBy] = React.useState<string>('recent');
     const [tipoFilter, setTipoFilter] = React.useState<TipoObra | ''>('');
+    const [sortColumn, setSortColumn] = React.useState<ColumnKey | null>(null);
+    const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('asc');
+
+    const handleColumnSort = (col: ColumnKey) => {
+        if (sortColumn === col) {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortColumn(col);
+            setSortDirection('asc');
+        }
+    };
+
+    const SortableHeader = ({ col, label }: { col: ColumnKey; label: string }) => (
+        <th
+            onClick={() => handleColumnSort(col)}
+            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+        >
+            <div className="flex items-center gap-1.5">
+                {label}
+                {sortColumn === col && (
+                    <span className="inline-flex items-center text-blue-600 group-hover:text-blue-700">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                    </span>
+                )}
+            </div>
+        </th>
+    );
 
     const filteredProjects = React.useMemo(() => {
         return projects
@@ -215,8 +242,49 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 return matchesSearch && matchesTab && matchesTipo;
             })
             .sort((a, b) => {
-                // Obras: sempre ordenar por código numérico crescente
-                if (isObraContext) {
+                // Se há uma coluna selecionada para ordenação, usar ela
+                if (sortColumn) {
+                    let valA: any, valB: any;
+
+                    switch (sortColumn) {
+                        case 'code':
+                            valA = parseInt((a.code || a.settings?.code || ''), 10);
+                            valB = parseInt((b.code || b.settings?.code || ''), 10);
+                            if (!isNaN(valA) && !isNaN(valB)) {
+                                return sortDirection === 'asc' ? valA - valB : valB - valA;
+                            }
+                            break;
+                        case 'name':
+                            return sortDirection === 'asc'
+                                ? a.name.localeCompare(b.name)
+                                : b.name.localeCompare(a.name);
+                        case 'updated':
+                            valA = new Date(a.updated_at || a.created_at || 0).getTime();
+                            valB = new Date(b.updated_at || b.created_at || 0).getTime();
+                            return sortDirection === 'asc' ? valA - valB : valB - valA;
+                        case 'client':
+                            valA = a.settings?.client || '';
+                            valB = b.settings?.client || '';
+                            return sortDirection === 'asc'
+                                ? valA.localeCompare(valB)
+                                : valB.localeCompare(valA);
+                        case 'status-obra':
+                            valA = a.settings?.obraStatus || '';
+                            valB = b.settings?.obraStatus || '';
+                            return sortDirection === 'asc'
+                                ? valA.localeCompare(valB)
+                                : valB.localeCompare(valA);
+                        case 'status-budget':
+                            valA = a.settings?.budgetStatus || '';
+                            valB = b.settings?.budgetStatus || '';
+                            return sortDirection === 'asc'
+                                ? valA.localeCompare(valB)
+                                : valB.localeCompare(valA);
+                    }
+                }
+
+                // Fallback: ordenação padrão (Obras: por código, outros: por dropdown)
+                if (isObraContext && !sortColumn) {
                     const codeA = parseInt((a.code || a.settings?.code || ''), 10);
                     const codeB = parseInt((b.code || b.settings?.code || ''), 10);
                     const hasA = !isNaN(codeA);
@@ -240,7 +308,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }
                 return 0;
             });
-    }, [projects, searchTerm, activeTab, classificationFilter, sortBy, isObraContext]);
+    }, [projects, searchTerm, activeTab, classificationFilter, sortBy, isObraContext, sortColumn, sortDirection]);
 
     const getLinkedProjectData = (project: ProjectSummary) => {
         if (project.settings?.linkedProjectId) {
@@ -549,15 +617,49 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
                                     {visibleColumns.includes('code') && (
-                                        <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-20 text-center">{COLUMN_LABELS.code}</th>
+                                        <th
+                                            onClick={() => handleColumnSort('code')}
+                                            className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-20 text-center cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                        >
+                                            <div className="flex items-center justify-center gap-1.5">
+                                                {COLUMN_LABELS.code}
+                                                {sortColumn === 'code' && (
+                                                    <span className="inline-flex items-center text-blue-600 group-hover:text-blue-700">
+                                                        {sortDirection === 'asc' ? '↑' : '↓'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </th>
                                     )}
                                     {visibleColumns.includes('name') && (
-                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                                            {isDiaryContext ? 'Diário' : (isObraContext ? 'Obra' : (isPlanejamentoContext ? 'Planejamento' : 'Orçamento'))}
+                                        <th
+                                            onClick={() => handleColumnSort('name')}
+                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                {isDiaryContext ? 'Diário' : (isObraContext ? 'Obra' : (isPlanejamentoContext ? 'Planejamento' : 'Orçamento'))}
+                                                {sortColumn === 'name' && (
+                                                    <span className="inline-flex items-center text-blue-600 group-hover:text-blue-700">
+                                                        {sortDirection === 'asc' ? '↑' : '↓'}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </th>
                                     )}
                                     {visibleColumns.includes('organization') && (
-                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{COLUMN_LABELS.organization}</th>
+                                        <th
+                                            onClick={() => handleColumnSort('organization')}
+                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                {COLUMN_LABELS.organization}
+                                                {sortColumn === 'organization' && (
+                                                    <span className="inline-flex items-center text-blue-600 group-hover:text-blue-700">
+                                                        {sortDirection === 'asc' ? '↑' : '↓'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </th>
                                     )}
                                     {visibleColumns.includes('linked') && (
                                         <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Último Diário' : (isObraContext ? 'Orçamentos Vinculados' : 'Obra Vinculada')}</th>
@@ -569,16 +671,64 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         </>
                                     )}
                                     {visibleColumns.includes('client') && (
-                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{COLUMN_LABELS.client}</th>
+                                        <th
+                                            onClick={() => handleColumnSort('client')}
+                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                {COLUMN_LABELS.client}
+                                                {sortColumn === 'client' && (
+                                                    <span className="inline-flex items-center text-blue-600 group-hover:text-blue-700">
+                                                        {sortDirection === 'asc' ? '↑' : '↓'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </th>
                                     )}
                                     {visibleColumns.includes('updated') && (
-                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Clima' : 'Atualização'}</th>
+                                        <th
+                                            onClick={() => handleColumnSort('updated')}
+                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                {isDiaryContext ? 'Clima' : 'Atualização'}
+                                                {sortColumn === 'updated' && (
+                                                    <span className="inline-flex items-center text-blue-600 group-hover:text-blue-700">
+                                                        {sortDirection === 'asc' ? '↑' : '↓'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </th>
                                     )}
                                     {visibleColumns.includes('status-budget') && (
-                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Status Diário' : 'Status Orç.'}</th>
+                                        <th
+                                            onClick={() => handleColumnSort('status-budget')}
+                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                {isDiaryContext ? 'Status Diário' : 'Status Orç.'}
+                                                {sortColumn === 'status-budget' && (
+                                                    <span className="inline-flex items-center text-blue-600 group-hover:text-blue-700">
+                                                        {sortDirection === 'asc' ? '↑' : '↓'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </th>
                                     )}
                                     {visibleColumns.includes('status-obra') && (
-                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Total Registros' : 'Status Obra'}</th>
+                                        <th
+                                            onClick={() => handleColumnSort('status-obra')}
+                                            className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                {isDiaryContext ? 'Total Registros' : 'Status Obra'}
+                                                {sortColumn === 'status-obra' && (
+                                                    <span className="inline-flex items-center text-blue-600 group-hover:text-blue-700">
+                                                        {sortDirection === 'asc' ? '↑' : '↓'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </th>
                                     )}
                                     {visibleColumns.includes('lock') && (
                                         <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">{COLUMN_LABELS.lock}</th>

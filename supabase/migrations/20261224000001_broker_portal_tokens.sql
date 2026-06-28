@@ -18,11 +18,13 @@ CREATE TABLE IF NOT EXISTS public.broker_portal_tokens (
 ALTER TABLE public.broker_portal_tokens ENABLE ROW LEVEL SECURITY;
 
 -- anon pode SELECT apenas tokens ativos (necessário para validação na rota pública)
+DROP POLICY IF EXISTS "broker_tokens_anon_select" ON public.broker_portal_tokens;
 CREATE POLICY "broker_tokens_anon_select" ON public.broker_portal_tokens
     FOR SELECT TO anon
     USING (is_active = TRUE AND expires_at > NOW());
 
 -- membros da org gerenciam tokens da sua org
+DROP POLICY IF EXISTS "broker_tokens_auth_all" ON public.broker_portal_tokens;
 CREATE POLICY "broker_tokens_auth_all" ON public.broker_portal_tokens
     FOR ALL TO authenticated
     USING (public.is_org_member(org_id))

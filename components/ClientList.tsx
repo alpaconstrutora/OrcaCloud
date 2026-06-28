@@ -38,6 +38,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const [viewMode, setViewMode] = React.useState<'list' | 'grid'>('list');
     const [categoryFilter, setCategoryFilter] = React.useState<string>('all');
     const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
+    const tableColumns = useTableColumns(CLIENT_COLUMNS, 'clientListColumns');
 
     React.useEffect(() => {
         loadData();

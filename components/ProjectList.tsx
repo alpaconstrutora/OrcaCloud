@@ -100,8 +100,21 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [activeTab, setActiveTab] = React.useState<'budgets' | 'templates'>(
         classificationFilter === 'OBRA' ? 'templates' : 'budgets'
     );
-    const [visibleColumns, setVisibleColumns] = React.useState<ColumnKey[]>(DEFAULT_COLUMNS);
-    const [showColumnConfig, setShowColumnConfig] = React.useState(false);
+    const tableColumns = useTableColumns(
+        DEFAULT_COLUMNS.map(col => ({ key: col, label: COLUMN_LABELS[col], sortable: true })),
+        'projectListColumns'
+    );
+    const {
+        visibleColumns,
+        sortColumn,
+        sortDirection,
+        showColumnConfig,
+        setShowColumnConfig,
+        handleColumnSort,
+        toggleColumn,
+        resetColumns,
+    } = tableColumns;
+
     const isObraContext = classificationFilter === 'OBRA' || (!classificationFilter && activeTab === 'templates');
     const isPlanejamentoContext = classificationFilter === 'PLANEJAMENTO';
     const isDiarioContext = classificationFilter === 'DIARIO' || isDiaryView;
@@ -561,13 +574,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 <input
                                                     type="checkbox"
                                                     checked={visibleColumns.includes(col)}
-                                                    onChange={(e) => {
-                                                        if (e.target.checked) {
-                                                            setVisibleColumns([...visibleColumns, col]);
-                                                        } else {
-                                                            setVisibleColumns(visibleColumns.filter(c => c !== col));
-                                                        }
-                                                    }}
+                                                    onChange={() => toggleColumn(col)}
                                                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                                 />
                                                 <span className="text-sm text-gray-700">{COLUMN_LABELS[col]}</span>
@@ -575,10 +582,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         ))}
                                     </div>
                                     <button
-                                        onClick={() => {
-                                            setVisibleColumns(DEFAULT_COLUMNS);
-                                            setShowColumnConfig(false);
-                                        }}
+                                        onClick={() => resetColumns()}
                                         className="mt-3 w-full text-xs font-bold text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
                                     >
                                         Restaurar Padrão

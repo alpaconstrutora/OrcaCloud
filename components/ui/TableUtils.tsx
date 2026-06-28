@@ -7,13 +7,35 @@ export type ColumnConfig = {
   sortable?: boolean;
 };
 
-export const useTableColumns = (defaultColumns: ColumnConfig[]) => {
-  const [visibleColumns, setVisibleColumns] = React.useState<string[]>(
-    defaultColumns.map(col => col.key)
-  );
+export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: string = 'tableColumns') => {
+  const defaultVisibleColumns = defaultColumns.map(col => col.key);
+
+  // Carregar do localStorage na inicialização
+  const [visibleColumns, setVisibleColumns] = React.useState<string[]>(() => {
+    if (typeof window === 'undefined') return defaultVisibleColumns;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (e) {
+      console.warn(`Failed to load column preferences from localStorage (${storageKey}):`, e);
+    }
+    return defaultVisibleColumns;
+  });
+
   const [sortColumn, setSortColumn] = React.useState<string | null>(null);
   const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('asc');
   const [showColumnConfig, setShowColumnConfig] = React.useState(false);
+
+  // Persistir quando visibleColumns muda
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(visibleColumns));
+    } catch (e) {
+      console.warn(`Failed to save column preferences to localStorage (${storageKey}):`, e);
+    }
+  }, [visibleColumns, storageKey]);
 
   const handleColumnSort = (colKey: string) => {
     if (sortColumn === colKey) {
@@ -33,7 +55,7 @@ export const useTableColumns = (defaultColumns: ColumnConfig[]) => {
   };
 
   const resetColumns = () => {
-    setVisibleColumns(defaultColumns.map(col => col.key));
+    setVisibleColumns(defaultVisibleColumns);
     setSortColumn(null);
     setSortDirection('asc');
     setShowColumnConfig(false);

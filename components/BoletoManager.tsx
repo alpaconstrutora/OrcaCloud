@@ -67,7 +67,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [exporting, setExporting] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
-    const tableColumns = useTableColumns(BOLETO_COLUMNS);
+    const tableColumns = useTableColumns(BOLETO_COLUMNS, 'boletoManagerColumns');
 
     // Raw arrays kept alongside maps for the bulk-edit modal dropdowns
     const [supplierList, setSupplierList] = useState<{ id: string; name: string }[]>([]);

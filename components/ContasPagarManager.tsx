@@ -84,7 +84,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const [vencDe, setVencDe] = useState('');
     const [vencAte, setVencAte] = useState('');
     const [showFilters, setShowFilters] = useState(false);
-    const tableColumns = useTableColumns(CONTAS_COLUMNS);
+    const tableColumns = useTableColumns(CONTAS_COLUMNS, 'contasPagarManagerColumns');
 
     const effectiveOrgId = selectedOrgId === 'ALL' ? undefined : selectedOrgId;
 

@@ -117,7 +117,7 @@ export async function uploadNFe(
 // INVOICES
 // ============================================================
 
-const NFE_COLS = 'id, organization_id, raw_document_id, access_key, issuer_name, issuer_cnpj, recipient_name, recipient_cnpj, issue_date, total_value, document_status, payment_status, created_at, project_id, linked_transaction_id, approved_at, approved_by';
+const NFE_COLS = 'id, organization_id, raw_document_id, access_key, issuer_name, issuer_cnpj, recipient_name, recipient_cnpj, issue_date, total_value, document_status, payment_status, created_at, project_id, linked_transaction_id, approved_at, approved_by, purchase_order_id';
 
 export async function listNfeInvoices(organizationId: string): Promise<NfeInvoice[]> {
   const { data, error } = await supabase
@@ -244,10 +244,11 @@ export async function approveAndLink(params: {
   invoiceId: string;
   organizationId: string;
   projectId: string;
-  dueDate: string;   // YYYY-MM-DD
+  dueDate: string;
   userId: string;
+  purchaseOrderId?: string;
 }): Promise<NfeInvoice> {
-  const { invoiceId, organizationId, projectId, dueDate, userId } = params;
+  const { invoiceId, organizationId, projectId, dueDate, userId, purchaseOrderId } = params;
 
   // 1. Buscar a nota para pegar valor e fornecedor
   const { data: invoice, error: fetchErr } = await supabase
@@ -280,7 +281,7 @@ export async function approveAndLink(params: {
 
   if (txErr || !tx) throw new Error(`Erro ao criar título: ${txErr?.message}`);
 
-  // 3. Vincular a nota ao título
+  // 3. Vincular a nota ao título (e ao pedido, se informado)
   const { data: updated, error: updErr } = await supabase
     .from('nfe_invoices')
     .update({
@@ -289,6 +290,7 @@ export async function approveAndLink(params: {
       approved_at:           new Date().toISOString(),
       approved_by:           userId,
       payment_status:        'approved',
+      ...(purchaseOrderId ? { purchase_order_id: purchaseOrderId } : {}),
     })
     .eq('id', invoiceId)
     .select(NFE_COLS)

@@ -50,9 +50,22 @@ function ApproveModal({
   onSuccess: (updated: NfeInvoice) => void;
 }) {
   const [projectId, setProjectId] = useState(invoice.project_id ?? '');
+  const [purchaseOrderId, setPurchaseOrderId] = useState(invoice.purchase_order_id ?? '');
+  const [orders, setOrders] = useState<{ id: string; number: string }[]>([]);
   const [dueDate, setDueDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Busca pedidos ao trocar de projeto
+  useEffect(() => {
+    if (!projectId) { setOrders([]); setPurchaseOrderId(''); return; }
+    supabase
+      .from('purchase_orders')
+      .select('id, number')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setOrders((data ?? []) as { id: string; number: string }[]));
+  }, [projectId]);
 
   async function handleSubmit() {
     if (!projectId) { setError('Selecione uma obra.'); return; }
@@ -67,6 +80,7 @@ function ApproveModal({
         projectId,
         dueDate,
         userId: user?.id ?? '',
+        purchaseOrderId: purchaseOrderId || undefined,
       });
       onSuccess(updated);
     } catch (e: unknown) {
@@ -86,7 +100,7 @@ function ApproveModal({
     >
       <div
         className="f-card"
-        style={{ width: 400, maxWidth: '90vw', margin: 0, padding: 24 }}
+        style={{ width: 420, maxWidth: '90vw', margin: 0, padding: 24 }}
         onClick={e => e.stopPropagation()}
       >
         <div className="f-section-title" style={{ marginBottom: 4 }}>Gerar Título Financeiro</div>
@@ -108,6 +122,24 @@ function ApproveModal({
               <option value="">Selecione...</option>
               {projects.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
+              Vincular Pedido de Compra <span style={{ fontWeight: 400, opacity: 0.6 }}>(opcional — habilita 3-way match)</span>
+            </label>
+            <select
+              value={purchaseOrderId}
+              onChange={e => setPurchaseOrderId(e.target.value)}
+              className="f-input"
+              style={{ width: '100%' }}
+              disabled={!projectId}
+            >
+              <option value="">Sem vínculo com pedido</option>
+              {orders.map(o => (
+                <option key={o.id} value={o.id}>Pedido #{o.number}</option>
               ))}
             </select>
           </div>

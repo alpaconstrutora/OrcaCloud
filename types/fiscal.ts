@@ -122,6 +122,8 @@ export interface NfeInvoice {
   linked_transaction_id: string | null;
   approved_at: string | null;
   approved_by: string | null;
+  // F2 — vínculo pedido (3-way match)
+  purchase_order_id: string | null;
 }
 
 export interface NfeInvoiceItem {

@@ -9,6 +9,7 @@ import { notificationLogService, NotificationLogEntry } from '../services/notifi
 import { supplierService } from '../services/supplierService';
 import { projectService } from '../services/projectService';
 import { invoiceService } from '../services/invoiceService';
+import { ThreeWayMatchPanel } from './ThreeWayMatchPanel';
 import OrderLifeline, { OrderStatus } from './OrderLifeline';
 import OrderChat from './OrderChat';
 import OrderReceiptModal from './OrderReceiptModal';
@@ -856,6 +857,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             </p>
                         </div>
                     </div>
+
+                    {/* 3-Way Match */}
+                    <ThreeWayMatchPanel orderId={order.id} />
 
                     {/* Receipts from purchase_receipts table */}
                     {receipts.length > 0 && (

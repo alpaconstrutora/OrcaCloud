@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Layers, Plus, Trash2, ChevronRight, Settings, FileText,
+  Layers, Plus, Trash2, ChevronRight, Settings, FileText, FileSpreadsheet,
   User, Shield, Activity, ArrowLeft, Building2, CheckCircle2, AlertTriangle, XCircle, HelpCircle,
   Loader2
 } from 'lucide-react'
@@ -23,6 +23,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
   const [elements, setElements] = useState<OpuraStructuralDimensionElement[]>([])
   const [activePavimento, setActivePavimento] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(false)
+  const [exportingExcel, setExportingExcel] = useState<boolean>(false)
 
   // Modais
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false)
@@ -41,6 +42,146 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
 
   // Elemento atualmente em edição no painel de dimensionamento
   const [editingElement, setEditingElement] = useState<OpuraStructuralDimensionElement | null>(null)
+
+  // 0. Exportar quantitativos em planilha consolidada
+  const handleExportConsolidatedExcel = async () => {
+    if (!selectedProject || elements.length === 0) return
+    setExportingExcel(true)
+    try {
+      const ExcelJS = (await import('exceljs')).default
+      const { saveAs } = await import('file-saver')
+
+      const wb = new ExcelJS.Workbook()
+      
+      // ABA 1: RESUMO DO PROJETO E TOTAIS
+      const wsResumo = wb.addWorksheet('Resumo do Projeto')
+      
+      wsResumo.mergeCells('A1:E1')
+      const rTitle = wsResumo.getCell('A1')
+      rTitle.value = `Memorial de Quantitativos Consolidados`
+      rTitle.font = { bold: true, size: 14 }
+      rTitle.alignment = { horizontal: 'left' }
+      
+      wsResumo.addRow([])
+      wsResumo.addRow(['Projeto:', selectedProject.nome])
+      wsResumo.addRow(['Responsável Técnico:', selectedProject.responsavel_tecnico])
+      wsResumo.addRow(['Número ART:', selectedProject.numero_art || 'Pendente'])
+      wsResumo.addRow(['Classe Agressividade:', `CAA ${selectedProject.caa}`])
+      wsResumo.addRow(['Revisão Atual:', `R${String(selectedProject.revisao_atual).padStart(2, '0')}`])
+      wsResumo.addRow([])
+
+      const headerRes = wsResumo.addRow(['Tipo de Elemento', 'Qtd Elementos', 'Volume Concreto (m³)', 'Área de Fôrma (m²)', 'Peso Aço (kg)'])
+      headerRes.eachCell(cell => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }
+        cell.alignment = { horizontal: 'center' }
+      })
+
+      const tipos = ['VIGA', 'PILAR', 'LAJE', 'SAPATA', 'VIGA_BALDRAME']
+      let totalConcreto = 0
+      let totalForma = 0
+      let totalAco = 0
+
+      for (const t of tipos) {
+        const list = elements.filter(el => el.tipo === t)
+        if (list.length === 0) continue
+
+        let conc = 0
+        let forma = 0
+        let aco = 0
+
+        for (const el of list) {
+          if (el.resultado_calculo) {
+            conc += Number(el.resultado_calculo.volumeConcretoM3 ?? 0)
+            forma += Number(el.resultado_calculo.areaFormaM2 ?? 0)
+            aco += Number(el.resultado_calculo.pesoAcoKg ?? 0)
+          }
+        }
+
+        totalConcreto += conc
+        totalForma += forma
+        totalAco += aco
+
+        wsResumo.addRow([
+          t.replace('_', ' '),
+          list.length,
+          conc.toFixed(3),
+          forma.toFixed(2),
+          aco.toFixed(1)
+        ])
+      }
+
+      wsResumo.addRow([])
+      const totalRow = wsResumo.addRow([
+        'TOTAL GERAL',
+        elements.length,
+        totalConcreto.toFixed(3),
+        totalForma.toFixed(2),
+        totalAco.toFixed(1)
+      ])
+      totalRow.font = { bold: true }
+      totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }
+
+      wsResumo.columns = [
+        { width: 22 }, { width: 16 }, { width: 22 }, { width: 22 }, { width: 18 }
+      ]
+
+      // ABA 2: DETALHAMENTO DE TODOS OS ELEMENTOS
+      const wsDetalhes = wb.addWorksheet('Lista de Elementos')
+      
+      wsDetalhes.mergeCells('A1:G1')
+      const dTitle = wsDetalhes.getCell('A1')
+      dTitle.value = `Detalhamento dos Elementos Estruturais`
+      dTitle.font = { bold: true, size: 12 }
+      
+      wsDetalhes.addRow([])
+      
+      const headerDet = wsDetalhes.addRow([
+        'Pavimento', 'Tag', 'Tipo', 'Status NBR', 'Vol. Concreto (m³)', 'Área Fôrma (m²)', 'Peso Aço (kg)'
+      ])
+      headerDet.eachCell(cell => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }
+        cell.alignment = { horizontal: 'center' }
+      })
+
+      const sortedElements = [...elements].sort((a, b) => {
+        const pavComp = a.pavimento.localeCompare(b.pavimento)
+        if (pavComp !== 0) return pavComp
+        return a.tag.localeCompare(b.tag)
+      })
+
+      for (const el of sortedElements) {
+        const conc = el.resultado_calculo ? Number(el.resultado_calculo.volumeConcretoM3 ?? 0) : 0
+        const forma = el.resultado_calculo ? Number(el.resultado_calculo.areaFormaM2 ?? 0) : 0
+        const aco = el.resultado_calculo ? Number(el.resultado_calculo.pesoAcoKg ?? 0) : 0
+
+        wsDetalhes.addRow([
+          el.pavimento,
+          el.tag,
+          el.tipo.replace('_', ' '),
+          el.status_verificacao === 'NAO_CALCULADO' ? 'Sem cálculo' : el.status_verificacao,
+          conc.toFixed(3),
+          forma.toFixed(2),
+          aco.toFixed(1)
+        ])
+      }
+
+      wsDetalhes.columns = [
+        { width: 20 }, { width: 12 }, { width: 18 }, { width: 16 },
+        { width: 20 }, { width: 20 }, { width: 16 }
+      ]
+
+      const buf = await wb.xlsx.writeBuffer()
+      saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+        `consolidado-${selectedProject.nome.replace(/\s+/g, '-')}-R${selectedProject.revisao_atual}.xlsx`)
+    } catch (err) {
+      console.error('Erro ao exportar consolidado para excel:', err)
+      alert('Ocorreu um erro ao gerar a planilha consolidada.')
+    } finally {
+      setExportingExcel(false)
+    }
+  }
 
   // 1. Carrega projetos
   const loadProjects = async () => {
@@ -346,12 +487,23 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
               </div>
             </div>
             
-            <button
-              onClick={() => setIsNewElementModalOpen(true)}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
-            >
-              <Plus className="w-4 h-4" /> Novo Elemento
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportConsolidatedExcel}
+                disabled={exportingExcel || elements.length === 0}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
+              >
+                {exportingExcel ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <FileSpreadsheet className="w-4.5 h-4.5" />}
+                Planilha (.xlsx)
+              </button>
+
+              <button
+                onClick={() => setIsNewElementModalOpen(true)}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
+              >
+                <Plus className="w-4 h-4" /> Novo Elemento
+              </button>
+            </div>
           </div>
 
           {/* Controle e Seletor de Pavimentos */}

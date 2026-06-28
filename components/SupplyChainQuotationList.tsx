@@ -2,6 +2,15 @@ import React from 'react';
 import { Plus, FileText, Calendar, Clock, ChevronRight, Search, Filter, LayoutDashboard, Table2, ArrowRight } from 'lucide-react';
 import { QuotationRequest } from '../types';
 import { quotationService } from '../services/quotationService';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+const COLUMNS: ColumnConfig[] = [
+    { key: 'number', label: 'Número', sortable: true },
+    { key: 'title', label: 'Título / Obra', sortable: true },
+    { key: 'deadline', label: 'Prazo Final', sortable: true },
+    { key: 'status', label: 'Status', sortable: false },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
 
 interface SupplyChainQuotationListProps {
     onCreateNew: () => void;
@@ -14,6 +23,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
     const [loading, setLoading] = React.useState(true);
     const [searchTerm, setSearchTerm] = React.useState('');
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
+    const tableColumns = useTableColumns(COLUMNS, 'supplyChainQuotationColumns');
 
     React.useEffect(() => {
         let cancelled = false;
@@ -58,12 +68,22 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
     };
 
     const filteredRequests = React.useMemo(() => {
-        return requests.filter(req =>
+        const filtered = requests.filter(req =>
             req.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
             req.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (req.projectName && req.projectName.toLowerCase().includes(searchTerm.toLowerCase()))
         );
-    }, [requests, searchTerm]);
+        if (tableColumns.sortColumn) {
+            const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+            return [...filtered].sort((a, b) => {
+                if (tableColumns.sortColumn === 'number') return a.number.localeCompare(b.number) * dir;
+                if (tableColumns.sortColumn === 'title') return a.title.localeCompare(b.title) * dir;
+                if (tableColumns.sortColumn === 'deadline') return a.deadline.localeCompare(b.deadline) * dir;
+                return 0;
+            });
+        }
+        return filtered;
+    }, [requests, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -73,6 +93,16 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie solicitações de preço e mapas comparativos com visão estratégica.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    {viewMode === 'list' && (
+                        <ColumnConfigButton
+                            columns={COLUMNS}
+                            visibleColumns={tableColumns.visibleColumns}
+                            showColumnConfig={tableColumns.showColumnConfig}
+                            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                            onToggleColumn={tableColumns.toggleColumn}
+                            onReset={tableColumns.resetColumns}
+                        />
+                    )}
                     <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm mr-2">
                         <button
                             onClick={() => setViewMode('grid')}
@@ -210,11 +240,21 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-widest border-b border-gray-200">
                                 <tr>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Número</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Título / Obra</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Prazo Final</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Status</th>
-                                    <th className="px-6 py-2 text-right">Ações</th>
+                                    {tableColumns.visibleColumns.includes('number') && (
+                                        <SortableHeader colKey="number" label="Número" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('title') && (
+                                        <SortableHeader colKey="title" label="Título / Obra" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('deadline') && (
+                                        <SortableHeader colKey="deadline" label="Prazo Final" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && (
+                                        <SortableHeader colKey="status" label="Status" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <th className="px-6 py-2 text-right">Ações</th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -224,39 +264,49 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                         className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                         onClick={() => onViewDetails(req.id)}
                                     >
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-mono text-sm font-bold text-gray-700">
-                                            #{req.number}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-medium text-gray-900">{req.title}</span>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{req.projectName}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600">
-                                            <div className="flex items-center gap-2">
-                                                <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                                                {new Date(req.deadline + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            <StatusBadge status={req.status} />
-                                        </td>
-                                        <td className="px-6 py-2.5 text-right flex items-center justify-end gap-2">
-                                            <button
-                                                onClick={() => onViewDetails(req.id)}
-                                                className="text-gray-500 hover:text-gray-700 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-gray-100 rounded-lg transition-all"
-                                            >
-                                                Ver Detalhes
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); onViewComparison(req.id); }}
-                                                className="text-blue-600 hover:text-blue-800 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1"
-                                            >
-                                                <Table2 className="w-3.5 h-3.5" />
-                                                Mapa
-                                            </button>
-                                        </td>
+                                        {tableColumns.visibleColumns.includes('number') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-mono text-sm font-bold text-gray-700">
+                                                #{req.number}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('title') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-medium text-gray-900">{req.title}</span>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{req.projectName}</span>
+                                                </div>
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('deadline') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600">
+                                                <div className="flex items-center gap-2">
+                                                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                                    {new Date(req.deadline + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                </div>
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('status') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <StatusBadge status={req.status} />
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('actions') && (
+                                            <td className="px-6 py-2.5 text-right flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => onViewDetails(req.id)}
+                                                    className="text-gray-500 hover:text-gray-700 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-gray-100 rounded-lg transition-all"
+                                                >
+                                                    Ver Detalhes
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); onViewComparison(req.id); }}
+                                                    className="text-blue-600 hover:text-blue-800 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1"
+                                                >
+                                                    <Table2 className="w-3.5 h-3.5" />
+                                                    Mapa
+                                                </button>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

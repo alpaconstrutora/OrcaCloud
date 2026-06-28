@@ -5,6 +5,15 @@ import {
 } from 'lucide-react';
 import { contractIndexService, ContractIndexValue, IndexName } from '../services/contractIndexService';
 import { contractService } from '../services/contractService';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+const COLUMNS: ColumnConfig[] = [
+    { key: 'reference', label: 'Referência', sortable: true },
+    { key: 'value', label: 'Valor', sortable: true },
+    { key: 'variation', label: 'Variação', sortable: false },
+    { key: 'source', label: 'Fonte', sortable: true },
+    { key: 'actions', label: '', sortable: false },
+];
 
 interface Props {
     organizationId: string;
@@ -40,6 +49,19 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
 
     // reajuste em lote
     const [applyingId, setApplyingId] = useState<string | null>(null);
+
+    const tableColumns = useTableColumns(COLUMNS, 'contractIndexColumns');
+
+    const sortedValues = React.useMemo(() => {
+        if (!tableColumns.sortColumn) return values;
+        return [...values].sort((a, b) => {
+            const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+            if (tableColumns.sortColumn === 'reference') return a.reference_month.localeCompare(b.reference_month) * dir;
+            if (tableColumns.sortColumn === 'value') return (a.value - b.value) * dir;
+            if (tableColumns.sortColumn === 'source') return (a.source ?? '').localeCompare(b.source ?? '') * dir;
+            return 0;
+        });
+    }, [values, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const notify = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ msg, type });
@@ -172,10 +194,20 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
                         {n}
                     </button>
                 ))}
-                <button onClick={loadValues} disabled={loading}
-                    className="ml-auto text-gray-400 hover:text-gray-700 disabled:opacity-50">
-                    <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-                </button>
+                <div className="ml-auto flex items-center gap-2">
+                    <ColumnConfigButton
+                        columns={COLUMNS}
+                        visibleColumns={tableColumns.visibleColumns}
+                        showColumnConfig={tableColumns.showColumnConfig}
+                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                        onToggleColumn={tableColumns.toggleColumn}
+                        onReset={tableColumns.resetColumns}
+                    />
+                    <button onClick={loadValues} disabled={loading}
+                        className="text-gray-400 hover:text-gray-700 disabled:opacity-50">
+                        <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
             </div>
 
             {/* Adicionar valor */}
@@ -216,38 +248,57 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
-                                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Referência</th>
-                                <th className="text-right px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Valor</th>
-                                <th className="text-right px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Variação</th>
-                                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Fonte</th>
-                                <th className="w-8" />
+                                {tableColumns.visibleColumns.includes('reference') && (
+                                    <SortableHeader colKey="reference" label="Referência" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide" />
+                                )}
+                                {tableColumns.visibleColumns.includes('value') && (
+                                    <SortableHeader colKey="value" label="Valor" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-right px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide" />
+                                )}
+                                {tableColumns.visibleColumns.includes('variation') && (
+                                    <SortableHeader colKey="variation" label="Variação" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-right px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide" />
+                                )}
+                                {tableColumns.visibleColumns.includes('source') && (
+                                    <SortableHeader colKey="source" label="Fonte" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide" />
+                                )}
+                                {tableColumns.visibleColumns.includes('actions') && <th className="w-8" />}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
-                            {values.map((v, i) => {
-                                const prev = values[i + 1];
+                            {sortedValues.map((v, i) => {
+                                const originalIndex = values.indexOf(v);
+                                const prev = values[originalIndex + 1];
                                 const varPct = prev ? ((v.value - prev.value) / prev.value) * 100 : null;
                                 return (
                                     <tr key={v.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                        <td className="px-4 py-2.5 font-medium text-gray-900 dark:text-white">{fmtDate(v.reference_month)}</td>
-                                        <td className="px-4 py-2.5 text-right font-mono text-gray-700 dark:text-gray-200">{fmtVal(v.value)}</td>
-                                        <td className="px-4 py-2.5 text-right">
-                                            {varPct !== null ? (
-                                                <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${varPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                                    {varPct >= 0 ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-                                                    {Math.abs(varPct).toFixed(2)}%
-                                                </span>
-                                            ) : '—'}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-400">{v.source ?? '—'}</td>
-                                        <td className="px-3 py-2.5">
-                                            {v.organization_id && (
-                                                <button onClick={() => handleRemove(v.id)}
-                                                    className="text-gray-300 hover:text-red-500 transition-colors">
-                                                    <Trash2 size={13} />
-                                                </button>
-                                            )}
-                                        </td>
+                                        {tableColumns.visibleColumns.includes('reference') && (
+                                            <td className="px-4 py-2.5 font-medium text-gray-900 dark:text-white">{fmtDate(v.reference_month)}</td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('value') && (
+                                            <td className="px-4 py-2.5 text-right font-mono text-gray-700 dark:text-gray-200">{fmtVal(v.value)}</td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('variation') && (
+                                            <td className="px-4 py-2.5 text-right">
+                                                {varPct !== null ? (
+                                                    <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${varPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                        {varPct >= 0 ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                                                        {Math.abs(varPct).toFixed(2)}%
+                                                    </span>
+                                                ) : '—'}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('source') && (
+                                            <td className="px-4 py-2.5 text-xs text-gray-400">{v.source ?? '—'}</td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('actions') && (
+                                            <td className="px-3 py-2.5">
+                                                {v.organization_id && (
+                                                    <button onClick={() => handleRemove(v.id)}
+                                                        className="text-gray-300 hover:text-red-500 transition-colors">
+                                                        <Trash2 size={13} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        )}
                                     </tr>
                                 );
                             })}

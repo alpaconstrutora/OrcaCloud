@@ -2,6 +2,18 @@ import React from 'react';
 import { projectService } from '../services/projectService';
 import { FolderOpen, Calendar, Search, Loader2, Settings, FileSpreadsheet, Edit2, LayoutDashboard, Clock, AlertCircle, CheckCircle2, ChevronRight, Copy, Trash2 } from 'lucide-react';
 import { ProjectSchedule } from '../types';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+const COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Planejamento', sortable: true },
+    { key: 'budgets', label: 'Orçamentos', sortable: false },
+    { key: 'client', label: 'Cliente', sortable: true },
+    { key: 'start', label: 'Início', sortable: true },
+    { key: 'end', label: 'Prazo', sortable: true },
+    { key: 'duration', label: 'Duração', sortable: false },
+    { key: 'status', label: 'Status', sortable: false },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ProjectSummarySettings = any;
@@ -35,6 +47,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
     const [isLoading, setIsLoading] = React.useState(true);
     const [searchTerm, setSearchTerm] = React.useState('');
     const [viewMode, setViewMode] = React.useState<'list' | 'grid'>('list');
+    const tableColumns = useTableColumns(COLUMNS, 'planningListColumns');
 
     const loadProjects = async () => {
         setIsLoading(true);
@@ -79,12 +92,33 @@ const PlanningList: React.FC<PlanningListProps> = ({
         return uniqueBudgets;
     };
 
-    const filteredProjects = projects.filter(p =>
-        p.settings?.classification === 'PLANEJAMENTO' && (
-            p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.settings?.client?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-    ).sort((a, b) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime());
+    const filteredProjects = React.useMemo(() => {
+        const base = projects.filter(p =>
+            p.settings?.classification === 'PLANEJAMENTO' && (
+                p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                p.settings?.client?.toLowerCase().includes(searchTerm.toLowerCase())
+            )
+        );
+        if (tableColumns.sortColumn) {
+            return [...base].sort((a, b) => {
+                const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                if (tableColumns.sortColumn === 'name') return a.name.localeCompare(b.name) * dir;
+                if (tableColumns.sortColumn === 'client') return ((a.settings?.client ?? '').localeCompare(b.settings?.client ?? '')) * dir;
+                if (tableColumns.sortColumn === 'start') {
+                    const sa = a.settings?.startDate ?? a.settings?.schedule?.startDate ?? '';
+                    const sb = b.settings?.startDate ?? b.settings?.schedule?.startDate ?? '';
+                    return sa.localeCompare(sb) * dir;
+                }
+                if (tableColumns.sortColumn === 'end') {
+                    const ea = a.settings?.endDate ?? a.settings?.schedule?.endDate ?? '';
+                    const eb = b.settings?.endDate ?? b.settings?.schedule?.endDate ?? '';
+                    return ea.localeCompare(eb) * dir;
+                }
+                return 0;
+            });
+        }
+        return base.sort((a, b) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime());
+    }, [projects, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const formatDate = (dateString?: string) => {
         if (!dateString) return '-';
@@ -176,19 +210,31 @@ const PlanningList: React.FC<PlanningListProps> = ({
                     />
                 </div>
 
-                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
-                    <button
-                        onClick={() => setViewMode('list')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <LayoutDashboard className="w-5 h-5" />
-                    </button>
-                    <button
-                        onClick={() => setViewMode('grid')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <Calendar className="w-5 h-5" />
-                    </button>
+                <div className="flex items-center gap-2">
+                    {viewMode === 'list' && (
+                        <ColumnConfigButton
+                            columns={COLUMNS}
+                            visibleColumns={tableColumns.visibleColumns}
+                            showColumnConfig={tableColumns.showColumnConfig}
+                            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                            onToggleColumn={tableColumns.toggleColumn}
+                            onReset={tableColumns.resetColumns}
+                        />
+                    )}
+                    <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={`p-2.5 rounded-xl transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <LayoutDashboard className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => setViewMode('grid')}
+                            className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <Calendar className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -208,12 +254,30 @@ const PlanningList: React.FC<PlanningListProps> = ({
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Planejamento</th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Orçamentos</th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Cliente</th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Prazos</th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Status</th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
+                                    {tableColumns.visibleColumns.includes('name') && (
+                                        <SortableHeader colKey="name" label="Planejamento" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('budgets') && (
+                                        <SortableHeader colKey="budgets" label="Orçamentos" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('client') && (
+                                        <SortableHeader colKey="client" label="Cliente" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('start') && (
+                                        <SortableHeader colKey="start" label="Início" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('end') && (
+                                        <SortableHeader colKey="end" label="Prazo" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('duration') && (
+                                        <SortableHeader colKey="duration" label="Duração" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && (
+                                        <SortableHeader colKey="status" label="Status" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -249,91 +313,107 @@ const PlanningList: React.FC<PlanningListProps> = ({
                                             onClick={() => onLoadProject(project.id, 'schedule')}
                                             className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                                         >
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center">
-                                                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 mr-3 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                                        <Calendar className="w-5 h-5" />
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-sm font-bold text-gray-900">{project.name}</div>
-                                                        <div className="text-[10px] text-blue-600 font-bold uppercase tracking-tight">
-                                                            {project.settings?.linkedProjectName || 'Obra não vinculada'}
+                                            {tableColumns.visibleColumns.includes('name') && (
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center">
+                                                        <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 mr-3 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                            <Calendar className="w-5 h-5" />
                                                         </div>
-                                                        <div className="text-[10px] text-gray-400 font-medium uppercase tracking-tight">
-                                                            Modificado em {formatDate(project.updated_at)}
+                                                        <div>
+                                                            <div className="text-sm font-bold text-gray-900">{project.name}</div>
+                                                            <div className="text-[10px] text-blue-600 font-bold uppercase tracking-tight">
+                                                                {project.settings?.linkedProjectName || 'Obra não vinculada'}
+                                                            </div>
+                                                            <div className="text-[10px] text-gray-400 font-medium uppercase tracking-tight">
+                                                                Modificado em {formatDate(project.updated_at)}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {getLinkedBudgets(project.id).length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {getLinkedBudgets(project.id).map(budget => (
-                                                            <span key={budget.id} className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
-                                                                {budget.name}
-                                                            </span>
-                                                        ))}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('budgets') && (
+                                                <td className="px-6 py-4">
+                                                    {getLinkedBudgets(project.id).length > 0 ? (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {getLinkedBudgets(project.id).map(budget => (
+                                                                <span key={budget.id} className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
+                                                                    {budget.name}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400 italic pl-2">-</span>
+                                                    )}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('client') && (
+                                                <td className="px-6 py-4 text-sm text-gray-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">
+                                                    {project.settings?.client || '-'}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('start') && (
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 text-gray-700 rounded-md border border-gray-100 text-xs font-bold">
+                                                        <Clock className="w-3 h-3 text-gray-400" />
+                                                        {formatDate(startDate)}
                                                     </div>
-                                                ) : (
-                                                    <span className="text-xs text-gray-400 italic pl-2">-</span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">
-                                                {project.settings?.client || '-'}
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 text-gray-700 rounded-md border border-gray-100 text-xs font-bold">
-                                                    <Clock className="w-3 h-3 text-gray-400" />
-                                                    {formatDate(startDate)}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 text-gray-700 rounded-md border border-gray-100 text-xs font-bold">
-                                                    <Clock className="w-3 h-3 text-gray-400" />
-                                                    {formatDate(endDate)}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className="text-sm font-bold text-gray-700">
-                                                    {duration || '-'} <span className="text-[10px] text-gray-400 uppercase">Meses</span>
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {getStatusBadge(project)}
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                                    <button
-                                                        onClick={() => onLoadProject(project.id, 'schedule')}
-                                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1.5 group/btn"
-                                                    >
-                                                        <LayoutDashboard className="w-4 h-4" />
-                                                        <span className="text-[10px] font-black uppercase hidden lg:inline">Abrir Gantt</span>
-                                                        <ChevronRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => onDuplicateProject(project.id)}
-                                                        className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                                                        title="Duplicar Planejamento"
-                                                    >
-                                                        <Copy className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => onEditProject(project.id)}
-                                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                                        title="Configurações"
-                                                    >
-                                                        <Settings className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => onDeleteProject(project)}
-                                                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                        title="Excluir Planejamento"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </td>
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('end') && (
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 text-gray-700 rounded-md border border-gray-100 text-xs font-bold">
+                                                        <Clock className="w-3 h-3 text-gray-400" />
+                                                        {formatDate(endDate)}
+                                                    </div>
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('duration') && (
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className="text-sm font-bold text-gray-700">
+                                                        {duration || '-'} <span className="text-[10px] text-gray-400 uppercase">Meses</span>
+                                                    </span>
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('status') && (
+                                                <td className="px-6 py-4">
+                                                    {getStatusBadge(project)}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('actions') && (
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={() => onLoadProject(project.id, 'schedule')}
+                                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1.5 group/btn"
+                                                        >
+                                                            <LayoutDashboard className="w-4 h-4" />
+                                                            <span className="text-[10px] font-black uppercase hidden lg:inline">Abrir Gantt</span>
+                                                            <ChevronRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => onDuplicateProject(project.id)}
+                                                            className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                                            title="Duplicar Planejamento"
+                                                        >
+                                                            <Copy className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => onEditProject(project.id)}
+                                                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                                            title="Configurações"
+                                                        >
+                                                            <Settings className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => onDeleteProject(project)}
+                                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                            title="Excluir Planejamento"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            )}
                                         </tr>
                                     );
                                 })}

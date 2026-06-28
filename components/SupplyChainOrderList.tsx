@@ -1,5 +1,18 @@
 import React from 'react';
 import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, Pencil } from 'lucide-react';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+const COLUMNS: ColumnConfig[] = [
+    { key: 'number', label: 'Número', sortable: true },
+    { key: 'obra', label: 'Obra', sortable: true },
+    { key: 'orcamento', label: 'Orçamento', sortable: false },
+    { key: 'supplier', label: 'Fornecedor', sortable: true },
+    { key: 'status', label: 'Status', sortable: false },
+    { key: 'date', label: 'Data do Pedido', sortable: true },
+    { key: 'value', label: 'Valor Total', sortable: true },
+    { key: 'items', label: 'Itens', sortable: false },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Copy01Icon } from '@hugeicons/core-free-icons';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
@@ -21,6 +34,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const [sortBy, setSortBy] = React.useState<string>('date-desc');
     const [searchTerm, setSearchTerm] = React.useState('');
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
+    const tableColumns = useTableColumns(COLUMNS, 'supplyChainOrderColumns');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
 
@@ -117,22 +131,39 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const filteredOrders = React.useMemo(() => {
         const calculateTotal = (order: any) => order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0;
 
-        return (orders || [])
-            .filter(order =>
-                order.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                order.supplierName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                order.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                order.linkedProjectName?.toLowerCase().includes(searchTerm.toLowerCase())
-            )
-            .sort((a, b) => {
-                if (sortBy === 'date-desc') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
-                if (sortBy === 'date-asc') return new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime();
-                if (sortBy === 'value-desc') return calculateTotal(b) - calculateTotal(a);
-                if (sortBy === 'value-asc') return calculateTotal(a) - calculateTotal(b);
-                if (sortBy === 'name-asc') return (a.supplierName || '').localeCompare(b.supplierName || '');
+        const filtered = (orders || []).filter(order =>
+            order.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.supplierName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.linkedProjectName?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        // TableUtils sort takes priority when set
+        if (tableColumns.sortColumn) {
+            const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+            return [...filtered].sort((a, b) => {
+                if (tableColumns.sortColumn === 'number') return (a.number || '').localeCompare(b.number || '') * dir;
+                if (tableColumns.sortColumn === 'obra') {
+                    const na = a.projectClassification === 'ORCAMENTO' ? (a.linkedProjectName || '') : a.projectName || '';
+                    const nb = b.projectClassification === 'ORCAMENTO' ? (b.linkedProjectName || '') : b.projectName || '';
+                    return na.localeCompare(nb) * dir;
+                }
+                if (tableColumns.sortColumn === 'supplier') return (a.supplierName || '').localeCompare(b.supplierName || '') * dir;
+                if (tableColumns.sortColumn === 'date') return (new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime()) * dir;
+                if (tableColumns.sortColumn === 'value') return (calculateTotal(a) - calculateTotal(b)) * dir;
                 return 0;
             });
-    }, [orders, searchTerm, sortBy]);
+        }
+
+        return filtered.sort((a, b) => {
+            if (sortBy === 'date-desc') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
+            if (sortBy === 'date-asc') return new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime();
+            if (sortBy === 'value-desc') return calculateTotal(b) - calculateTotal(a);
+            if (sortBy === 'value-asc') return calculateTotal(a) - calculateTotal(b);
+            if (sortBy === 'name-asc') return (a.supplierName || '').localeCompare(b.supplierName || '');
+            return 0;
+        });
+    }, [orders, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     return (
         <>
@@ -143,6 +174,16 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie suas cotações e pedidos de materiais com precisão executiva.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    {viewMode === 'list' && (
+                        <ColumnConfigButton
+                            columns={COLUMNS}
+                            visibleColumns={tableColumns.visibleColumns}
+                            showColumnConfig={tableColumns.showColumnConfig}
+                            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                            onToggleColumn={tableColumns.toggleColumn}
+                            onReset={tableColumns.resetColumns}
+                        />
+                    )}
                     <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm mr-2">
                         <button
                             onClick={() => setViewMode('grid')}
@@ -354,15 +395,33 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-widest border-b border-gray-200">
                                 <tr>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Número</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap">Obra</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap">Orçamento</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Fornecedor</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Status</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Data do Pedido</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Valor Total</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Itens</th>
-                                    <th className="px-6 py-2 text-right">Ações</th>
+                                    {tableColumns.visibleColumns.includes('number') && (
+                                        <SortableHeader colKey="number" label="Número" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('obra') && (
+                                        <SortableHeader colKey="obra" label="Obra" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('orcamento') && (
+                                        <SortableHeader colKey="orcamento" label="Orçamento" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('supplier') && (
+                                        <SortableHeader colKey="supplier" label="Fornecedor" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && (
+                                        <SortableHeader colKey="status" label="Status" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('date') && (
+                                        <SortableHeader colKey="date" label="Data do Pedido" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('value') && (
+                                        <SortableHeader colKey="value" label="Valor Total" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('items') && (
+                                        <SortableHeader colKey="items" label="Itens" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <th className="px-6 py-2 text-right">Ações</th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -372,77 +431,95 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                         className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                         onClick={() => onViewDetails(order.id)}
                                     >
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-mono text-sm font-bold text-gray-700">
-                                            {order.number || order.id.slice(0, 8)}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-medium text-gray-700">
-                                            {order.projectClassification === 'ORCAMENTO'
-                                                ? (order.linkedProjectName || '-')
-                                                : order.projectName}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-medium text-blue-600">
-                                            {order.projectClassification === 'ORCAMENTO' ? order.projectName : '-'}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-700">
-                                            {order.supplierName || '-'}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            <StatusBadge status={order.status} />
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600">
-                                            {order.created_at ? new Date(order.created_at).toLocaleDateString('pt-BR') : '-'}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-black text-gray-900">
-                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                                order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600">
-                                            {order.items?.length || 0} itens
-                                        </td>
-                                        <td className="px-6 py-2.5 text-right">
-                                            <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onViewDetails(order.id); }}
-                                                    className="text-blue-600 hover:text-blue-800 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all"
-                                                >
-                                                    Ver Detalhes
-                                                </button>
-                                                <InlineDisclosureMenu
-                                                    menuItems={[
-                                                        {
-                                                            icon: <Pencil className="w-[18px] h-[18px]" />,
-                                                            label: 'Editar Pedido',
-                                                            onClick: () => onEdit?.(order.id),
-                                                        },
-                                                        {
-                                                            icon: <Truck className="w-[18px] h-[18px]" />,
-                                                            label: 'Logística',
-                                                            onClick: () => onViewLogistics(order.id),
-                                                        },
-                                                        {
-                                                            icon: <HugeiconsIcon icon={Copy01Icon} size={18} />,
-                                                            label: 'Duplicar Pedido',
-                                                            onClick: () => handleDuplicate(order.id),
-                                                        },
-                                                    ]}
-                                                    showDelete
-                                                    onDelete={async () => {
-                                                        try {
-                                                            setLoading(true);
-                                                            await orderService.deleteOrder(order.id);
-                                                            await loadOrders();
-                                                        } catch (error: any) {
-                                                            notify(`Erro ao excluir pedido: ${error.message || 'Erro desconhecido'}`, 'error');
-                                                        } finally {
-                                                            setLoading(false);
-                                                        }
-                                                    }}
-                                                    deleteDisabled={!canDeleteOrder(order.status)}
-                                                    deleteDisabledTitle={!canDeleteOrder(order.status) ? `Pedido "${order.status}" não pode ser excluído` : undefined}
-                                                />
-                                            </div>
-                                        </td>
+                                        {tableColumns.visibleColumns.includes('number') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-mono text-sm font-bold text-gray-700">
+                                                {order.number || order.id.slice(0, 8)}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('obra') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-medium text-gray-700">
+                                                {order.projectClassification === 'ORCAMENTO'
+                                                    ? (order.linkedProjectName || '-')
+                                                    : order.projectName}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('orcamento') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-medium text-blue-600">
+                                                {order.projectClassification === 'ORCAMENTO' ? order.projectName : '-'}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('supplier') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-700">
+                                                {order.supplierName || '-'}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('status') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <StatusBadge status={order.status} />
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('date') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600">
+                                                {order.created_at ? new Date(order.created_at).toLocaleDateString('pt-BR') : '-'}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('value') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-black text-gray-900">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                                    order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0
+                                                )}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('items') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600">
+                                                {order.items?.length || 0} itens
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('actions') && (
+                                            <td className="px-6 py-2.5 text-right">
+                                                <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); onViewDetails(order.id); }}
+                                                        className="text-blue-600 hover:text-blue-800 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                                                    >
+                                                        Ver Detalhes
+                                                    </button>
+                                                    <InlineDisclosureMenu
+                                                        menuItems={[
+                                                            {
+                                                                icon: <Pencil className="w-[18px] h-[18px]" />,
+                                                                label: 'Editar Pedido',
+                                                                onClick: () => onEdit?.(order.id),
+                                                            },
+                                                            {
+                                                                icon: <Truck className="w-[18px] h-[18px]" />,
+                                                                label: 'Logística',
+                                                                onClick: () => onViewLogistics(order.id),
+                                                            },
+                                                            {
+                                                                icon: <HugeiconsIcon icon={Copy01Icon} size={18} />,
+                                                                label: 'Duplicar Pedido',
+                                                                onClick: () => handleDuplicate(order.id),
+                                                            },
+                                                        ]}
+                                                        showDelete
+                                                        onDelete={async () => {
+                                                            try {
+                                                                setLoading(true);
+                                                                await orderService.deleteOrder(order.id);
+                                                                await loadOrders();
+                                                            } catch (error: any) {
+                                                                notify(`Erro ao excluir pedido: ${error.message || 'Erro desconhecido'}`, 'error');
+                                                            } finally {
+                                                                setLoading(false);
+                                                            }
+                                                        }}
+                                                        deleteDisabled={!canDeleteOrder(order.status)}
+                                                        deleteDisabledTitle={!canDeleteOrder(order.status) ? `Pedido "${order.status}" não pode ser excluído` : undefined}
+                                                    />
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

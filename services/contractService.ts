@@ -578,11 +578,28 @@ export const contractService = {
             } catch { /* título sem unidade, não bloqueia */ }
         }
 
-        const number = (deal.contract_number && deal.contract_number.trim())
+        // Gera número: usa o do deal se preenchido; senão tenta RPC; senão fallback timestamp
+        let number = (deal.contract_number && deal.contract_number.trim())
             ? deal.contract_number.trim()
-            : await contractService.getNextContractNumber(deal.organization_id, 'OUTGOING');
+            : '';
+        if (!number) {
+            try {
+                number = await contractService.getNextContractNumber(deal.organization_id, 'OUTGOING');
+            } catch {
+                number = `CV-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+            }
+            if (!number || number === '001') {
+                // RPC inexistente retorna '001' — fallback por contagem local
+                const { count } = await supabase
+                    .from('contracts')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('organization_id', deal.organization_id)
+                    .eq('direction', 'OUTGOING');
+                number = `CV-${new Date().getFullYear()}-${String((count || 0) + 1).padStart(3, '0')}`;
+            }
+        }
 
-        // Idempotência secundária: busca por número + org (protege contra deal_id ausente no banco)
+        // Idempotência secundária: contrato com este número já existe?
         const { data: byNumber } = await supabase
             .from('contracts')
             .select('id, organization_id, client_id, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
@@ -590,8 +607,7 @@ export const contractService = {
             .eq('number', number)
             .maybeSingle();
         if (byNumber) {
-            // Aproveita para gravar o deal_id se a coluna já existir
-            await supabase.from('contracts').update({ deal_id: deal.id } as any).eq('id', (byNumber as any).id).then(() => {});
+            await supabase.from('contracts').update({ deal_id: deal.id } as any).eq('id', (byNumber as any).id);
             return byNumber as Contract;
         }
 
@@ -625,7 +641,24 @@ export const contractService = {
             signed_contract_url: deal.signed_contract_url || undefined,
         };
 
-        return await contractService.createContract(payload as Omit<Contract, 'id' | 'created_at' | 'current_value'>);
+        try {
+            return await contractService.createContract(payload as Omit<Contract, 'id' | 'created_at' | 'current_value'>);
+        } catch (err: any) {
+            // Duplicate key (23505): contrato criado por corrida — busca e retorna o existente
+            if (err?.code === '23505') {
+                const { data: race } = await supabase
+                    .from('contracts')
+                    .select('id, organization_id, client_id, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
+                    .eq('organization_id', deal.organization_id)
+                    .eq('number', number)
+                    .maybeSingle();
+                if (race) {
+                    await supabase.from('contracts').update({ deal_id: deal.id } as any).eq('id', (race as any).id);
+                    return race as Contract;
+                }
+            }
+            throw err;
+        }
     },
 
     addMinutaVersion: async (contractId: string, version: { url: string; notes: string; name?: string }): Promise<void> => {

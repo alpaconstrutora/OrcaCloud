@@ -57,6 +57,23 @@ interface ProjectListProps {
     isExternalLoading?: boolean; // sinaliza que o pai ainda está carregando os projetos
 }
 
+type ColumnKey = 'code' | 'name' | 'organization' | 'linked' | 'client' | 'updated' | 'status-budget' | 'status-obra' | 'lock' | 'actions';
+
+const DEFAULT_COLUMNS: ColumnKey[] = ['code', 'name', 'organization', 'linked', 'client', 'updated', 'status-budget', 'status-obra', 'lock', 'actions'];
+
+const COLUMN_LABELS: Record<ColumnKey, string> = {
+    code: 'Código',
+    name: 'Nome',
+    organization: 'Organização',
+    linked: 'Vinculado',
+    client: 'Cliente',
+    updated: 'Atualização',
+    'status-budget': 'Status Orç.',
+    'status-obra': 'Status Obra',
+    lock: 'Bloqueio',
+    actions: 'Ações',
+};
+
 const ProjectList: React.FC<ProjectListProps> = ({
     onLoadProject,
     onEditProject,
@@ -83,6 +100,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [activeTab, setActiveTab] = React.useState<'budgets' | 'templates'>(
         classificationFilter === 'OBRA' ? 'templates' : 'budgets'
     );
+    const [visibleColumns, setVisibleColumns] = React.useState<ColumnKey[]>(DEFAULT_COLUMNS);
+    const [showColumnConfig, setShowColumnConfig] = React.useState(false);
     const isObraContext = classificationFilter === 'OBRA' || (!classificationFilter && activeTab === 'templates');
     const isPlanejamentoContext = classificationFilter === 'PLANEJAMENTO';
     const isDiarioContext = classificationFilter === 'DIARIO' || isDiaryView;
@@ -435,7 +454,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         </select>
                     </div>
                 )}
-                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
+                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5">
                     <button
                         onClick={() => setViewMode('grid')}
                         className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid'
@@ -456,6 +475,50 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     >
                         <Table2 className="w-5 h-5" />
                     </button>
+                    {viewMode === 'list' && (
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowColumnConfig(!showColumnConfig)}
+                                className="p-2.5 rounded-xl transition-all text-gray-400 hover:text-gray-600 relative"
+                                title="Classificar Colunas"
+                            >
+                                <Settings className="w-5 h-5" />
+                            </button>
+                            {showColumnConfig && (
+                                <div className="absolute right-0 top-full mt-2 bg-white rounded-xl border border-gray-200 shadow-lg p-4 z-50 min-w-[250px]">
+                                    <div className="text-xs font-bold text-gray-700 mb-3 uppercase tracking-wider">Colunas Visíveis</div>
+                                    <div className="space-y-2">
+                                        {DEFAULT_COLUMNS.map(col => (
+                                            <label key={col} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded-lg">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={visibleColumns.includes(col)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setVisibleColumns([...visibleColumns, col]);
+                                                        } else {
+                                                            setVisibleColumns(visibleColumns.filter(c => c !== col));
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <span className="text-sm text-gray-700">{COLUMN_LABELS[col]}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setVisibleColumns(DEFAULT_COLUMNS);
+                                            setShowColumnConfig(false);
+                                        }}
+                                        className="mt-3 w-full text-xs font-bold text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
+                                    >
+                                        Restaurar Padrão
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -485,32 +548,42 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
-                                    {(isObraContext || isPlanejamentoContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
-                                        <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-20 text-center">Código</th>
+                                    {visibleColumns.includes('code') && (isObraContext || isPlanejamentoContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
+                                        <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-20 text-center">{COLUMN_LABELS.code}</th>
                                     )}
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                                        {isDiaryContext ? 'Diário' : (isObraContext ? 'Obra' : (isPlanejamentoContext ? 'Planejamento' : 'Orçamento'))}
-                                    </th>
-                                    {isObraContext && organizations.length > 1 && (
-                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Organização</th>
+                                    {visibleColumns.includes('name') && (
+                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                            {isDiaryContext ? 'Diário' : (isObraContext ? 'Obra' : (isPlanejamentoContext ? 'Planejamento' : 'Orçamento'))}
+                                        </th>
                                     )}
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Último Diário' : (isObraContext ? 'Orçamentos Vinculados' : 'Obra Vinculada')}</th>
+                                    {visibleColumns.includes('organization') && isObraContext && organizations.length > 1 && (
+                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{COLUMN_LABELS.organization}</th>
+                                    )}
+                                    {visibleColumns.includes('linked') && (
+                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Último Diário' : (isObraContext ? 'Orçamentos Vinculados' : 'Obra Vinculada')}</th>
+                                    )}
                                     {isDiaryContext && (
                                         <>
                                             <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Obra Vinculada</th>
                                             <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Planejamento Vinculado</th>
                                         </>
                                     )}
-                                    {!isObraContext && !isPlanejamentoContext && (
-                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Cliente</th>
+                                    {visibleColumns.includes('client') && !isObraContext && !isPlanejamentoContext && (
+                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{COLUMN_LABELS.client}</th>
                                     )}
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Clima' : 'Atualização'}</th>
-                                    {(!isObraContext || isDiaryContext) && (
+                                    {visibleColumns.includes('updated') && (
+                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Clima' : 'Atualização'}</th>
+                                    )}
+                                    {visibleColumns.includes('status-budget') && (!isObraContext || isDiaryContext) && (
                                         <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Status Diário' : 'Status Orç.'}</th>
                                     )}
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Total Registros' : 'Status Obra'}</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Bloqueio</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
+                                    {visibleColumns.includes('status-obra') && (
+                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Total Registros' : 'Status Obra'}</th>
+                                    )}
+                                    {visibleColumns.includes('lock') && (
+                                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">{COLUMN_LABELS.lock}</th>
+                                    )}
+                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">{COLUMN_LABELS.actions}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -520,34 +593,36 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
                                         className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                                     >
-                                        {(isObraContext || isPlanejamentoContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
+                                        {visibleColumns.includes('code') && (isObraContext || isPlanejamentoContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
                                             <td className="px-4 py-4 text-center">
                                                 <span className="text-sm font-black font-mono text-blue-700">
                                                     {project.code || project.settings?.code || '—'}
                                                 </span>
                                             </td>
                                         )}
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center">
-                                                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 mr-3 shrink-0">
-                                                    <FolderOpen className="w-5 h-5" />
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-bold text-gray-900">
-                                                        {project.name}
+                                        {visibleColumns.includes('name') && (
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center">
+                                                    <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 mr-3 shrink-0">
+                                                        <FolderOpen className="w-5 h-5" />
                                                     </div>
-                                                    <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
-                                                        <span>CR: {new Date(project.created_at || 0).toLocaleDateString()}</span>
-                                                        {project.settings?.tipoObra && (
-                                                            <span className={`px-1.5 py-0.5 rounded border text-[9px] font-black uppercase tracking-wider ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                                                                {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
-                                                            </span>
-                                                        )}
+                                                    <div>
+                                                        <div className="text-sm font-bold text-gray-900">
+                                                            {project.name}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                                                            <span>CR: {new Date(project.created_at || 0).toLocaleDateString()}</span>
+                                                            {project.settings?.tipoObra && (
+                                                                <span className={`px-1.5 py-0.5 rounded border text-[9px] font-black uppercase tracking-wider ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                                    {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        {isObraContext && organizations.length > 1 && (() => {
+                                            </td>
+                                        )}
+                                        {visibleColumns.includes('organization') && isObraContext && organizations.length > 1 && (() => {
                                             const orgId = project.settings?.organizationId;
                                             const org = organizations.find(o => o.id === orgId);
                                             return (
@@ -562,18 +637,19 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </td>
                                             );
                                         })()}
-                                        <td className="px-6 py-4">
-                                            {isDiaryContext ? (
-                                                <div className="flex flex-col">
-                                                    <div className="text-sm font-bold text-gray-900 truncate max-w-[150px]">
-                                                        {(project.settings?.diaryEntries && project.settings.diaryEntries.length > 0)
-                                                            ? new Date(project.settings.diaryEntries[project.settings.diaryEntries.length - 1].date).toLocaleDateString()
-                                                            : '-'}
+                                        {visibleColumns.includes('linked') && (
+                                            <td className="px-6 py-4">
+                                                {isDiaryContext ? (
+                                                    <div className="flex flex-col">
+                                                        <div className="text-sm font-bold text-gray-900 truncate max-w-[150px]">
+                                                            {(project.settings?.diaryEntries && project.settings.diaryEntries.length > 0)
+                                                                ? new Date(project.settings.diaryEntries[project.settings.diaryEntries.length - 1].date).toLocaleDateString()
+                                                                : '-'}
+                                                        </div>
+                                                        <span className="text-[10px] text-gray-400 font-medium lowercase italic">Visto por último</span>
                                                     </div>
-                                                    <span className="text-[10px] text-gray-400 font-medium lowercase italic">Visto por último</span>
-                                                </div>
-                                            ) : (
-                                                isObraContext ? (() => {
+                                                ) : (
+                                                    isObraContext ? (() => {
                                                     const linked = getLinkedBudgets(project.id);
                                                     const suggested = linked.length === 0 ? getSuggestedBudgetsForObra(project) : [];
                                                     if (linked.length > 0) return (
@@ -626,7 +702,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     return <span className="text-xs text-gray-400 italic pl-2">-</span>;
                                                 })()
                                             )}
-                                        </td>
+                                            </td>
+                                        )}
                                         {isDiaryContext && (
                                             <>
                                                 <td className="px-6 py-4">
@@ -659,7 +736,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </td>
                                             </>
                                         )}
-                                        {!isObraContext && !isPlanejamentoContext && (
+                                        {visibleColumns.includes('client') && !isObraContext && !isPlanejamentoContext && (
                                             <td className="px-6 py-4">
                                                 {project.settings?.obraPropria ? (
                                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight bg-indigo-100 text-indigo-700 border border-indigo-200">
@@ -674,7 +751,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 )}
                                             </td>
                                         )}
-                                        <td className="px-6 py-4">
+                                        {visibleColumns.includes('updated') && (
+                                            <td className="px-6 py-4">
                                             {isDiaryContext ? (
                                                 <div className="flex items-center gap-2">
                                                     {(project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (
@@ -700,8 +778,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     </span>
                                                 </div>
                                             )}
-                                        </td>
-                                        {(!isObraContext || isDiaryContext) && (
+                                            </td>
+                                        )}
+                                        {visibleColumns.includes('status-budget') && (!isObraContext || isDiaryContext) && (
                                             <td className="px-6 py-4">
                                                 {isDiaryContext ? (
                                                     (project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (
@@ -725,8 +804,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 )}
                                             </td>
                                         )}
-                                        <td className="px-6 py-4">
-                                            {isDiaryContext ? (
+                                        {visibleColumns.includes('status-obra') && (
+                                            <td className="px-6 py-4">
+                                                {isDiaryContext ? (
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="text-sm font-bold text-gray-900">{project.settings?.diaryEntries?.length || 0}</span>
                                                     <span className="text-[10px] text-gray-400 font-medium uppercase">Dias</span>
@@ -743,9 +823,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     <span className="text-xs text-gray-400 italic">-</span>
                                                 )
                                             )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex justify-center">
+                                            </td>
+                                        )}
+                                        {visibleColumns.includes('lock') && (
+                                            <td className="px-6 py-4">
+                                                <div className="flex justify-center">
                                                 {getEffectiveOrderCount(project.id) > 0 ? (
                                                     <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-700 rounded-md border border-amber-100" title={`${getEffectiveOrderCount(project.id)} orçamento(s)/pedido(s) vinculados - Exclusão Bloqueada`}>
                                                         <Lock className="w-3.5 h-3.5" />
@@ -757,8 +839,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                         <span className="text-[10px] font-black uppercase tracking-tight">Livre</span>
                                                     </div>
                                                 )}
-                                            </div>
-                                        </td>
+                                                </div>
+                                            </td>
+                                        )}
                                         {!isObraContext && !isPlanejamentoContext && !isDiaryContext && (
                                             <td className="px-6 py-4">
                                                 <button
@@ -810,14 +893,16 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             </td>
                                         )}
                                         <td className="px-6 py-4 text-right">
-                                            <div onClick={(e) => e.stopPropagation()}>
+                                            <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => onEditProject(project.id)}
+                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="Editar Dados"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </button>
                                                 <InlineDisclosureMenu
                                                     menuItems={[
-                                                        {
-                                                            icon: <Pencil className="w-[18px] h-[18px]" />,
-                                                            label: 'Editar Dados',
-                                                            onClick: () => onEditProject(project.id),
-                                                        },
                                                         {
                                                             icon: <HugeiconsIcon icon={FileDownloadIcon} size={18} />,
                                                             label: 'Exportar Excel',
@@ -923,26 +1008,26 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 </div>
 
                                 <div className="p-4 bg-gray-50 rounded-b-[2.5rem] border-t border-gray-100 flex items-center justify-between">
-                                    {!isObraContext && !isPlanejamentoContext && !isDiaryContext && (
-                                        <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'dashboard'); }}
-                                                className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                                                title="Curva ABC"
-                                            >
-                                                <LayoutDashboard className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'analytic'); }}
-                                                className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
-                                                title="Orçamento Analítico"
-                                            >
-                                                <Table2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    )}
-                                    {isPlanejamentoContext && (
-                                        <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1">
+                                        {!isObraContext && !isPlanejamentoContext && !isDiaryContext && (
+                                            <>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'dashboard'); }}
+                                                    className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                                                    title="Curva ABC"
+                                                >
+                                                    <LayoutDashboard className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'analytic'); }}
+                                                    className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
+                                                    title="Orçamento Analítico"
+                                                >
+                                                    <Table2 className="w-4 h-4" />
+                                                </button>
+                                            </>
+                                        )}
+                                        {isPlanejamentoContext && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'planning-view'); }}
                                                 className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
@@ -950,16 +1035,18 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             >
                                                 <Calendar className="w-4 h-4" />
                                             </button>
-                                        </div>
-                                    )}
-                                    <div onClick={(e) => e.stopPropagation()}>
+                                        )}
+                                    </div>
+                                    <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => onEditProject(project.id)}
+                                            className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                                            title="Editar Dados"
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </button>
                                         <InlineDisclosureMenu
                                             menuItems={[
-                                                {
-                                                    icon: <Pencil className="w-[18px] h-[18px]" />,
-                                                    label: 'Editar Dados',
-                                                    onClick: () => onEditProject(project.id),
-                                                },
                                                 {
                                                     icon: <HugeiconsIcon icon={FileDownloadIcon} size={18} />,
                                                     label: 'Exportar Excel',

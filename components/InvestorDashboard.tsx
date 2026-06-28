@@ -36,6 +36,8 @@ interface InvestorDashboardProps {
     isPreview?: boolean;
     /** Token de acesso público. Quando presente, dados são buscados via RPCs anon. */
     portalToken?: string;
+    /** Sobrescreve enabledTabIds derivado de investorProfile.settings (usado pela prévia mobile). */
+    overrideEnabledTabIds?: string[];
 }
 
 type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'comunicados' | 'spe' | 'relatorios';
@@ -66,7 +68,7 @@ const TAB_TITLES: Record<TabId, string> = {
 
 const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     activeTab: initialTab, settings, organizationId, profile, investorProfile, onUpdateSettings,
-    isPreview = false, portalToken,
+    isPreview = false, portalToken, overrideEnabledTabIds,
 }) => {
     // Org canônica: prop activeOrganizationId tem precedência; settings.organizationId
     // só existe quando um projeto está carregado, então sem ele o portal não salvava.
@@ -103,16 +105,17 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
 
     // Tab visibility: estado local inicializado do investorProfile.settings
     const investorSettings = investorProfile?.settings ?? {};
-    const initialTabIds = (investorSettings.investorPortalTabs ?? []).length > 0
-        ? investorSettings.investorPortalTabs!
-        : TABS.map(t => t.id as string);
-    const [enabledTabIds, setEnabledTabIds] = React.useState<string[]>(initialTabIds);
-
-    // Sincroniza quando o investidor selecionado muda (ex: admin troca de investidor)
-    React.useEffect(() => {
+    const deriveTabIds = () => {
+        if (overrideEnabledTabIds) return overrideEnabledTabIds;
         const saved = investorProfile?.settings?.investorPortalTabs;
-        setEnabledTabIds((saved ?? []).length > 0 ? saved! : TABS.map(t => t.id as string));
-    }, [investorProfile?.id]);
+        return (saved ?? []).length > 0 ? saved! : TABS.map(t => t.id as string);
+    };
+    const [enabledTabIds, setEnabledTabIds] = React.useState<string[]>(deriveTabIds);
+
+    // Sincroniza quando overrideEnabledTabIds muda (prévia mobile) ou investidor troca
+    React.useEffect(() => {
+        setEnabledTabIds(deriveTabIds());
+    }, [investorProfile?.id, overrideEnabledTabIds?.join(',')]);
 
     // admin vê todas (para configurar); investidor vê só as habilitadas
     const navTabs = isAdmin ? TABS : TABS.filter(t => enabledTabIds.includes(t.id));
@@ -383,6 +386,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         investorProfile={investorProfile}
                         activeTab={activeTab}
                         isPreview
+                        overrideEnabledTabIds={enabledTabIds}
                     />
                 </MobilePreviewFrame>
             )}

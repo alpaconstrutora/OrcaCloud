@@ -250,7 +250,7 @@ export async function approveAndLink(params: {
 }): Promise<NfeInvoice> {
   const { invoiceId, organizationId, projectId, dueDate, userId, purchaseOrderId } = params;
 
-  // 1. Buscar a nota para pegar valor e fornecedor
+  // 1. Buscar a nota
   const { data: invoice, error: fetchErr } = await supabase
     .from('nfe_invoices')
     .select(NFE_COLS)
@@ -261,31 +261,41 @@ export async function approveAndLink(params: {
   if (invoice.linked_transaction_id) throw new Error('NF-e já possui título financeiro vinculado');
   if (invoice.document_status !== 'completed') throw new Error('NF-e ainda não foi processada com sucesso');
 
-  // 2. Criar o título em internal_transactions
-  const { data: tx, error: txErr } = await supabase
+  // 2. ID único para o par de partidas (D/C)
+  const journalEntryId = crypto.randomUUID();
+  const txBase = {
+    organization_id:  organizationId,
+    project_id:       projectId,
+    source_system:    'NFE',
+    reference_id:     invoiceId,
+    transaction_date: dueDate,
+    amount:           invoice.total_value,
+    status:           'PENDING',
+    journal_entry_id: journalEntryId,
+    description:      `NF-e ${invoice.issuer_name} — ${invoice.access_key.slice(0, 8)}`,
+  };
+
+  // 3. Partida de débito — custo de materiais (PRINCIPAL)
+  const { data: txDebit, error: txDebitErr } = await supabase
     .from('internal_transactions')
-    .insert({
-      organization_id: organizationId,
-      project_id:      projectId,
-      source_system:   'NFE',
-      reference_id:    invoiceId,
-      transaction_date: dueDate,
-      amount:          invoice.total_value,
-      direction:       'DEBIT',
-      description:     `NF-e ${invoice.issuer_name} — ${invoice.access_key.slice(0, 8)}`,
-      category:        'Material',
-      status:          'PENDING',
-    })
+    .insert({ ...txBase, direction: 'DEBIT',  category: 'Material',             entry_type: 'PRINCIPAL' })
     .select('id')
     .single<{ id: string }>();
 
-  if (txErr || !tx) throw new Error(`Erro ao criar título: ${txErr?.message}`);
+  if (txDebitErr || !txDebit) throw new Error(`Erro ao criar partida débito: ${txDebitErr?.message}`);
 
-  // 3. Vincular a nota ao título (e ao pedido, se informado)
+  // 4. Contra-partida de crédito — fornecedores a pagar (CONTRA)
+  const { error: txCreditErr } = await supabase
+    .from('internal_transactions')
+    .insert({ ...txBase, direction: 'CREDIT', category: 'Fornecedores a Pagar', entry_type: 'CONTRA' });
+
+  if (txCreditErr) throw new Error(`Erro ao criar contra-partida crédito: ${txCreditErr.message}`);
+
+  // 5. Vincular NF-e ao débito principal (e ao pedido, se informado)
   const { data: updated, error: updErr } = await supabase
     .from('nfe_invoices')
     .update({
-      linked_transaction_id: tx.id,
+      linked_transaction_id: txDebit.id,
       project_id:            projectId,
       approved_at:           new Date().toISOString(),
       approved_by:           userId,

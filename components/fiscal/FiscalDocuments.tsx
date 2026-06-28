@@ -5,6 +5,7 @@ import type { NfeInvoice, NfeInvoiceWithItems, ProcessingStatus } from '../../ty
 import { supabase } from '../../lib/supabase';
 import { validateNfe, summarizeAlerts } from '../../services/taxValidationService';
 import { TaxValidationPanel } from './TaxValidationPanel';
+import { JournalEntryCard } from './JournalEntryCard';
 
 interface Props {
   organizationId: string;
@@ -350,6 +351,11 @@ function DocumentDetail({
                 {linkedProject && <> · Obra: <strong>{linkedProject.name}</strong></>}
               </div>
             </div>
+          )}
+
+          {/* Lançamento contábil (F4 — partida dobrada) */}
+          {invoice.linked_transaction_id && (
+            <JournalEntryCard invoiceId={invoice.id} />
           )}
 
           <div style={{ marginTop: 16 }}>

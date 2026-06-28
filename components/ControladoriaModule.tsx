@@ -1,5 +1,5 @@
 import React, { Suspense, useState } from 'react'
-import { BarChart3, TrendingUp, BookOpen, Construction, Building2 } from 'lucide-react'
+import { BarChart3, TrendingUp, BookOpen, Construction, Building2, BookMarked } from 'lucide-react'
 import type { Organization } from '../types'
 
 const DREReport                  = React.lazy(() => import('./DREReport'))
@@ -7,6 +7,7 @@ const CashFlowDashboard          = React.lazy(() => import('./CashFlowDashboard'
 const BalanceteReport            = React.lazy(() => import('./BalanceteReport'))
 const WIPReport                  = React.lazy(() => import('./WIPReport'))
 const DRESPEReport               = React.lazy(() => import('./DRESPEReport'))
+const DiarioReport               = React.lazy(() => import('./DiarioReport'))
 
 export type { ControladoriaTab } from '../constants/controladoríaTabs'
 export { VIEW_TO_CONTROLADORIA_TAB } from '../constants/controladoríaTabs'
@@ -26,6 +27,7 @@ const TABS: Array<{ id: ControladoriaTab; label: string; icon: React.ElementType
   { id: 'wip',          label: 'WIP',                 icon: Construction },
   { id: 'balancete',    label: 'Balancete',            icon: BookOpen     },
   { id: 'fluxo',        label: 'Fluxo de Caixa',      icon: TrendingUp   },
+  { id: 'diario',       label: 'Diário Contábil',      icon: BookMarked   },
 ]
 
 const Spinner = () => (
@@ -80,6 +82,9 @@ const ControladoriaModule: React.FC<Props> = ({
           )}
           {activeTab === 'dre_spe' && (
             <DRESPEReport organizationId={orgId} />
+          )}
+          {activeTab === 'diario' && (
+            <DiarioReport organizationId={orgId} />
           )}
         </Suspense>
       </div>

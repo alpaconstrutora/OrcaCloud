@@ -12,6 +12,7 @@ import {
   dimensionarLaje,
   dimensionarSapata,
   dimensionarVigaContinua,
+  dimensionarVigaBaldrame,
   DimensionResult
 } from '../../utils/structuralMath'
 import type {
@@ -88,6 +89,18 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
           caa: project.caa,
           cargaRevestimentoKnm2: Number(cargas.cargaRevestimentoKnm2 ?? 1.0),
           cargaVariavelKnm2: Number(cargas.cargaVariavelKnm2 ?? 1.5)
+        })
+      } else if (element.tipo === 'VIGA_BALDRAME') {
+        calcRes = dimensionarVigaBaldrame({
+          bCm: Number(geometria.bCm ?? 15),
+          hCm: Number(geometria.hCm ?? 40),
+          comprimentoVaoM: Number(geometria.comprimentoVaoM ?? 3.0),
+          fckMpa: Number(geometria.fckMpa ?? 25),
+          caa: project.caa,
+          cargaParedeKnm: Number(cargas.cargaParedeKnm ?? 10.0),
+          bitolaLongitudinalMm: Number(geometria.bitolaLongitudinalMm ?? 10),
+          bitolaEstriboMm: Number(geometria.bitolaEstriboMm ?? 5.0),
+          presencaConcretoMagro: !!geometria.presencaConcretoMagro
         })
       } else {
         // SAPATA
@@ -192,6 +205,28 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
           return
         }
       }
+    } else if (element.tipo === 'VIGA_BALDRAME') {
+      // Varre h de 25 a 70 (passo 5) e b de 12 a 30 (passo 2)
+      for (let h = 25; h <= 70; h += 5) {
+        for (let b = 12; b <= 30; b += 2) {
+          const res = dimensionarVigaBaldrame({
+            bCm: b,
+            hCm: h,
+            comprimentoVaoM: Number(geometria.comprimentoVaoM ?? 3.0),
+            fckMpa: Number(geometria.fckMpa ?? 25),
+            caa: project.caa,
+            cargaParedeKnm: Number(cargas.cargaParedeKnm ?? 10.0),
+            bitolaLongitudinalMm: Number(geometria.bitolaLongitudinalMm ?? 10),
+            bitolaEstriboMm: Number(geometria.bitolaEstriboMm ?? 5.0),
+            presencaConcretoMagro: !!geometria.presencaConcretoMagro
+          })
+          if (res.status === 'OK') {
+            setGeometria(prev => ({ ...prev, bCm: b, hCm: h }))
+            return
+          }
+        }
+      }
+      alert('Não foi encontrada seção viável nos limites convencionais.')
     }
   }
 
@@ -462,6 +497,27 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   )}
                 </div>
               )}
+              {element.tipo === 'VIGA_BALDRAME' && (
+                <div className="col-span-2 space-y-3">
+                  <label className="block text-xs font-black text-slate-500 space-y-1">
+                    Vão do Baldrame (m)
+                    <input
+                      type="number" step="0.1" value={geometria.comprimentoVaoM ?? 3.0}
+                      onChange={e => updateGeometria('comprimentoVaoM', Number(e.target.value))}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer mt-2 select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!geometria.presencaConcretoMagro}
+                      onChange={e => updateGeometria('presencaConcretoMagro', e.target.checked ? 1 : 0)}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                    />
+                    <span className="text-xs font-bold text-slate-600">Presença de lastro de concreto magro (5cm)</span>
+                  </label>
+                </div>
+              )}
               {element.tipo === 'PILAR' && (
                 <label className="block text-xs font-black text-slate-500 space-y-1">
                   Comprimento (m)
@@ -475,7 +531,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
             </div>
 
             {/* Geometria de Vigas e Pilares */}
-            {(element.tipo === 'VIGA' || element.tipo === 'PILAR') && (
+            {(element.tipo === 'VIGA' || element.tipo === 'PILAR' || element.tipo === 'VIGA_BALDRAME') && (
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-xs font-black text-slate-500 space-y-1">
                   Largura b (cm)
@@ -529,7 +585,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
             )}
 
             {/* Bitolas Adotadas */}
-            {(element.tipo === 'VIGA' || element.tipo === 'PILAR') && (
+            {(element.tipo === 'VIGA' || element.tipo === 'PILAR' || element.tipo === 'VIGA_BALDRAME') && (
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-xs font-black text-slate-500 space-y-1">
                   Aço Longitudinal
@@ -546,7 +602,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   </select>
                 </label>
 
-                {element.tipo === 'VIGA' && (
+                {(element.tipo === 'VIGA' || element.tipo === 'VIGA_BALDRAME') && (
                   <label className="block text-xs font-black text-slate-500 space-y-1">
                     Bitola Estribo
                     <select
@@ -645,6 +701,17 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   </label>
                 </div>
               )
+            )}
+
+            {element.tipo === 'VIGA_BALDRAME' && (
+              <label className="block text-xs font-black text-slate-500 space-y-1 col-span-2">
+                Carga de Alvenaria Superior (kN/m)
+                <input
+                  type="number" value={cargas.cargaParedeKnm ?? 10.0}
+                  onChange={e => updateCarga('cargaParedeKnm', Number(e.target.value))}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                />
+              </label>
             )}
 
             {element.tipo === 'PILAR' && (
@@ -817,6 +884,13 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                       )
                     )}
                     {element.tipo === 'PILAR' && `${result.armaduraSugerida.longitudinal.quantidade} barras Ø${result.armaduraSugerida.longitudinal.bitolaMm}`}
+                    {element.tipo === 'VIGA_BALDRAME' && (
+                      <div className="text-[9px] text-left leading-normal font-semibold">
+                        <div>Inf: {result.armaduraSugerida.longitudinal.quantidade}Ø{result.armaduraSugerida.longitudinal.bitolaMm} ({result.armaduraSugerida.longitudinal.areaCalculadaCm2.toFixed(2)} cm²)</div>
+                        <div>Sup (Recalque): {result.armaduraSugerida.longitudinalSuperior.quantidade}Ø{result.armaduraSugerida.longitudinalSuperior.bitolaMm} ({result.armaduraSugerida.longitudinalSuperior.areaCalculadaCm2.toFixed(2)} cm²)</div>
+                        <div>Estribo: c/{result.armaduraSugerida.transversal.espaçamentoCm} cm</div>
+                      </div>
+                    )}
                     {element.tipo === 'LAJE' && `Ø${result.armaduraSugerida.flexao.bitolaMm} c/${result.armaduraSugerida.flexao.espaçamentoCm}`}
                     {element.tipo === 'SAPATA' && `${result.armaduraSugerida.direcaoA.quantidade}Ø${result.armaduraSugerida.direcaoA.bitolaMm} + ${result.armaduraSugerida.direcaoB.quantidade}Ø${result.armaduraSugerida.direcaoB.bitolaMm}`}
                   </div>

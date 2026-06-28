@@ -435,6 +435,7 @@ export const structuralService = {
         }
       } else {
         const long = result.armaduraSugerida?.longitudinal
+        const longSup = result.armaduraSugerida?.longitudinalSuperior
         const trans = result.armaduraSugerida?.transversal
         const vaoM = geometria.comprimentoVaoM ?? 4.0
 
@@ -452,6 +453,20 @@ export const structuralService = {
           })
         }
 
+        if (tipo === 'VIGA_BALDRAME' && longSup && longSup.quantidade > 0) {
+          rebars.push({
+            org_id: orgId,
+            element_id: structuralElementId,
+            bitola_id: findBitolaId(longSup.bitolaMm, 'CA-50'),
+            funcao: 'longitudinal',
+            posicao: 2,
+            quantidade: longSup.quantidade,
+            comprimento_unit_cm: Math.round(vaoM * 100 + 30),
+            formato_dobra: 'reta',
+            dobras: []
+          })
+        }
+
         if (trans && trans.espaçamentoCm > 0) {
           const qtd = Math.ceil((vaoM * 100) / trans.espaçamentoCm) + 1
           const b = geometria.bCm ?? 15
@@ -462,7 +477,7 @@ export const structuralService = {
             element_id: structuralElementId,
             bitola_id: findBitolaId(trans.bitolaMm, trans.bitolaMm <= 5.0 ? 'CA-60' : 'CA-50'),
             funcao: 'estribo',
-            posicao: 2,
+            posicao: tipo === 'VIGA_BALDRAME' ? 3 : 2,
             quantidade: qtd,
             espacamento_cm: trans.espaçamentoCm,
             comprimento_unit_cm: Math.round(compEstribo),

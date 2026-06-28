@@ -920,6 +920,240 @@ export function dimensionarVigaContinua(params: {
   }
 }
 
+/**
+ * Dimensionamento de Viga Baldrame (Viga biapoiada em contato contínuo com o solo)
+ */
+export function dimensionarVigaBaldrame(params: {
+  bCm: number
+  hCm: number
+  comprimentoVaoM: number
+  fckMpa: number
+  caa: 'I' | 'II' | 'III' | 'IV'
+  cargaParedeKnm: number
+  bitolaLongitudinalMm: number
+  bitolaEstriboMm: number
+  presencaConcretoMagro: boolean
+}): DimensionResult {
+  const {
+    bCm, hCm, comprimentoVaoM, fckMpa, caa, cargaParedeKnm,
+    bitolaLongitudinalMm, bitolaEstriboMm, presencaConcretoMagro
+  } = params
+  const diagnosticos: DiagnosticItem[] = []
+
+  // 1. Durabilidade e Cobrimento Nominal Específico (NBR 6118 Art. 7.2.6)
+  const cNomCm = presencaConcretoMagro
+    ? Math.max(3.0, getCobrimentoNominalCm(caa, 'viga'))
+    : 5.0 // vala direta sem lastro exige cobrimento rígido de 5.0 cm (50 mm)
+
+  const fcd = fckMpa / 1.4
+  const fyd = 500 / 1.15
+  const fydKnc2 = fyd / 10
+  const fcdKnc2 = fcd / 10
+
+  const dCm = hCm - cNomCm - (bitolaEstriboMm / 10) - (bitolaLongitudinalMm / 20)
+
+  diagnosticos.push({
+    criterio: 'Cobrimento em fundações',
+    status: 'OK',
+    valorCalculado: `${cNomCm * 10} mm`,
+    valorLimite: presencaConcretoMagro ? '≥ 30 mm (com lastro)' : '≥ 50 mm (sem lastro)',
+    referenciaNormativa: 'Art. 7.2.6',
+    mensagem: presencaConcretoMagro
+      ? `Cobrimento adequado para viga baldrame com lastro de regularização.`
+      : `Cobrimento forçado para 50 mm devido à ausência de lastro de concreto magro.`
+  })
+
+  // 2. Cargas e Análise de Esforços
+  const pesoProprioKnm = (bCm / 100) * (hCm / 100) * 25 // Concreto armado = 25 kN/m³
+  const qKnm = pesoProprioKnm + cargaParedeKnm
+
+  // Esforços críticos na fase de execução (viga suspensa biapoiada)
+  const mkPosKnm = (qKnm * Math.pow(comprimentoVaoM, 2)) / 8
+  const vkMaxKn = (qKnm * comprimentoVaoM) / 2
+
+  const mdKnm = 1.4 * mkPosKnm
+  const vdKn = 1.4 * vkMaxKn
+
+  // 3. Dimensionamento à Flexão Longitudinal (ELU)
+  let rhoMin = 0.0015
+  if (fckMpa > 30) {
+    rhoMin = 0.0015 + (fckMpa - 30) * 0.00008
+  }
+  const asMin = rhoMin * bCm * hCm
+
+  // Flexão Positiva (Inferior)
+  const mdKncm = mdKnm * 100
+  const A_eq = 0.272 * bCm * fcdKnc2
+  const B_eq = -0.68 * bCm * fcdKnc2 * dCm
+  const C_eq = mdKncm
+
+  let asPosFinal = asMin
+  let flexStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  let flexMsg = 'Seção de concreto e armadura inferior adequadas para flexão.'
+
+  const delta = B_eq * B_eq - 4 * A_eq * C_eq
+  if (delta < 0 || dCm <= 0) {
+    flexStatus = 'REPROVADO'
+    flexMsg = 'Seção subdimensionada. Ruptura por esmagamento do concreto. Aumente a seção.'
+    asPosFinal = 0
+  } else {
+    const xCm = (-B_eq - Math.sqrt(delta)) / (2 * A_eq)
+    const betaX = xCm / dCm
+    if (betaX > 0.45) {
+      flexStatus = 'REPROVADO'
+      flexMsg = `Linha neutra (x/d = ${betaX.toFixed(2)}) excede o limite de ductilidade (0.45).`
+      asPosFinal = 0
+    } else {
+      if (betaX > 0.35) {
+        flexStatus = 'ATENCAO'
+        flexMsg = `Linha neutra (x/d = ${betaX.toFixed(2)}) elevada.`
+      }
+      const asPosNec = mdKncm / (fydKnc2 * (dCm - 0.4 * xCm))
+      asPosFinal = Math.max(asPosNec, asMin)
+    }
+  }
+
+  // Armadura superior (negativa) de combate a recalques diferenciais (mínimo 50% da inferior)
+  const asNegFinal = flexStatus === 'REPROVADO' ? 0 : Math.max(0.5 * asPosFinal, asMin)
+
+  diagnosticos.push({
+    criterio: 'Resistência à flexão inferior (ELU)',
+    status: flexStatus,
+    valorCalculado: flexStatus === 'REPROVADO' ? 'Inviável' : `${asPosFinal.toFixed(2)} cm²`,
+    valorLimite: `Mín: ${asMin.toFixed(2)} cm²`,
+    referenciaNormativa: 'Art. 17.2',
+    mensagem: flexMsg
+  })
+
+  diagnosticos.push({
+    criterio: 'Resistência à flexão superior de recalque',
+    status: flexStatus,
+    valorCalculado: flexStatus === 'REPROVADO' ? 'Inviável' : `${asNegFinal.toFixed(2)} cm²`,
+    valorLimite: `Mín: ${asMin.toFixed(2)} cm²`,
+    referenciaNormativa: 'Proteção contra recalques',
+    mensagem: 'Armadura superior de proteção dimensionada para cobrir inversões de momentos e recalques de blocos.'
+  })
+
+  // Barras sugeridas
+  const areaBarra = (Math.PI * Math.pow(bitolaLongitudinalMm / 10, 2)) / 4
+  const numBarrasInferior = flexStatus === 'REPROVADO' ? 0 : Math.max(2, Math.ceil(asPosFinal / areaBarra))
+  const numBarrasSuperior = flexStatus === 'REPROVADO' ? 0 : Math.max(2, Math.ceil(asNegFinal / areaBarra))
+
+  // 4. Dimensionamento ao Cisalhamento (Estribos)
+  const vrd2 = 0.27 * (1 - fckMpa / 250) * fcdKnc2 * bCm * dCm
+  let cisStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  let cisMsg = 'Seção de concreto resistente à compressão diagonal.'
+
+  if (vdKn > vrd2) {
+    cisStatus = 'REPROVADO'
+    cisMsg = 'Esmagamento da biela de compressão. Aumente a largura da viga ou a classe do concreto.'
+  }
+
+  const fctkInf = 0.21 * Math.pow(fckMpa, 2 / 3)
+  const fctd = fctkInf / 1.4
+  const vc0 = 0.6 * (fctd / 10) * bCm * dCm
+
+  const vsw = Math.max(0, vdKn - vc0)
+  const aswOverS = vsw / (fydKnc2 * dCm)
+
+  const fctm = 0.3 * Math.pow(fckMpa, 2 / 3)
+  const rhoSwMin = 0.2 * (fctm / 500)
+  const aswOverSMin = rhoSwMin * bCm
+  const aswOverSFinal = Math.max(aswOverS, aswOverSMin)
+
+  const areaEstribo = 2 * (Math.PI * Math.pow(bitolaEstriboMm / 10, 2)) / 4
+  const espaçamentoEstribo = Math.min(30, Math.floor(areaEstribo / aswOverSFinal))
+  const sMax = vdKn <= 0.67 * vrd2 ? Math.min(30, 0.6 * dCm) : Math.min(20, 0.3 * dCm)
+  const espaçamentoFinal = Math.min(espaçamentoEstribo, sMax)
+
+  diagnosticos.push({
+    criterio: 'Resistência ao cisalhamento (ELU)',
+    status: cisStatus,
+    valorCalculado: cisStatus === 'REPROVADO' ? 'Esmagamento' : `Estribos de c/${espaçamentoFinal} cm`,
+    valorLimite: `Máx: c/${Math.floor(sMax)} cm`,
+    referenciaNormativa: 'Art. 17.4',
+    mensagem: cisMsg
+  })
+
+  // 5. Flechas ELS (Branson)
+  const Ec = 4760 * Math.sqrt(fckMpa)
+  const EcKnc2 = Ec / 10
+  const Ic = (bCm * Math.pow(hCm, 3)) / 12
+  const yt = hCm / 2
+  const mcr = (1.2 * (fctm / 10) * Ic) / yt
+  const ma = mkPosKnm * 100 // kN.cm
+
+  let Ieq = Ic
+  if (ma > mcr) {
+    const maRatio = Math.pow(mcr / ma, 3)
+    Ieq = maRatio * Ic + (1 - maRatio) * (0.3 * Ic)
+  }
+
+  const q_cm = qKnm / 100
+  const L_cm = comprimentoVaoM * 100
+  const flechaImediata = (5 * q_cm * Math.pow(L_cm, 4)) / (384 * EcKnc2 * Ieq)
+  const flechaLonga = flechaImediata * 3.0 // Fluência e longa duração
+  const flechaLim = L_cm / 250
+
+  const statusFlecha = flechaLonga <= flechaLim ? 'OK' : 'REPROVADO'
+
+  diagnosticos.push({
+    criterio: 'Deformação excessiva (ELS)',
+    status: statusFlecha,
+    valorCalculado: `${flechaLonga.toFixed(2)} cm`,
+    valorLimite: `${flechaLim.toFixed(2)} cm (L/250)`,
+    referenciaNormativa: 'Tabela 13.3',
+    mensagem: statusFlecha === 'OK'
+      ? 'Deformação imediata e diferida dentro dos limites.'
+      : 'Flecha excessiva! Aumente a altura da viga baldrame.'
+  })
+
+  // Status Geral do Semáforo
+  let overallStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  if (diagnosticos.some(d => d.status === 'REPROVADO')) {
+    overallStatus = 'REPROVADO'
+  } else if (diagnosticos.some(d => d.status === 'ATENCAO')) {
+    overallStatus = 'ATENCAO'
+  }
+
+  const volumeConcretoM3 = (bCm / 100) * (hCm / 100) * comprimentoVaoM
+  const pesoAcoKg = (asPosFinal + asNegFinal) * 100 * 0.00785 * comprimentoVaoM * 1.15
+
+  return {
+    status: overallStatus,
+    diagnosticos,
+    armaduraSugerida: {
+      longitudinal: {
+        bitolaMm: bitolaLongitudinalMm,
+        quantidade: numBarrasInferior,
+        areaCalculadaCm2: asPosFinal
+      },
+      longitudinalSuperior: {
+        bitolaMm: bitolaLongitudinalMm,
+        quantidade: numBarrasSuperior,
+        areaCalculadaCm2: asNegFinal
+      },
+      transversal: {
+        bitolaMm: bitolaEstriboMm,
+        espaçamentoCm: espaçamentoFinal
+      }
+    },
+    detalhesTecnicos: {
+      cobrimentoNominalCm: cNomCm,
+      alturaUtilCm: dCm,
+      esforcos: {
+        pesoProprioKnm,
+        qTotalKnm: qKnm,
+        mSdKnm: mdKnm,
+        vSdKn: vdKn
+      },
+      volumeConcretoM3,
+      pesoAcoKg,
+      areaFormaM2: (bCm + 2 * hCm) / 100 * comprimentoVaoM
+    }
+  }
+}
+
 // ── Funções de ajuda internas ───────────────────────────────────
 
 function fcdMpaToKnc2(fckMpa: number): number {

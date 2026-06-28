@@ -6,6 +6,7 @@ import {
   dimensionarLaje,
   dimensionarSapata,
   dimensionarVigaContinua,
+  dimensionarVigaBaldrame,
 } from '../utils/structuralMath'
 
 describe('getCobrimentoNominalCm', () => {
@@ -215,4 +216,47 @@ describe('dimensionarVigaContinua', () => {
     expect(result.diagnosticos.some(d => d.criterio.includes('flexão') && d.status === 'REPROVADO')).toBe(true)
   })
 })
+
+describe('dimensionarVigaBaldrame', () => {
+  it('Viga baldrame 15x40 com lastro magro que atende (Vão=3.0m, cargaParede=12kN/m, fck=25MPa)', () => {
+    const result = dimensionarVigaBaldrame({
+      bCm: 15,
+      hCm: 40,
+      comprimentoVaoM: 3.0,
+      fckMpa: 25,
+      caa: 'II',
+      cargaParedeKnm: 12.0,
+      bitolaLongitudinalMm: 10,
+      bitolaEstriboMm: 5.0,
+      presencaConcretoMagro: true,
+    })
+
+    expect(result.status).toBe('OK')
+    expect(result.detalhesTecnicos.cobrimentoNominalCm).toBe(3.0) // CAA II viga = 3.0cm
+    expect(result.armaduraSugerida.longitudinal.quantidade).toBeGreaterThanOrEqual(2)
+    expect(result.armaduraSugerida.longitudinalSuperior.quantidade).toBeGreaterThanOrEqual(2)
+    expect(result.diagnosticos.some(d => d.criterio.includes('Cobrimento') && d.status === 'OK')).toBe(true)
+    expect(result.diagnosticos.some(d => d.criterio.includes('superior') && d.status === 'OK')).toBe(true)
+  })
+
+  it('Viga baldrame 15x40 SEM lastro magro que força cobrimento de 50mm e recalque superior', () => {
+    const result = dimensionarVigaBaldrame({
+      bCm: 15,
+      hCm: 40,
+      comprimentoVaoM: 3.0,
+      fckMpa: 25,
+      caa: 'II',
+      cargaParedeKnm: 12.0,
+      bitolaLongitudinalMm: 10,
+      bitolaEstriboMm: 5.0,
+      presencaConcretoMagro: false, // sem lastro
+    })
+
+    expect(result.status).toBe('OK')
+    expect(result.detalhesTecnicos.cobrimentoNominalCm).toBe(5.0) // NBR 6118 exige 50mm
+    expect(result.armaduraSugerida.longitudinal.quantidade).toBeGreaterThanOrEqual(2)
+    expect(result.armaduraSugerida.longitudinalSuperior.quantidade).toBeGreaterThanOrEqual(2)
+  })
+})
+
 

@@ -2,6 +2,18 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
 @import "tailwindcss";
 
+@theme {
+  --font-size-menu: 14px;
+  --font-size-button: 14px;
+  --font-size-form-label: 13px;
+  --font-size-form-input: 14px;
+  --font-size-table-body: 14px;
+  --font-size-table-header: 14px;
+  --font-size-tooltip: 13px;
+  --font-size-modal-body: 14px;
+  --font-size-card-body: 14px;
+}
+
 /* OrçaCloud SaaS - Global Styles */
 
 @layer base {

@@ -95,7 +95,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
             'Cancelado': 'bg-red-100 text-red-800',
         };
         return (
-            <span className={`px-2 py-1 rounded-full text-[12px] font-medium uppercase tracking-wider ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
+            <span className={`px-2 py-1 rounded-full text-xs font-medium uppercase tracking-wider ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
                 {status}
             </span>
         );
@@ -201,7 +201,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         return (
             <div className="flex flex-col items-center justify-center p-20 space-y-4">
                 <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" />
-                <p className="text-gray-400 font-medium animate-pulse uppercase tracking-widest text-[12px]">Sincronizando Contratos...</p>
+                <p className="text-gray-400 font-medium animate-pulse uppercase tracking-widest text-xs">Sincronizando Contratos...</p>
             </div>
         );
     }
@@ -235,13 +235,13 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         <div className="flex gap-3 justify-end">
                             <button
                                 onClick={() => setConfirmDeleteId(null)}
-                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-medium text-[12px] uppercase tracking-widest hover:bg-gray-200 transition-all"
+                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-medium text-xs uppercase tracking-widest hover:bg-gray-200 transition-all"
                             >
                                 Cancelar
                             </button>
                             <button
                                 onClick={confirmDelete}
-                                className="px-6 py-3 bg-red-600 text-white rounded-xl font-medium text-[12px] uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200"
+                                className="px-6 py-3 bg-red-600 text-white rounded-xl font-medium text-xs uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200"
                             >
                                 Excluir
                             </button>
@@ -291,7 +291,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
 
                     <button
                         onClick={onCreateNew}
-                        className="group flex items-center gap-2 px-6 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 hover:shadow-blue-200 font-medium text-[12px] uppercase tracking-widest active:scale-95 translate-y-0 hover:-translate-y-1"
+                        className="group flex items-center gap-2 px-6 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 hover:shadow-blue-200 font-medium text-xs uppercase tracking-widest active:scale-95 translate-y-0 hover:-translate-y-1"
                     >
                         <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
                         Novo Contrato
@@ -299,7 +299,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     {projectId && (
                         <button
                             onClick={() => setLocalShowAll(!localShowAll)}
-                            className={`flex items-center gap-2 px-6 py-4 rounded-2xl border transition-all font-medium text-[12px] uppercase tracking-widest active:scale-95 ${!localShowAll
+                            className={`flex items-center gap-2 px-6 py-4 rounded-2xl border transition-all font-medium text-xs uppercase tracking-widest active:scale-95 ${!localShowAll
                                 ? 'bg-blue-50 border-blue-200 text-blue-700'
                                 : 'bg-white border-gray-100 text-gray-400 hover:text-gray-600'
                                 } `}
@@ -323,7 +323,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         <div className={`absolute top-0 right-0 w-24 h-24 rounded-full -mr-8 -mt-8 group-hover:scale-150 transition-transform duration-500 ${STAT_BG_CLS[stat.color]}`} />
                         <div className="flex items-start justify-between relative z-10">
                             <div>
-                                <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest mb-1">{stat.label}</p>
+                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">{stat.label}</p>
                                 <h3 className="text-xl font-medium text-gray-900 tracking-tight">{stat.value}</h3>
                             </div>
                             <div className={`p-3 rounded-2xl transition-all duration-300 ${STAT_ICON_CLS[stat.color]}`}>
@@ -350,7 +350,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="px-6 py-4 bg-white border border-gray-100 rounded-2xl text-[12px] font-medium text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-all uppercase tracking-widest"
+                        className="px-6 py-4 bg-white border border-gray-100 rounded-2xl text-xs font-medium text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-all uppercase tracking-widest"
                     >
                         <option value="all">Todos os Status</option>
                         <option value="Rascunho">Rascunho</option>
@@ -373,7 +373,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     <p className="text-gray-400 text-sm mt-2 font-medium max-w-xs mx-auto">Não há contratos registrados para este projeto ainda.</p>
                     <button
                         onClick={onCreateNew}
-                        className="mt-8 px-8 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all font-medium text-[12px] uppercase tracking-widest shadow-lg shadow-blue-200 active:scale-95"
+                        className="mt-8 px-8 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all font-medium text-xs uppercase tracking-widest shadow-lg shadow-blue-200 active:scale-95"
                     >
                         Começar Cadastro
                     </button>
@@ -422,27 +422,27 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                             </div>
 
                             <div className="space-y-1 mb-6">
-                                <p className="text-[12px] font-medium text-blue-500 uppercase tracking-widest">{contract.number}</p>
+                                <p className="text-xs font-medium text-blue-500 uppercase tracking-widest">{contract.number}</p>
                                 <h3 className="text-lg font-medium text-gray-900 tracking-tight leading-tight group-hover:text-blue-600 transition-colors uppercase">{contract.title}</h3>
                             </div>
 
                             <div className="space-y-4 mb-8 flex-1">
                                 <div className="flex items-center gap-3 text-gray-500">
                                     <Building2 className="w-4 h-4 text-gray-400" />
-                                    <span className="text-[12px] font-medium truncate">
+                                    <span className="text-xs font-medium truncate">
                                         {contract.project_id ? (projectMap[contract.project_id] ?? '—') : '—'}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-3 text-gray-500">
                                     <Calendar className="w-4 h-4 text-gray-400" />
-                                    <span className="text-[12px] font-medium">Vigência: {new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} a {contract.end_date ? new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado'}</span>
+                                    <span className="text-xs font-medium">Vigência: {new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} a {contract.end_date ? new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado'}</span>
                                 </div>
                             </div>
 
                             <div className="pt-6 border-t border-gray-50 mt-auto">
                                 <div className="flex justify-between items-end">
                                     <div>
-                                        <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest mb-1">Valor Atualizado</p>
+                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">Valor Atualizado</p>
                                         <p className="text-xl font-medium text-gray-900 tracking-tighter">
                                             R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </p>
@@ -473,7 +473,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         <th
                                             key={col.field}
                                             onClick={() => handleSort(col.field)}
-                                            className={`px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest cursor-pointer select-none hover:text-blue-500 transition-colors ${col.align}`}
+                                            className={`px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest cursor-pointer select-none hover:text-blue-500 transition-colors ${col.align}`}
                                         >
                                             <span className="inline-flex items-center gap-0.5">
                                                 {col.label}
@@ -492,23 +492,23 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         onClick={() => onViewDetails(contract.id)}
                                     >
                                         <td className="px-6 py-5">
-                                            <span className="text-[12px] font-medium text-blue-500 uppercase tracking-widest">{contract.number || '—'}</span>
+                                            <span className="text-xs font-medium text-blue-500 uppercase tracking-widest">{contract.number || '—'}</span>
                                         </td>
                                         <td className="px-6 py-5">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
                                                     <FileText className="w-5 h-5" />
                                                 </div>
-                                                <p className="text-[12px] font-medium text-gray-900 group-hover:text-blue-600 transition-colors uppercase">{contract.title}</p>
+                                                <p className="text-xs font-medium text-gray-900 group-hover:text-blue-600 transition-colors uppercase">{contract.title}</p>
                                             </div>
                                         </td>
                                         <td className="px-6 py-5">
-                                            <span className="text-[12px] font-medium text-gray-700">
+                                            <span className="text-xs font-medium text-gray-700">
                                                 {contract.project_id ? (projectMap[contract.project_id] ?? '—') : '—'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-5">
-                                            <span className="text-[12px] font-medium text-gray-700">
+                                            <span className="text-xs font-medium text-gray-700">
                                                 {direction === 'OUTGOING'
                                                     ? (contract.client_id ? (clientMap[contract.client_id] ?? '—') : '—')
                                                     : (contract.supplier_id ? (supplierMap[contract.supplier_id] ?? '—') : '—')}
@@ -517,13 +517,13 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         <td className="px-6 py-5">
                                             <div className="flex items-center gap-2 text-gray-500">
                                                 <Calendar className="w-3.5 h-3.5" />
-                                                <span className="text-[12px] font-medium">{new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} a {contract.end_date ? new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado'}</span>
+                                                <span className="text-xs font-medium">{new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} a {contract.end_date ? new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado'}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-5">
                                             <StatusBadge status={contract.status} />
                                         </td>
-                                        <td className="px-6 py-5 text-right font-medium text-gray-900 tracking-tighter text-[12px]">
+                                        <td className="px-6 py-5 text-right font-medium text-gray-900 tracking-tighter text-xs">
                                             R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </td>
                                         <td className="px-6 py-5 text-right">

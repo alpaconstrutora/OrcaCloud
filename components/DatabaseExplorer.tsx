@@ -1415,10 +1415,10 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                                         type="text"
                                                                         value={comp.description}
                                                                         onChange={(e) => handleUpdateComposition({ description: e.target.value }, idx)}
-                                                                        className="w-full text-[12px] font-medium text-gray-700 uppercase outline-none bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 leading-tight"
+                                                                        className="w-full text-xs font-medium text-gray-700 uppercase outline-none bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 leading-tight"
                                                                     />
                                                                 ) : (
-                                                                    <span className="leading-tight text-[12px] font-medium text-gray-700 uppercase">{comp.description}</span>
+                                                                    <span className="leading-tight text-xs font-medium text-gray-700 uppercase">{comp.description}</span>
                                                                 )}
                                                             </div>
                                                             <div className="col-span-1 text-center text-gray-400 font-bold text-[10px]">

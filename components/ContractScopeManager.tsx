@@ -381,7 +381,7 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                                                                 ? <CheckSquare className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
                                                                 : <Square className="w-3.5 h-3.5 text-gray-300 flex-shrink-0 group-hover:text-gray-400" />
                                                             }
-                                                            <span className={`text-[12px] font-medium ${checked ? 'text-blue-700 font-semibold' : 'text-gray-600'}`}>
+                                                            <span className={`text-xs font-medium ${checked ? 'text-blue-700 font-semibold' : 'text-gray-600'}`}>
                                                                 {item}
                                                             </span>
                                                         </button>

@@ -47,7 +47,7 @@ const STAT_BG_CLS: Record<string, string> = {
 };
 
 const StatusBadge = ({ status }: { status: ServiceContract['status'] }) => (
-  <span className={`px-2 py-1 rounded-full text-[12px] font-medium uppercase tracking-wider ${STATUS_COLORS[status]}`}>
+  <span className={`px-2 py-1 rounded-full text-xs font-medium uppercase tracking-wider ${STATUS_COLORS[status]}`}>
     {STATUS_LABELS[status]}
   </span>
 );
@@ -124,7 +124,7 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoTo
     return (
       <div className="flex flex-col items-center justify-center p-20 space-y-4">
         <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" />
-        <p className="text-gray-400 font-medium animate-pulse uppercase tracking-widest text-[12px]">Carregando Contratos...</p>
+        <p className="text-gray-400 font-medium animate-pulse uppercase tracking-widest text-xs">Carregando Contratos...</p>
       </div>
     );
   }
@@ -181,7 +181,7 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoTo
             <div className={`absolute top-0 right-0 w-24 h-24 rounded-full -mr-8 -mt-8 group-hover:scale-150 transition-transform duration-500 ${STAT_BG_CLS[stat.color]}`} />
             <div className="flex items-start justify-between relative z-10">
               <div>
-                <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest mb-1">{stat.label}</p>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">{stat.label}</p>
                 <h3 className="text-xl font-medium text-gray-900 tracking-tight">{stat.value}</h3>
               </div>
               <div className={`p-3 rounded-2xl transition-all duration-300 ${STAT_ICON_CLS[stat.color]}`}>
@@ -207,7 +207,7 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoTo
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value as ServiceContract['status'] | 'all')}
-          className="px-6 py-4 bg-white border border-gray-100 rounded-2xl text-[12px] font-medium text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-all uppercase tracking-widest"
+          className="px-6 py-4 bg-white border border-gray-100 rounded-2xl text-xs font-medium text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-all uppercase tracking-widest"
         >
           <option value="all">Todos os Status</option>
           <option value="active">Ativo</option>
@@ -246,18 +246,18 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoTo
               </div>
 
               <div className="space-y-1 mb-6">
-                <p className="text-[12px] font-medium text-blue-500 uppercase tracking-widest">{c.contract_number}</p>
+                <p className="text-xs font-medium text-blue-500 uppercase tracking-widest">{c.contract_number}</p>
                 <h3 className="text-lg font-medium text-gray-900 tracking-tight leading-tight group-hover:text-blue-600 transition-colors uppercase">{c.client_name}</h3>
               </div>
 
               <div className="space-y-4 mb-8 flex-1">
                 <div className="flex items-center gap-3 text-gray-500">
                   <User className="w-4 h-4 text-gray-400" />
-                  <span className="text-[12px] font-medium truncate">{c.client_name}</span>
+                  <span className="text-xs font-medium truncate">{c.client_name}</span>
                 </div>
                 <div className="flex items-center gap-3 text-gray-500">
                   <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-[12px] font-medium">
+                  <span className="text-xs font-medium">
                     {fmtDate(c.start_date)} a {fmtDate(c.end_date)}
                   </span>
                 </div>
@@ -266,7 +266,7 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoTo
               <div className="pt-6 border-t border-gray-50 mt-auto">
                 <div className="flex justify-between items-end">
                   <div>
-                    <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest mb-1">Valor Total</p>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">Valor Total</p>
                     <p className="text-xl font-medium text-gray-900 tracking-tighter">{fmt(c.total_value)}</p>
                   </div>
                   <div className="p-3 bg-gray-50 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-all duration-500">
@@ -293,7 +293,7 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoTo
                     <th
                       key={col.field}
                       onClick={() => handleSort(col.field)}
-                      className={`px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest cursor-pointer select-none hover:text-blue-500 transition-colors ${col.align}`}
+                      className={`px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest cursor-pointer select-none hover:text-blue-500 transition-colors ${col.align}`}
                     >
                       <span className="inline-flex items-center gap-0.5">
                         {col.label}
@@ -312,26 +312,26 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoTo
                     className="hover:bg-blue-50/30 transition-colors cursor-pointer group"
                   >
                     <td className="px-6 py-5">
-                      <span className="text-[12px] font-medium text-blue-500 uppercase tracking-widest">{c.contract_number}</span>
+                      <span className="text-xs font-medium text-blue-500 uppercase tracking-widest">{c.contract_number}</span>
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm shrink-0">
                           <FileText className="w-5 h-5" />
                         </div>
-                        <p className="text-[12px] font-medium text-gray-900 group-hover:text-blue-600 transition-colors uppercase">{c.client_name}</p>
+                        <p className="text-xs font-medium text-gray-900 group-hover:text-blue-600 transition-colors uppercase">{c.client_name}</p>
                       </div>
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-2 text-gray-500">
                         <Calendar className="w-3.5 h-3.5" />
-                        <span className="text-[12px] font-medium">{fmtDate(c.start_date)} a {fmtDate(c.end_date)}</span>
+                        <span className="text-xs font-medium">{fmtDate(c.start_date)} a {fmtDate(c.end_date)}</span>
                       </div>
                     </td>
                     <td className="px-6 py-5">
                       <StatusBadge status={c.status} />
                     </td>
-                    <td className="px-6 py-5 text-right font-medium text-gray-900 tracking-tighter text-[12px]">
+                    <td className="px-6 py-5 text-right font-medium text-gray-900 tracking-tighter text-xs">
                       {fmt(c.total_value)}
                     </td>
                     <td className="px-6 py-5 text-right">

@@ -186,7 +186,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                     const dealCfg = DEAL_STATUS_CONFIG[d.status];
                     if (!dealCfg) return (
                         <div className="mt-1 flex items-center gap-1 bg-gray-100 text-gray-500 px-2 py-0.5 rounded-md w-full justify-center border border-black/5">
-                            <span className="text-[7px] font-black uppercase tracking-wider">{d.status}</span>
+                            <span className="text-[10px] font-black uppercase tracking-wider">{d.status}</span>
                         </div>
                     );
                     const DealIcon = dealCfg.icon;
@@ -395,7 +395,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                                 <div key={realUnit.id || cIndex} className="w-full h-full relative">
                                                                                     {/* Indicação visual da frente rua se a torre NÃO estiver conectada e for a primeira do grid */}
                                                                                     {!connectedTowers && cell.y === 0 && cell.x === 0 && (
-                                                                                        <div className="absolute -top-3 -left-3 rotate-[-15deg] text-[7px] font-black text-blue-400 uppercase tracking-widest bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 z-10 shadow-sm">Rua</div>
+                                                                                        <div className="absolute -top-3 -left-3 rotate-[-15deg] text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 z-10 shadow-sm">Rua</div>
                                                                                     )}
                                                                                     {renderUnit(realUnit)}
                                                                                 </div>

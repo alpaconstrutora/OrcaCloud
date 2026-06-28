@@ -306,7 +306,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                     </div>
                                     <p className="text-[11px] font-bold text-slate-700">{log.description}</p>
                                     <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[7px] font-black text-slate-500 uppercase">
+                                        <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-black text-slate-500 uppercase">
                                             {log.user_email?.substring(0, 1)}
                                         </div>
                                         <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{log.user_email}</span>

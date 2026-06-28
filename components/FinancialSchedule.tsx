@@ -4049,7 +4049,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 <div className="flex items-center justify-between gap-3 px-4 py-3 bg-indigo-50 border border-indigo-200/70 rounded-xl shadow-sm">
                     <div className="flex items-center gap-2.5 min-w-0">
                         <ArrowUpCircle className="w-4 h-4 text-indigo-500 shrink-0" />
-                        <p className="text-[12px] text-indigo-800 font-medium truncate">
+                        <p className="text-xs text-indigo-800 font-medium truncate">
                             {budgetVersionStatus.newVersionId
                                 ? <>Orçamento atualizado para{' '}<span className="font-bold">v{budgetVersionStatus.linkedActive.item}</span>{' '}— planejamento baseado em{' '}<span className="font-bold">v{budgetVersionStatus.pinnedItem ?? '—'}</span>.</>
                                 : <>Orçamento <span className="font-bold">v{budgetVersionStatus.linkedActive.item}</span> foi modificado — planejamento usa snapshot anterior.</>
@@ -4071,7 +4071,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-50 border border-amber-200/70 rounded-xl shadow-sm">
                     <div className="flex items-center gap-2.5 min-w-0">
                         <RefreshCw className="w-4 h-4 text-amber-500 shrink-0" />
-                        <p className="text-[12px] text-amber-800 font-medium truncate">
+                        <p className="text-xs text-amber-800 font-medium truncate">
                             <span className="font-bold">{syncDiff.newItems.length > 0 && syncDiff.changedItems.length > 0
                                 ? `${syncDiff.newItems.length} item(s) novo(s) e ${syncDiff.changedItems.length} com duração alterada`
                                 : syncDiff.newItems.length > 0

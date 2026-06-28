@@ -184,7 +184,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                     </div>
                 </div>
 
-                <div className="text-center text-[12px] font-medium text-gray-500 italic">
+                <div className="text-center text-xs font-medium text-gray-500 italic">
                     R$ {(item.quantity * (item.sinapiItem?.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
 
@@ -206,7 +206,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                     </div>
                 </div>
 
-                <div className="text-center text-[12px] font-bold text-blue-600">
+                <div className="text-center text-xs font-bold text-blue-600">
                     R$ {((item.sinapiItem?.price || 0) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </div>
 

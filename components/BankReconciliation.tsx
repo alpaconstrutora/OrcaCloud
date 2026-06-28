@@ -3644,7 +3644,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
                                                     {tx.status === 'RULE_APPLIED' && (
                                                         <div className="absolute top-0 right-0 w-16 h-16 pointer-events-none overflow-hidden">
-                                                            <div className="absolute top-0 right-0 bg-purple-600 text-[6px] font-black text-white px-8 py-1 rotate-45 translate-x-[35%] translate-y-[20%] uppercase tracking-widest">
+                                                            <div className="absolute top-0 right-0 bg-purple-600 text-[10px] font-black text-white px-8 py-1 rotate-45 translate-x-[35%] translate-y-[20%] uppercase tracking-widest">
                                                                 Regra
                                                             </div>
                                                         </div>

@@ -250,7 +250,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         style={{ width: `${getGanttSidebarTotal()}px` }}
                     >
                         <div
-                            className="shrink-0 truncate px-4 py-2 text-[12px] text-gray-600 border-r border-gray-100 flex items-center gap-1.5"
+                            className="shrink-0 truncate px-4 py-2 text-xs text-gray-600 border-r border-gray-100 flex items-center gap-1.5"
                             title={item.sinapiItem.description}
                             data-gantt-sidebar
                             style={{ paddingLeft: `${(node.level * 20) + 16}px`, width: `${sidebarWidth}px` }}
@@ -264,7 +264,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             {taskInsights?.[item.id]?.hasAlert && (
                                 <div className="shrink-0 flex items-center justify-center text-red-500 cursor-help relative group/insight">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
-                                    <div className="absolute left-1/2 bottom-full mb-1 -translate-x-1/2 hidden group-hover/insight:block w-48 p-2 bg-gray-900 border border-gray-800 text-white text-[12px] font-medium leading-tight rounded shadow-xl z-[100] text-center whitespace-normal">
+                                    <div className="absolute left-1/2 bottom-full mb-1 -translate-x-1/2 hidden group-hover/insight:block w-48 p-2 bg-gray-900 border border-gray-800 text-white text-xs font-medium leading-tight rounded shadow-xl z-[100] text-center whitespace-normal">
                                         {taskInsights[item.id].message}
                                     </div>
                                 </div>
@@ -280,14 +280,14 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             {node.wbsCode || ''}
                         </div>
 
-                        <div data-gantt-col="gId" className={`shrink-0 border-r border-gray-100 flex items-center justify-center text-[12px] font-medium ${itemSchedule?.isCritical ? 'text-red-500 bg-red-50' : 'text-gray-400 bg-gray-50/50'}`} style={getGanttColStyle('gId')}>
+                        <div data-gantt-col="gId" className={`shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium ${itemSchedule?.isCritical ? 'text-red-500 bg-red-50' : 'text-gray-400 bg-gray-50/50'}`} style={getGanttColStyle('gId')}>
                             {node.uid}
                         </div>
 
                         <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-100 flex items-center gap-0.5 px-0.5 relative group/pred" style={getGanttColStyle('gPred')}>
                             <input
                                 type="text"
-                                className="w-full bg-transparent border-none rounded text-center text-[12px] p-0.5 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
+                                className="w-full bg-transparent border-none rounded text-center text-xs p-0.5 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
                                 value={itemSchedule?.predecessors?.[0] ? idToUid[itemSchedule.predecessors[0].id] || '' : ''}
                                 onChange={(e) => handleUpdatePredecessorField(item.id, 'uid', e.target.value)}
                                 placeholder="-"
@@ -297,7 +297,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         <div data-gantt-col="gDur" className="shrink-0 border-r border-gray-100 flex items-center justify-center p-0.5 relative group/gdur" style={getGanttColStyle('gDur')}>
                             {itemSchedule?.autoDuration ? (
                                 <div className="flex items-center gap-0.5">
-                                    <span className="text-[12px] font-medium text-green-600">{node.isMilestone ? '0d' : `${itemSchedule?.duration || 1}d`}</span>
+                                    <span className="text-xs font-medium text-green-600">{node.isMilestone ? '0d' : `${itemSchedule?.duration || 1}d`}</span>
                                     <button
                                         onClick={() => handleUpdateCrewField(item.id, 'autoDuration', false)}
                                         className="text-green-500 hover:text-green-700"
@@ -309,14 +309,14 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             ) : (
                                 <div className="flex items-center gap-0.5">
                                     {node.isMilestone ? (
-                                        <span className="text-[12px] font-medium text-gray-600">0d</span>
+                                        <span className="text-xs font-medium text-gray-600">0d</span>
                                     ) : (
                                         <input
                                             type="number"
                                             min="0"
                                             disabled={isSimulationMode}
                                             title={isSimulationMode ? 'Arraste a barra no Gantt para alterar a duração' : 'Duração em dias'}
-                                            className={`w-14 bg-white border border-gray-200 rounded text-center text-[12px] p-0.5 font-medium text-gray-700 ${isSimulationMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            className={`w-14 bg-white border border-gray-200 rounded text-center text-xs p-0.5 font-medium text-gray-700 ${isSimulationMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             value={itemSchedule?.duration ?? ''}
                                             onChange={(e) => handleUpdateItemSchedule(item.id, 'duration', parseInt(e.target.value, 10) || 0)}
                                         />
@@ -347,7 +347,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                             setCrewPopoverItem(item.id);
                                         }
                                     }}
-                                    className={`absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-[6px] px-1 py-0 rounded-b border border-t-0 border-gray-200 z-20 transition-colors ${crewPopoverItem === item.id ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-500'}`}
+                                    className={`absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-[10px] px-1 py-0 rounded-b border border-t-0 border-gray-200 z-20 transition-colors ${crewPopoverItem === item.id ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-500'}`}
                                 >
                                     ▾
                                 </button>
@@ -358,23 +358,23 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     style={{ position: 'fixed', top: crewPopoverPos.top, left: crewPopoverPos.left, zIndex: 9999 }}
                                     onClick={(e) => e.stopPropagation()}
                                 >
-                                    <div className="text-[12px] font-medium text-gray-700 mb-2 flex items-center justify-between">
+                                    <div className="text-xs font-medium text-gray-700 mb-2 flex items-center justify-between">
                                         <span>⚙ Equipe</span>
                                         <button onClick={() => { setCrewPopoverItem(null); setCrewPopoverPos(null); }} className="text-gray-400 hover:text-gray-600 text-sm leading-none">×</button>
                                     </div>
                                     <div className="space-y-2">
                                         <div className="bg-gray-50 p-1.5 rounded-lg border border-gray-100 mb-2">
-                                            <div className="text-[12px] font-medium text-gray-400 uppercase mb-1 px-1">Modelo de Cálculo</div>
+                                            <div className="text-xs font-medium text-gray-400 uppercase mb-1 px-1">Modelo de Cálculo</div>
                                             <div className="flex gap-1">
                                                 <button
                                                     onClick={() => handleUpdateCrewField(item.id, 'mainWorkerProd', (itemSchedule?.mainWorkerProd || 0) > 0 ? 0 : 10)}
-                                                    className={`flex-1 text-[12px] py-1 rounded border transition-all ${(itemSchedule?.mainWorkerProd || 0) > 0 ? 'bg-blue-600 border-blue-700 text-white shadow-sm' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                                    className={`flex-1 text-xs py-1 rounded border transition-all ${(itemSchedule?.mainWorkerProd || 0) > 0 ? 'bg-blue-600 border-blue-700 text-white shadow-sm' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                                                 >
                                                     Produtividade
                                                 </button>
                                                 <button
                                                     onClick={() => handleUpdateCrewField(item.id, 'mainWorkerProd', 0)}
-                                                    className={`flex-1 text-[12px] py-1 rounded border transition-all ${(itemSchedule?.mainWorkerProd || 0) <= 0 ? 'bg-blue-600 border-blue-700 text-white shadow-sm' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                                    className={`flex-1 text-xs py-1 rounded border transition-all ${(itemSchedule?.mainWorkerProd || 0) <= 0 ? 'bg-blue-600 border-blue-700 text-white shadow-sm' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                                                 >
                                                     HH/unid
                                                 </button>
@@ -382,34 +382,34 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         </div>
 
                                         <div className="flex items-center justify-between">
-                                            <label className="text-[12px] text-gray-500">Oficiais</label>
-                                            <input type="number" min="0" step="1" className="w-16 border border-gray-200 rounded text-center text-[12px] p-0.5" value={itemSchedule?.crewMainWorkers ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'crewMainWorkers', parseInt(e.target.value, 10) || 0)} placeholder="0" />
+                                            <label className="text-xs text-gray-500">Oficiais</label>
+                                            <input type="number" min="0" step="1" className="w-16 border border-gray-200 rounded text-center text-xs p-0.5" value={itemSchedule?.crewMainWorkers ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'crewMainWorkers', parseInt(e.target.value, 10) || 0)} placeholder="0" />
                                         </div>
                                         <div className="flex items-center justify-between">
-                                            <label className="text-[12px] text-gray-500">Serventes</label>
-                                            <input type="number" min="0" step="1" className="w-16 border border-gray-200 rounded text-center text-[12px] p-0.5" value={itemSchedule?.crewHelpers ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'crewHelpers', parseInt(e.target.value, 10) || 0)} placeholder="0" />
+                                            <label className="text-xs text-gray-500">Serventes</label>
+                                            <input type="number" min="0" step="1" className="w-16 border border-gray-200 rounded text-center text-xs p-0.5" value={itemSchedule?.crewHelpers ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'crewHelpers', parseInt(e.target.value, 10) || 0)} placeholder="0" />
                                         </div>
 
                                         {(itemSchedule?.mainWorkerProd || 0) > 0 ? (
                                             <>
                                                 <div className="flex items-center justify-between">
-                                                    <label className="text-[12px] text-blue-600 font-medium">Prod. Oficial</label>
-                                                    <input type="number" min="0.1" step="0.1" className="w-16 border border-blue-200 bg-blue-50/30 rounded text-center text-[12px] p-0.5" value={itemSchedule?.mainWorkerProd ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'mainWorkerProd', parseFloat(e.target.value) || 0)} placeholder="un/dia" />
+                                                    <label className="text-xs text-blue-600 font-medium">Prod. Oficial</label>
+                                                    <input type="number" min="0.1" step="0.1" className="w-16 border border-blue-200 bg-blue-50/30 rounded text-center text-xs p-0.5" value={itemSchedule?.mainWorkerProd ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'mainWorkerProd', parseFloat(e.target.value) || 0)} placeholder="un/dia" />
                                                 </div>
                                                 <div className="flex items-center justify-between">
-                                                    <label className="text-[12px] text-blue-600 font-medium">Prod. Servente</label>
-                                                    <input type="number" min="0" step="0.1" className="w-16 border border-blue-200 bg-blue-50/30 rounded text-center text-[12px] p-0.5" value={itemSchedule?.helperProd ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'helperProd', parseFloat(e.target.value) || 0)} placeholder="un/dia" />
+                                                    <label className="text-xs text-blue-600 font-medium">Prod. Servente</label>
+                                                    <input type="number" min="0" step="0.1" className="w-16 border border-blue-200 bg-blue-50/30 rounded text-center text-xs p-0.5" value={itemSchedule?.helperProd ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'helperProd', parseFloat(e.target.value) || 0)} placeholder="un/dia" />
                                                 </div>
                                             </>
                                         ) : (
                                             <>
                                                 <div className="flex items-center justify-between">
-                                                    <label className="text-[12px] text-gray-500">HH/unid</label>
-                                                    <input type="number" min="0" step="0.1" className="w-16 border border-gray-200 rounded text-center text-[12px] p-0.5" value={itemSchedule?.effortCoefficient ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'effortCoefficient', parseFloat(e.target.value) || 0)} placeholder="0" />
+                                                    <label className="text-xs text-gray-500">HH/unid</label>
+                                                    <input type="number" min="0" step="0.1" className="w-16 border border-gray-200 rounded text-center text-xs p-0.5" value={itemSchedule?.effortCoefficient ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'effortCoefficient', parseFloat(e.target.value) || 0)} placeholder="0" />
                                                 </div>
                                                 <div className="flex items-center justify-between">
-                                                    <label className="text-[12px] text-gray-500">Fator Ajudante</label>
-                                                    <input type="number" min="0" max="1" step="0.1" className="w-16 border border-gray-200 rounded text-center text-[12px] p-0.5" value={itemSchedule?.helperFactor ?? 0.5} onChange={(e) => handleUpdateCrewField(item.id, 'helperFactor', parseFloat(e.target.value) || 0.5)} />
+                                                    <label className="text-xs text-gray-500">Fator Ajudante</label>
+                                                    <input type="number" min="0" max="1" step="0.1" className="w-16 border border-gray-200 rounded text-center text-xs p-0.5" value={itemSchedule?.helperFactor ?? 0.5} onChange={(e) => handleUpdateCrewField(item.id, 'helperFactor', parseFloat(e.target.value) || 0.5)} />
                                                 </div>
                                             </>
                                         )}
@@ -423,7 +423,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                         if (laborSum > 0) handleUpdateCrewField(item.id, 'effortCoefficient', laborSum);
                                                     }
                                                 }}
-                                                className="flex-1 text-[12px] py-1 rounded border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-medium uppercase transition-all shadow-sm"
+                                                className="flex-1 text-xs py-1 rounded border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-medium uppercase transition-all shadow-sm"
                                             >
                                                 Resetar SINAPI (HH)
                                             </button>
@@ -432,7 +432,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         <hr className="border-gray-100" />
 
                                         <div className="flex items-center justify-between">
-                                            <label className="text-[12px] text-amber-600 font-medium">Eficiência</label>
+                                            <label className="text-xs text-amber-600 font-medium">Eficiência</label>
                                             <div className="flex items-center gap-2">
                                                 <input
                                                     type="range" min="0.5" max="1.5" step="0.1"
@@ -440,16 +440,16 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                     value={itemSchedule?.efficiencyFactor ?? 1.0}
                                                     onChange={(e) => handleUpdateCrewField(item.id, 'efficiencyFactor', parseFloat(e.target.value) || 1.0)}
                                                 />
-                                                <span className="text-[12px] font-medium text-amber-700 w-6">{(itemSchedule?.efficiencyFactor ?? 1.0).toFixed(1)}</span>
+                                                <span className="text-xs font-medium text-amber-700 w-6">{(itemSchedule?.efficiencyFactor ?? 1.0).toFixed(1)}</span>
                                             </div>
                                         </div>
 
                                         <div className="flex items-center justify-between">
-                                            <label className="text-[12px] text-gray-500">Horas/dia</label>
-                                            <input type="number" min="1" max="24" step="1" className="w-16 border border-gray-200 rounded text-center text-[12px] p-0.5" value={itemSchedule?.hoursPerDay ?? 8} onChange={(e) => handleUpdateCrewField(item.id, 'hoursPerDay', parseFloat(e.target.value) || 8)} />
+                                            <label className="text-xs text-gray-500">Horas/dia</label>
+                                            <input type="number" min="1" max="24" step="1" className="w-16 border border-gray-200 rounded text-center text-xs p-0.5" value={itemSchedule?.hoursPerDay ?? 8} onChange={(e) => handleUpdateCrewField(item.id, 'hoursPerDay', parseFloat(e.target.value) || 8)} />
                                         </div>
 
-                                        <div className="mt-2 pt-2 border-t border-gray-100 text-[12px] text-gray-500 bg-gray-50/50 p-1.5 rounded-lg">
+                                        <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-500 bg-gray-50/50 p-1.5 rounded-lg">
                                             <div className="flex justify-between mb-0.5">
                                                 <span>Capacidade/dia:</span>
                                                 <span className="font-medium text-gray-700">
@@ -469,7 +469,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                     })()} un
                                                 </span>
                                             </div>
-                                            <div className="flex justify-between text-[12px]">
+                                            <div className="flex justify-between text-xs">
                                                 <span className="font-medium">Duração Final:</span>
                                                 <span className="font-medium text-blue-600">{itemSchedule?.duration} dias</span>
                                             </div>
@@ -480,41 +480,41 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             )}
                         </div>
 
-                        <div data-gantt-col="gStart" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-[12px] font-medium text-gray-500" style={getGanttColStyle('gStart')}>
+                        <div data-gantt-col="gStart" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gStart')}>
                             {itemSchedule?.startDate ? fmtLocalDate(itemSchedule.startDate) : '-'}
                         </div>
 
-                        <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-[12px] font-medium text-gray-500" style={getGanttColStyle('gEnd')}>
+                        <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gEnd')}>
                             {itemSchedule?.endDate ? fmtLocalDate(itemSchedule.endDate) : '-'}
                         </div>
 
-                        <div data-gantt-col="gEsEf" className="shrink-0 border-r border-gray-100 flex flex-col items-center justify-center bg-blue-50/20 text-[12px] font-medium text-blue-600 leading-tight" style={getGanttColStyle('gEsEf')}>
+                        <div data-gantt-col="gEsEf" className="shrink-0 border-r border-gray-100 flex flex-col items-center justify-center bg-blue-50/20 text-xs font-medium text-blue-600 leading-tight" style={getGanttColStyle('gEsEf')}>
                             <span>{itemSchedule?.earlyStart ? fmtLocalDate(itemSchedule.earlyStart, { day: '2-digit', month: '2-digit' }) : '-'}</span>
                             <span>{itemSchedule?.earlyFinish ? fmtLocalDate(itemSchedule.earlyFinish, { day: '2-digit', month: '2-digit' }) : '-'}</span>
                         </div>
 
-                        <div data-gantt-col="gLsLf" className="shrink-0 border-r border-gray-100 flex flex-col items-center justify-center bg-orange-50/20 text-[12px] font-medium text-orange-600 leading-tight" style={getGanttColStyle('gLsLf')}>
+                        <div data-gantt-col="gLsLf" className="shrink-0 border-r border-gray-100 flex flex-col items-center justify-center bg-orange-50/20 text-xs font-medium text-orange-600 leading-tight" style={getGanttColStyle('gLsLf')}>
                             <span>{formatDateDisplay(itemSchedule?.lateStart)?.split('/')?.slice(0, 2)?.join('/') || '-'}</span>
                             <span>{formatDateDisplay(itemSchedule?.lateFinish)?.split('/')?.slice(0, 2)?.join('/') || '-'}</span>
                         </div>
 
-                        <div data-gantt-col="gFloat" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-[12px] font-medium text-indigo-600 bg-gray-50/30" style={getGanttColStyle('gFloat')}>
+                        <div data-gantt-col="gFloat" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-indigo-600 bg-gray-50/30" style={getGanttColStyle('gFloat')}>
                             {itemSchedule?.totalFloat !== undefined ? `${itemSchedule.totalFloat}d` : '-'}
                         </div>
 
-                        <div data-gantt-col="gBudgeted" className="shrink-0 border-r border-gray-100 flex items-center justify-end px-2 text-[12px] font-medium text-gray-400" style={getGanttColStyle('gBudgeted')}>
+                        <div data-gantt-col="gBudgeted" className="shrink-0 border-r border-gray-100 flex items-center justify-end px-2 text-xs font-medium text-gray-400" style={getGanttColStyle('gBudgeted')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedTotal)}
                         </div>
 
-                        <div data-gantt-col="gPlanned" className="shrink-0 flex items-center justify-end px-2 text-[12px] font-medium text-blue-600 border-r border-gray-100" style={getGanttColStyle('gPlanned')}>
+                        <div data-gantt-col="gPlanned" className="shrink-0 flex items-center justify-end px-2 text-xs font-medium text-blue-600 border-r border-gray-100" style={getGanttColStyle('gPlanned')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.plannedTotal)}
                         </div>
 
-                        <div data-gantt-col="gRealized" className="shrink-0 flex items-center justify-end px-2 text-[12px] font-medium text-emerald-500 border-r border-gray-100" style={getGanttColStyle('gRealized')}>
+                        <div data-gantt-col="gRealized" className="shrink-0 flex items-center justify-end px-2 text-xs font-medium text-emerald-500 border-r border-gray-100" style={getGanttColStyle('gRealized')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.realizedTotal || 0)}
                         </div>
 
-                        <div data-gantt-col="gVariation" className={`shrink-0 flex items-center justify-end px-2 text-[12px] font-medium border-r border-gray-100 ${(node.variation ?? 0) > 0 ? 'text-red-500' : (node.variation ?? 0) < 0 ? 'text-emerald-500' : 'text-gray-400'}`} style={getGanttColStyle('gVariation')}>
+                        <div data-gantt-col="gVariation" className={`shrink-0 flex items-center justify-end px-2 text-xs font-medium border-r border-gray-100 ${(node.variation ?? 0) > 0 ? 'text-red-500' : (node.variation ?? 0) < 0 ? 'text-emerald-500' : 'text-gray-400'}`} style={getGanttColStyle('gVariation')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.variation || 0)}
                         </div>
 
@@ -522,9 +522,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             <div className="flex -space-x-2 overflow-hidden py-1">
                                 {(() => {
                                     const allocations = itemSchedule?.allocations || [];
-                                    if (allocations.length === 0) return <span className="text-[12px] text-gray-300 italic">Nenhum</span>;
+                                    if (allocations.length === 0) return <span className="text-xs text-gray-300 italic">Nenhum</span>;
                                     return allocations.map((alloc: ResourceAllocation, idx: number) => (
-                                        <div key={idx} className="w-7 h-7 rounded-full bg-white border border-gray-200 flex items-center justify-center text-[12px] font-medium text-indigo-600 shadow-sm ring-2 ring-white" title={(alloc as any).roleName || (alloc as any).workerName || (alloc as any).teamName}>
+                                        <div key={idx} className="w-7 h-7 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs font-medium text-indigo-600 shadow-sm ring-2 ring-white" title={(alloc as any).roleName || (alloc as any).workerName || (alloc as any).teamName}>
                                             {((alloc as any).roleName || (alloc as any).workerName || (alloc as any).teamName || '?').substring(0, 1).toUpperCase()}
                                         </div>
                                     ));
@@ -533,12 +533,12 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         </div>
 
                         <div data-gantt-col="gRealPct" className="shrink-0 flex items-center justify-center" style={getGanttColStyle('gRealPct')}>
-                            <div className="flex items-center text-[12px] text-blue-600 font-medium">
+                            <div className="flex items-center text-xs text-blue-600 font-medium">
                                 <input
                                     type="number"
                                     min="0"
                                     max="100"
-                                    className={`w-9 bg-transparent border-none p-0 text-[12px] font-medium text-right focus:ring-0 ${itemSchedule?.manualRealPct !== undefined ? 'text-orange-500' : 'text-blue-600'}`}
+                                    className={`w-9 bg-transparent border-none p-0 text-xs font-medium text-right focus:ring-0 ${itemSchedule?.manualRealPct !== undefined ? 'text-orange-500' : 'text-blue-600'}`}
                                     value={itemSchedule?.manualRealPct !== undefined ? itemSchedule.manualRealPct : (node.total > 0 ? (node.realizedTotal / node.total * 100) : 0).toFixed(0)}
                                     onChange={(e) => handleUpdateRealPct(item.id, e.target.value)}
                                 />
@@ -578,11 +578,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                             className={`w-3.5 h-3.5 rotate-45 border border-white shadow-md ${itemSchedule.isCritical ? 'bg-red-600 ring-2 ring-red-100' : ''}`}
                                             style={!itemSchedule.isCritical ? { backgroundColor: baseColor } : {}}
                                         />
-                                        <div className="opacity-0 hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[12px] px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none">
+                                        <div className="opacity-0 hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none">
                                             Marco: {fmtLocalDate(itemSchedule.startDate)} {itemSchedule.isCritical ? '(CRÍTICO)' : ''}
                                         </div>
                                         {/* External Label for Milestones */}
-                                        <div className="absolute left-[calc(100%+8px)] whitespace-nowrap text-[12px] font-medium text-gray-500 pointer-events-none">
+                                        <div className="absolute left-[calc(100%+8px)] whitespace-nowrap text-xs font-medium text-gray-500 pointer-events-none">
                                             {node.name}
                                         </div>
                                     </div>
@@ -640,7 +640,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         {/* Progress Text overlay */}
                                         {width > 40 && (
                                             <div
-                                                className="absolute inset-y-0 left-0 flex items-center justify-end pr-2 text-[12px] font-medium text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] pointer-events-none z-10"
+                                                className="absolute inset-y-0 left-0 flex items-center justify-end pr-2 text-xs font-medium text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] pointer-events-none z-10"
                                                 style={{ width: `${Math.min(100, progress)}%` }}
                                             >
                                                 {progress > 8 ? `${progress.toFixed(0)}%` : ''}
@@ -658,7 +658,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                             </div>
                                         )}
 
-                                        <div className="opacity-0 group-hover/bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[12px] px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none">
+                                        <div className="opacity-0 group-hover/bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none">
                                             {fmtLocalDate(itemSchedule.startDate)} - {itemSchedule.endDate ? fmtLocalDate(itemSchedule.endDate) : ''} ({itemSchedule.duration}d)
                                             {itemSchedule.totalFloat ? ` | Folga: ${itemSchedule.totalFloat}d` : ''}
                                         </div>
@@ -707,7 +707,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             {taskInsights?.[node.id]?.hasAlert && (
                                 <div className="shrink-0 flex items-center justify-center text-red-500 cursor-help relative group/insight ml-auto mr-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
-                                    <div className="absolute left-1/2 bottom-full mb-1 -translate-x-1/2 hidden group-hover/insight:block w-48 p-2 bg-gray-900 border border-gray-800 text-white text-[12px] font-medium leading-tight rounded shadow-xl z-[100] text-center whitespace-normal">
+                                    <div className="absolute left-1/2 bottom-full mb-1 -translate-x-1/2 hidden group-hover/insight:block w-48 p-2 bg-gray-900 border border-gray-800 text-white text-xs font-medium leading-tight rounded shadow-xl z-[100] text-center whitespace-normal">
                                         {taskInsights[node.id].message}
                                     </div>
                                 </div>
@@ -719,14 +719,14 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             )}
                         </div>
                         <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-medium text-gray-500" style={getGanttColStyle('gWbs')}>{node.wbsCode || ''}</div>
-                        <div data-gantt-col="gId" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gId')}>{node.uid}</div>
+                        <div data-gantt-col="gId" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gId')}>{node.uid}</div>
                         <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-200 flex items-center px-0.5" style={getGanttColStyle('gPred')}>
                             {(() => {
                                 const ns = schedule.itemSchedules?.find(s => s.id === node.id);
                                 return (
                                     <input
                                         type="text"
-                                        className="w-full bg-transparent border-none rounded text-center text-[12px] p-0.5 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
+                                        className="w-full bg-transparent border-none rounded text-center text-xs p-0.5 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
                                         value={ns?.predecessors?.map(p => idToUid[p.id] || '').filter(Boolean).join(', ') || ''}
                                         onChange={(e) => handleUpdatePredecessorField(node.id, 'uid', e.target.value)}
                                         onClick={(e) => e.stopPropagation()}
@@ -740,7 +740,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             {(() => {
                                 if (schedule.autoRollupParentDates) {
                                     return node.earlyStart
-                                        ? <span className="text-[12px] font-medium text-gray-600">{fmtLocalDate(node.earlyStart)}</span>
+                                        ? <span className="text-xs font-medium text-gray-600">{fmtLocalDate(node.earlyStart)}</span>
                                         : null;
                                 }
                                 // INÍCIO do pai = rollup (mín. dos filhos), igual ao FIM (máx. dos filhos).
@@ -753,12 +753,12 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         type="date"
                                         value={effectiveDate}
                                         onChange={(e) => handleUpdateItemSchedule(node.id, 'startDate', e.target.value)}
-                                        className="w-full bg-transparent border-none text-center text-[12px] font-medium text-gray-600 outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 rounded px-1"
+                                        className="w-full bg-transparent border-none text-center text-xs font-medium text-gray-600 outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 rounded px-1"
                                     />
                                 );
                             })()}
                         </div>
-                        <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-500" style={getGanttColStyle('gEnd')}>
+                        <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gEnd')}>
                             {(() => {
                                 // FIM do nó-pai é sempre derivado (read-only): mostra o rollup (máx dos filhos),
                                 // nunca um endDate antigo armazenado que poderia ficar "preso".
@@ -766,31 +766,31 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 return effectiveDate ? fmtLocalDate(effectiveDate) : '';
                             })()}
                         </div>
-                        <div data-gantt-col="gEsEf" className="shrink-0 border-r border-gray-200 flex flex-col items-center justify-center text-[12px] font-medium text-blue-600 leading-tight" style={getGanttColStyle('gEsEf')}>
+                        <div data-gantt-col="gEsEf" className="shrink-0 border-r border-gray-200 flex flex-col items-center justify-center text-xs font-medium text-blue-600 leading-tight" style={getGanttColStyle('gEsEf')}>
                             {node.earlyStart ? <span>{fmtLocalDate(node.earlyStart, { day: '2-digit', month: '2-digit' })}</span> : null}
                             {node.earlyFinish ? <span>{fmtLocalDate(node.earlyFinish, { day: '2-digit', month: '2-digit' })}</span> : null}
                         </div>
                         <div data-gantt-col="gLsLf" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gLsLf')}></div>
                         <div data-gantt-col="gFloat" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gFloat')}></div>
-                        <div data-gantt-col="gBudgeted" className="shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-gray-500" style={getGanttColStyle('gBudgeted')}>
+                        <div data-gantt-col="gBudgeted" className="shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-gray-500" style={getGanttColStyle('gBudgeted')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedTotal)}
                         </div>
-                        <div data-gantt-col="gPlanned" className="shrink-0 flex items-center justify-end px-2 text-[12px] font-medium text-blue-700 border-r border-gray-100" style={getGanttColStyle('gPlanned')}>
+                        <div data-gantt-col="gPlanned" className="shrink-0 flex items-center justify-end px-2 text-xs font-medium text-blue-700 border-r border-gray-100" style={getGanttColStyle('gPlanned')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.plannedTotal)}
                         </div>
-                        <div data-gantt-col="gRealized" className="shrink-0 flex items-center justify-end px-2 text-[12px] font-medium text-emerald-600 border-r border-gray-100" style={getGanttColStyle('gRealized')}>
+                        <div data-gantt-col="gRealized" className="shrink-0 flex items-center justify-end px-2 text-xs font-medium text-emerald-600 border-r border-gray-100" style={getGanttColStyle('gRealized')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.realizedTotal || 0)}
                         </div>
-                        <div data-gantt-col="gVariation" className={`shrink-0 flex items-center justify-end px-2 text-[12px] font-medium border-r border-gray-100 ${(node.variation ?? 0) > 0 ? 'text-red-500' : (node.variation ?? 0) < 0 ? 'text-emerald-500' : 'text-gray-400'}`} style={getGanttColStyle('gVariation')}>
+                        <div data-gantt-col="gVariation" className={`shrink-0 flex items-center justify-end px-2 text-xs font-medium border-r border-gray-100 ${(node.variation ?? 0) > 0 ? 'text-red-500' : (node.variation ?? 0) < 0 ? 'text-emerald-500' : 'text-gray-400'}`} style={getGanttColStyle('gVariation')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.variation || 0)}
                         </div>
                         <div data-gantt-col="gResources" className="shrink-0 flex items-center px-2 border-r border-gray-200 overflow-hidden" style={getGanttColStyle('gResources')}>
                             <div className="flex -space-x-1.5 overflow-hidden py-1">
                                 {(() => {
                                     const allocations = node.schedule?.allocations || [];
-                                    if (allocations.length === 0) return <span className="text-[12px] text-gray-300 italic">Nenhum</span>;
+                                    if (allocations.length === 0) return <span className="text-xs text-gray-300 italic">Nenhum</span>;
                                     return allocations.map((alloc: ResourceAllocation, idx: number) => (
-                                        <div key={idx} className="w-7 h-7 rounded-full bg-white border border-gray-200 flex items-center justify-center text-[12px] font-medium text-indigo-600 shadow-sm ring-1 ring-white" title={(alloc as any).roleName || (alloc as any).workerName || (alloc as any).teamName}>
+                                        <div key={idx} className="w-7 h-7 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs font-medium text-indigo-600 shadow-sm ring-1 ring-white" title={(alloc as any).roleName || (alloc as any).workerName || (alloc as any).teamName}>
                                             {((alloc as any).roleName || (alloc as any).workerName || (alloc as any).teamName || '?').substring(0, 1).toUpperCase()}
                                         </div>
                                     ));
@@ -798,7 +798,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             </div>
                         </div>
                         <div data-gantt-col="gRealPct" className="shrink-0 flex items-center justify-center" style={getGanttColStyle('gRealPct')}>
-                            <div className="text-[12px] text-blue-600 font-medium">
+                            <div className="text-xs text-blue-600 font-medium">
                                 {(node.total > 0 ? (node.realizedTotal / node.total * 100) : 0).toFixed(0)}%
                             </div>
                         </div>
@@ -845,7 +845,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         {/* Progress Text overlay */}
                                         {width > 30 && (
                                             <div
-                                                className="absolute inset-y-0 left-0 flex items-center justify-end pr-1.5 text-[12px] font-medium text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] pointer-events-none z-10"
+                                                className="absolute inset-y-0 left-0 flex items-center justify-end pr-1.5 text-xs font-medium text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] pointer-events-none z-10"
                                                 style={{ width: `${Math.min(100, progress)}%` }}
                                             >
                                                 {progress > 5 ? `${progress.toFixed(0)}%` : ''}
@@ -864,7 +864,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         <div className="w-[10px] h-[10px] -rotate-45 translate-y-[8px] translate-x-1/2 shadow-sm border border-black/10" style={{ backgroundColor: baseColor }} />
                                     </div>
 
-                                    <div className="opacity-0 group-hover/summary-bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[12px] px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none font-medium">
+                                    <div className="opacity-0 group-hover/summary-bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none font-medium">
                                         {node.name}: {fmtLocalDate(node.earlyStart)} - {fmtLocalDate(node.earlyFinish)} ({durationDays.toFixed(0)}d)
                                     </div>
                                 </div>
@@ -943,7 +943,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             className="shrink-0 flex sticky left-0 z-60 bg-gray-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)] border-r border-gray-200"
                             style={{ width: `${getGanttSidebarTotal()}px` }}
                         >
-                            <div className="relative shrink-0 px-4 py-3 text-[12px] font-medium text-gray-400 uppercase tracking-widest border-r border-gray-200 bg-gray-50/80 backdrop-blur-sm flex items-center justify-between group/h-task" data-gantt-sidebar style={{ width: `${sidebarWidth}px` }}>
+                            <div className="relative shrink-0 px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-widest border-r border-gray-200 bg-gray-50/80 backdrop-blur-sm flex items-center justify-between group/h-task" data-gantt-sidebar style={{ width: `${sidebarWidth}px` }}>
                                 {/* Sidebar resize handle */}
                                 <div
                                     className="absolute right-0 top-0 bottom-0 w-[5px] cursor-col-resize z-30 group/sresize hover:bg-blue-400/40 active:bg-blue-500/60 transition-colors"
@@ -1005,7 +1005,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                                         </svg>
                                                                     )}
                                                                 </div>
-                                                                <span className={`text-[12px] font-medium ${isVisible ? 'text-gray-700' : 'text-gray-400'}`}>
+                                                                <span className={`text-xs font-medium ${isVisible ? 'text-gray-700' : 'text-gray-400'}`}>
                                                                     {COL_LABELS[key]}
                                                                 </span>
                                                                 {!isVisible && <EyeOff className="w-3 h-3 text-gray-300 ml-auto" />}
@@ -1020,7 +1020,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 <div className="relative" ref={levelsMenuRef}>
                                     <button
                                         onClick={() => setShowLevelsDropdown(!showLevelsDropdown)}
-                                        className={`px-2 py-1 flex items-center gap-1.5 rounded-lg border transition-all text-[12px] font-medium ${showLevelsDropdown ? 'bg-indigo-600 border-indigo-700 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'}`}
+                                        className={`px-2 py-1 flex items-center gap-1.5 rounded-lg border transition-all text-xs font-medium ${showLevelsDropdown ? 'bg-indigo-600 border-indigo-700 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'}`}
                                         title="Filtrar níveis de resumo"
                                     >
                                         <Filter className={`w-3 h-3 ${showLevelsDropdown ? 'fill-white/20' : ''}`} />
@@ -1031,7 +1031,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         <>
                                             <div className="fixed inset-0 z-40" onClick={() => setShowLevelsDropdown(false)} />
                                             <div className="absolute top-full right-0 mt-1 w-40 bg-white border border-gray-100 rounded-xl shadow-2xl z-[70] p-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                <div className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2 pb-2 border-b border-gray-50 mb-1">Resumo Gantt</div>
+                                                <div className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2 pb-2 border-b border-gray-50 mb-1">Resumo Gantt</div>
                                                 {[
                                                     { id: 'group', label: 'Grupos' },
                                                     { id: 'phase', label: 'Etapas' },
@@ -1043,13 +1043,13 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                         onClick={() => onToggleSummaryLevel(level.id)}
                                                         className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors group/item"
                                                     >
-                                                        <span className={`text-[12px] font-medium ${visibleSummaryLevels.has(level.id) ? 'text-indigo-600' : 'text-gray-500'}`}>{level.label}</span>
+                                                        <span className={`text-xs font-medium ${visibleSummaryLevels.has(level.id) ? 'text-indigo-600' : 'text-gray-500'}`}>{level.label}</span>
                                                         {visibleSummaryLevels.has(level.id) && <Check className="w-3 h-3 text-indigo-600" />}
                                                     </button>
                                                 ))}
                                                 {visibleNatures && onToggleNature && (
                                                     <>
-                                                        <div className="text-[12px] font-medium text-gray-400 uppercase tracking-widest px-2 pt-2 pb-2 border-t border-gray-50 mt-1 mb-1">Natureza</div>
+                                                        <div className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2 pt-2 pb-2 border-t border-gray-50 mt-1 mb-1">Natureza</div>
                                                         <div className="max-h-48 overflow-y-auto">
                                                             {Object.entries(TASK_NATURE_META).map(([key, meta]) => (
                                                                 <button
@@ -1059,7 +1059,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                                 >
                                                                     <span className="flex items-center gap-1.5">
                                                                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
-                                                                        <span className={`text-[12px] font-medium ${visibleNatures.has(key) ? 'text-gray-700' : 'text-gray-400'}`}>{meta.label}</span>
+                                                                        <span className={`text-xs font-medium ${visibleNatures.has(key) ? 'text-gray-700' : 'text-gray-400'}`}>{meta.label}</span>
                                                                     </span>
                                                                     {visibleNatures.has(key) && <Check className="w-3 h-3 text-indigo-600" />}
                                                                 </button>
@@ -1068,7 +1068,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                                 onClick={() => onToggleNature('__none__')}
                                                                 className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors"
                                                             >
-                                                                <span className={`text-[12px] font-medium ${visibleNatures.has('__none__') ? 'text-gray-700' : 'text-gray-400'}`}>Sem natureza</span>
+                                                                <span className={`text-xs font-medium ${visibleNatures.has('__none__') ? 'text-gray-700' : 'text-gray-400'}`}>Sem natureza</span>
                                                                 {visibleNatures.has('__none__') && <Check className="w-3 h-3 text-indigo-600" />}
                                                             </button>
                                                         </div>
@@ -1080,21 +1080,21 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 </div>
                             </div>
 
-                            <div data-gantt-col="gWbs" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gWbs')}>ITEM{GanttResizeHandle && <GanttResizeHandle colKey="gWbs" />}</div>
-                            <div data-gantt-col="gId" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gId')}>ID{GanttResizeHandle && <GanttResizeHandle colKey="gId" />}</div>
-                            <div data-gantt-col="gPred" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gPred')}>PRÉD.{GanttResizeHandle && <GanttResizeHandle colKey="gPred" />}</div>
-                            <div data-gantt-col="gDur" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gDur')}>DUR.{GanttResizeHandle && <GanttResizeHandle colKey="gDur" />}</div>
-                            <div data-gantt-col="gStart" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gStart')}>INÍCIO{GanttResizeHandle && <GanttResizeHandle colKey="gStart" />}</div>
-                            <div data-gantt-col="gEnd" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gEnd')}>FIM{GanttResizeHandle && <GanttResizeHandle colKey="gEnd" />}</div>
-                            <div data-gantt-col="gEsEf" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-blue-400 bg-blue-50/30" style={getGanttColStyle('gEsEf')}>P.I/P.T{GanttResizeHandle && <GanttResizeHandle colKey="gEsEf" />}</div>
-                            <div data-gantt-col="gLsLf" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-orange-400 bg-orange-50/30" style={getGanttColStyle('gLsLf')}>M.I/M.T{GanttResizeHandle && <GanttResizeHandle colKey="gLsLf" />}</div>
-                            <div data-gantt-col="gFloat" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-indigo-400" style={getGanttColStyle('gFloat')}>F.L{GanttResizeHandle && <GanttResizeHandle colKey="gFloat" />}</div>
-                            <div data-gantt-col="gBudgeted" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-gray-400" style={getGanttColStyle('gBudgeted')}>ORÇADO{GanttResizeHandle && <GanttResizeHandle colKey="gBudgeted" />}</div>
-                            <div data-gantt-col="gPlanned" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-blue-500" style={getGanttColStyle('gPlanned')}>PLANEJ.{GanttResizeHandle && <GanttResizeHandle colKey="gPlanned" />}</div>
-                            <div data-gantt-col="gRealized" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-emerald-500" style={getGanttColStyle('gRealized')}>REALIZADO{GanttResizeHandle && <GanttResizeHandle colKey="gRealized" />}</div>
-                            <div data-gantt-col="gVariation" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-[12px] font-medium text-gray-400" style={getGanttColStyle('gVariation')}>VARIAÇÃO{GanttResizeHandle && <GanttResizeHandle colKey="gVariation" />}</div>
-                            <div data-gantt-col="gResources" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-[12px] font-medium text-gray-400" style={getGanttColStyle('gResources')}>RECURSOS{GanttResizeHandle && <GanttResizeHandle colKey="gResources" />}</div>
-                            <div data-gantt-col="gRealPct" className="relative shrink-0 flex items-center justify-center text-[12px] font-medium text-blue-600" style={getGanttColStyle('gRealPct')}>REAL %{GanttResizeHandle && <GanttResizeHandle colKey="gRealPct" />}</div>
+                            <div data-gantt-col="gWbs" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gWbs')}>ITEM{GanttResizeHandle && <GanttResizeHandle colKey="gWbs" />}</div>
+                            <div data-gantt-col="gId" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gId')}>ID{GanttResizeHandle && <GanttResizeHandle colKey="gId" />}</div>
+                            <div data-gantt-col="gPred" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gPred')}>PRÉD.{GanttResizeHandle && <GanttResizeHandle colKey="gPred" />}</div>
+                            <div data-gantt-col="gDur" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gDur')}>DUR.{GanttResizeHandle && <GanttResizeHandle colKey="gDur" />}</div>
+                            <div data-gantt-col="gStart" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gStart')}>INÍCIO{GanttResizeHandle && <GanttResizeHandle colKey="gStart" />}</div>
+                            <div data-gantt-col="gEnd" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gEnd')}>FIM{GanttResizeHandle && <GanttResizeHandle colKey="gEnd" />}</div>
+                            <div data-gantt-col="gEsEf" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-blue-400 bg-blue-50/30" style={getGanttColStyle('gEsEf')}>P.I/P.T{GanttResizeHandle && <GanttResizeHandle colKey="gEsEf" />}</div>
+                            <div data-gantt-col="gLsLf" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-orange-400 bg-orange-50/30" style={getGanttColStyle('gLsLf')}>M.I/M.T{GanttResizeHandle && <GanttResizeHandle colKey="gLsLf" />}</div>
+                            <div data-gantt-col="gFloat" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-indigo-400" style={getGanttColStyle('gFloat')}>F.L{GanttResizeHandle && <GanttResizeHandle colKey="gFloat" />}</div>
+                            <div data-gantt-col="gBudgeted" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-gray-400" style={getGanttColStyle('gBudgeted')}>ORÇADO{GanttResizeHandle && <GanttResizeHandle colKey="gBudgeted" />}</div>
+                            <div data-gantt-col="gPlanned" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-blue-500" style={getGanttColStyle('gPlanned')}>PLANEJ.{GanttResizeHandle && <GanttResizeHandle colKey="gPlanned" />}</div>
+                            <div data-gantt-col="gRealized" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-emerald-500" style={getGanttColStyle('gRealized')}>REALIZADO{GanttResizeHandle && <GanttResizeHandle colKey="gRealized" />}</div>
+                            <div data-gantt-col="gVariation" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-gray-400" style={getGanttColStyle('gVariation')}>VARIAÇÃO{GanttResizeHandle && <GanttResizeHandle colKey="gVariation" />}</div>
+                            <div data-gantt-col="gResources" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gResources')}>RECURSOS{GanttResizeHandle && <GanttResizeHandle colKey="gResources" />}</div>
+                            <div data-gantt-col="gRealPct" className="relative shrink-0 flex items-center justify-center text-xs font-medium text-blue-600" style={getGanttColStyle('gRealPct')}>REAL %{GanttResizeHandle && <GanttResizeHandle colKey="gRealPct" />}</div>
                         </div>
                         <div
                             ref={headerRef}
@@ -1107,8 +1107,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     className={`shrink-0 border-l border-gray-100 flex flex-col items-center justify-center px-1 py-1.5 ${column.isToday ? 'bg-orange-50/50' : ''}`}
                                     style={{ width: `${column.width}px` }}
                                 >
-                                    <span className="text-[12px] font-medium text-gray-400 leading-none">{column.label}</span>
-                                    <span className={`text-[12px] font-medium leading-none mt-1 ${column.isToday ? 'text-orange-600' : 'text-gray-300'}`}>{column.subLabel}</span>
+                                    <span className="text-xs font-medium text-gray-400 leading-none">{column.label}</span>
+                                    <span className={`text-xs font-medium leading-none mt-1 ${column.isToday ? 'text-orange-600' : 'text-gray-300'}`}>{column.subLabel}</span>
                                 </div>
                             ))}
                         </div>
@@ -1125,7 +1125,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 >
                                     <button
                                         onClick={onAddRootGroup}
-                                        className="flex items-center gap-1.5 px-4 py-1.5 text-[12px] font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                        className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                     >
                                         <Plus className="w-3.5 h-3.5" /> Novo Grupo
                                     </button>
@@ -1146,7 +1146,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         className="absolute top-0 bottom-0 w-[2px] bg-orange-500/60 z-30 pointer-events-none"
                                         style={{ left: `${left}px` }}
                                     >
-                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-orange-500 rotate-45 flex items-center justify-center text-[12px] font-medium text-white shadow-lg">
+                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-orange-500 rotate-45 flex items-center justify-center text-xs font-medium text-white shadow-lg">
                                             H
                                         </div>
                                     </div>

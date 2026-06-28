@@ -272,7 +272,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                     <BarChart3 className="w-6 h-6 text-white" />
                                 </div>
                                 <div>
-                                    <p className="text-[12px] font-medium text-blue-400 uppercase tracking-[0.2em]">{initialData ? 'Edição de Medição' : 'Medição de Contrato'}</p>
+                                    <p className="text-xs font-medium text-blue-400 uppercase tracking-[0.2em]">{initialData ? 'Edição de Medição' : 'Medição de Contrato'}</p>
                                     <h2 className="text-3xl font-medium tracking-tight uppercase leading-none">{initialData ? `Medição #${initialData.number}` : contract.title}</h2>
                                 </div>
                             </div>
@@ -288,21 +288,21 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                     {/* Datas + modo de medição */}
                     <div className="grid grid-cols-6 gap-4 mt-10 relative z-10 bg-white/5 p-5 rounded-3xl border border-white/10">
                         <div className="space-y-2 text-left">
-                            <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                 <Calendar className="w-3 h-3" /> Início
                             </p>
                             <input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)}
                                 className="w-full bg-transparent text-white font-medium text-sm outline-none border-b border-white/10 focus:border-blue-500 transition-colors p-1" />
                         </div>
                         <div className="space-y-2 text-left">
-                            <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                 <Calendar className="w-3 h-3" /> Fim
                             </p>
                             <input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)}
                                 className="w-full bg-transparent text-white font-medium text-sm outline-none border-b border-white/10 focus:border-blue-500 transition-colors p-1" />
                         </div>
                         <div className="space-y-2 text-left">
-                            <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                 <Calendar className="w-3 h-3" /> Data Medição
                             </p>
                             <input type="date" value={measurementDate} onChange={e => setMeasurementDate(e.target.value)}
@@ -310,7 +310,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                         </div>
                         {/* Modo de medição */}
                         <div className="space-y-2">
-                            <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Tipo de Medição</p>
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Tipo de Medição</p>
                             <div className="flex gap-1">
                                 {(['QUANTITATIVO', 'PERCENTUAL', 'HIBRIDO'] as MeasurementMode[]).map(m => (
                                     <button
@@ -329,13 +329,13 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                             </div>
                         </div>
                         <div className="text-right flex flex-col justify-center border-l border-white/10 pl-4">
-                            <p className="text-[12px] font-medium text-emerald-400 uppercase tracking-widest mb-1">Saldo a Faturar</p>
+                            <p className="text-xs font-medium text-emerald-400 uppercase tracking-widest mb-1">Saldo a Faturar</p>
                             <p className={`text-2xl font-medium tracking-tighter ${saldoAFaturar < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                                 R$ {saldoAFaturar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </p>
                         </div>
                         <div className="text-right flex flex-col justify-center border-l border-white/10 pl-4">
-                            <p className="text-[12px] font-medium text-blue-400 uppercase tracking-widest mb-1">Total do Período</p>
+                            <p className="text-xs font-medium text-blue-400 uppercase tracking-widest mb-1">Total do Período</p>
                             <p className="text-3xl font-medium tracking-tighter">R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         </div>
                     </div>
@@ -347,7 +347,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                 <FileText className="w-6 h-6 text-white" />
                             </div>
                             <div>
-                                <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Nota Fiscal do Período (NF)</p>
+                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Nota Fiscal do Período (NF)</p>
                                 <p className="text-sm font-medium text-white">
                                     {invoiceUrl ? 'Documento Vinculado com Sucesso' : 'Nenhuma nota fiscal anexada'}
                                 </p>
@@ -356,13 +356,13 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                         <div className="flex items-center gap-3">
                             <input type="file" id="invoice-upload" className="hidden" accept=".pdf,.doc,.docx,image/*" onChange={handleInvoiceUpload} />
                             {isUploadingInvoice ? (
-                                <div className="flex items-center gap-2 px-6 py-3 bg-white/5 text-gray-400 rounded-xl text-[12px] font-medium uppercase tracking-widest animate-pulse">
+                                <div className="flex items-center gap-2 px-6 py-3 bg-white/5 text-gray-400 rounded-xl text-xs font-medium uppercase tracking-widest animate-pulse">
                                     <Loader2 className="w-4 h-4 animate-spin" /> Subindo...
                                 </div>
                             ) : invoiceUrl ? (
                                 <>
                                     <a href={invoiceUrl} target="_blank" rel="noopener noreferrer"
-                                        className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl text-[12px] font-medium uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20">
+                                        className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl text-xs font-medium uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20">
                                         <ExternalLink className="w-4 h-4" /> Ver Arquivo
                                     </a>
                                     <button onClick={() => setInvoiceUrl('')}
@@ -372,7 +372,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                 </>
                             ) : (
                                 <button onClick={() => document.getElementById('invoice-upload')?.click()}
-                                    className="flex items-center gap-2 px-8 py-3 bg-white text-gray-900 rounded-xl text-[12px] font-medium uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-gray-200">
+                                    className="flex items-center gap-2 px-8 py-3 bg-white text-gray-900 rounded-xl text-xs font-medium uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-gray-200">
                                     <Upload className="w-4 h-4" /> Anexar Nota Fiscal
                                 </button>
                             )}
@@ -385,13 +385,13 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                     <div className="mx-8 mb-2 mt-4 bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                         <div className="flex items-center gap-2 px-5 py-3 border-b border-white/10">
                             <TrendingUp className="w-4 h-4 text-amber-400" />
-                            <p className="text-[12px] font-medium text-amber-400 uppercase tracking-widest">
+                            <p className="text-xs font-medium text-amber-400 uppercase tracking-widest">
                                 {addendums.length} Aditivo{addendums.length > 1 ? 's' : ''} Aprovado{addendums.length > 1 ? 's' : ''} — Valor atual inclui estes aditivos
                             </p>
                         </div>
                         <div className="divide-y divide-white/5">
                             {addendums.map(a => (
-                                <div key={a.id} className="flex items-center justify-between px-5 py-3 text-[12px]">
+                                <div key={a.id} className="flex items-center justify-between px-5 py-3 text-xs">
                                     <div className="flex items-center gap-3">
                                         <span className="font-medium text-gray-300">{a.number}</span>
                                         <span className="text-gray-500">{a.description}</span>
@@ -419,17 +419,17 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-[#f8fafc] border-b border-gray-100">
                                 <tr>
-                                    <th className="px-8 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Item / Descrição</th>
-                                    <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Unid.</th>
-                                    <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest text-right">Qtd. Contrato</th>
-                                    <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest text-right">
+                                    <th className="px-8 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest">Item / Descrição</th>
+                                    <th className="px-6 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest">Unid.</th>
+                                    <th className="px-6 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest text-right">Qtd. Contrato</th>
+                                    <th className="px-6 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest text-right">
                                         {measurementMode === 'QUANTITATIVO' ? 'Saldo Ant.' : '% Ant.'}
                                     </th>
-                                    <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest text-right">
+                                    <th className="px-6 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest text-right">
                                         {measurementMode === 'QUANTITATIVO' ? 'Qtd. Medida' : measurementMode === 'PERCENTUAL' ? '% Período' : 'Medição'}
                                     </th>
-                                    <th className="px-6 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Anexo / Foto</th>
-                                    <th className="px-8 py-5 text-[12px] font-medium text-gray-400 uppercase tracking-widest text-right">Valor Período</th>
+                                    <th className="px-6 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest">Anexo / Foto</th>
+                                    <th className="px-8 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest text-right">Valor Período</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-gray-700">
@@ -449,7 +449,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                         <tr key={item.id} className="hover:bg-blue-50/20 transition-all group">
                                             <td className="px-8 py-5">
                                                 <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">{item.description}</p>
-                                                <p className="text-[12px] text-gray-400 font-medium">ID: {item.id.slice(0, 8)}</p>
+                                                <p className="text-xs text-gray-400 font-medium">ID: {item.id.slice(0, 8)}</p>
                                             </td>
                                             <td className="px-6 py-5 font-medium text-xs uppercase text-gray-400">{item.unit}</td>
                                             <td className="px-6 py-5 text-right font-medium text-sm text-gray-700">{item.quantity.toLocaleString('pt-BR')}</td>
@@ -541,7 +541,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                                         onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(item.id, f); }}
                                                     />
                                                     {uploadingItems[item.id] ? (
-                                                        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 text-gray-400 rounded-xl text-[12px] font-medium uppercase tracking-widest border border-gray-100">
+                                                        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 text-gray-400 rounded-xl text-xs font-medium uppercase tracking-widest border border-gray-100">
                                                             <Loader2 className="w-3 h-3 animate-spin" /> Subindo...
                                                         </div>
                                                     ) : (
@@ -574,7 +574,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                                             ))}
                                                             <button
                                                                 onClick={() => document.getElementById(`file-${item.id}`)?.click()}
-                                                                className="flex items-center gap-2 px-3 py-2 bg-white text-blue-600 rounded-xl text-[12px] font-medium uppercase tracking-widest border border-blue-100 hover:bg-blue-50 transition-all shadow-sm"
+                                                                className="flex items-center gap-2 px-3 py-2 bg-white text-blue-600 rounded-xl text-xs font-medium uppercase tracking-widest border border-blue-100 hover:bg-blue-50 transition-all shadow-sm"
                                                             >
                                                                 <Upload className="w-3 h-3" />
                                                                 {attachments[item.id]?.length > 0 ? 'Add' : 'Anexar'}
@@ -604,7 +604,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                     <Info className="w-4 h-4" />
                                 </div>
                                 <div>
-                                    <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Observações</p>
+                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Observações</p>
                                     <input
                                         type="text"
                                         value={notes}
@@ -620,19 +620,19 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                             {modalError && (
                                 <div className="flex items-center gap-3 px-5 py-3 bg-red-50 border border-red-100 rounded-2xl text-red-600 animate-in fade-in slide-in-from-top-2 duration-300">
                                     <AlertCircle className="w-4 h-4 shrink-0" />
-                                    <p className="text-[12px] font-medium">{modalError}</p>
+                                    <p className="text-xs font-medium">{modalError}</p>
                                 </div>
                             )}
                             <button
                                 onClick={onClose}
-                                className="px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-all font-medium text-[12px] uppercase tracking-widest"
+                                className="px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-all font-medium text-xs uppercase tracking-widest"
                             >
                                 Cancelar
                             </button>
                             <button
                                 onClick={handleSave}
                                 disabled={loading}
-                                className="flex items-center gap-2 px-10 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 font-medium text-[12px] uppercase tracking-widest disabled:opacity-50 group active:scale-95"
+                                className="flex items-center gap-2 px-10 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 font-medium text-xs uppercase tracking-widest disabled:opacity-50 group active:scale-95"
                             >
                                 {loading ? (
                                     <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />

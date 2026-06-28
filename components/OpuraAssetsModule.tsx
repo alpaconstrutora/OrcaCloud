@@ -2276,7 +2276,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   O
                 </div>
                 <span className="font-sans font-black text-gray-900 tracking-wider text-sm">ÒPURA</span>
-                <span className="text-[7px] text-gray-400 uppercase tracking-widest font-bold">Patrimônio</span>
+                <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Patrimônio</span>
               </div>
 
               {/* Desenho do QR Code Realista em SVG puro */}
@@ -2317,7 +2317,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               {/* Código Patrimonial Legível */}
               <div className="text-center">
-                <span className="text-gray-400 block text-[7px] font-bold uppercase tracking-widest">Código do Bem</span>
+                <span className="text-gray-400 block text-[10px] font-bold uppercase tracking-widest">Código do Bem</span>
                 <span className="font-mono text-gray-800 font-black text-sm tracking-widest">{selectedAsset.code}</span>
               </div>
             </div>

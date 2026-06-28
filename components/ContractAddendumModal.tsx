@@ -77,7 +77,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                             </div>
                             <div>
                                 <h2 className="text-xl font-medium tracking-tight uppercase leading-none">Novo Aditivo</h2>
-                                <p className="text-blue-400 text-[12px] font-medium uppercase tracking-[0.2em] mt-2">Alteração de Valor ou Prazo</p>
+                                <p className="text-blue-400 text-xs font-medium uppercase tracking-[0.2em] mt-2">Alteração de Valor ou Prazo</p>
                             </div>
                         </div>
                         <button
@@ -92,7 +92,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                 {/* Form */}
                 <div className="p-10 space-y-8 overflow-y-auto">
                     <div className="space-y-2">
-                        <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Descrição do Aditivo</label>
+                        <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Descrição do Aditivo</label>
                         <div className="relative">
                             <FileText className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                             <input
@@ -107,7 +107,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
 
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Impacto Financeiro (R$)</label>
+                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Impacto Financeiro (R$)</label>
                             <div className="relative">
                                 <DollarSign className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />
                                 <input
@@ -118,10 +118,10 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                                     className="w-full pl-14 pr-6 py-4 bg-blue-50/30 border border-blue-100/50 rounded-2xl text-sm font-medium text-gray-900 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                 />
                             </div>
-                            <p className="text-[12px] text-gray-400 font-medium ml-1 uppercase">Use valores negativos para descontos.</p>
+                            <p className="text-xs text-gray-400 font-medium ml-1 uppercase">Use valores negativos para descontos.</p>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-[12px] font-medium text-gray-400 uppercase tracking-widest ml-1">Nova Data de Término</label>
+                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Nova Data de Término</label>
                             <div className="relative">
                                 <Calendar className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                 <input
@@ -136,11 +136,11 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
 
                     <div className="bg-gray-900 rounded-[32px] p-8 text-white flex justify-between items-center shadow-2xl">
                         <div>
-                            <p className="text-[12px] font-medium text-blue-400 uppercase tracking-widest mb-1">Atual Valor do Contrato</p>
+                            <p className="text-xs font-medium text-blue-400 uppercase tracking-widest mb-1">Atual Valor do Contrato</p>
                             <p className="text-xs font-medium opacity-60">R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         </div>
                         <div className="text-right">
-                            <p className="text-[12px] font-medium text-emerald-400 uppercase tracking-widest mb-1">Novo Valor Previsto</p>
+                            <p className="text-xs font-medium text-emerald-400 uppercase tracking-widest mb-1">Novo Valor Previsto</p>
                             <p className="text-2xl font-medium tracking-tighter">R$ {newValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         </div>
                     </div>
@@ -148,7 +148,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                     {error && (
                         <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in fade-in slide-in-from-top-2">
                             <AlertCircle className="w-5 h-5" />
-                            <p className="text-[12px] font-medium uppercase tracking-widest">{error}</p>
+                            <p className="text-xs font-medium uppercase tracking-widest">{error}</p>
                         </div>
                     )}
                 </div>
@@ -156,14 +156,14 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                 <div className="p-8 bg-gray-50 border-t border-gray-100 shrink-0 flex justify-end gap-4">
                     <button
                         onClick={onClose}
-                        className="px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-600 transition-all font-medium text-[12px] uppercase tracking-widest"
+                        className="px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-600 transition-all font-medium text-xs uppercase tracking-widest"
                     >
                         Cancelar
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={loading}
-                        className="flex items-center gap-2 px-10 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 font-medium text-[12px] uppercase tracking-widest active:scale-95 group"
+                        className="flex items-center gap-2 px-10 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 font-medium text-xs uppercase tracking-widest active:scale-95 group"
                     >
                         {loading ? (
                             <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />

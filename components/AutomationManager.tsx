@@ -286,10 +286,10 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                     <p className="text-sm text-gray-500 font-medium tracking-tight">Gerencie e monitore suas integrações inteligentes.</p>
                 </div>
                 <div className="flex bg-gray-100 p-1.5 rounded-2xl">
-                    <button onClick={() => setActiveTab('painel')} className={`px-5 py-2.5 rounded-xl text-[12px] font-medium uppercase tracking-widest transition-all ${activeTab === 'painel' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Painel</button>
-                    <button onClick={() => setActiveTab('config')} className={`px-5 py-2.5 rounded-xl text-[12px] font-medium uppercase tracking-widest transition-all ${activeTab === 'config' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Configurações</button>
-                    <button onClick={() => setActiveTab('ruler')} className={`px-5 py-2.5 rounded-xl text-[12px] font-medium uppercase tracking-widest transition-all ${activeTab === 'ruler' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Régua</button>
-                    <button onClick={() => setActiveTab('history')} className={`px-5 py-2.5 rounded-xl text-[12px] font-medium uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Histórico</button>
+                    <button onClick={() => setActiveTab('painel')} className={`px-5 py-2.5 rounded-xl text-xs font-medium uppercase tracking-widest transition-all ${activeTab === 'painel' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Painel</button>
+                    <button onClick={() => setActiveTab('config')} className={`px-5 py-2.5 rounded-xl text-xs font-medium uppercase tracking-widest transition-all ${activeTab === 'config' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Configurações</button>
+                    <button onClick={() => setActiveTab('ruler')} className={`px-5 py-2.5 rounded-xl text-xs font-medium uppercase tracking-widest transition-all ${activeTab === 'ruler' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Régua</button>
+                    <button onClick={() => setActiveTab('history')} className={`px-5 py-2.5 rounded-xl text-xs font-medium uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Histórico</button>
                 </div>
             </div>
 
@@ -298,13 +298,13 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                 <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ${JSON.stringify(localFinancialInfo) !== JSON.stringify(settings.financialInfo) ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`}>
                     <div className="bg-gray-900 text-white px-8 py-4 rounded-[2rem] shadow-2xl flex items-center gap-6 border border-white/10 backdrop-blur-xl">
                         <div className="flex flex-col">
-                            <span className="text-[12px] font-medium uppercase tracking-widest text-blue-400">Alterações Pendentes</span>
+                            <span className="text-xs font-medium uppercase tracking-widest text-blue-400">Alterações Pendentes</span>
                             <span className="text-xs text-gray-400">Você possui mudanças não salvas nestas configurações.</span>
                         </div>
                         <button
                             onClick={handleCommitChanges}
                             disabled={isSaving}
-                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-medium text-[12px] uppercase tracking-widest transition-all disabled:opacity-50"
+                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-medium text-xs uppercase tracking-widest transition-all disabled:opacity-50"
                         >
                             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             {isSaving ? 'Salvando...' : 'Salvar Alterações'}
@@ -315,7 +315,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
 
             {showSuccess && (
                 <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[110] animate-in slide-in-from-top-4">
-                    <div className="bg-emerald-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 font-medium text-[12px] uppercase tracking-widest">
+                    <div className="bg-emerald-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 font-medium text-xs uppercase tracking-widest">
                         <CheckCircle2 className="w-4 h-4" /> Configurações Salvas com Sucesso!
                     </div>
                 </div>
@@ -326,7 +326,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                     {/* KPIs */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col justify-between h-40">
-                            <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Taxa de Sucesso</span>
+                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Taxa de Sucesso</span>
                             <div className="flex items-end justify-between">
                                 <span className={`text-4xl font-medium tracking-tighter ${metrics.successRate > 90 ? 'text-emerald-500' : 'text-orange-500'}`}>{metrics.successRate.toFixed(1)}%</span>
                                 <div className={`p-2 rounded-xl ${metrics.successRate > 90 ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
@@ -335,7 +335,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                             </div>
                         </div>
                         <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col justify-between h-40">
-                            <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Total de Disparos</span>
+                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Total de Disparos</span>
                             <div className="flex items-end justify-between">
                                 <span className="text-4xl font-medium tracking-tighter text-blue-600">{metrics.totalDisparos}</span>
                                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
@@ -344,7 +344,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                             </div>
                         </div>
                         <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col justify-between h-40">
-                            <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Taxa de Conversão</span>
+                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Taxa de Conversão</span>
                             <div className="flex items-end justify-between">
                                 <span className={`text-4xl font-medium tracking-tighter ${metrics.conversionRate > 20 ? 'text-emerald-500' : 'text-indigo-500'}`}>{metrics.conversionRate.toFixed(1)}%</span>
                                 <div className={`p-2 rounded-xl ${metrics.conversionRate > 20 ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>
@@ -353,7 +353,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                             </div>
                         </div>
                         <div className="bg-indigo-600 p-8 rounded-[2rem] shadow-xl shadow-indigo-600/20 text-white flex flex-col justify-between h-40">
-                            <span className="text-[12px] font-medium uppercase tracking-widest opacity-80">Valor Recuperado (ROI)</span>
+                            <span className="text-xs font-medium uppercase tracking-widest opacity-80">Valor Recuperado (ROI)</span>
                             <div className="flex items-end justify-between">
                                 <span className="text-2xl font-medium tracking-tighter">{fmt(metrics.recoveredValue)}</span>
                                 <div className="p-2 bg-white/10 text-white rounded-xl">
@@ -366,7 +366,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                     {/* Charts */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                         <div className="lg:col-span-8 bg-white border border-gray-100 p-8 rounded-[2.5rem] shadow-sm">
-                            <h4 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest mb-8">Atividade de Redução de Fricção (7 dias)</h4>
+                            <h4 className="text-xs font-medium text-gray-900 uppercase tracking-widest mb-8">Atividade de Redução de Fricção (7 dias)</h4>
                             <div className="h-64">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={metrics.activityData}>
@@ -389,7 +389,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                         </div>
 
                         <div className="lg:col-span-4 bg-white border border-gray-100 p-8 rounded-[2.5rem] shadow-sm flex flex-col items-center">
-                            <h4 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest mb-8 self-start">Mix de Eventos</h4>
+                            <h4 className="text-xs font-medium text-gray-900 uppercase tracking-widest mb-8 self-start">Mix de Eventos</h4>
                             <div className="h-48 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
@@ -413,7 +413,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                     <div key={i} className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} />
-                                            <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">{d.name}</span>
+                                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">{d.name}</span>
                                         </div>
                                         <span className="text-sm font-medium text-gray-900">{d.value}</span>
                                     </div>
@@ -426,8 +426,8 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                     <div className="bg-white border border-gray-100 rounded-[2.5rem] shadow-sm overflow-hidden mt-8">
                         <div className="p-8 border-b border-gray-50 flex justify-between items-center">
                             <div>
-                                <h4 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest">Principais Falhas Detectadas</h4>
-                                <p className="text-[12px] text-gray-400 font-medium uppercase tracking-widest mt-1">Padrões de erro que precisam de sua atenção</p>
+                                <h4 className="text-xs font-medium text-gray-900 uppercase tracking-widest">Principais Falhas Detectadas</h4>
+                                <p className="text-xs text-gray-400 font-medium uppercase tracking-widest mt-1">Padrões de erro que precisam de sua atenção</p>
                             </div>
                         </div>
                         <div className="p-8">
@@ -451,11 +451,11 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                 </div>
                                                 <div className="flex-1">
                                                     <p className="text-sm font-medium text-gray-900 leading-none mb-1">{error}</p>
-                                                    <p className="text-[12px] text-red-600 font-medium uppercase tracking-widest">Frequência Alta</p>
+                                                    <p className="text-xs text-red-600 font-medium uppercase tracking-widest">Frequência Alta</p>
                                                 </div>
                                                 <button
                                                     onClick={() => setActiveTab('history')}
-                                                    className="px-4 py-2 bg-white border border-red-100 text-red-600 text-[12px] font-medium uppercase rounded-lg hover:bg-red-50 transition-colors tracking-widest"
+                                                    className="px-4 py-2 bg-white border border-red-100 text-red-600 text-xs font-medium uppercase rounded-lg hover:bg-red-50 transition-colors tracking-widest"
                                                 >
                                                     Ver Histórico
                                                 </button>
@@ -487,7 +487,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                         <div className={`p-2 bg-${item.color}-50 rounded-xl`}>
                                             <item.icon className={`w-5 h-5 text-${item.color}-600`} />
                                         </div>
-                                        <h4 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest">{item.label}</h4>
+                                        <h4 className="text-xs font-medium text-gray-900 uppercase tracking-widest">{item.label}</h4>
                                     </div>
                                     <button
                                         onClick={() => handleTestWebhook((financialInfo[item.field as keyof FinancialInfo] as string) || '')}
@@ -502,7 +502,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                     value={(financialInfo[item.field as keyof FinancialInfo] as string) || ''}
                                     onChange={e => handleSaveGlobal(item.field as keyof FinancialInfo, e.target.value)}
                                     placeholder="URL do Webhook..."
-                                    className="w-full bg-gray-50 px-4 py-3 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white font-mono text-[12px] font-medium outline-none transition-all"
+                                    className="w-full bg-gray-50 px-4 py-3 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white font-mono text-xs font-medium outline-none transition-all"
                                 />
                             </div>
                         ))}
@@ -514,8 +514,8 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                 <Clock className="w-6 h-6" />
                             </div>
                             <div>
-                                <h4 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest">Agendamento Automático</h4>
-                                <p className="text-[12px] text-gray-400 font-medium uppercase tracking-widest mt-1">Defina o horário do disparo diário da régua</p>
+                                <h4 className="text-xs font-medium text-gray-900 uppercase tracking-widest">Agendamento Automático</h4>
+                                <p className="text-xs text-gray-400 font-medium uppercase tracking-widest mt-1">Defina o horário do disparo diário da régua</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
@@ -528,7 +528,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                     <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
                                 ))}
                             </select>
-                            <span className="text-[12px] font-medium text-gray-500 uppercase tracking-widest">Horário de Brasília (BRT)</span>
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-widest">Horário de Brasília (BRT)</span>
                         </div>
                     </div>
 
@@ -539,8 +539,8 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                     <Settings className="w-6 h-6" />
                                 </div>
                                 <div>
-                                    <h4 className="text-[12px] font-medium text-gray-900 uppercase tracking-widest">Templates de Contrato</h4>
-                                    <p className="text-[12px] text-gray-400 font-medium uppercase tracking-widest mt-1">Escolha as variações para emissão</p>
+                                    <h4 className="text-xs font-medium text-gray-900 uppercase tracking-widest">Templates de Contrato</h4>
+                                    <p className="text-xs text-gray-400 font-medium uppercase tracking-widest mt-1">Escolha as variações para emissão</p>
                                 </div>
                             </div>
                             <button
@@ -584,7 +584,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                         handleSaveGlobal('contractTemplates', newTemplates);
                                                     }}
                                                     placeholder="Ex: TPL_FINANCE_001"
-                                                    className="w-full bg-white px-3 py-2 rounded-xl border border-gray-200 font-mono text-[12px] font-medium outline-none focus:border-blue-500"
+                                                    className="w-full bg-white px-3 py-2 rounded-xl border border-gray-200 font-mono text-xs font-medium outline-none focus:border-blue-500"
                                                 />
                                             </div>
                                         </div>
@@ -601,7 +601,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                 </div>
                             ))}
                             {(!financialInfo.contractTemplates || financialInfo.contractTemplates.length === 0) && (
-                                <p className="text-[12px] text-gray-400 font-medium uppercase text-center py-4 italic">Nenhum template cadastrado.</p>
+                                <p className="text-xs text-gray-400 font-medium uppercase text-center py-4 italic">Nenhum template cadastrado.</p>
                             )}
                         </div>
                     </div>
@@ -615,7 +615,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                             <div className="p-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
                                 <div>
                                     <h4 className="text-xs font-medium text-gray-900 uppercase tracking-widest">Regras de Automação</h4>
-                                    <p className="text-[12px] text-gray-400 font-medium uppercase mt-1">Defina quando e como os disparos ocorrem</p>
+                                    <p className="text-xs text-gray-400 font-medium uppercase mt-1">Defina quando e como os disparos ocorrem</p>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="flex bg-white border border-gray-100 p-1 rounded-xl shadow-sm">
@@ -662,7 +662,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                 <div className="flex-1 space-y-4">
                                                     <div className="grid grid-cols-4 gap-4">
                                                         <div className="flex flex-col">
-                                                            <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Disparo</span>
+                                                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Disparo</span>
                                                             <select
                                                                 value={rule.days}
                                                                 onChange={e => {
@@ -680,7 +680,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                             </select>
                                                         </div>
                                                         <div className="flex flex-col">
-                                                            <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Valor Mínimo</span>
+                                                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Valor Mínimo</span>
                                                             <input
                                                                 type="number"
                                                                 value={rule.minValue || ''}
@@ -694,25 +694,25 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                             />
                                                         </div>
                                                         <div className="flex flex-col">
-                                                            <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Modo</span>
+                                                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Modo</span>
                                                             <span className="text-xs font-medium text-gray-700">{rule.triggerMode === 'AUTOMATIC' ? 'Automático' : 'Manual'}</span>
                                                         </div>
                                                         <div className="flex flex-col">
-                                                            <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Status</span>
+                                                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Status</span>
                                                             <button
                                                                 onClick={() => {
                                                                     const newRules = [...(financialInfo.billingRules || [])];
                                                                     newRules[idx].active = !newRules[idx].active;
                                                                     handleSaveGlobal('billingRules', newRules);
                                                                 }}
-                                                                className={`text-[12px] font-medium uppercase text-left ${rule.active ? 'text-emerald-600' : 'text-gray-400'}`}
+                                                                className={`text-xs font-medium uppercase text-left ${rule.active ? 'text-emerald-600' : 'text-gray-400'}`}
                                                             >
                                                                 {rule.active ? 'Ativo' : 'Pausado'}
                                                             </button>
                                                         </div>
                                                     </div>
                                                     <div className="flex flex-col gap-1">
-                                                        <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Template da Mensagem</span>
+                                                        <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Template da Mensagem</span>
                                                         <textarea
                                                             value={rule.messageTemplate || ''}
                                                             onChange={e => {

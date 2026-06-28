@@ -341,7 +341,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 {portalToken && (
                                     <button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white">
                                         <Bell className="w-3.5 h-3.5" />
-                                        {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[7px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+                                        {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[10px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                                     </button>
                                 )}
                                 <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-600 font-black text-sm shadow">{(clientProfile?.name || '?').charAt(0)}</div>
@@ -475,7 +475,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5"><span className="text-[10px] font-black text-white uppercase tracking-widest">Serviços</span></div>
                             <div className="flex items-center gap-2">
-                                {portalToken && (<button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"><Bell className="w-3.5 h-3.5" />{unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[7px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}</button>)}
+                                {portalToken && (<button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"><Bell className="w-3.5 h-3.5" />{unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-[10px] font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}</button>)}
                                 <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-600 font-black text-sm shadow">{(clientProfile?.name || '?').charAt(0)}</div>
                             </div>
                         </div>
@@ -2323,7 +2323,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     .filter(item => item.group === event.groupName && item.phase.includes(event.name))
                                                     .slice(0, 5) // Limit to 5 items to keep card tidy
                                                     .map((item) => (
-                                                        <div key={item.id} className="flex items-center gap-3 text-[12px] font-bold text-gray-500 group/item">
+                                                        <div key={item.id} className="flex items-center gap-3 text-xs font-bold text-gray-500 group/item">
                                                             <div className="w-2 h-2 rounded-full bg-blue-400/30 group-hover/item:bg-blue-500 transition-colors" />
                                                             <span className="tracking-tight uppercase">{item.sinapiItem.description}</span>
                                                         </div>

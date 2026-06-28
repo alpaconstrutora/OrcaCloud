@@ -594,11 +594,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                     <div>
                         <h1 className="text-2xl font-medium text-gray-900 tracking-tight">Diário de Obras</h1>
                         <div className="flex items-center gap-2 mt-1 relative">
-                            <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Obra:</span>
+                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Obra:</span>
                             <div className="relative">
                                 <button
                                     onClick={() => setIsProjectSelectorOpen(!isProjectSelectorOpen)}
-                                    className="flex items-center gap-2 text-[12px] font-medium text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-all border border-indigo-100"
+                                    className="flex items-center gap-2 text-xs font-medium text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-all border border-indigo-100"
                                 >
                                     {settings.name || 'Selecionar Obra'}
                                     <ChevronRight className={`w-3 h-3 transition-transform ${isProjectSelectorOpen ? 'rotate-90' : ''}`} />
@@ -607,7 +607,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                 {isProjectSelectorOpen && (
                                     <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                                         <div className="px-3 py-2 border-b border-gray-50 mb-1">
-                                            <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Minhas Obras</span>
+                                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Minhas Obras</span>
                                         </div>
                                         <div className="max-h-60 overflow-y-auto">
                                             {projects
@@ -619,7 +619,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                             onLoadProject(p.id, 'project-diary');
                                                             setIsProjectSelectorOpen(false);
                                                         }}
-                                                        className={`w-full text-left px-4 py-2 text-[12px] font-medium hover:bg-gray-50 flex items-center justify-between group ${p.id === settings.id ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-600'}`}
+                                                        className={`w-full text-left px-4 py-2 text-xs font-medium hover:bg-gray-50 flex items-center justify-between group ${p.id === settings.id ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-600'}`}
                                                     >
                                                         <span className="truncate">{p.name}</span>
                                                         {p.id === settings.id && <CheckCircle2 className="w-4 h-4 text-indigo-500" />}
@@ -627,7 +627,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                 ))}
                                             {projects.length === 0 && (
                                                 <div className="px-4 py-8 text-center">
-                                                    <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Nenhuma obra encontrada</p>
+                                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Nenhuma obra encontrada</p>
                                                 </div>
                                             )}
                                         </div>
@@ -641,20 +641,20 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                 <div className="flex flex-wrap gap-8 items-center">
                     <div className="flex flex-wrap gap-8 items-center">
                         <div className="text-center">
-                            <span className="block text-[12px] font-medium text-gray-400 uppercase tracking-widest">Prazo Restante</span>
+                            <span className="block text-xs font-medium text-gray-400 uppercase tracking-widest">Prazo Restante</span>
                             <span className="text-xl font-medium text-indigo-600">{metrics.remaining} dias</span>
                         </div>
                         <div className="w-px h-8 bg-gray-100" />
                         <div className="text-center">
-                            <span className="block text-[12px] font-medium text-gray-400 uppercase tracking-widest">Prazo Total</span>
+                            <span className="block text-xs font-medium text-gray-400 uppercase tracking-widest">Prazo Total</span>
                             <span className="text-sm font-medium text-gray-700 bg-gray-50 px-3 py-1 rounded-lg">{metrics.total} dias</span>
                         </div>
                         <div className="text-center">
-                            <span className="block text-[12px] font-medium text-gray-400 uppercase tracking-widest">Prazo Decorrido</span>
+                            <span className="block text-xs font-medium text-gray-400 uppercase tracking-widest">Prazo Decorrido</span>
                             <span className="text-sm font-medium text-gray-700 bg-gray-50 px-3 py-1 rounded-lg">{metrics.elapsed} dias</span>
                         </div>
                         <div className="text-center">
-                            <span className="block text-[12px] font-medium text-gray-400 uppercase tracking-widest">Período Planejado</span>
+                            <span className="block text-xs font-medium text-gray-400 uppercase tracking-widest">Período Planejado</span>
                             <span className="text-xs font-medium text-gray-500 bg-gray-50 px-3 py-1 rounded-lg">{metrics.period}</span>
                         </div>
                         <div className="w-px h-8 bg-gray-100" />
@@ -672,7 +672,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
                             {isLinkingPlanningOpen && (
                                 <div className="absolute top-full right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                                    <h4 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">Selecionar Planejamento</h4>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">Selecionar Planejamento</h4>
                                     <div className="max-h-60 overflow-y-auto space-y-1">
                                         {projects
                                             .filter(p => p.settings?.classification === 'PLANEJAMENTO')
@@ -691,7 +691,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                             });
                                                             setIsLinkingPlanningOpen(false);
                                                         }}
-                                                        className={`w-full text-left px-4 py-3 rounded-xl text-[12px] font-medium transition-all flex items-center justify-between group ${isManual || isAuto
+                                                        className={`w-full text-left px-4 py-3 rounded-xl text-xs font-medium transition-all flex items-center justify-between group ${isManual || isAuto
                                                             ? 'bg-indigo-50 text-indigo-600 border border-indigo-100'
                                                             : 'hover:bg-gray-50 text-gray-600 border border-transparent'
                                                             }`}
@@ -768,7 +768,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                     {!isAdding && (
                         <button
                             onClick={handleAddNew}
-                            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium text-[12px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
+                            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
                         >
                             <Plus className="w-5 h-5" />
                             NOVA ENTRADA
@@ -839,13 +839,13 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => { setIsAdding(false); setEditingId(null); resetForm(); }}
-                                    className="px-6 py-2.5 bg-white text-gray-500 rounded-xl font-medium text-[12px] uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-100"
+                                    className="px-6 py-2.5 bg-white text-gray-500 rounded-xl font-medium text-xs uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-100"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     onClick={handleSave}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium text-[12px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
                                 >
                                     <Save className="w-5 h-5" />
                                     Salvar Registro
@@ -855,9 +855,9 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
                         {/* Editor Tabs */}
                         <div className="flex border-b border-gray-100 bg-white">
-                            <button onClick={() => setActiveTab('geral')} className={`px-8 py-4 text-[12px] font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'geral' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Dados Gerais</button>
-                            <button onClick={() => setActiveTab('comentarios')} className={`px-8 py-4 text-[12px] font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'comentarios' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Comentários</button>
-                            <button onClick={() => setActiveTab('arquivos')} className={`px-8 py-4 text-[12px] font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'arquivos' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Arquivos ({(formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0)})</button>
+                            <button onClick={() => setActiveTab('geral')} className={`px-8 py-4 text-xs font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'geral' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Dados Gerais</button>
+                            <button onClick={() => setActiveTab('comentarios')} className={`px-8 py-4 text-xs font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'comentarios' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Comentários</button>
+                            <button onClick={() => setActiveTab('arquivos')} className={`px-8 py-4 text-xs font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'arquivos' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Arquivos ({(formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0)})</button>
                         </div>
 
                         <div className="p-8">
@@ -880,9 +880,9 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                             <table className="w-full text-left border-collapse">
                                                 <thead>
                                                     <tr className="bg-gray-50 border-b border-gray-100">
-                                                        <th className="px-6 py-3 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Turno</th>
-                                                        <th className="px-6 py-3 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Tempo</th>
-                                                        <th className="px-6 py-3 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Condição</th>
+                                                        <th className="px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-widest">Turno</th>
+                                                        <th className="px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-widest">Tempo</th>
+                                                        <th className="px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-widest">Condição</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-50">
@@ -1247,19 +1247,19 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                         <div className="relative group overflow-hidden bg-indigo-50 border-2 border-dashed border-indigo-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center hover:bg-indigo-100/50 hover:border-indigo-400 transition-all cursor-pointer shadow-sm active:scale-95">
                                             <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, 'image')} className="absolute inset-0 opacity-0 cursor-pointer" />
                                             <Camera className="w-8 h-8 text-indigo-500 mb-3" />
-                                            <span className="text-[12px] font-bold text-indigo-800 uppercase tracking-widest">Fotos</span>
+                                            <span className="text-xs font-bold text-indigo-800 uppercase tracking-widest">Fotos</span>
                                             <span className="text-[10px] text-indigo-400 font-medium">JPG, PNG</span>
                                         </div>
                                         <div className="relative group overflow-hidden bg-blue-50 border-2 border-dashed border-blue-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center hover:bg-blue-100/50 hover:border-blue-400 transition-all cursor-pointer shadow-sm active:scale-95">
                                             <input type="file" accept="video/*" onChange={(e) => handleFileUpload(e, 'video')} className="absolute inset-0 opacity-0 cursor-pointer" />
                                             <Video className="w-8 h-8 text-blue-500 mb-3" />
-                                            <span className="text-[12px] font-bold text-blue-800 uppercase tracking-widest">Vídeos</span>
+                                            <span className="text-xs font-bold text-blue-800 uppercase tracking-widest">Vídeos</span>
                                             <span className="text-[10px] text-blue-400 font-medium">MP4</span>
                                         </div>
                                         <div className="relative group overflow-hidden bg-emerald-50 border-2 border-dashed border-emerald-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center hover:bg-emerald-100/50 hover:border-emerald-400 transition-all cursor-pointer shadow-sm active:scale-95">
                                             <input type="file" onChange={(e) => handleFileUpload(e, 'document')} className="absolute inset-0 opacity-0 cursor-pointer" />
                                             <FileText className="w-8 h-8 text-emerald-500 mb-3" />
-                                            <span className="text-[12px] font-bold text-emerald-800 uppercase tracking-widest">Documentos</span>
+                                            <span className="text-xs font-bold text-emerald-800 uppercase tracking-widest">Documentos</span>
                                             <span className="text-[10px] text-emerald-400 font-medium">PDF, DOC, XLS</span>
                                         </div>
                                     </div>
@@ -1294,7 +1294,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             <BookOpen className="w-10 h-10 text-gray-300" />
                         </div>
                         <h3 className="text-xl font-medium text-gray-400 uppercase tracking-widest">Nenhum registro ainda</h3>
-                        <p className="text-gray-400 text-[12px] max-w-xs mt-2 font-medium">Os registros aparecerão aqui conforme você os adiciona.</p>
+                        <p className="text-gray-400 text-xs max-w-xs mt-2 font-medium">Os registros aparecerão aqui conforme você os adiciona.</p>
                     </div>
                 ) : viewMode === 'grid' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -1305,16 +1305,16 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                         <span className="text-xl font-medium text-white leading-none">
                                             {new Date(entry.date + 'T12:00:00').getDate()}
                                         </span>
-                                        <span className="text-[12px] font-medium text-indigo-100 uppercase tracking-widest mt-0.5">
+                                        <span className="text-xs font-medium text-indigo-100 uppercase tracking-widest mt-0.5">
                                             {new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(entry.date + 'T12:00:00')).replace('.', '')}
                                         </span>
                                     </div>
                                     <div className="flex-1 flex flex-wrap gap-2 justify-end">
                                         <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 rounded-lg text-amber-700 border border-amber-100">
                                             <Sun className="w-3 h-3" />
-                                            <span className="text-[12px] font-medium uppercase tracking-widest">{entry.weather}</span>
+                                            <span className="text-xs font-medium uppercase tracking-widest">{entry.weather}</span>
                                         </div>
-                                        <div className={`px-2 py-1 rounded-lg text-[12px] font-medium uppercase tracking-widest border ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                        <div className={`px-2 py-1 rounded-lg text-xs font-medium uppercase tracking-widest border ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                                             entry.status === 'Recusado' ? 'bg-red-50 text-red-600 border-red-100' :
                                                 'bg-indigo-50 text-indigo-600 border-indigo-100'
                                             }`}>
@@ -1328,9 +1328,9 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
                                     {entry.activities && entry.activities.length > 0 && (
                                         <div className="space-y-1">
-                                            <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest block mb-1">Atividades Principais</span>
+                                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest block mb-1">Atividades Principais</span>
                                             {entry.activities.slice(0, 3).map((act, i) => (
-                                                <div key={i} className="flex items-center gap-2 text-[12px] text-gray-600">
+                                                <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
                                                     <CheckCircle2 className={`w-3 h-3 shrink-0 ${act.status === 'Finalizada' ? 'text-emerald-500' : 'text-amber-500'}`} />
                                                     <span className="truncate flex-1 font-medium">{act.description}</span>
                                                     <span className="font-medium text-indigo-600">{act.evolution}%</span>
@@ -1340,9 +1340,9 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                     )}
 
                                     <div className="flex flex-wrap gap-2 pt-2">
-                                        {(entry.images?.length || 0) > 0 && <span className="flex items-center gap-1 text-[12px] font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100"><Camera className="w-3 h-3" /> {entry.images?.length} fotos</span>}
-                                        {(entry.videos?.length || 0) > 0 && <span className="flex items-center gap-1 text-[12px] font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100"><Video className="w-3 h-3" /> {entry.videos?.length} vídeos</span>}
-                                        {(entry.documents?.length || 0) > 0 && <span className="flex items-center gap-1 text-[12px] font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100"><FileText className="w-3 h-3" /> {entry.documents?.length} docs</span>}
+                                        {(entry.images?.length || 0) > 0 && <span className="flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100"><Camera className="w-3 h-3" /> {entry.images?.length} fotos</span>}
+                                        {(entry.videos?.length || 0) > 0 && <span className="flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100"><Video className="w-3 h-3" /> {entry.videos?.length} vídeos</span>}
+                                        {(entry.documents?.length || 0) > 0 && <span className="flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100"><FileText className="w-3 h-3" /> {entry.documents?.length} docs</span>}
                                     </div>
                                 </div>
 
@@ -1367,11 +1367,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 border-b border-gray-100">
                                 <tr>
-                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest w-[120px]">Data</th>
-                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest">Relato Curto</th>
-                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest w-[150px]">Status</th>
-                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest w-[100px] text-center">Clima</th>
-                                    <th className="px-6 py-4 text-[12px] font-medium text-gray-400 uppercase tracking-widest w-[120px] text-center">Mídia</th>
+                                    <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest w-[120px]">Data</th>
+                                    <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest">Relato Curto</th>
+                                    <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest w-[150px]">Status</th>
+                                    <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest w-[100px] text-center">Clima</th>
+                                    <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest w-[120px] text-center">Mídia</th>
                                     <th className="px-6 py-4 text-right"></th>
                                 </tr>
                             </thead>
@@ -1382,7 +1382,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 flex flex-col items-center justify-center bg-indigo-50 rounded-xl text-indigo-600 border border-indigo-100">
                                                     <span className="text-sm font-medium leading-none">{new Date(entry.date + 'T12:00:00').getDate()}</span>
-                                                    <span className="text-[12px] font-medium uppercase">{new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(entry.date + 'T12:00:00')).replace('.', '')}</span>
+                                                    <span className="text-xs font-medium uppercase">{new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(entry.date + 'T12:00:00')).replace('.', '')}</span>
                                                 </div>
                                                 <span className="text-sm font-medium text-gray-400">{new Date(entry.date + 'T12:00:00').getFullYear()}</span>
                                             </div>
@@ -1400,7 +1400,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 rounded-full text-[12px] font-medium uppercase tracking-wider ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600' :
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium uppercase tracking-wider ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600' :
                                                 entry.status === 'Recusado' ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'
                                                 }`}>
                                                 {entry.status || 'Rascunho'}
@@ -1409,14 +1409,14 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex flex-col items-center gap-1">
                                                 <Sun className="w-4 h-4 text-amber-500" />
-                                                <span className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">{entry.weather}</span>
+                                                <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">{entry.weather}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex items-center justify-center gap-3">
-                                                {(entry.images?.length || 0) > 0 && <div className="flex flex-col items-center text-indigo-400"><Camera className="w-4 h-4" /><span className="text-[12px] font-medium">{entry.images?.length}</span></div>}
-                                                {(entry.videos?.length || 0) > 0 && <div className="flex flex-col items-center text-blue-400"><Video className="w-4 h-4" /><span className="text-[12px] font-medium">{entry.videos?.length}</span></div>}
-                                                {(entry.documents?.length || 0) > 0 && <div className="flex flex-col items-center text-emerald-400"><FileText className="w-4 h-4" /><span className="text-[12px] font-medium">{entry.documents?.length}</span></div>}
+                                                {(entry.images?.length || 0) > 0 && <div className="flex flex-col items-center text-indigo-400"><Camera className="w-4 h-4" /><span className="text-xs font-medium">{entry.images?.length}</span></div>}
+                                                {(entry.videos?.length || 0) > 0 && <div className="flex flex-col items-center text-blue-400"><Video className="w-4 h-4" /><span className="text-xs font-medium">{entry.videos?.length}</span></div>}
+                                                {(entry.documents?.length || 0) > 0 && <div className="flex flex-col items-center text-emerald-400"><FileText className="w-4 h-4" /><span className="text-xs font-medium">{entry.documents?.length}</span></div>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">

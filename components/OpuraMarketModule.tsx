@@ -314,7 +314,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         const label = `<b>${l.propertyType}</b> - ${l.address || 'Endereço não geocodificado'}<br/>R$ ${l.price.toLocaleString('pt-BR')} (${l.areaPrivate}m² | ${l.bedrooms}D)`;
 
         const competitorIcon = L.divIcon({
-          html: `<div class="w-3.5 h-3.5 rounded-full ${colorClass} border border-white shadow-md flex items-center justify-center text-[7px] text-white font-bold">🏢</div>`,
+          html: `<div class="w-3.5 h-3.5 rounded-full ${colorClass} border border-white shadow-md flex items-center justify-center text-[10px] text-white font-bold">🏢</div>`,
           className: 'border-0 bg-transparent',
           iconSize: [14, 14],
           iconAnchor: [7, 7]
@@ -331,7 +331,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       const pinIcon = L.divIcon({
         html: `<div class="relative flex items-center justify-center">
                  <div class="absolute w-8 h-8 rounded-full bg-blue-500/20 border border-blue-400 animate-ping"></div>
-                 <div class="w-7 h-7 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center shadow-lg text-[12px]">📍</div>
+                 <div class="w-7 h-7 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center shadow-lg text-xs">📍</div>
                </div>`,
         className: 'border-0 bg-transparent',
         iconSize: [28, 28],

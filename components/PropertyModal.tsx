@@ -869,7 +869,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                 {/* Planta Baixa (Torres Conectadas) */}
                                 {connectedTowers && towerMatrix.length > 1 && (
                                     <div className="mt-8 pt-6 border-t border-blue-200">
-                                        <h4 className="text-[12px] font-black text-blue-800 uppercase tracking-widest mb-4 px-1 text-center">
+                                        <h4 className="text-xs font-black text-blue-800 uppercase tracking-widest mb-4 px-1 text-center">
                                             Planta Baixa Unificada (Torres Conectadas)
                                         </h4>
                                         <div className="flex flex-col items-center p-6 bg-slate-50/50 rounded-2xl border border-slate-100/50 overflow-x-auto relative shadow-inner md:px-12">

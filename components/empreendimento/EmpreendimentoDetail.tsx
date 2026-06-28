@@ -23,6 +23,14 @@ const STATUS_LABELS: Record<EmpreendimentoStatus, string> = {
   ENCERRADO: 'Encerrado',
 };
 
+const TIPO_LABELS: Record<string, string> = {
+  VERTICAL: 'Vertical',
+  HORIZONTAL: 'Horizontal',
+  MISTO: 'Misto',
+  COND_LOGISTICO: 'Condomínio Logístico',
+  COND_INDUSTRIAL: 'Condomínio Industrial',
+};
+
 type Tab = 'visao' | 'torres' | 'areas';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced }) => {
@@ -32,6 +40,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
 
   const terrenoCidade = [e.terreno_city, e.terreno_state].filter(Boolean).join(' - ');
   const terrenoLinha = [e.terreno_street, e.terreno_number].filter(Boolean).join(', ');
+  const enderecoCidade = [e.endereco_city, e.endereco_state].filter(Boolean).join(' - ');
+  const enderecoLinha = [e.endereco_street, e.endereco_number].filter(Boolean).join(', ');
 
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: 'visao', label: 'Visão Geral', icon: FileText },
@@ -57,6 +67,11 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
                 <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600">
                   {STATUS_LABELS[e.status]}
                 </span>
+                {e.tipo && (
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-gray-500/10 text-gray-600">
+                    {TIPO_LABELS[e.tipo] || e.tipo}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-gray-400 font-medium mt-0.5">
                 {e.code ? `${e.code} · ` : ''}{e.spe_razao_social || e.developer_name || 'Sem SPE definida'}
@@ -98,6 +113,30 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       {/* Conteúdo */}
       {tab === 'visao' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+            <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider mb-4">Dados Gerais</h3>
+            <dl className="space-y-3 text-sm">
+              <Row label="Tipo" value={e.tipo ? (TIPO_LABELS[e.tipo] || e.tipo) : undefined} />
+              <Row label="Matrícula" value={e.matricula} />
+              <Row label="Nº do Processo" value={e.numero_processo} />
+              <Row label="Construtora" value={e.construtora} />
+              <Row label="Responsável Técnico" value={e.responsavel_tecnico} />
+              <Row label="CREA/CAU" value={e.crea_cau} />
+            </dl>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+            <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider mb-4 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-gray-400" /> Endereço
+            </h3>
+            <dl className="space-y-3 text-sm">
+              <Row label="Logradouro" value={enderecoLinha} />
+              <Row label="Bairro" value={e.endereco_neighborhood} />
+              <Row label="Cidade/UF" value={enderecoCidade} />
+              <Row label="CEP" value={e.endereco_zip_code} />
+            </dl>
+          </div>
+
           <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
             <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider mb-4">SPE</h3>
             <dl className="space-y-3 text-sm">

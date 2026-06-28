@@ -5,6 +5,9 @@
 export type EmpreendimentoStatus =
     | 'PLANEJAMENTO' | 'LANCAMENTO' | 'EM_OBRAS' | 'ENTREGUE' | 'ENCERRADO';
 
+export type EmpreendimentoTipo =
+    | 'VERTICAL' | 'HORIZONTAL' | 'MISTO' | 'COND_LOGISTICO' | 'COND_INDUSTRIAL';
+
 export type UnitPositionType = 'FRENTE' | 'LATERAL' | 'FUNDOS';
 export type UnitSunOrientation = 'NORTE' | 'SUL' | 'LESTE' | 'OESTE';
 export type UnitStatus = 'DISPONIVEL' | 'RESERVADO' | 'PERMUTADO' | 'VENDIDO';
@@ -16,10 +19,27 @@ export interface Empreendimento {
     name: string;
     code?: string;
     status: EmpreendimentoStatus;
+    tipo?: EmpreendimentoTipo | null;
 
     // Vínculo vivo com o estudo Imovib
     imovib_study_id?: string | null;
     last_synced_at?: string | null;
+
+    // Dados gerais / regularização
+    matricula?: string;
+    construtora?: string;          // distinta da incorporadora (developer_name)
+    responsavel_tecnico?: string;
+    crea_cau?: string;
+    numero_processo?: string;
+
+    // Endereço de divulgação / oficial (separado do terreno)
+    endereco_street?: string;
+    endereco_number?: string;
+    endereco_complement?: string;
+    endereco_neighborhood?: string;
+    endereco_city?: string;
+    endereco_state?: string;
+    endereco_zip_code?: string;
 
     // SPE
     spe_razao_social?: string;

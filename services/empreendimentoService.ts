@@ -32,7 +32,7 @@ const inferCommonAreaCategory = (name: string): CommonAreaCategory => {
 
 // NOTA: estas constantes precisam ser string LITERAIS (sem concatenação com +),
 // senão o supabase-js infere GenericStringError em vez do tipo da linha.
-const EMPREENDIMENTO_COLS = 'id, organization_id, name, code, status, imovib_study_id, last_synced_at, spe_razao_social, spe_cnpj, spe_nome_fantasia, terreno_street, terreno_number, terreno_complement, terreno_neighborhood, terreno_city, terreno_state, terreno_zip_code, terreno_area, terreno_frente, terreno_fundos, terreno_lateral_direita, terreno_lateral_esquerda, vgv_total, developer_name, manager, launch_date, expected_delivery_date, metadata, created_at, updated_at';
+const EMPREENDIMENTO_COLS = 'id, organization_id, name, code, status, tipo, imovib_study_id, last_synced_at, matricula, construtora, responsavel_tecnico, crea_cau, numero_processo, endereco_street, endereco_number, endereco_complement, endereco_neighborhood, endereco_city, endereco_state, endereco_zip_code, spe_razao_social, spe_cnpj, spe_nome_fantasia, terreno_street, terreno_number, terreno_complement, terreno_neighborhood, terreno_city, terreno_state, terreno_zip_code, terreno_area, terreno_frente, terreno_fundos, terreno_lateral_direita, terreno_lateral_esquerda, vgv_total, developer_name, manager, launch_date, expected_delivery_date, metadata, created_at, updated_at';
 
 const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, name, floors_count, units_per_floor, construction_cost_sqm, sales_price_sqm, sort_order, created_at, updated_at';
 

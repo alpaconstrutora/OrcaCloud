@@ -5,7 +5,7 @@ import CityStateSelect from '../CityStateSelect';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { imovibService } from '../../services/imovibService';
 import {
-  Empreendimento, EmpreendimentoStatus, EmpreendimentoInsert, ImovibStudy,
+  Empreendimento, EmpreendimentoStatus, EmpreendimentoTipo, EmpreendimentoInsert, ImovibStudy,
 } from '../../types';
 
 interface Props {
@@ -23,6 +23,14 @@ const STATUS_OPTIONS: { value: EmpreendimentoStatus; label: string }[] = [
   { value: 'ENCERRADO', label: 'Encerrado' },
 ];
 
+const TIPO_OPTIONS: { value: EmpreendimentoTipo; label: string }[] = [
+  { value: 'VERTICAL', label: 'Vertical' },
+  { value: 'HORIZONTAL', label: 'Horizontal' },
+  { value: 'MISTO', label: 'Misto' },
+  { value: 'COND_LOGISTICO', label: 'Condomínio Logístico' },
+  { value: 'COND_INDUSTRIAL', label: 'Condomínio Industrial' },
+];
+
 export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, onClose, onSaved }) => {
   const [saving, setSaving] = React.useState(false);
   const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
@@ -30,7 +38,19 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
     name: editing?.name ?? '',
     code: editing?.code ?? '',
     status: (editing?.status ?? 'PLANEJAMENTO') as EmpreendimentoStatus,
+    tipo: (editing?.tipo ?? '') as EmpreendimentoTipo | '',
     imovib_study_id: editing?.imovib_study_id ?? '',
+    matricula: editing?.matricula ?? '',
+    construtora: editing?.construtora ?? '',
+    responsavel_tecnico: editing?.responsavel_tecnico ?? '',
+    crea_cau: editing?.crea_cau ?? '',
+    numero_processo: editing?.numero_processo ?? '',
+    endereco_street: editing?.endereco_street ?? '',
+    endereco_number: editing?.endereco_number ?? '',
+    endereco_neighborhood: editing?.endereco_neighborhood ?? '',
+    endereco_city: editing?.endereco_city ?? '',
+    endereco_state: editing?.endereco_state ?? '',
+    endereco_zip_code: editing?.endereco_zip_code ?? '',
     spe_razao_social: editing?.spe_razao_social ?? '',
     spe_cnpj: editing?.spe_cnpj ?? '',
     spe_nome_fantasia: editing?.spe_nome_fantasia ?? '',
@@ -64,7 +84,19 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
         name: form.name.trim(),
         code: form.code || undefined,
         status: form.status,
+        tipo: form.tipo || null,
         imovib_study_id: form.imovib_study_id || null,
+        matricula: form.matricula || undefined,
+        construtora: form.construtora || undefined,
+        responsavel_tecnico: form.responsavel_tecnico || undefined,
+        crea_cau: form.crea_cau || undefined,
+        numero_processo: form.numero_processo || undefined,
+        endereco_street: form.endereco_street || undefined,
+        endereco_number: form.endereco_number || undefined,
+        endereco_neighborhood: form.endereco_neighborhood || undefined,
+        endereco_city: form.endereco_city || undefined,
+        endereco_state: form.endereco_state || undefined,
+        endereco_zip_code: form.endereco_zip_code || undefined,
         spe_razao_social: form.spe_razao_social || undefined,
         spe_cnpj: form.spe_cnpj || undefined,
         spe_nome_fantasia: form.spe_nome_fantasia || undefined,
@@ -124,12 +156,46 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
                 {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
+            <div>
+              <label className={labelCls}>Tipo</label>
+              <select className={inputCls} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
+                <option value="">— Selecione —</option>
+                {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
             <div className="md:col-span-2">
               <label className={labelCls}>Estudo de Viabilidade (Imovib)</label>
               <select className={inputCls} value={form.imovib_study_id} onChange={e => set('imovib_study_id', e.target.value)}>
                 <option value="">— Sem vínculo —</option>
                 {studies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+            </div>
+          </div>
+
+          {/* Dados Gerais / Regularização */}
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-3">Dados Gerais</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className={labelCls}>Matrícula</label>
+                <input className={inputCls} value={form.matricula} onChange={e => set('matricula', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Nº do Processo</label>
+                <input className={inputCls} value={form.numero_processo} onChange={e => set('numero_processo', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Construtora</label>
+                <input className={inputCls} value={form.construtora} onChange={e => set('construtora', e.target.value)} />
+              </div>
+              <div className="md:col-span-2">
+                <label className={labelCls}>Responsável Técnico</label>
+                <input className={inputCls} value={form.responsavel_tecnico} onChange={e => set('responsavel_tecnico', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>CREA/CAU</label>
+                <input className={inputCls} value={form.crea_cau} onChange={e => set('crea_cau', e.target.value)} />
+              </div>
             </div>
           </div>
 
@@ -158,6 +224,38 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
                   <label className={labelCls}>Gestor</label>
                   <input className={inputCls} value={form.manager} onChange={e => set('manager', e.target.value)} />
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Endereço de divulgação / oficial */}
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-3">Endereço do Empreendimento</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2">
+                <label className={labelCls}>Logradouro</label>
+                <input className={inputCls} value={form.endereco_street} onChange={e => set('endereco_street', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Número</label>
+                <input className={inputCls} value={form.endereco_number} onChange={e => set('endereco_number', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Bairro</label>
+                <input className={inputCls} value={form.endereco_neighborhood} onChange={e => set('endereco_neighborhood', e.target.value)} />
+              </div>
+              <div className="md:col-span-2">
+                <CityStateSelect
+                  cep={form.endereco_zip_code || undefined}
+                  stateCode={form.endereco_state || undefined}
+                  cityName={form.endereco_city || undefined}
+                  onChange={({ cep, stateCode, cityName }) => setForm(prev => ({
+                    ...prev,
+                    endereco_zip_code: cep ?? '',
+                    endereco_state: stateCode ?? '',
+                    endereco_city: cityName ?? '',
+                  }))}
+                />
               </div>
             </div>
           </div>

@@ -53,7 +53,7 @@ export interface Client {
 export interface Investor {
     id: string;
     name: string;
-    email: string;
+    email?: string;
     phone?: string;
     document?: string;
     organization_id?: string;

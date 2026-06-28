@@ -33,7 +33,7 @@ const NBR_TO_SINAPI: Record<string, string> = {
 export interface Investor {
     id: string;
     name: string;
-    email?: string | null;
+    email?: string;
     phone?: string;
     document?: string;
     organization_id?: string;
@@ -80,18 +80,19 @@ export const investorService = {
 
     async saveInvestor(investor: Partial<Investor>) {
         const INVESTOR_COLS = 'id, name, email, phone, document, organization_id, settings, created_at';
-        // Coerce empty strings to null so UNIQUE constraint works correctly
-        investor = {
+        // Coerce empty email to null so the UNIQUE constraint allows multiple
+        // investors without email. Kept off the typed interface (DB-only concern).
+        const payload: Record<string, unknown> = {
             ...investor,
             email: investor.email?.trim() || null,
         };
         if (investor.id) {
             // Strip immutable fields from update payload
-            const { id, created_at, ...updatePayload } = investor;
+            const { id, created_at, ...updatePayload } = payload;
             const { data, error } = await supabase
                 .from('investors')
                 .update(updatePayload)
-                .eq('id', id)
+                .eq('id', investor.id)
                 .select(INVESTOR_COLS)
                 .single();
 
@@ -100,7 +101,7 @@ export const investorService = {
         } else {
             const { data, error } = await supabase
                 .from('investors')
-                .insert(investor)
+                .insert(payload)
                 .select(INVESTOR_COLS)
                 .single();
 

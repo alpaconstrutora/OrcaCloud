@@ -1,0 +1,14 @@
+node_modules
+.git
+.github
+dist
+__tests__
+*.xlsx
+*.pdf
+*.zip
+*.tgz
+*.log
+*.sql
+*.ps1
+*.mjs
+*.js

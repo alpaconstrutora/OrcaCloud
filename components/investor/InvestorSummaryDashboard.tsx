@@ -122,10 +122,18 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                                <Area type="monotone" dataKey="yield" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorYield)" />
+                                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`} />
+                                <Tooltip
+                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                    formatter={((value: any, name: any) => {
+                                        if (name === 'yield') return [value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), 'Capital Investido'];
+                                        if (name === 'percent') return [`${Number(value).toFixed(2)}%`, 'Retorno sobre Aporte'];
+                                        return [value, name];
+                                    }) as any}
+                                />
+                                <Area type="monotone" dataKey="yield" name="yield" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorYield)" />
                                 {showSelic && <Line type="monotone" dataKey="selic" stroke="#CDA434" strokeWidth={2} dot={false} />}
                                 {showIpca && <Line type="monotone" dataKey="ipca" stroke="#6366f1" strokeWidth={2} dot={false} />}
                                 {showIgpm && <Line type="monotone" dataKey="igpm" stroke="#10b981" strokeWidth={2} dot={false} />}

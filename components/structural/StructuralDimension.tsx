@@ -11,6 +11,7 @@ import type {
   UpsertStructuralProjectInput
 } from '../../types/structural'
 import ElementDimensionPanel from './ElementDimensionPanel'
+import { generateConsolidatedMemorialPDF } from '../../services/pdfMemorialService'
 
 interface Props {
   activeOrganizationId?: string
@@ -42,6 +43,22 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
 
   // Elemento atualmente em edição no painel de dimensionamento
   const [editingElement, setEditingElement] = useState<OpuraStructuralDimensionElement | null>(null)
+
+  const [exportingPDF, setExportingPDF] = useState<boolean>(false)
+
+  // 0. Exportar Caderno de Memoriais PDF unificado
+  const handleExportConsolidatedPDF = async () => {
+    if (!selectedProject || elements.length === 0) return
+    setExportingPDF(true)
+    try {
+      generateConsolidatedMemorialPDF(selectedProject, elements)
+    } catch (err) {
+      console.error('Erro ao exportar memorial consolidado:', err)
+      alert('Erro ao gerar o caderno consolidado.')
+    } finally {
+      setExportingPDF(false)
+    }
+  }
 
   // 0. Exportar quantitativos em planilha consolidada
   const handleExportConsolidatedExcel = async () => {
@@ -488,6 +505,15 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
             </div>
             
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportConsolidatedPDF}
+                disabled={exportingPDF || elements.length === 0}
+                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 disabled:text-slate-300 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
+              >
+                {exportingPDF ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <FileText className="w-4.5 h-4.5" />}
+                Caderno PDF
+              </button>
+
               <button
                 onClick={handleExportConsolidatedExcel}
                 disabled={exportingExcel || elements.length === 0}

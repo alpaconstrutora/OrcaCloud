@@ -95,7 +95,6 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     };
 
     const [sortBy, setSortBy] = React.useState<string>('name-asc');
-    const tableColumns = useTableColumns(CLIENT_COLUMNS);
     const [tokenModal, setTokenModal] = React.useState<{ client: Client; token: ClientPortalToken | null } | null>(null);
     const [tokenLoading, setTokenLoading] = React.useState(false);
     const [tokenCopied, setTokenCopied] = React.useState(false);

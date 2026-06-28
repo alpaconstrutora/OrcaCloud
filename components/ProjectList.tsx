@@ -27,6 +27,7 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 import ExcelImportModal from './ExcelImportModal';
 import { BudgetEntry, ProjectSettings } from '../types';
+import { useTableColumns } from './ui/TableUtils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SettingsLike = any;
@@ -197,17 +198,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
     const [sortBy, setSortBy] = React.useState<string>('recent');
     const [tipoFilter, setTipoFilter] = React.useState<TipoObra | ''>('');
-    const [sortColumn, setSortColumn] = React.useState<ColumnKey | null>(null);
-    const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('asc');
-
-    const handleColumnSort = (col: ColumnKey) => {
-        if (sortColumn === col) {
-            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortColumn(col);
-            setSortDirection('asc');
-        }
-    };
 
     const SortableHeader = ({ col, label }: { col: ColumnKey; label: string }) => (
         <th

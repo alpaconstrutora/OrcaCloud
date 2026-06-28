@@ -84,7 +84,8 @@ export const investorService = {
         // investors without email. Kept off the typed interface (DB-only concern).
         const payload: Record<string, unknown> = {
             ...investor,
-            email: investor.email?.trim() || null,
+            // Só normaliza email se foi explicitamente fornecido (evita apagar em updates parciais)
+            ...(investor.email !== undefined && { email: investor.email?.trim() || null }),
         };
         if (investor.id) {
             // Strip immutable fields from update payload

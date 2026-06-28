@@ -101,11 +101,19 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const [showTabConfig, setShowTabConfig] = React.useState(false);
     const [portalAnnouncements, setPortalAnnouncements] = React.useState<any[]>([]);
 
-    // Tab visibility: lida de investorProfile.settings.investorPortalTabs
+    // Tab visibility: estado local inicializado do investorProfile.settings
     const investorSettings = investorProfile?.settings ?? {};
-    const enabledTabIds: string[] = (investorSettings.investorPortalTabs ?? []).length > 0
+    const initialTabIds = (investorSettings.investorPortalTabs ?? []).length > 0
         ? investorSettings.investorPortalTabs!
-        : TABS.map(t => t.id);
+        : TABS.map(t => t.id as string);
+    const [enabledTabIds, setEnabledTabIds] = React.useState<string[]>(initialTabIds);
+
+    // Sincroniza quando o investidor selecionado muda (ex: admin troca de investidor)
+    React.useEffect(() => {
+        const saved = investorProfile?.settings?.investorPortalTabs;
+        setEnabledTabIds((saved ?? []).length > 0 ? saved! : TABS.map(t => t.id as string));
+    }, [investorProfile?.id]);
+
     // admin vê todas (para configurar); investidor vê só as habilitadas
     const navTabs = isAdmin ? TABS : TABS.filter(t => enabledTabIds.includes(t.id));
 
@@ -114,6 +122,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         const next = enabledTabIds.includes(tabId)
             ? enabledTabIds.filter(id => id !== tabId)
             : [...enabledTabIds, tabId];
+        // Atualiza UI imediatamente
+        setEnabledTabIds(next);
         try {
             const { investorService } = await import('../services/investorService');
             await investorService.saveInvestor({
@@ -122,6 +132,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             });
         } catch (err) {
             console.error('Erro ao salvar abas do investidor:', err);
+            // Reverte em caso de erro
+            setEnabledTabIds(enabledTabIds);
         }
     };
 

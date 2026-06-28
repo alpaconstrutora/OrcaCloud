@@ -46,11 +46,18 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     // Layout "com cliente" (mostra coluna Contratante): qualquer domínio OUTGOING.
     const showsClient = direction === 'OUTGOING' || domain === 'SERVICOS' || domain === 'LOCACAO' || domain === 'VENDAS';
 
+    const [loadError, setLoadError] = useState<string | null>(null);
+
     const load = useCallback(async () => {
         setLoading(true);
+        setLoadError(null);
         try {
             const data = await contractService.listContracts(undefined, organizationId, undefined, direction, domain);
             setContracts(data);
+        } catch (err: any) {
+            console.error('[ContractsDashboard] Erro ao carregar contratos:', err);
+            setLoadError(err?.message || 'Erro ao carregar contratos.');
+            setContracts([]);
         } finally {
             setLoading(false);
         }
@@ -188,6 +195,15 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                     </button>
                 </div>
             </div>
+
+            {/* Erro de carregamento */}
+            {loadError && (
+                <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-medium">
+                    <AlertTriangle size={16} className="shrink-0" />
+                    <span>{loadError}</span>
+                    <button onClick={load} className="ml-auto text-xs underline hover:no-underline">Tentar novamente</button>
+                </div>
+            )}
 
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

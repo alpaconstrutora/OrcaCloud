@@ -520,18 +520,28 @@ export const contractService = {
 
     // ─── Ponte Negociação (Vendas de Ativos) → Contrato de Venda ──────────────
     // Retorna o contrato VENDAS já gerado para uma negociação, se existir.
+    // Resiliente: se a coluna deal_id ainda não existe no banco (migration pendente),
+    // retorna null em vez de lançar erro.
     getContractByDealId: async (dealId: string): Promise<Contract | null> => {
-        const { data, error } = await supabase
-            .from('contracts')
-            .select('id, organization_id, deal_id, client_id, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
-            .eq('deal_id', dealId)
-            .maybeSingle();
-        if (error) throw error;
-        return (data as Contract) ?? null;
+        try {
+            const { data, error } = await supabase
+                .from('contracts')
+                .select('id, organization_id, deal_id, client_id, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
+                .eq('deal_id', dealId)
+                .maybeSingle();
+            if (error) {
+                // Coluna deal_id pode não existir ainda (migration pendente) — trata como "não encontrado"
+                console.warn('[contractService] getContractByDealId error (deal_id column may be missing):', error.message);
+                return null;
+            }
+            return (data as Contract) ?? null;
+        } catch {
+            return null;
+        }
     },
 
     // Cria (ou retorna se já existir) um contrato domain='VENDAS' a partir de uma
-    // negociação de Vendas de Ativos. Idempotente via contracts.deal_id (índice único).
+    // negociação de Vendas de Ativos. Idempotente via deal_id ou número do contrato.
     createFromDeal: async (deal: {
         id: string;
         organization_id?: string;
@@ -551,7 +561,7 @@ export const contractService = {
         if (!deal.organization_id) throw new Error('Negociação sem organização — impossível gerar contrato.');
         if (!deal.client_id) throw new Error('Negociação sem cliente — selecione o comprador antes de gerar o contrato.');
 
-        // Idempotência: se já há contrato para esta negociação, retorna o existente.
+        // Idempotência primária: busca por deal_id (requer migration 20261228000006 aplicada)
         const existing = await contractService.getContractByDealId(deal.id);
         if (existing) return existing;
 
@@ -571,6 +581,19 @@ export const contractService = {
         const number = (deal.contract_number && deal.contract_number.trim())
             ? deal.contract_number.trim()
             : await contractService.getNextContractNumber(deal.organization_id, 'OUTGOING');
+
+        // Idempotência secundária: busca por número + org (protege contra deal_id ausente no banco)
+        const { data: byNumber } = await supabase
+            .from('contracts')
+            .select('id, organization_id, client_id, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
+            .eq('organization_id', deal.organization_id)
+            .eq('number', number)
+            .maybeSingle();
+        if (byNumber) {
+            // Aproveita para gravar o deal_id se a coluna já existir
+            await supabase.from('contracts').update({ deal_id: deal.id } as any).eq('id', (byNumber as any).id).then(() => {});
+            return byNumber as Contract;
+        }
 
         // Mapeia o estágio da negociação para o status do contrato.
         const status =

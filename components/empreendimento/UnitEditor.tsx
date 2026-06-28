@@ -8,6 +8,7 @@ import {
 
 interface Props {
   tower: EmpreendimentoTower;
+  onUnitsChange?: (towerId: string, units: EmpreendimentoUnit[]) => void;
 }
 
 const STATUS_LABELS: Record<UnitStatus, string> = {
@@ -28,7 +29,7 @@ const emptyForm = () => ({
   name: '', floor: '', typology: '', private_area: '', common_area: '', price: '', parking_spaces: '',
 });
 
-export const UnitEditor: React.FC<Props> = ({ tower }) => {
+export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   const [units, setUnits] = React.useState<EmpreendimentoUnit[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -65,6 +66,10 @@ export const UnitEditor: React.FC<Props> = ({ tower }) => {
   }, [tower.id]);
 
   React.useEffect(() => { load(); }, [load]);
+
+  React.useEffect(() => {
+    onUnitsChange?.(tower.id, units);
+  }, [units, tower.id, onUnitsChange]);
 
   const buildPayload = (f: typeof form): Omit<EmpreendimentoUnitInsert, 'tower_id' | 'name'> => {
     const priv = f.private_area ? Number(f.private_area) : undefined;
@@ -419,10 +424,29 @@ export const UnitEditor: React.FC<Props> = ({ tower }) => {
                 );
               })}
             </tbody>
+            <tfoot>
+              <TotalsRow units={units} />
+            </tfoot>
           </table>
         </div>
       )}
     </div>
+  );
+};
+
+const TotalsRow: React.FC<{ units: EmpreendimentoUnit[] }> = ({ units }) => {
+  const totalPriv = units.reduce((s, u) => s + (u.private_area ?? 0), 0);
+  const totalComum = units.reduce((s, u) => s + (u.common_area ?? 0), 0);
+  const fmt = (v: number) => v > 0 ? v.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—';
+  return (
+    <tr className="border-t-2 border-gray-200 bg-gray-50/70 font-bold text-xs text-gray-700">
+      <td className="py-2.5 px-4" colSpan={3}>
+        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total ({units.length} unid.)</span>
+      </td>
+      <td className="py-2.5 px-4">{fmt(totalPriv)} m²</td>
+      <td className="py-2.5 px-4">{fmt(totalComum)} m²</td>
+      <td className="py-2.5 px-4" colSpan={4} />
+    </tr>
   );
 };
 

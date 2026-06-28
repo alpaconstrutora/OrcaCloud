@@ -46,6 +46,7 @@ const ImovibDashboard       = React.lazy(() => import('./ImovibDashboard'));
 const ImovibForm            = React.lazy(() => import('./ImovibForm'));
 const ImovibDetailView      = React.lazy(() => import('./ImovibDetailView'));
 const InvestorDashboard     = React.lazy(() => import('./InvestorDashboard'));
+const InvestorModule        = React.lazy(() => import('./InvestorModule'));
 const SupplierDashboard     = React.lazy(() => import('./SupplierDashboard'));
 const BrokerPortal          = React.lazy(() => import('./BrokerPortal'));
 const SalesModule           = React.lazy(() => import('./SalesModule'));
@@ -873,6 +874,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onClientSelect={(c: Client) => setClientProfile(c)}
           onUpdateSettings={handleUpdateSettings}
           activeTab={activeView === 'documentos' ? 'documentos' : 'dashboard'}
+        />
+      );
+
+    case 'investor-portal':
+      return (
+        <InvestorModule
+          organizationId={activeOrganizationId || undefined}
+          profile={currentProfile}
+          settings={settingsWithId}
+          budget={budget}
         />
       );
 

@@ -1,7 +1,8 @@
 export type ContractType =
     | 'Empreitada Global' | 'Empreitada Parcial' | 'Preço Fechado' | 'Preço Unitário'
     | 'Contrato por Medição' | 'Contrato Recorrente' | 'Manutenção' | 'Prestação de Serviços'
-    | 'Instalação' | 'Reforma' | 'Administração' | 'Subempreitada' | 'Outros';
+    | 'Instalação' | 'Reforma' | 'Administração' | 'Subempreitada' | 'Outros'
+    | 'Compra e Venda';
 
 export type BillingMode = 'MEDICAO' | 'ETAPA' | 'SINAL_PARCELAS' | 'COST_PLUS';
 

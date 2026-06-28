@@ -1,9 +1,9 @@
 // components/empreendimento/TowerEditor.tsx
 import React from 'react';
-import { Plus, Trash2, Loader2, Building, Link2, HardHat, ChevronRight, Edit, Check, X } from 'lucide-react';
+import { Plus, Trash2, Loader2, Building, Link2, HardHat, ChevronRight, Edit, Check, X, BarChart2 } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { useStore } from '../../store/useStore';
-import { EmpreendimentoTower, EmpreendimentoTowerInsert } from '../../types';
+import { EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnit } from '../../types';
 import UnitEditor from './UnitEditor';
 
 interface Props {
@@ -20,6 +20,11 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editForm, setEditForm] = React.useState({ name: '', floors_count: '', units_per_floor: '' });
   const [form, setForm] = React.useState({ name: '', floors_count: '', units_per_floor: '' });
+  const [unitsByTower, setUnitsByTower] = React.useState<Record<string, EmpreendimentoUnit[]>>({});
+
+  const handleUnitsChange = React.useCallback((towerId: string, units: EmpreendimentoUnit[]) => {
+    setUnitsByTower(prev => ({ ...prev, [towerId]: units }));
+  }, []);
 
   const orgProjects = React.useMemo(() => projects.filter(p => {
     const s: any = p.settings || {};
@@ -153,6 +158,9 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
             const linkedObra = orgProjects.find(p => p.id === tower.project_id);
             const isOpen = expandedId === tower.id;
             const isEditing = editingId === tower.id;
+            const towerUnits = unitsByTower[tower.id] ?? [];
+            const towerPriv = towerUnits.reduce((s, u) => s + (u.private_area ?? 0), 0);
+            const towerComum = towerUnits.reduce((s, u) => s + (u.common_area ?? 0), 0);
             return (
               <div key={tower.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 <div className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -203,6 +211,14 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
                         <p className="text-xs text-gray-400 font-medium">
                           {tower.floors_count ? `${tower.floors_count} pav.` : 'sem pavimentos'}
                           {tower.units_per_floor ? ` · ${tower.units_per_floor} un/pav` : ''}
+                          {towerUnits.length > 0 && (
+                            <>
+                              {' · '}
+                              <span className="text-gray-500">{towerUnits.length} unid.</span>
+                              {towerPriv > 0 && <> · <span className="text-blue-500">{towerPriv.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m² priv.</span></>}
+                              {towerComum > 0 && <> · <span className="text-violet-500">{towerComum.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m² comum</span></>}
+                            </>
+                          )}
                         </p>
                       </div>
                       <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
@@ -247,7 +263,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
 
                 {isOpen && !isEditing && (
                   <div className="border-t border-gray-100 p-4 bg-gray-50/30">
-                    <UnitEditor tower={tower} />
+                    <UnitEditor tower={tower} onUnitsChange={handleUnitsChange} />
                   </div>
                 )}
               </div>
@@ -255,8 +271,37 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
           })}
         </div>
       )}
+
+      {/* Totais gerais — só exibe quando há pelo menos 1 torre com unidades */}
+      {Object.keys(unitsByTower).length > 0 && (() => {
+        const allUnits = Object.values(unitsByTower).flat();
+        if (allUnits.length === 0) return null;
+        const totalPriv = allUnits.reduce((s, u) => s + (u.private_area ?? 0), 0);
+        const totalComum = allUnits.reduce((s, u) => s + (u.common_area ?? 0), 0);
+        const totalArea = totalPriv + totalComum;
+        const fmt = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+        return (
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-wrap gap-6 items-center">
+            <div className="flex items-center gap-2 text-gray-500">
+              <BarChart2 className="w-4 h-4 text-gray-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Total Geral</span>
+            </div>
+            <Metric label="Unidades" value={String(allUnits.length)} />
+            <Metric label="Área Privativa" value={totalPriv > 0 ? `${fmt(totalPriv)} m²` : '—'} color="text-blue-600" />
+            <Metric label="Área Comum" value={totalComum > 0 ? `${fmt(totalComum)} m²` : '—'} color="text-violet-600" />
+            {totalArea > 0 && <Metric label="Área Total" value={`${fmt(totalArea)} m²`} color="text-gray-700" />}
+          </div>
+        );
+      })()}
     </div>
   );
 };
+
+const Metric: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color = 'text-gray-700' }) => (
+  <div>
+    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 block">{label}</span>
+    <span className={`text-sm font-bold ${color}`}>{value}</span>
+  </div>
+);
 
 export default TowerEditor;

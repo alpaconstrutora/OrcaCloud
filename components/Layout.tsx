@@ -859,7 +859,7 @@ const Layout: React.FC<LayoutProps> = ({
                   onToggle={() => setIsPortalsOpen(!isPortalsOpen)}
                 >
                   <DropdownItem id="client-properties" label="Portal do Cliente" icon={Building2} />
-                  <DropdownItem id="investor-area" label="Área do Investidor" icon={TrendingUp} />
+                  <DropdownItem id="investor-portal" label="Portal do Investidor" icon={TrendingUp} />
                   <DropdownItem id="supplier-area" label="Portal do Fornecedor" icon={Truck} />
                   <DropdownItem id="partner-workspaces-admin" label="Portal de Parceiros" icon={Users} />
                   {(mod.broker_portal || isDev) && (

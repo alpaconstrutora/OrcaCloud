@@ -126,6 +126,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                 descricao: form.descricao || null,
                 nivel_hierarquico: form.nivel_hierarquico,
                 responsabilidades: form.responsabilidades.split('\n').map(s => s.trim()).filter(Boolean),
+                competencias: [],
             });
             setIsModalOpen(false);
             setForm(EMPTY_FORM);

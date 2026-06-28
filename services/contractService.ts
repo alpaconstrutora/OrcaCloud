@@ -586,7 +586,7 @@ export const contractService = {
             title: unitLabel ? `Contrato de Venda — ${unitLabel}` : 'Contrato de Compra e Venda',
             description: deal.notes || undefined,
             contract_type: 'Compra e Venda',
-            nature: 'Venda',
+            nature: 'Outros',
             direction: 'OUTGOING' as const,
             domain: 'VENDAS' as const,
             status,

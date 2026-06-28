@@ -558,8 +558,10 @@ export function dimensionarSapata(params: {
   sigmaSoloMpa: number // Tensão admissível do solo em MPa (SPT)
   aPilarCm: number // dimensões do pilar de arranque
   bPilarCm: number
+  mkAKnm?: number // Momento em kN.m na direção A
+  mkBKnm?: number // Momento em kN.m na direção B
 }): DimensionResult {
-  const { fckMpa, caa, nkKn, sigmaSoloMpa, aPilarCm, bPilarCm } = params
+  const { fckMpa, caa, nkKn, sigmaSoloMpa, aPilarCm, bPilarCm, mkAKnm = 0, mkBKnm = 0 } = params
   const diagnosticos: DiagnosticItem[] = []
 
   const cNomCm = getCobrimentoNominalCm(caa, 'sapata')
@@ -571,26 +573,91 @@ export function dimensionarSapata(params: {
 
   // 1. Dimensionamento em Planta
   // Adiciona 10% para peso próprio da sapata
-  const areaPlantaCm2 = (1.1 * nkKn) / sigmaSoloKnc2
+  const nEstKn = 1.1 * nkKn
+  let areaPlantaCm2 = nEstKn / sigmaSoloKnc2
 
   // Mantendo balanços iguais nas duas direções: aSap - bSap = aPilar - bPilar
   const diffPilar = (aPilarCm - bPilarCm)
   const deltaEquaçao = diffPilar * diffPilar + 4 * areaPlantaCm2
-  const aSap = Math.ceil(((diffPilar + Math.sqrt(deltaEquaçao)) / 2) / 5) * 5 // arredonda para múltiplos de 5
-  const bSap = aSap - diffPilar
+  let aSap = Math.ceil(((diffPilar + Math.sqrt(deltaEquaçao)) / 2) / 5) * 5
+  let bSap = aSap - diffPilar
+
+  // Iteração para garantir que a tensão máxima atenda a capacidade do solo e limitar descolamento
+  let atendido = false
+  let iteracao = 0
+  let sigmaMax = 0
+  let sigmaMin = 0
+
+  while (!atendido && iteracao < 20) {
+    iteracao++
+    const A = aSap
+    const B = bSap
+    const area = A * B
+
+    // W = B * A^2 / 6 (direção A)
+    const Wa = (B * Math.pow(A, 2)) / 6
+    // W = A * B^2 / 6 (direção B)
+    const Wb = (A * Math.pow(B, 2)) / 6
+
+    // Momentos em kN.cm
+    const mkA_cm = mkAKnm * 100
+    const mkB_cm = mkBKnm * 100
+
+    sigmaMax = (nEstKn / area) + (mkA_cm / Wa) + (mkB_cm / Wb)
+    sigmaMin = (nEstKn / area) - (mkA_cm / Wa) - (mkB_cm / Wb)
+
+    // Se a tensão máxima e o descolamento parcial estiverem aceitáveis
+    if (sigmaMax <= sigmaSoloKnc2 && sigmaMin >= -0.2 * sigmaMax) {
+      atendido = true
+    } else {
+      aSap += 5
+      bSap = aSap - diffPilar
+    }
+  }
+
+  const statusTensao = sigmaMax <= sigmaSoloKnc2 ? 'OK' : 'REPROVADO'
+  const msgTensao = statusTensao === 'OK'
+    ? `Tensão máxima no solo (${(sigmaMax * 10).toFixed(2)} kgf/cm²) atende a tensão admissível (${(sigmaSoloKnc2 * 10).toFixed(2)} kgf/cm²).`
+    : `Tensão máxima no solo (${(sigmaMax * 10).toFixed(2)} kgf/cm²) excede a admissível (${(sigmaSoloKnc2 * 10).toFixed(2)} kgf/cm²).`
 
   diagnosticos.push({
-    criterio: 'Tensão admissível do solo',
-    status: 'OK',
-    valorCalculado: `${(nkKn / (aSap * bSap)).toFixed(3)} kN/cm²`,
+    criterio: 'Tensão máxima no solo',
+    status: statusTensao,
+    valorCalculado: `${(sigmaMax).toFixed(3)} kN/cm²`,
     valorLimite: `${sigmaSoloKnc2.toFixed(3)} kN/cm²`,
     referenciaNormativa: 'NBR 6122',
-    mensagem: 'Área da base adequada para não exceder a capacidade do solo.'
+    mensagem: msgTensao
+  })
+
+  // Verificação de descolamento de base
+  let statusDescolamento: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  let msgDescolamento = 'Sem descolamento de base (toda a sapata está comprimida).'
+
+  if (sigmaMin < 0) {
+    const eA = mkAKnm / (nkKn || 1)
+    const eB = mkBKnm / (nkKn || 1)
+    
+    if (eA > aSap / 600 || eB > bSap / 600) {
+      statusDescolamento = 'ATENCAO'
+      msgDescolamento = `Descolamento de base detectado fora do núcleo central.`
+    } else {
+      statusDescolamento = 'OK'
+      msgDescolamento = `Descolamento leve detectado (${(sigmaMin * 10).toFixed(2)} kgf/cm²), aceitável dentro do núcleo central.`
+    }
+  }
+
+  diagnosticos.push({
+    criterio: 'Descolamento da base da sapata',
+    status: statusDescolamento,
+    valorCalculado: sigmaMin >= 0 ? '0.00%' : `${Math.abs(sigmaMin / (sigmaMax - sigmaMin) * 100).toFixed(1)}% de descolamento`,
+    valorLimite: 'Evitar tração no solo',
+    referenciaNormativa: 'NBR 6122 Art. 7.4',
+    mensagem: msgDescolamento
   })
 
   // 2. Altura da Sapata Rígida (Bielas a 45 graus)
   const dCm = Math.max((aSap - aPilarCm) / 4, (bSap - bPilarCm) / 4)
-  const hSap = Math.ceil((dCm + cNomCm + 1.0) / 5) * 5 // total em cm múltiplo de 5
+  const hSap = Math.ceil((dCm + cNomCm + 1.0) / 5) * 5
 
   diagnosticos.push({
     criterio: 'Condição de sapata rígida',
@@ -602,14 +669,20 @@ export function dimensionarSapata(params: {
   })
 
   // 3. Armaduras de Flexão nas duas direções
-  const nd = 1.4 * nkKn
-  const momentoA = nd * Math.pow(aSap - aPilarCm, 2) / (8 * aSap) // kN.cm
-  const momentoB = nd * Math.pow(bSap - bPilarCm, 2) / (8 * bSap) // kN.cm
+  const balançoA = (aSap - aPilarCm) / 2
+  const balançoB = (bSap - bPilarCm) / 2
 
-  const asA = momentoA / (fydKnc2 * 0.9 * dCm)
-  const asB = momentoB / (fydKnc2 * 0.9 * dCm)
+  const pressaoCalculoMax = 1.4 * sigmaMax // kN/cm²
+  
+  const momentoA = (pressaoCalculoMax * bSap * Math.pow(balançoA, 2)) / 2
+  const momentoB = (pressaoCalculoMax * aSap * Math.pow(balançoB, 2)) / 2
 
-  // Bitolas e quantidade sugerida
+  const asMinA = 0.0015 * bSap * dCm
+  const asMinB = 0.0015 * aSap * dCm
+
+  const asA = Math.max(asMinA, momentoA / (fydKnc2 * 0.9 * dCm))
+  const asB = Math.max(asMinB, momentoB / (fydKnc2 * 0.9 * dCm))
+
   const bitolaSapMm = 10.0
   const areaSapBar = (Math.PI * Math.pow(bitolaSapMm / 10, 2)) / 4
   const numBarrasA = Math.ceil(asA / areaSapBar)
@@ -618,8 +691,12 @@ export function dimensionarSapata(params: {
   const volumeConcretoM3 = (aSap / 100) * (bSap / 100) * (hSap / 100)
   const pesoAcoKg = (numBarrasA * (aSap / 100) + numBarrasB * (bSap / 100)) * areaSapBar * 100 * 0.00785
 
+  let sapStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  if (diagnosticos.some(d => d.status === 'REPROVADO')) sapStatus = 'REPROVADO'
+  else if (diagnosticos.some(d => d.status === 'ATENCAO')) sapStatus = 'ATENCAO'
+
   return {
-    status: 'OK',
+    status: sapStatus,
     diagnosticos,
     armaduraSugerida: {
       direcaoA: {
@@ -637,6 +714,13 @@ export function dimensionarSapata(params: {
       cobrimentoNominalCm: cNomCm,
       dimensaoACm: aSap,
       dimensaoBCm: bSap,
+      esforcos: {
+        nkKn,
+        mkAKnm,
+        mkBKnm,
+        sigmaMaxKnc2: sigmaMax,
+        sigmaMinKnc2: sigmaMin
+      },
       volumeConcretoM3,
       pesoAcoKg,
       areaFormaM2: (2 * aSap * hSap + 2 * bSap * hSap) / 10000

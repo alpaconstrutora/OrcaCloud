@@ -169,6 +169,42 @@ describe('dimensionarSapata', () => {
     expect(result.detalhesTecnicos.volumeConcretoM3).toBeGreaterThan(0)
     expect(result.armaduraSugerida.direcaoA.quantidade).toBeGreaterThan(0)
   })
+
+  it('Sapata sob Flexão Composta (Nk=400kN, MkA=20kNm, MkB=10kNm) que atende tensões', () => {
+    const result = dimensionarSapata({
+      fckMpa: 25,
+      caa: 'II',
+      nkKn: 400,
+      sigmaSoloMpa: 0.2,
+      aPilarCm: 20,
+      bPilarCm: 20,
+      mkAKnm: 20,
+      mkBKnm: 10,
+    })
+
+    expect(result.status).toBe('OK')
+    expect(result.detalhesTecnicos.esforcos.sigmaMaxKnc2).toBeLessThanOrEqual(0.02) // menor que 0.2 MPa = 0.02 kN/cm²
+    expect(result.armaduraSugerida.direcaoA.quantidade).toBeGreaterThanOrEqual(2)
+    expect(result.armaduraSugerida.direcaoB.quantidade).toBeGreaterThanOrEqual(2)
+    expect(result.diagnosticos.some(d => d.criterio.includes('Tensão máxima') && d.status === 'OK')).toBe(true)
+  })
+
+  it('Sapata sob flexão composta severa que gera aviso de descolamento de base', () => {
+    const result = dimensionarSapata({
+      fckMpa: 25,
+      caa: 'II',
+      nkKn: 200,
+      sigmaSoloMpa: 0.2,
+      aPilarCm: 20,
+      bPilarCm: 20,
+      mkAKnm: 80, // Momento muito alto para normal relativamente baixa
+      mkBKnm: 0,
+    })
+
+    // Deve reportar ATENCAO ou REPROVADO no descolamento de base
+    expect(result.status === 'ATENCAO' || result.status === 'REPROVADO').toBe(true)
+    expect(result.diagnosticos.some(d => d.criterio.includes('Descolamento') && d.status === 'ATENCAO')).toBe(true)
+  })
 })
 
 describe('dimensionarVigaContinua', () => {

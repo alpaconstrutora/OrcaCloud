@@ -110,7 +110,9 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
           nkKn: Number(cargas.nkKn ?? 300),
           sigmaSoloMpa: Number(cargas.sigmaSoloMpa ?? 0.2),
           aPilarCm: Number(geometria.aPilarCm ?? 20),
-          bPilarCm: Number(geometria.bPilarCm ?? 20)
+          bPilarCm: Number(geometria.bPilarCm ?? 20),
+          mkAKnm: Number(cargas.mkAKnm ?? 0),
+          mkBKnm: Number(cargas.mkBKnm ?? 0)
         })
       }
 
@@ -764,6 +766,22 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
+                <label className="block text-xs font-black text-slate-500 space-y-1">
+                  Momento Mk,A (kNm)
+                  <input
+                    type="number" value={cargas.mkAKnm ?? 0}
+                    onChange={e => updateCarga('mkAKnm', Number(e.target.value))}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                  />
+                </label>
+                <label className="block text-xs font-black text-slate-500 space-y-1">
+                  Momento Mk,B (kNm)
+                  <input
+                    type="number" value={cargas.mkBKnm ?? 0}
+                    onChange={e => updateCarga('mkBKnm', Number(e.target.value))}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                  />
+                </label>
               </div>
             )}
           </div>
@@ -905,6 +923,18 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     <div>Exc. 1ª Ordem (e1): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.e1Cm.toFixed(2)} cm</span></div>
                     <div>Exc. 2ª Ordem (e2): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.e2Cm.toFixed(2)} cm</span></div>
                     <div>Momento Total (MSd): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.mSdTotKnm.toFixed(2)} kN.m</span></div>
+                  </div>
+                </div>
+              )}
+
+              {element.tipo === 'SAPATA' && result.detalhesTecnicos.esforcos && (
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mt-3 space-y-2">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Tensões de Contato e Excentricidade (NBR 6122)</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold text-slate-700">
+                    <div>Tensão Máxima (σ_max): <span className="font-bold text-slate-900">{(result.detalhesTecnicos.esforcos.sigmaMaxKnc2 * 10).toFixed(2)} kgf/cm²</span></div>
+                    <div>Tensão Mínima (σ_min): <span className="font-bold text-slate-900">{(result.detalhesTecnicos.esforcos.sigmaMinKnc2 * 10).toFixed(2)} kgf/cm²</span></div>
+                    <div>Momento Mk,A: <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.mkAKnm.toFixed(1)} kN.m</span></div>
+                    <div>Momento Mk,B: <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.mkBKnm.toFixed(1)} kN.m</span></div>
                   </div>
                 </div>
               )}

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Search, Building2, Filter, HandCoins, AlertCircle, Download, FileDown, Upload } from 'lucide-react';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 
 interface RegistryItem {
     id: string;
@@ -58,6 +59,17 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     // Form state
     const [formData, setFormData] = useState<Partial<RegistryItem>>({});
 
+    // Build column config dynamically based on props
+    const registryColumns = useMemo<ColumnConfig[]>(() => {
+        const cols: ColumnConfig[] = [];
+        if (showCode) cols.push({ key: 'code', label: 'Código', sortable: true });
+        cols.push({ key: 'name', label: 'Nome', sortable: true });
+        if (showDescription || showBankDetails) cols.push({ key: 'details', label: 'Detalhes', sortable: false });
+        return cols;
+    }, [showCode, showDescription, showBankDetails]);
+
+    const tableColumns = useTableColumns(registryColumns, 'financialRegistryColumns');
+
     const handleEdit = (item: RegistryItem) => {
         setFormData(item);
         setIsEditing(item.id);
@@ -91,17 +103,29 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
         }
     };
 
-    const filteredItems = items
+    const filteredItems = useMemo(() => items
         .filter(item =>
             item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (item.code?.toLowerCase().includes(searchTerm.toLowerCase()))
         )
         .sort((a, b) => {
+            // TableUtils sort takes priority over default sort
+            if (tableColumns.sortColumn) {
+                const col = tableColumns.sortColumn;
+                const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                if (col === 'name') return a.name.localeCompare(b.name, 'pt-BR') * dir;
+                if (col === 'code') {
+                    if (!a.code && !b.code) return 0;
+                    if (!a.code) return 1 * dir;
+                    if (!b.code) return -1 * dir;
+                    return a.code.localeCompare(b.code, 'pt-BR', { numeric: true }) * dir;
+                }
+            }
             if (!a.code && !b.code) return a.name.localeCompare(b.name, 'pt-BR');
             if (!a.code) return 1;
             if (!b.code) return -1;
             return a.code.localeCompare(b.code, 'pt-BR', { numeric: true });
-        });
+        }), [items, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const getLevel = (code?: string) => code ? code.split('.').length : 0;
 
@@ -166,6 +190,14 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                 <span>Exportar</span>
                             </button>
                         )}
+                        <ColumnConfigButton
+                            columns={registryColumns}
+                            visibleColumns={tableColumns.visibleColumns}
+                            showColumnConfig={tableColumns.showColumnConfig}
+                            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                            onToggleColumn={tableColumns.toggleColumn}
+                            onReset={tableColumns.resetColumns}
+                        />
                         <button
                             onClick={handleAdd}
                             className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/10 active:scale-95"
@@ -308,9 +340,15 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         <table className="min-w-full divide-y divide-gray-100 border-collapse">
                             <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-widest border-b border-gray-200">
                                 <tr>
-                                    {showCode && <th className="px-6 py-2 border-r border-gray-100 text-left w-32">Código</th>}
-                                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">Nome</th>
-                                    {(showDescription || showBankDetails) && <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">Detalhes</th>}
+                                    {showCode && tableColumns.visibleColumns.includes('code') && (
+                                        <SortableHeader label="Código" colKey="code" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left w-32" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('name') && (
+                                        <SortableHeader label="Nome" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
+                                    )}
+                                    {(showDescription || showBankDetails) && tableColumns.visibleColumns.includes('details') && (
+                                        <SortableHeader label="Detalhes" colKey="details" sortable={false} className="px-6 py-2 border-r border-gray-100 text-left" />
+                                    )}
                                     <th className="px-6 py-2 text-right w-24">Ações</th>
                                 </tr>
                             </thead>
@@ -327,22 +365,24 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                         const lvl = showCode ? getLevelStyle(item.code) : getLevelStyle(undefined);
                                         return (
                                         <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors cursor-pointer ${lvl.rowCls}`} onClick={() => handleEdit(item)}>
-                                            {showCode && (
+                                            {showCode && tableColumns.visibleColumns.includes('code') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100">
                                                     <span className={`text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider whitespace-nowrap ${lvl.codeCls}`}>
                                                         {item.code || '-'}
                                                     </span>
                                                 </td>
                                             )}
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex items-center gap-2.5" style={{ paddingLeft: showCode ? lvl.indent : 0 }}>
-                                                    <div className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-white border border-transparent group-hover:border-blue-100 transition-all shrink-0">
-                                                        <Icon className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                                            {tableColumns.visibleColumns.includes('name') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    <div className="flex items-center gap-2.5" style={{ paddingLeft: showCode ? lvl.indent : 0 }}>
+                                                        <div className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-white border border-transparent group-hover:border-blue-100 transition-all shrink-0">
+                                                            <Icon className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                                                        </div>
+                                                        <span className={`truncate ${lvl.nameCls}`}>{item.name}</span>
                                                     </div>
-                                                    <span className={`truncate ${lvl.nameCls}`}>{item.name}</span>
-                                                </div>
-                                            </td>
-                                            {(showDescription || showBankDetails) && (
+                                                </td>
+                                            )}
+                                            {(showDescription || showBankDetails) && tableColumns.visibleColumns.includes('details') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     <div className="flex items-center gap-3 text-sm">
                                                         {item.description && <p className="font-bold text-gray-500 uppercase tracking-tight line-clamp-1 flex-1">{item.description}</p>}

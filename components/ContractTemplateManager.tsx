@@ -6,6 +6,14 @@ import {
 import {
     contractTemplateService, ContractTemplate, TEMPLATE_VARIABLES, renderTemplate,
 } from '../services/contractTemplateService';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+const CONTRACT_TEMPLATE_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Nome', sortable: true },
+    { key: 'type', label: 'Tipo', sortable: true },
+    { key: 'variables', label: 'Variáveis', sortable: false },
+    { key: 'version', label: 'Versão', sortable: true },
+];
 
 interface Props {
     organizationId: string;
@@ -47,6 +55,19 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
     const [busy, setBusy] = useState(false);
     const [previewMode, setPreviewMode] = useState(false);
     const [notification, setNotification] = useState<string | null>(null);
+    const tableColumns = useTableColumns(CONTRACT_TEMPLATE_COLUMNS, 'contractTemplateColumns');
+
+    const sortedTemplates = React.useMemo(() => {
+        if (!tableColumns.sortColumn) return templates;
+        const col = tableColumns.sortColumn;
+        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+        return [...templates].sort((a, b) => {
+            if (col === 'name') return a.name.localeCompare(b.name) * dir;
+            if (col === 'type') return (a.contract_type || '').localeCompare(b.contract_type || '') * dir;
+            if (col === 'version') return (a.version - b.version) * dir;
+            return 0;
+        });
+    }, [templates, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     // form state
     const [name, setName] = useState('');
@@ -237,10 +258,20 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
             )}
             <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Templates de Contrato</h2>
-                <button onClick={openNew}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700">
-                    <Plus size={15} /> Novo Template
-                </button>
+                <div className="flex items-center gap-2">
+                    <ColumnConfigButton
+                        columns={CONTRACT_TEMPLATE_COLUMNS}
+                        visibleColumns={tableColumns.visibleColumns}
+                        showColumnConfig={tableColumns.showColumnConfig}
+                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                        onToggleColumn={tableColumns.toggleColumn}
+                        onReset={tableColumns.resetColumns}
+                    />
+                    <button onClick={openNew}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700">
+                        <Plus size={15} /> Novo Template
+                    </button>
+                </div>
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
@@ -258,34 +289,50 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
-                                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Nome</th>
-                                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Tipo</th>
-                                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Variáveis</th>
-                                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Versão</th>
+                                {tableColumns.visibleColumns.includes('name') && (
+                                    <SortableHeader label="Nome" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3" />
+                                )}
+                                {tableColumns.visibleColumns.includes('type') && (
+                                    <SortableHeader label="Tipo" colKey="type" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3" />
+                                )}
+                                {tableColumns.visibleColumns.includes('variables') && (
+                                    <SortableHeader label="Variáveis" colKey="variables" sortable={false} className="text-left px-4 py-3" />
+                                )}
+                                {tableColumns.visibleColumns.includes('version') && (
+                                    <SortableHeader label="Versão" colKey="version" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3" />
+                                )}
                                 <th className="w-24" />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
-                            {templates.map(t => (
+                            {sortedTemplates.map(t => (
                                 <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                                    <td className="px-4 py-3">
-                                        <p className="font-medium text-gray-900 dark:text-white">{t.name}</p>
-                                        {t.description && <p className="text-[11px] text-gray-400 mt-0.5">{t.description}</p>}
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-500 text-xs">{t.contract_type || '—'}</td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex flex-wrap gap-1">
-                                            {(t.variables ?? []).slice(0, 4).map(v => (
-                                                <span key={v} className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded font-mono">
-                                                    {`{{${v}}}`}
-                                                </span>
-                                            ))}
-                                            {(t.variables ?? []).length > 4 && (
-                                                <span className="text-[10px] text-gray-400">+{(t.variables ?? []).length - 4}</span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-xs text-gray-400">v{t.version}</td>
+                                    {tableColumns.visibleColumns.includes('name') && (
+                                        <td className="px-4 py-3">
+                                            <p className="font-medium text-gray-900 dark:text-white">{t.name}</p>
+                                            {t.description && <p className="text-[11px] text-gray-400 mt-0.5">{t.description}</p>}
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('type') && (
+                                        <td className="px-4 py-3 text-gray-500 text-xs">{t.contract_type || '—'}</td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('variables') && (
+                                        <td className="px-4 py-3">
+                                            <div className="flex flex-wrap gap-1">
+                                                {(t.variables ?? []).slice(0, 4).map(v => (
+                                                    <span key={v} className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded font-mono">
+                                                        {`{{${v}}}`}
+                                                    </span>
+                                                ))}
+                                                {(t.variables ?? []).length > 4 && (
+                                                    <span className="text-[10px] text-gray-400">+{(t.variables ?? []).length - 4}</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('version') && (
+                                        <td className="px-4 py-3 text-xs text-gray-400">v{t.version}</td>
+                                    )}
                                     <td className="px-4 py-3">
                                         <div className="flex gap-1 justify-end">
                                             <button onClick={() => openEdit(t)}

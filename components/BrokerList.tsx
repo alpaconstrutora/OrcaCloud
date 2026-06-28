@@ -5,6 +5,15 @@ import { brokerService } from '../services/brokerService';
 import { brokerPortalService, BrokerPortalToken } from '../services/brokerPortalService';
 import BrokerModal from './BrokerModal';
 import { useStore } from '../store/useStore';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+const BROKER_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Corretor', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'contact', label: 'Contato', sortable: false },
+    { key: 'creci', label: 'CRECI', sortable: true },
+    { key: 'agency', label: 'Imobiliária', sortable: true },
+];
 
 interface BrokerListProps {
     organizationId?: string;
@@ -113,6 +122,8 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
         }
     };
 
+    const tableColumns = useTableColumns(BROKER_COLUMNS, 'brokerListColumns');
+
     // ── Filtragem / ordenação ────────────────────────────────────────────────────
     const filtered = React.useMemo(() => {
         return brokers
@@ -123,12 +134,21 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
             )
             .filter(b => statusFilter === 'all' || (statusFilter === 'active' ? b.is_active : !b.is_active))
             .sort((a, b) => {
+                // TableUtils sort takes priority over dropdown sort
+                if (tableColumns.sortColumn) {
+                    const col = tableColumns.sortColumn;
+                    const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                    if (col === 'name') return a.name.localeCompare(b.name) * dir;
+                    if (col === 'status') return (a.is_active === b.is_active ? 0 : a.is_active ? -1 : 1) * dir;
+                    if (col === 'creci') return (a.creci || '').localeCompare(b.creci || '') * dir;
+                    if (col === 'agency') return (a.agency_name || '').localeCompare(b.agency_name || '') * dir;
+                }
                 if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
                 if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
                 if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
                 return 0;
             });
-    }, [brokers, searchTerm, statusFilter, sortBy]);
+    }, [brokers, searchTerm, statusFilter, sortBy, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const ActionBar = ({ broker }: { broker: BrokerProfile }) => (
         <div className="flex items-center gap-1.5">
@@ -234,6 +254,16 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                         <Table2 className="w-5 h-5" />
                     </button>
                 </div>
+                {viewMode === 'list' && (
+                    <ColumnConfigButton
+                        columns={BROKER_COLUMNS}
+                        visibleColumns={tableColumns.visibleColumns}
+                        showColumnConfig={tableColumns.showColumnConfig}
+                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                        onToggleColumn={tableColumns.toggleColumn}
+                        onReset={tableColumns.resetColumns}
+                    />
+                )}
             </div>
 
             {/* Conteúdo */}
@@ -254,56 +284,76 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                     <table className="w-full text-left">
                         <thead className="bg-gray-50 border-b border-gray-200">
                             <tr>
-                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Corretor</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Status</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Contato</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">CRECI</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Imobiliária</th>
+                                {tableColumns.visibleColumns.includes('name') && (
+                                    <SortableHeader label="Corretor" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                )}
+                                {tableColumns.visibleColumns.includes('status') && (
+                                    <SortableHeader label="Status" colKey="status" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                )}
+                                {tableColumns.visibleColumns.includes('contact') && (
+                                    <SortableHeader label="Contato" colKey="contact" sortable={false} className="px-6 py-5" />
+                                )}
+                                {tableColumns.visibleColumns.includes('creci') && (
+                                    <SortableHeader label="CRECI" colKey="creci" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                )}
+                                {tableColumns.visibleColumns.includes('agency') && (
+                                    <SortableHeader label="Imobiliária" colKey="agency" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                )}
                                 <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {filtered.map(broker => (
                                 <tr key={broker.id} className="hover:bg-gray-50 transition-colors group">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
-                                                <User className="w-5 h-5" />
+                                    {tableColumns.visibleColumns.includes('name') && (
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
+                                                    <User className="w-5 h-5" />
+                                                </div>
+                                                <span className="text-sm font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
+                                                    {broker.name}
+                                                </span>
                                             </div>
-                                            <span className="text-sm font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
-                                                {broker.name}
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && (
+                                        <td className="px-6 py-4">
+                                            <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${broker.is_active
+                                                ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                                : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
+                                                {broker.is_active ? 'Ativo' : 'Inativo'}
                                             </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${broker.is_active
-                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                            : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
-                                            {broker.is_active ? 'Ativo' : 'Inativo'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="space-y-1">
-                                            {broker.email && (
-                                                <div className="flex items-center text-xs text-gray-600">
-                                                    <Mail className="w-3 h-3 mr-1.5 text-blue-500 flex-shrink-0" />
-                                                    {broker.email}
-                                                </div>
-                                            )}
-                                            {broker.phone && (
-                                                <div className="flex items-center text-xs text-gray-600">
-                                                    <Phone className="w-3 h-3 mr-1.5 flex-shrink-0" />
-                                                    {broker.phone}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="text-sm text-gray-600 font-medium">{broker.creci || '-'}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="text-sm text-gray-600">{broker.agency_name || '-'}</span>
-                                    </td>
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('contact') && (
+                                        <td className="px-6 py-4">
+                                            <div className="space-y-1">
+                                                {broker.email && (
+                                                    <div className="flex items-center text-xs text-gray-600">
+                                                        <Mail className="w-3 h-3 mr-1.5 text-blue-500 flex-shrink-0" />
+                                                        {broker.email}
+                                                    </div>
+                                                )}
+                                                {broker.phone && (
+                                                    <div className="flex items-center text-xs text-gray-600">
+                                                        <Phone className="w-3 h-3 mr-1.5 flex-shrink-0" />
+                                                        {broker.phone}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('creci') && (
+                                        <td className="px-6 py-4">
+                                            <span className="text-sm text-gray-600 font-medium">{broker.creci || '-'}</span>
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('agency') && (
+                                        <td className="px-6 py-4">
+                                            <span className="text-sm text-gray-600">{broker.agency_name || '-'}</span>
+                                        </td>
+                                    )}
                                     <td className="px-6 py-4">
                                         <div className="flex justify-end">
                                             <ActionBar broker={broker} />

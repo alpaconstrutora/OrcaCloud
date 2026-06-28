@@ -5,6 +5,14 @@ import { supabase } from '../lib/supabase';
 import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, TrendingUp, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X } from 'lucide-react';
 import InvestorModal from './InvestorModal';
 import { useStore } from '../store/useStore';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+const INVESTOR_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Investidor', sortable: true },
+    { key: 'contact', label: 'Acesso / Contato', sortable: false },
+    { key: 'document', label: 'Documento', sortable: true },
+    { key: 'project', label: 'Obra Vinculada', sortable: false },
+];
 
 interface InvestorListProps {
     onInvestorsChange?: () => void;
@@ -137,6 +145,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
     };
 
     const [sortBy, setSortBy] = React.useState<string>('name-asc');
+    const tableColumns = useTableColumns(INVESTOR_COLUMNS, 'investorListColumns');
 
     const filteredInvestors = React.useMemo(() => {
         return investors
@@ -146,12 +155,19 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                 i.document?.includes(searchTerm)
             )
             .sort((a, b) => {
+                // TableUtils sort takes priority over dropdown sort
+                if (tableColumns.sortColumn) {
+                    const col = tableColumns.sortColumn;
+                    const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                    if (col === 'name') return a.name.localeCompare(b.name) * dir;
+                    if (col === 'document') return (a.document || '').localeCompare(b.document || '') * dir;
+                }
                 if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
                 if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
                 if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
                 return 0;
             });
-    }, [investors, searchTerm, sortBy]);
+    }, [investors, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     return (
         <div className="space-y-6">
@@ -214,6 +230,16 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                         <Table2 className="w-5 h-5" />
                     </button>
                 </div>
+                {viewMode === 'list' && (
+                    <ColumnConfigButton
+                        columns={INVESTOR_COLUMNS}
+                        visibleColumns={tableColumns.visibleColumns}
+                        showColumnConfig={tableColumns.showColumnConfig}
+                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                        onToggleColumn={tableColumns.toggleColumn}
+                        onReset={tableColumns.resetColumns}
+                    />
+                )}
             </div>
 
             {isLoading ? (
@@ -234,69 +260,85 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Investidor</th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Acesso / Contato</th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Documento</th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Obra Vinculada</th>
+                                    {tableColumns.visibleColumns.includes('name') && (
+                                        <SortableHeader label="Investidor" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('contact') && (
+                                        <SortableHeader label="Acesso / Contato" colKey="contact" sortable={false} className="px-6 py-5" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('document') && (
+                                        <SortableHeader label="Documento" colKey="document" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('project') && (
+                                        <SortableHeader label="Obra Vinculada" colKey="project" sortable={false} className="px-6 py-5" />
+                                    )}
                                     <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {filteredInvestors.map(investor => (
                                     <tr key={investor.id} className="hover:bg-gray-50 transition-colors group">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center">
-                                                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 mr-3">
-                                                    <User className="w-5 h-5" />
+                                        {tableColumns.visibleColumns.includes('name') && (
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center">
+                                                    <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 mr-3">
+                                                        <User className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-sm font-bold text-gray-900">{investor.name}</div>
+                                                        <div className="text-xs text-gray-500">Perfil Investidor</div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <div className="text-sm font-bold text-gray-900">{investor.name}</div>
-                                                    <div className="text-xs text-gray-500">Perfil Investidor</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="space-y-1">
-                                                <div className="flex items-center text-xs text-gray-600">
-                                                    <Mail className="w-3 h-3 mr-1.5 text-purple-500" />
-                                                    <span className="font-medium">{investor.email}</span>
-                                                </div>
-                                                {investor.phone && (
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('contact') && (
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-1">
                                                     <div className="flex items-center text-xs text-gray-600">
-                                                        <Phone className="w-3 h-3 mr-1.5" />
-                                                        {investor.phone}
+                                                        <Mail className="w-3 h-3 mr-1.5 text-purple-500" />
+                                                        <span className="font-medium">{investor.email}</span>
                                                     </div>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="text-sm text-gray-600">{investor.document || '-'}</span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {(() => {
-                                                const investorProjects = projects.filter(p =>
-                                                    (p.investor_id ?? p.settings?.investorId) === investor.id &&
-                                                    p.settings?.classification === 'OBRA'
-                                                );
+                                                    {investor.phone && (
+                                                        <div className="flex items-center text-xs text-gray-600">
+                                                            <Phone className="w-3 h-3 mr-1.5" />
+                                                            {investor.phone}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('document') && (
+                                            <td className="px-6 py-4">
+                                                <span className="text-sm text-gray-600">{investor.document || '-'}</span>
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('project') && (
+                                            <td className="px-6 py-4">
+                                                {(() => {
+                                                    const investorProjects = projects.filter(p =>
+                                                        (p.investor_id ?? p.settings?.investorId) === investor.id &&
+                                                        p.settings?.classification === 'OBRA'
+                                                    );
 
-                                                if (investorProjects.length === 0) {
-                                                    return <span className="text-gray-400 text-sm">-</span>;
-                                                }
+                                                    if (investorProjects.length === 0) {
+                                                        return <span className="text-gray-400 text-sm">-</span>;
+                                                    }
 
-                                                return (
-                                                    <div className="flex flex-col gap-1.5">
-                                                        {investorProjects.map(p => (
-                                                            <div key={p.id} className="flex items-center gap-1.5 text-sm text-gray-700">
-                                                                <Building2 className="w-3.5 h-3.5 text-purple-500" />
-                                                                <span className="font-medium truncate max-w-[200px]" title={p.name}>
-                                                                    {p.name}
-                                                                </span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                );
-                                            })()}
-                                        </td>
+                                                    return (
+                                                        <div className="flex flex-col gap-1.5">
+                                                            {investorProjects.map(p => (
+                                                                <div key={p.id} className="flex items-center gap-1.5 text-sm text-gray-700">
+                                                                    <Building2 className="w-3.5 h-3.5 text-purple-500" />
+                                                                    <span className="font-medium truncate max-w-[200px]" title={p.name}>
+                                                                        {p.name}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </td>
+                                        )}
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-1.5">
                                                 {onSelectInvestor && (

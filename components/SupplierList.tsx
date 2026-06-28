@@ -4,6 +4,15 @@ import { Supplier } from '../types';
 import { supplierService } from '../services/supplierService';
 import { SupplierModal } from './SupplierModal';
 import { SupplierCategoryModal } from './SupplierCategoryModal';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+const SUPPLIER_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Fornecedor', sortable: true },
+    { key: 'category', label: 'Categoria', sortable: true },
+    { key: 'organization', label: 'Organização', sortable: true },
+    { key: 'contact', label: 'Contato', sortable: false },
+    { key: 'document', label: 'Documento', sortable: true },
+];
 
 interface SupplierListProps {
     organizationId?: string;
@@ -77,6 +86,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
         }
     };
 
+    const tableColumns = useTableColumns(SUPPLIER_COLUMNS, 'supplierListColumns');
+
     const filteredSuppliers = React.useMemo(() => {
         return suppliers
             .filter(s =>
@@ -86,13 +97,22 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 s.category?.toLowerCase().includes(searchTerm.toLowerCase())
             )
             .sort((a, b) => {
+                // TableUtils sort takes priority over dropdown sort
+                if (tableColumns.sortColumn) {
+                    const col = tableColumns.sortColumn;
+                    const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                    if (col === 'name') return a.name.localeCompare(b.name) * dir;
+                    if (col === 'category') return (a.category || '').localeCompare(b.category || '') * dir;
+                    if (col === 'organization') return (a.organization_name || '').localeCompare(b.organization_name || '') * dir;
+                    if (col === 'document') return (a.document || '').localeCompare(b.document || '') * dir;
+                }
                 if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
                 if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
                 if (sortBy === 'category') return (a.category || '').localeCompare(b.category || '');
                 if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
                 return 0;
             });
-    }, [suppliers, searchTerm, sortBy]);
+    }, [suppliers, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     return (
         <div className="space-y-6">
@@ -165,6 +185,16 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         <Table2 className="w-5 h-5" />
                     </button>
                 </div>
+                {viewMode === 'list' && (
+                    <ColumnConfigButton
+                        columns={SUPPLIER_COLUMNS}
+                        visibleColumns={tableColumns.visibleColumns}
+                        showColumnConfig={tableColumns.showColumnConfig}
+                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                        onToggleColumn={tableColumns.toggleColumn}
+                        onReset={tableColumns.resetColumns}
+                    />
+                )}
             </div>
 
             {isLoading ? (
@@ -177,11 +207,21 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] border-b border-gray-100">
-                                    <th className="px-6 py-5">Fornecedor</th>
-                                    <th className="px-6 py-5">Categoria</th>
-                                    <th className="px-6 py-5">Organização</th>
-                                    <th className="px-6 py-5">Contato</th>
-                                    <th className="px-6 py-5">Documento</th>
+                                    {tableColumns.visibleColumns.includes('name') && (
+                                        <SortableHeader label="Fornecedor" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('category') && (
+                                        <SortableHeader label="Categoria" colKey="category" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('organization') && (
+                                        <SortableHeader label="Organização" colKey="organization" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('contact') && (
+                                        <SortableHeader label="Contato" colKey="contact" sortable={false} className="px-6 py-5" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('document') && (
+                                        <SortableHeader label="Documento" colKey="document" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                    )}
                                     <th className="px-6 py-5 text-center">Ações</th>
                                 </tr>
                             </thead>
@@ -193,47 +233,57 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             onClick={() => { setEditingSupplier(supplier); setIsModalOpen(true); }}
                                             className="hover:bg-blue-50/30 transition-all duration-200 group cursor-pointer"
                                         >
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                                                        <Truck className="w-5 h-5 text-blue-600" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{supplier.name}</p>
-                                                        <p className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">{supplier.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-gray-50 text-gray-600 rounded-lg border border-gray-100 group-hover:bg-white group-hover:border-blue-100 transition-all">
-                                                    <Tag className="w-3.5 h-3.5 text-gray-400" />
-                                                    <span className="text-xs font-semibold">{supplier.category}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="text-xs font-semibold text-gray-700">{supplier.organization_name}</span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="space-y-1.5">
-                                                    {supplier.email && (
-                                                        <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
-                                                            <Mail className="w-3.5 h-3.5 text-gray-400" />
-                                                            {supplier.email}
+                                            {tableColumns.visibleColumns.includes('name') && (
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                                                            <Truck className="w-5 h-5 text-blue-600" />
                                                         </div>
-                                                    )}
-                                                    {supplier.phone && (
-                                                        <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
-                                                            <Phone className="w-3.5 h-3.5 text-gray-400" />
-                                                            {supplier.phone}
+                                                        <div>
+                                                            <p className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{supplier.name}</p>
+                                                            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">{supplier.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}</p>
                                                         </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="text-xs font-bold text-gray-600 font-mono bg-gray-100/50 px-2 py-1 rounded-md border border-gray-100">
-                                                    {supplier.document || '---'}
-                                                </span>
-                                            </td>
+                                                    </div>
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('category') && (
+                                                <td className="px-6 py-4">
+                                                    <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-gray-50 text-gray-600 rounded-lg border border-gray-100 group-hover:bg-white group-hover:border-blue-100 transition-all">
+                                                        <Tag className="w-3.5 h-3.5 text-gray-400" />
+                                                        <span className="text-xs font-semibold">{supplier.category}</span>
+                                                    </div>
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('organization') && (
+                                                <td className="px-6 py-4">
+                                                    <span className="text-xs font-semibold text-gray-700">{supplier.organization_name}</span>
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('contact') && (
+                                                <td className="px-6 py-4">
+                                                    <div className="space-y-1.5">
+                                                        {supplier.email && (
+                                                            <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                                                                <Mail className="w-3.5 h-3.5 text-gray-400" />
+                                                                {supplier.email}
+                                                            </div>
+                                                        )}
+                                                        {supplier.phone && (
+                                                            <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                                                                <Phone className="w-3.5 h-3.5 text-gray-400" />
+                                                                {supplier.phone}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('document') && (
+                                                <td className="px-6 py-4">
+                                                    <span className="text-xs font-bold text-gray-600 font-mono bg-gray-100/50 px-2 py-1 rounded-md border border-gray-100">
+                                                        {supplier.document || '---'}
+                                                    </span>
+                                                </td>
+                                            )}
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center justify-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                                     <button

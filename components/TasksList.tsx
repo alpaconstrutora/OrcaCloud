@@ -9,6 +9,7 @@ import {
 import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
 import type { GroupByField } from './TasksModule'
+import { ColumnConfig, useTableColumns, ColumnConfigButton } from './ui/TableUtils'
 
 interface TaskGroup { key: string; label: string; color?: string; tasks: TaskRecord[] }
 
@@ -43,6 +44,20 @@ const MODULE_LABEL: Record<string, { label: string; cls: string }> = {
   rh:          { label: 'RH',          cls: 'bg-purple-100 text-purple-700' },
   compras:     { label: 'Compras',     cls: 'bg-indigo-100 text-indigo-700' },
 }
+
+// ── Configuração de visibilidade de colunas ───────────────────────────────────
+const TASKS_LIST_COLUMNS: ColumnConfig[] = [
+  { key: 'title',      label: 'Nome',         sortable: false },
+  { key: 'assignee',  label: 'Responsável',   sortable: false },
+  { key: 'project',   label: 'Obra',          sortable: false },
+  { key: 'start_date',label: 'Data Inicial',  sortable: false },
+  { key: 'due_date',  label: 'Vencimento',    sortable: false },
+  { key: 'priority',  label: 'Prioridade',    sortable: false },
+  { key: 'source',    label: 'Origem',        sortable: false },
+  { key: 'alert',     label: 'Alerta',        sortable: false },
+  { key: 'status',    label: 'Status',        sortable: false },
+  { key: 'actions',   label: 'Ações',         sortable: false },
+]
 
 // ── Colunas reordenáveis ──────────────────────────────────────────────────────
 const COLUMN_DEFS = [
@@ -144,6 +159,14 @@ const TasksList: React.FC<Props> = ({
   const [colOrder, setColOrder]       = useState<ColKey[]>(DEFAULT_COL_ORDER)
   const [colDragging, setColDragging] = useState<ColKey | null>(null)
   const [colDragOver, setColDragOver] = useState<ColKey | null>(null)
+
+  // Visibility via TableUtils (sort handled by existing sortCol/sortDir state)
+  const taskVisibility = useTableColumns(TASKS_LIST_COLUMNS, 'tasksListColumns')
+  // Filter colOrder by visible columns
+  const visibleColOrder = useMemo(
+    () => colOrder.filter(k => taskVisibility.visibleColumns.includes(k)),
+    [colOrder, taskVisibility.visibleColumns]
+  )
 
   const empMap    = useMemo(() => Object.fromEntries(employees.map(e => [e.id, e])), [employees])
   const projMap   = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects])
@@ -554,7 +577,7 @@ const TasksList: React.FC<Props> = ({
           </td>
 
           {/* Colunas reordenáveis */}
-          {colOrder.map(key => cells[key])}
+          {visibleColOrder.map(key => cells[key])}
         </tr>
 
         {isExpanded && children.map(child => (
@@ -691,7 +714,7 @@ const TasksList: React.FC<Props> = ({
   // ── Cabeçalho de grupo (ClickUp style) ────────────────────────────────────
   function GroupHeader({ group }: { group: TaskGroup }) {
     const isCollapsed = collapsedGroups.has(group.key)
-    const totalCols = 2 + colOrder.length
+    const totalCols = 2 + visibleColOrder.length
 
     return (
       <tr className="group/gh">
@@ -821,6 +844,14 @@ const TasksList: React.FC<Props> = ({
           </button>
         )}
         <span className="ml-auto text-[11px] font-bold text-slate-400">{filtered.length} tarefa{filtered.length !== 1 ? 's' : ''}</span>
+        <ColumnConfigButton
+          columns={TASKS_LIST_COLUMNS}
+          visibleColumns={taskVisibility.visibleColumns}
+          showColumnConfig={taskVisibility.showColumnConfig}
+          onToggleShow={() => taskVisibility.setShowColumnConfig(!taskVisibility.showColumnConfig)}
+          onToggleColumn={taskVisibility.toggleColumn}
+          onReset={taskVisibility.resetColumns}
+        />
       </div>
 
       {showFilters && (
@@ -889,7 +920,7 @@ const TasksList: React.FC<Props> = ({
                 <tr>
                   <th className="w-6 p-0" />
                   <th className="w-8 p-0" />
-                  {colOrder.map(key => <ColHeader key={key} colKey={key} />)}
+                  {visibleColOrder.map(key => <ColHeader key={key} colKey={key} />)}
                 </tr>
               </thead>
               <tbody>
@@ -906,7 +937,7 @@ const TasksList: React.FC<Props> = ({
                     {/* + Adicionar Tarefa no rodapé de cada grupo */}
                     {!collapsedGroups.has(group.key) && onAddTask && groupBy !== 'none' && (
                       <tr>
-                        <td colSpan={2 + colOrder.length} className="px-4 py-1.5 border-b border-slate-100">
+                        <td colSpan={2 + visibleColOrder.length} className="px-4 py-1.5 border-b border-slate-100">
                           <button
                             onClick={() => onAddTask(buildDefaults(group.key))}
                             className="flex items-center gap-2 text-sm text-slate-400 hover:text-blue-600 transition-colors font-medium group/add"
@@ -922,7 +953,7 @@ const TasksList: React.FC<Props> = ({
                 {/* + Adicionar Tarefa global (sem agrupamento) */}
                 {groupBy === 'none' && onAddTask && (
                   <tr className="border-t border-slate-100">
-                    <td colSpan={2 + colOrder.length} className="px-4 py-2">
+                    <td colSpan={2 + visibleColOrder.length} className="px-4 py-2">
                       <button
                         onClick={() => onAddTask()}
                         className="flex items-center gap-2 text-sm text-slate-400 hover:text-blue-600 transition-colors font-medium group/add"

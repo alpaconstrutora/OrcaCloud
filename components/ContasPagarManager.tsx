@@ -7,6 +7,7 @@ import {
 import { invoiceService } from '../services/invoiceService';
 import { Invoice } from '../types/financial';
 import type { Organization } from '../types';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 
 type InvoiceRow = Invoice & { supplierName?: string };
 type StatusFilter = 'all' | 'pending' | 'approved' | 'paid' | 'rejected' | 'overdue';
@@ -17,6 +18,14 @@ const STATUS_PT: Record<string, string> = {
     rejected: 'Rejeitado',
     paid: 'Pago',
 };
+
+const CONTAS_COLUMNS: ColumnConfig[] = [
+    { key: 'supplier', label: 'Fornecedor / Documento', sortable: true },
+    { key: 'origem', label: 'Origem', sortable: true },
+    { key: 'valor', label: 'Valor', sortable: true },
+    { key: 'vencimento', label: 'Vencimento', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+];
 
 const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 
@@ -75,6 +84,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const [vencDe, setVencDe] = useState('');
     const [vencAte, setVencAte] = useState('');
     const [showFilters, setShowFilters] = useState(false);
+    const tableColumns = useTableColumns(CONTAS_COLUMNS);
 
     const effectiveOrgId = selectedOrgId === 'ALL' ? undefined : selectedOrgId;
 
@@ -111,7 +121,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     }
 
     const filtered = useMemo(() => {
-        return invoices.filter(inv => {
+        let result = invoices.filter(inv => {
             if (statusFilter === 'overdue') { if (!isOverdue(inv)) return false; }
             else if (statusFilter !== 'all') { if (inv.status !== statusFilter) return false; }
             if (vencDe && inv.dueDate && inv.dueDate < vencDe) return false;
@@ -125,7 +135,42 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
             }
             return true;
         });
-    }, [invoices, statusFilter, vencDe, vencAte, search]);
+
+        // Ordenação
+        if (tableColumns.sortColumn) {
+            result.sort((a, b) => {
+                let va: any, vb: any;
+                switch (tableColumns.sortColumn) {
+                    case 'supplier':
+                        va = (a.supplierName ?? '').toLowerCase();
+                        vb = (b.supplierName ?? '').toLowerCase();
+                        break;
+                    case 'origem':
+                        va = ((a.notes ?? '').includes('[boleto:') ? 'Boleto' : 'Manual');
+                        vb = ((b.notes ?? '').includes('[boleto:') ? 'Boleto' : 'Manual');
+                        break;
+                    case 'valor':
+                        va = a.amount ?? 0;
+                        vb = b.amount ?? 0;
+                        break;
+                    case 'vencimento':
+                        va = a.dueDate ?? '';
+                        vb = b.dueDate ?? '';
+                        break;
+                    case 'status':
+                        va = a.status;
+                        vb = b.status;
+                        break;
+                    default:
+                        return 0;
+                }
+                if (va < vb) return tableColumns.sortDirection === 'asc' ? -1 : 1;
+                if (va > vb) return tableColumns.sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return result;
+    }, [invoices, statusFilter, vencDe, vencAte, search, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const summary = useMemo(() => {
         const now = today();
@@ -255,6 +300,14 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 {showFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                 Filtros
                             </button>
+                            <ColumnConfigButton
+                                columns={CONTAS_COLUMNS}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
                         </div>
 
                         {showFilters && (
@@ -298,11 +351,61 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                        <th className="text-left px-4 py-3">Fornecedor / Documento</th>
-                                        <th className="text-left px-4 py-3">Origem</th>
-                                        <th className="text-right px-4 py-3">Valor</th>
-                                        <th className="text-center px-4 py-3">Vencimento</th>
-                                        <th className="text-center px-4 py-3">Status</th>
+                                        {tableColumns.visibleColumns.includes('supplier') && (
+                                            <SortableHeader
+                                                label="Fornecedor / Documento"
+                                                colKey="supplier"
+                                                sortable={true}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                className="text-left px-4 py-3"
+                                            />
+                                        )}
+                                        {tableColumns.visibleColumns.includes('origem') && (
+                                            <SortableHeader
+                                                label="Origem"
+                                                colKey="origem"
+                                                sortable={true}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                className="text-left px-4 py-3"
+                                            />
+                                        )}
+                                        {tableColumns.visibleColumns.includes('valor') && (
+                                            <SortableHeader
+                                                label="Valor"
+                                                colKey="valor"
+                                                sortable={true}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                className="text-right px-4 py-3"
+                                            />
+                                        )}
+                                        {tableColumns.visibleColumns.includes('vencimento') && (
+                                            <SortableHeader
+                                                label="Vencimento"
+                                                colKey="vencimento"
+                                                sortable={true}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                className="text-center px-4 py-3"
+                                            />
+                                        )}
+                                        {tableColumns.visibleColumns.includes('status') && (
+                                            <SortableHeader
+                                                label="Status"
+                                                colKey="status"
+                                                sortable={true}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                className="text-center px-4 py-3"
+                                            />
+                                        )}
                                         <th className="text-right px-4 py-3">Ações</th>
                                     </tr>
                                 </thead>
@@ -314,35 +417,45 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
 
                                         return (
                                             <tr key={inv.id} className={`hover:bg-gray-50 transition-colors ${overdue ? 'bg-red-50/30' : ''}`}>
-                                                <td className="px-4 py-3">
-                                                    <p className="font-medium text-gray-900 truncate max-w-xs">{inv.supplierName ?? '—'}</p>
-                                                    <p className="text-xs text-gray-400 truncate max-w-xs">{inv.fileName}</p>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    {fromBoleto ? (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-700 border border-indigo-100">
-                                                            <FileText className="w-2.5 h-2.5" /> Boleto
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-50 text-gray-500 border border-gray-100">
-                                                            Manual
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                                                    {fmt(inv.amount)}
-                                                </td>
-                                                <td className={`px-4 py-3 text-center text-xs font-medium ${overdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
-                                                    {fmtDate(inv.dueDate)}
-                                                    {overdue && dueDate && (
-                                                        <div className="text-[10px] text-red-500">
-                                                            {Math.floor((today().getTime() - dueDate.getTime()) / 86400000)}d atraso
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <StatusBadge inv={inv} />
-                                                </td>
+                                                {tableColumns.visibleColumns.includes('supplier') && (
+                                                    <td className="px-4 py-3">
+                                                        <p className="font-medium text-gray-900 truncate max-w-xs">{inv.supplierName ?? '—'}</p>
+                                                        <p className="text-xs text-gray-400 truncate max-w-xs">{inv.fileName}</p>
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('origem') && (
+                                                    <td className="px-4 py-3">
+                                                        {fromBoleto ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                                <FileText className="w-2.5 h-2.5" /> Boleto
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-50 text-gray-500 border border-gray-100">
+                                                                Manual
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('valor') && (
+                                                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                                                        {fmt(inv.amount)}
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('vencimento') && (
+                                                    <td className={`px-4 py-3 text-center text-xs font-medium ${overdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                                                        {fmtDate(inv.dueDate)}
+                                                        {overdue && dueDate && (
+                                                            <div className="text-[10px] text-red-500">
+                                                                {Math.floor((today().getTime() - dueDate.getTime()) / 86400000)}d atraso
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('status') && (
+                                                    <td className="px-4 py-3 text-center">
+                                                        <StatusBadge inv={inv} />
+                                                    </td>
+                                                )}
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center justify-end gap-2">
                                                         {/* Ver documento */}

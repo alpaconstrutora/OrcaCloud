@@ -1,6 +1,8 @@
 import { supabase } from '../lib/supabase';
 import {
   OrgRole,
+  OrgFuncao,
+  OrgFuncaoInsert,
   OrgRelationship,
   OrgRelationshipType,
   OrgAuthorityLimit,
@@ -14,6 +16,50 @@ import {
 } from '../types';
 
 export const orgGovernanceService = {
+  // ==========================================
+  // FUNÇÕES (org_funcoes)
+  // ==========================================
+  async listFuncoes(companyId: string): Promise<OrgFuncao[]> {
+    const { data, error } = await supabase
+      .from('org_funcoes')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('nome');
+    if (error) throw error;
+    return data || [];
+  },
+
+  async saveFuncao(funcao: OrgFuncaoInsert & { id?: string }): Promise<OrgFuncao> {
+    const payload = {
+      company_id: funcao.company_id,
+      nome: funcao.nome,
+      descricao: funcao.descricao || null,
+      categoria: funcao.categoria,
+    };
+    if (funcao.id) {
+      const { data, error } = await supabase
+        .from('org_funcoes')
+        .update({ ...payload, updated_at: new Date().toISOString() })
+        .eq('id', funcao.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+    const { data, error } = await supabase
+      .from('org_funcoes')
+      .insert(payload)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteFuncao(id: string): Promise<void> {
+    const { error } = await supabase.from('org_funcoes').delete().eq('id', id);
+    if (error) throw error;
+  },
+
   // ==========================================
   // CARGOS (org_roles)
   // ==========================================
@@ -45,6 +91,7 @@ export const orgGovernanceService = {
       salario_maximo: role.salario_maximo ?? null,
       competencias: role.competencias || [],
       proximo_cargo_id: role.proximo_cargo_id || null,
+      funcao_id: role.funcao_id || null,
     };
 
     let query;

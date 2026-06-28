@@ -6,6 +6,22 @@ export type ReadinessLevel = 'imediato' | '1_a_2_anos' | '3_a_5_anos' | 'longo_p
 export type RiskLevel = 'baixo' | 'medio' | 'alto' | 'critico';
 export type RaciRoleType = 'R' | 'A' | 'C' | 'I';
 
+// ─── 0. FUNÇÕES (org_funcoes) ────────────────────────────────
+
+export type OrgFuncaoCategoria = 'operacional' | 'tecnica' | 'administrativa' | 'gerencial' | 'comercial';
+
+export interface OrgFuncao {
+  id: string;
+  company_id: string;
+  nome: string;
+  descricao?: string | null;
+  categoria: OrgFuncaoCategoria;
+  created_at: string;
+  updated_at: string;
+}
+
+export type OrgFuncaoInsert = Omit<OrgFuncao, 'id' | 'created_at' | 'updated_at'>;
+
 // ─── 1. CARGOS (org_roles) ───────────────────────────────────
 
 export interface OrgRole {
@@ -20,6 +36,7 @@ export interface OrgRole {
   salario_maximo?: number | null;
   competencias: string[];
   proximo_cargo_id?: string | null;
+  funcao_id?: string | null;
   created_at: string;
   updated_at: string;
 }

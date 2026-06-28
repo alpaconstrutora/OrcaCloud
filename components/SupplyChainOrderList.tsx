@@ -1,5 +1,6 @@
 import React from 'react';
-import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, Pencil } from 'lucide-react';
+import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, Pencil, FileCheck } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 
 const COLUMNS: ColumnConfig[] = [
@@ -37,6 +38,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainOrderColumns');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
+    const [linkedNfeOrderIds, setLinkedNfeOrderIds] = React.useState<Set<string>>(new Set());
+    const [nfFilter, setNfFilter] = React.useState<'all' | 'sem-nf'>('all');
 
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
         setNotification({ message, type });
@@ -52,8 +55,21 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         (async () => {
             try {
                 setLoading(true);
-                const data = await orderService.listOrders();
-                if (!cancelled) setOrders(data);
+                const [data, nfeRes] = await Promise.all([
+                    orderService.listOrders(),
+                    supabase
+                        .from('nfe_invoices')
+                        .select('purchase_order_id')
+                        .not('purchase_order_id', 'is', null),
+                ]);
+                if (!cancelled) {
+                    setOrders(data);
+                    const ids = new Set<string>(
+                        ((nfeRes.data ?? []) as { purchase_order_id: string }[])
+                            .map(r => r.purchase_order_id)
+                    );
+                    setLinkedNfeOrderIds(ids);
+                }
             } catch (error) {
                 console.error("Erro ao carregar pedidos:", error);
             } finally {
@@ -131,12 +147,15 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const filteredOrders = React.useMemo(() => {
         const calculateTotal = (order: any) => order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0;
 
-        const filtered = (orders || []).filter(order =>
-            order.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order.supplierName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order.linkedProjectName?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+        const filtered = (orders || []).filter(order => {
+            const matchSearch =
+                order.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                order.supplierName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                order.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                order.linkedProjectName?.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchNf = nfFilter === 'all' || !linkedNfeOrderIds.has(order.id);
+            return matchSearch && matchNf;
+        });
 
         // TableUtils sort takes priority when set
         if (tableColumns.sortColumn) {
@@ -163,7 +182,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             if (sortBy === 'name-asc') return (a.supplierName || '').localeCompare(b.supplierName || '');
             return 0;
         });
-    }, [orders, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [orders, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection, nfFilter, linkedNfeOrderIds]);
 
     return (
         <>
@@ -376,6 +395,18 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     </select>
                 </div>
                 <button
+                    onClick={() => setNfFilter(f => f === 'sem-nf' ? 'all' : 'sem-nf')}
+                    title={nfFilter === 'sem-nf' ? 'Mostrando apenas pedidos sem NF-e — clique para ver todos' : 'Filtrar pedidos sem NF-e vinculada'}
+                    className={`flex items-center gap-2 px-4 py-4 rounded-[1.25rem] transition-all active:scale-95 shadow-sm text-xs font-black uppercase tracking-wider whitespace-nowrap ${
+                        nfFilter === 'sem-nf'
+                            ? 'bg-amber-500 text-white'
+                            : 'bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white'
+                    }`}
+                >
+                    <FileCheck className="w-4 h-4" />
+                    Sem NF-e
+                </button>
+                <button
                     onClick={loadOrders}
                     className="p-4 bg-blue-50 text-blue-600 rounded-[1.25rem] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shadow-sm"
                 >
@@ -455,7 +486,14 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                         )}
                                         {tableColumns.visibleColumns.includes('status') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <StatusBadge status={order.status} />
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <StatusBadge status={order.status} />
+                                                    {linkedNfeOrderIds.has(order.id) && (
+                                                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                            <FileCheck className="w-2.5 h-2.5" />NF ✓
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('date') && (
@@ -537,7 +575,14 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                     <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-all">
                                         <Package className="w-6 h-6" />
                                     </div>
-                                    <StatusBadge status={order.status} />
+                                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                        {linkedNfeOrderIds.has(order.id) && (
+                                            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                <FileCheck className="w-2.5 h-2.5" />NF ✓
+                                            </span>
+                                        )}
+                                        <StatusBadge status={order.status} />
+                                    </div>
                                 </div>
 
                                 <h3 className="text-lg font-black text-gray-900 mb-1">

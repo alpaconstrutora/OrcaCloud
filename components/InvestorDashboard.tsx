@@ -162,11 +162,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     .map(p => p.id!)
             );
             const allIds = new Set([...partIds, ...legacyIds]);
-            if (allIds.size > 0) {
-                return realProjects.filter(p => p.id && allIds.has(p.id));
-            }
-            // Sem vínculo nenhum — mostra obras como admin para não ficar vazio
-            return realProjects.filter(p => p.settings?.classification === 'OBRA');
+            // Só retorna projetos explicitamente vinculados — nunca expõe dados de outros investidores
+            return realProjects.filter(p => p.id && allIds.has(p.id));
         }
         if (isAdmin) return realProjects.filter(p => p.settings?.classification === 'OBRA');
         return [];

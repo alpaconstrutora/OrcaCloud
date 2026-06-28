@@ -548,7 +548,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
-                                    {visibleColumns.includes('code') && (isObraContext || isPlanejamentoContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
+                                    {visibleColumns.includes('code') && (
                                         <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-20 text-center">{COLUMN_LABELS.code}</th>
                                     )}
                                     {visibleColumns.includes('name') && (
@@ -556,7 +556,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             {isDiaryContext ? 'Diário' : (isObraContext ? 'Obra' : (isPlanejamentoContext ? 'Planejamento' : 'Orçamento'))}
                                         </th>
                                     )}
-                                    {visibleColumns.includes('organization') && isObraContext && organizations.length > 1 && (
+                                    {visibleColumns.includes('organization') && (
                                         <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{COLUMN_LABELS.organization}</th>
                                     )}
                                     {visibleColumns.includes('linked') && (
@@ -568,13 +568,13 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Planejamento Vinculado</th>
                                         </>
                                     )}
-                                    {visibleColumns.includes('client') && !isObraContext && !isPlanejamentoContext && (
+                                    {visibleColumns.includes('client') && (
                                         <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{COLUMN_LABELS.client}</th>
                                     )}
                                     {visibleColumns.includes('updated') && (
                                         <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Clima' : 'Atualização'}</th>
                                     )}
-                                    {visibleColumns.includes('status-budget') && (!isObraContext || isDiaryContext) && (
+                                    {visibleColumns.includes('status-budget') && (
                                         <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{isDiaryContext ? 'Status Diário' : 'Status Orç.'}</th>
                                     )}
                                     {visibleColumns.includes('status-obra') && (
@@ -593,14 +593,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
                                         className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                                     >
-                                        {visibleColumns.includes('code') && (isObraContext || isPlanejamentoContext || (!isObraContext && !isPlanejamentoContext && !isDiaryContext)) && (
-                                            <td className="px-4 py-4 text-center">
-                                                <span className="text-sm font-black font-mono text-blue-700">
-                                                    {project.code || project.settings?.code || '—'}
-                                                </span>
-                                            </td>
-                                        )}
-                                        {visibleColumns.includes('name') && (
+                                        {visibleColumns.includes('code') && (
+                                        <td className="px-4 py-4 text-center">
+                                            <span className="text-sm font-black font-mono text-blue-700">
+                                                {project.code || project.settings?.code || '—'}
+                                            </span>
+                                        </td>
+                                    )}
+                                    {visibleColumns.includes('name') && (
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center">
                                                     <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 mr-3 shrink-0">
@@ -622,7 +622,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </div>
                                             </td>
                                         )}
-                                        {visibleColumns.includes('organization') && isObraContext && organizations.length > 1 && (() => {
+                                        {visibleColumns.includes('organization') && (() => {
                                             const orgId = project.settings?.organizationId;
                                             const org = organizations.find(o => o.id === orgId);
                                             return (
@@ -736,7 +736,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </td>
                                             </>
                                         )}
-                                        {visibleColumns.includes('client') && !isObraContext && !isPlanejamentoContext && (
+                                        {visibleColumns.includes('client') && (
                                             <td className="px-6 py-4">
                                                 {project.settings?.obraPropria ? (
                                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight bg-indigo-100 text-indigo-700 border border-indigo-200">
@@ -780,7 +780,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             )}
                                             </td>
                                         )}
-                                        {visibleColumns.includes('status-budget') && (!isObraContext || isDiaryContext) && (
+                                        {visibleColumns.includes('status-budget') && (
                                             <td className="px-6 py-4">
                                                 {isDiaryContext ? (
                                                     (project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (

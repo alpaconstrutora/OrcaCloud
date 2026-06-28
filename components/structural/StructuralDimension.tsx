@@ -12,6 +12,7 @@ import type {
 } from '../../types/structural'
 import ElementDimensionPanel from './ElementDimensionPanel'
 import { generateConsolidatedMemorialPDF } from '../../services/pdfMemorialService'
+import { supabase } from '../../lib/supabase'
 
 interface Props {
   activeOrganizationId?: string
@@ -25,6 +26,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
   const [activePavimento, setActivePavimento] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(false)
   const [exportingExcel, setExportingExcel] = useState<boolean>(false)
+  const [resolvedOrgId, setResolvedOrgId] = useState<string | null>(null)
 
   // Modais
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false)
@@ -200,12 +202,39 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
     }
   }
 
+  // Resolução da Organização ativa ou Fallback
+  useEffect(() => {
+    const resolveOrg = async () => {
+      if (activeOrganizationId) {
+        setResolvedOrgId(activeOrganizationId)
+      } else {
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            const { data } = await supabase
+              .from('organization_members')
+              .select('organization_id')
+              .eq('email', user.email)
+              .limit(1)
+              .maybeSingle()
+            if (data?.organization_id) {
+              setResolvedOrgId(data.organization_id)
+            }
+          }
+        } catch (err) {
+          console.error('Erro ao buscar organização de fallback:', err)
+        }
+      }
+    }
+    resolveOrg()
+  }, [activeOrganizationId])
+
   // 1. Carrega projetos
   const loadProjects = async () => {
-    if (!activeOrganizationId) return
+    if (!resolvedOrgId) return
     setLoading(true)
     try {
-      const data = await structuralService.listStructuralProjects(activeOrganizationId)
+      const data = await structuralService.listStructuralProjects(resolvedOrgId)
       setProjects(data)
     } catch (err) {
       console.error('Erro ao listar projetos estruturais:', err)
@@ -216,7 +245,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
 
   useEffect(() => {
     loadProjects()
-  }, [activeOrganizationId])
+  }, [resolvedOrgId])
 
   // 2. Carrega elementos do projeto selecionado
   const loadElements = async (projectId: string) => {
@@ -245,11 +274,18 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
   // 3. Cria Novo Projeto
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!activeOrganizationId || !projNome || !projRT) return
+    if (!resolvedOrgId) {
+      alert('Nenhuma organização ativa encontrada para o seu usuário. Por favor, selecione uma organização no topo da página ou na barra lateral para criar o projeto.')
+      return
+    }
+    if (!projNome || !projRT) {
+      alert('Por favor, preencha o Nome do Projeto e o Responsável Técnico.')
+      return
+    }
     
     try {
       const input: UpsertStructuralProjectInput = {
-        organizationId: activeOrganizationId,
+        organizationId: resolvedOrgId,
         nome: projNome,
         responsavelTecnico: projRT,
         numeroArt: projART || null,
@@ -294,7 +330,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
   // 5. Cria Novo Elemento
   const handleCreateElement = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedProject || !activeOrganizationId || !elTag || !elPavimentoInput) return
+    if (!selectedProject || !resolvedOrgId || !elTag || !elPavimentoInput) return
     
     try {
       // Define geometrias default simplificadas com base no tipo
@@ -316,7 +352,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
       }
 
       const newEl = await structuralService.upsertStructuralDimensionElement({
-        organizationId: activeOrganizationId,
+        organizationId: resolvedOrgId,
         projectId: selectedProject.id,
         tipo: elTipo,
         pavimento: elPavimentoInput,

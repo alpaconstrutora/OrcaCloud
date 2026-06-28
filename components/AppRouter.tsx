@@ -97,6 +97,7 @@ const OpuraAssetsModule     = React.lazy(() => import('./OpuraAssetsModule'));
 const EmpreendimentoModule  = React.lazy(() => import('./empreendimento/EmpreendimentoModule'));
 const InventoryModule       = React.lazy(() => import('./InventoryModule').then(m => ({ default: m.InventoryModule })));
 const ProcurementModule     = React.lazy(() => import('./ProcurementModule').then(m => ({ default: m.ProcurementModule })));
+const P2PFlowBoard          = React.lazy(() => import('./P2PFlowBoard').then(m => ({ default: m.P2PFlowBoard })));
 const PartnerPortal         = React.lazy(() => import('./partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 const PartnerWorkspaceManager = React.lazy(() => import('./partner/PartnerWorkspaceManager').then(m => ({ default: m.PartnerWorkspaceManager })));
 
@@ -448,6 +449,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <ProcurementModule
+            activeOrganizationId={activeOrganizationId}
+            onChangeView={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    case 'fluxo-p2p':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <P2PFlowBoard
             activeOrganizationId={activeOrganizationId}
             onChangeView={setActiveView}
           />

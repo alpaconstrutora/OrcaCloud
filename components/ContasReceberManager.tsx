@@ -11,6 +11,7 @@ import { clientService } from '../services/clientService';
 import type { ClientCharge, BillingType } from '../services/clientChargeService';
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
 import type { Organization } from '../types';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -46,6 +47,14 @@ const STATUS_COLORS: Record<string, string> = {
     RENEGOCIADO: 'bg-yellow-50 text-yellow-700 border-yellow-100',
     CANCELADO:   'bg-gray-50 text-gray-400 border-gray-100',
 };
+
+const RECEBER_COLUMNS: ColumnConfig[] = [
+    { key: 'party_name', label: 'Cliente / Descrição', sortable: true },
+    { key: 'amount', label: 'Valor', sortable: true },
+    { key: 'due_date', label: 'Vencimento', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'partial_amount', label: 'Recebido', sortable: true },
+];
 
 function StatusBadge({ status }: { status: string }) {
     return (
@@ -623,6 +632,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
     const [showFilters, setShowFilters]  = useState(false);
     const [showInad, setShowInad]        = useState(false);
     const [sort, setSort]               = useState<SortConfig>({ key: 'due_date', dir: 'asc' });
+    const tableColumns = useTableColumns(RECEBER_COLUMNS);
 
     const [showNovo, setShowNovo]         = useState(false);
     const [baixando, setBaixando]         = useState<Receivable | null>(null);

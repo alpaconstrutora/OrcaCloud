@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, Landmark, ArrowRightLeft, Banknote, LineChart } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, Landmark, ArrowRightLeft, Banknote, LineChart, Workflow } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -368,7 +368,7 @@ const Layout: React.FC<LayoutProps> = ({
   const qualidadeViews = ['quality','pos-obra'];
   const [isQualidadeOpen, setIsQualidadeOpen] = React.useState(() => qualidadeViews.includes(activeView));
   React.useEffect(() => { if (qualidadeViews.includes(activeView)) setIsQualidadeOpen(true); }, [activeView]);
-  const suprimentosViews = ['supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
+  const suprimentosViews = ['fluxo-p2p','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
   const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','controladoria','fiscal-nfe','automation'];
@@ -775,6 +775,7 @@ const Layout: React.FC<LayoutProps> = ({
                     }}
                     hasActiveChild={suprimentosViews.includes(activeView)}
                   >
+                    <DropdownItem id="fluxo-p2p" label="Fluxo Integrado (P2P)" icon={Workflow} />
                     <DropdownItem id="almoxarifado" label="Almoxarifado" icon={Warehouse} />
                     <DropdownItem id="plano-aquisicoes" label="Plano de Aquisições" icon={ClipboardList} />
                     <DropdownItem id="supplies-contracts" label="Contratos" icon={FileText} />
@@ -1051,6 +1052,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="opura-docs" icon={FolderOpen} label="Gestão de Documentos" forceFull />
 
               <NavGroup label="Suprimentos" />
+              <NavItem id="fluxo-p2p" icon={Workflow} label="Fluxo Integrado (P2P)" forceFull />
               <NavItem id="almoxarifado" icon={Warehouse} label="Almoxarifado" forceFull />
               <NavItem id="plano-aquisicoes" icon={ClipboardList} label="Plano de Aquisições" forceFull />
               <NavItem id="supplies-orders" icon={Package} label="Pedidos" forceFull />

@@ -17,35 +17,49 @@
 - **Descasamento de escopo:** `org_roles.company_id` (companies) vs `employees.org_id`
   (organizations), onde org→company é hierárquico. Este é o nó da Fase 3.
 
-## Fase 1 — Aba "Cargos & Funções" no RH ✅ (em andamento)
+## Fase 1 — Aba "Cargos & Funções" no RH ✅ CONCLUÍDA (2026-06-27)
 
-- Novo componente `components/LaborCargos.tsx` — gestor de cargo autocontido, **reusa**
-  `orgGovernanceService` (zero lógica nova de dados). Tema claro (slate/white) do LaborModule.
-- Seletor de empresa interno (mesma query da Governance), pois cargo é por-empresa.
-- CRUD completo: criar/editar/excluir cargo, com campo **responsabilidades** (corrige lacuna:
-  o modal da Governance tinha o estado mas omitia o input).
-- Integração: tab `cargos` em `LaborModule` + rota `labor-cargos` em `AppRouter` + item de
-  menu em `Layout` (grupo "Pessoas") + card no dashboard de RH.
+- `components/LaborCargos.tsx` — CRUD completo reusando `orgGovernanceService`.
+- Tab `cargos` em LaborModule + rota `labor-cargos` + item de menu + card no dashboard.
 
-## Fase 2 — Governance vira consumidor
+## Fase 2 — Governance vira consumidor ✅ CONCLUÍDA (2026-06-27)
 
-- Trocar o CRUD de cargo na aba Organograma por **lista read-only + seletor**.
-- Banner: "Cargos são gerenciados em RH › Cargos & Funções".
-- Corrigir bug `data_Campanha` em `orgGovernanceService.ts` `saveCommittee` (grava coluna
-  inexistente em vez de `data_encerramento`).
+- Aba Organograma: lista read-only + banner "gerenciado em RH" + botão que navega para labor-cargos.
+- Bug `data_Campanha` → `data_encerramento` corrigido em `orgGovernanceService.saveCommittee`.
 
-## Fase 3 — Resolver escopo `company_id` × `org_id` ⚠️ (portão de decisão)
+## Fase 3 — Escopo `company_id` × `org_id` ✅ CONCLUÍDA — decisão 3a (2026-06-27)
 
-Três caminhos (decisão **pendente** do cliente):
-- **3a.** Manter `company_id` — RH seleciona empresa. Zero migration. *(recomendação preliminar)*
-- **3b.** Adicionar `org_id` a `org_roles` — cargo nos dois níveis.
-- **3c.** Migrar para `org_id` — cargo org-level puro; toca FKs/RLS de 4 features + backfill.
+- Mantido `company_id`. LaborCargos tem seletor de empresa interno. Zero migration.
 
-## Fase 4 — Gaps do PRD que pertencem a RH (incremental, 1 por vez)
+## Fase 4 — Gaps do PRD ✅ CONCLUÍDA (2026-06-27)
 
-- Faixa salarial por cargo/nível
-- Catálogo de competências ligado ao cargo
-- Trilha de carreira Jr→Pleno→Sr
-- *(Ponte cargo→permissão fica fora — é de Governance/acesso)*
+- Migration `20261228000007`: `salario_minimo`, `salario_maximo`, `competencias[]`, `proximo_cargo_id` em `org_roles`.
+- `OrgRole` type + `saveRole` payload atualizados.
+- LaborCargos: 4 KPIs, badge de faixa salarial, chips de competências, trilha de carreira no card e no form.
+
+## Fase 5 — Ponte Funcionário ↔ Cargo ⏳ PRÓXIMA
+
+**Problema:** `employees.role` é texto livre — sem FK para `org_roles`. Headcount por cargo e
+KPI "Cargos Vagos" não têm dados reais.
+
+**Escopo:**
+
+### 5a. Migration
+```sql
+ALTER TABLE public.employees
+    ADD COLUMN IF NOT EXISTS org_role_id UUID REFERENCES public.org_roles(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_employees_org_role ON public.employees(org_role_id);
+```
+
+### 5b. LaborCargos — headcount real
+- Query JOIN `employees` por `org_role_id` ao carregar roles.
+- Card de cargo: exibir lista de funcionários ocupantes (nome + avatar).
+- KPI "Cargos Vagos": `roles sem nenhum employee com org_role_id = role.id`.
+- KPI "Cargos": total; novo KPI "Ocupantes": soma de headcount.
+
+### 5c. Formulário do funcionário (EmployeeModal / EmployeeForm)
+- Campo `role` (texto livre) substituído por select de `org_roles` da empresa do colaborador.
+- Ao selecionar cargo: preenche automaticamente faixa salarial sugerida (read-only informativo).
+- Manter `role` TEXT como fallback exibido caso `org_role_id` seja nulo (retrocompatibilidade).
 
 Relaciona: gap audit em memória `project_opura_governance_gap_audit`.

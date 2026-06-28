@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { X, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, CheckCircle2, Info, AlertTriangle, CreditCard, Briefcase } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import { payrollService, PayrollRubric } from '../services/payrollService';
+import { orgGovernanceService } from '../services/orgGovernanceService';
+import { OrgRole } from '../types';
 import { validateCPF } from '../lib/validators';
 import CityStateSelect from './CityStateSelect';
+import { supabase } from '../lib/supabase';
 
 interface OrganizationOption {
     id: string;
@@ -49,6 +52,9 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     const [allRubrics, setAllRubrics] = useState<PayrollRubric[]>([]);
     const [recurringRubrics, setRecurringRubrics] = useState<string[]>([]);
     const [loadingRubrics, setLoadingRubrics] = useState(false);
+    const [companies, setCompanies] = useState<{ id: string; razao_social: string }[]>([]);
+    const [orgRoles, setOrgRoles] = useState<OrgRole[]>([]);
+    const [loadingRoles, setLoadingRoles] = useState(false);
     const [form, setForm] = useState<Partial<Employee>>({
         name: employee?.name || '',
         cpf: employee?.cpf || '',
@@ -64,6 +70,8 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         notes: employee?.notes || '',
         admission_checklist: employee?.admission_checklist || [],
         org_id: employee?.org_id || orgId,
+        empresa_id: employee?.empresa_id || '',
+        role_id: employee?.role_id || null,
         // Novos Campos Registro
         father_name: employee?.father_name || '',
         mother_name: employee?.mother_name || '',
@@ -139,6 +147,35 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
         loadInitialData();
     }, [isEditing, employee?.id]);
+
+    // Carrega empresas da org para o seletor de cargo catalogado
+    useEffect(() => {
+        if (!orgId) return;
+        let cancelled = false;
+        supabase.from('companies').select('id, razao_social').eq('org_id', orgId)
+            .then(({ data }) => {
+                if (cancelled) return;
+                const list = data || [];
+                setCompanies(list);
+                if (list.length === 1 && !form.empresa_id) {
+                    setForm(prev => ({ ...prev, empresa_id: list[0].id }));
+                }
+            });
+        return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [orgId]);
+
+    // Carrega cargos do catálogo quando empresa_id muda
+    useEffect(() => {
+        if (!form.empresa_id) { setOrgRoles([]); return; }
+        let cancelled = false;
+        setLoadingRoles(true);
+        orgGovernanceService.listRoles(form.empresa_id)
+            .then(data => { if (!cancelled) setOrgRoles(data); })
+            .catch(() => { if (!cancelled) setOrgRoles([]); })
+            .finally(() => { if (!cancelled) setLoadingRoles(false); });
+        return () => { cancelled = true; };
+    }, [form.empresa_id]);
 
     const setField = <K extends keyof Employee>(key: K, value: Employee[K]) => setForm(prev => ({ ...prev, [key]: value }));
     
@@ -320,13 +357,60 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                     <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                                 </div>
                             </InputGroup>
+                            <InputGroup label="Cargo (Catálogo)">
+                                {loadingRoles ? (
+                                    <div className="flex items-center gap-2 px-3 py-2.5 text-sm text-slate-400">
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando cargos...
+                                    </div>
+                                ) : orgRoles.length > 0 ? (
+                                    <div className="space-y-1">
+                                        <div className="relative">
+                                            <select
+                                                value={form.role_id || ''}
+                                                onChange={e => {
+                                                    const rid = e.target.value;
+                                                    const found = orgRoles.find(r => r.id === rid);
+                                                    setForm(prev => ({
+                                                        ...prev,
+                                                        role_id: rid || null,
+                                                        role: found ? found.nome : (prev.role || ''),
+                                                    }));
+                                                }}
+                                                className={inputCls + ' appearance-none pr-8'}
+                                            >
+                                                <option value="">— Selecione do catálogo —</option>
+                                                {orgRoles.sort((a, b) => a.nivel_hierarquico - b.nivel_hierarquico || a.nome.localeCompare(b.nome)).map(r => (
+                                                    <option key={r.id} value={r.id}>{r.nome}{r.codigo ? ` (${r.codigo})` : ''}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                        </div>
+                                        {form.role_id && (() => {
+                                            const sel = orgRoles.find(r => r.id === form.role_id);
+                                            if (!sel) return null;
+                                            const hasSalary = sel.salario_minimo != null || sel.salario_maximo != null;
+                                            if (!hasSalary) return null;
+                                            const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 });
+                                            return (
+                                                <p className="text-[11px] text-violet-600 font-medium px-1">
+                                                    Faixa salarial: {sel.salario_minimo != null ? fmt(sel.salario_minimo) : '—'} – {sel.salario_maximo != null ? fmt(sel.salario_maximo) : '—'}
+                                                </p>
+                                            );
+                                        })()}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-slate-400 italic px-1">
+                                        {form.empresa_id ? 'Nenhum cargo cadastrado no catálogo.' : 'Selecione a empresa para ver os cargos.'}
+                                    </p>
+                                )}
+                            </InputGroup>
                             <InputGroup label="Função / Cargo *">
-                                <div className="relative">
-                                    <select value={form.role} onChange={e => setField('role', e.target.value)} className={inputCls + ' appearance-none pr-8'}>
-                                        {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                                    </select>
-                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                                </div>
+                                <input
+                                    value={form.role || ''}
+                                    onChange={e => setField('role', e.target.value)}
+                                    className={inputCls}
+                                    placeholder="Ex: Pedreiro, Mestre de Obras..."
+                                />
                             </InputGroup>
                             <InputGroup label="Status">
                                 <div className="relative">
@@ -650,6 +734,21 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                     <Briefcase className="w-3.5 h-3.5 text-indigo-500" /> Dados Organizacionais
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {companies.length > 0 && (
+                                        <InputGroup label="Empresa (CNPJ)">
+                                            <div className="relative">
+                                                <select
+                                                    value={form.empresa_id || ''}
+                                                    onChange={e => setForm(prev => ({ ...prev, empresa_id: e.target.value, role_id: null }))}
+                                                    className={inputCls + ' appearance-none pr-8'}
+                                                >
+                                                    <option value="">— Nenhuma —</option>
+                                                    {companies.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
+                                                </select>
+                                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                            </div>
+                                        </InputGroup>
+                                    )}
                                     <InputGroup label="Matrícula">
                                         <input value={form.matricula} onChange={e => setField('matricula', e.target.value)} className={inputCls} placeholder="Ex: 001234" />
                                     </InputGroup>

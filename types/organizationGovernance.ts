@@ -16,6 +16,10 @@ export interface OrgRole {
   descricao?: string | null;
   nivel_hierarquico: number;
   responsabilidades: string[];
+  salario_minimo?: number | null;
+  salario_maximo?: number | null;
+  competencias: string[];
+  proximo_cargo_id?: string | null;
   created_at: string;
   updated_at: string;
 }

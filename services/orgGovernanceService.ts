@@ -40,7 +40,11 @@ export const orgGovernanceService = {
       codigo: role.codigo || null,
       descricao: role.descricao || null,
       nivel_hierarquico: role.nivel_hierarquico,
-      responsabilidades: role.responsabilidades || []
+      responsabilidades: role.responsabilidades || [],
+      salario_minimo: role.salario_minimo ?? null,
+      salario_maximo: role.salario_maximo ?? null,
+      competencias: role.competencias || [],
+      proximo_cargo_id: role.proximo_cargo_id || null,
     };
 
     let query;

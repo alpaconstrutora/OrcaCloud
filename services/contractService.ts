@@ -595,7 +595,9 @@ export const contractService = {
             is_recurring: false,
             payment_method: deal.payment_method || undefined,
             payment_installments: deal.installments || undefined,
-            signature_status: deal.signature_status as Contract['signature_status'] | undefined,
+            signature_status: deal.signature_status && ['PENDING', 'SENT', 'SIGNED', 'EXPIRED', 'CANCELLED'].includes(deal.signature_status)
+                ? deal.signature_status as Contract['signature_status']
+                : undefined,
             signature_url: deal.signature_url || undefined,
             signed_contract_url: deal.signed_contract_url || undefined,
         };

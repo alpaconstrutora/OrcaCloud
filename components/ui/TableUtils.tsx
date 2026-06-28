@@ -148,7 +148,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
 }) => {
   if (!sortable) {
     return (
-      <th className={`${className} text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]`}>
+      <th className={`${className} text-table-header font-semibold text-gray-400 uppercase tracking-wider`}>
         {label}
       </th>
     );
@@ -157,7 +157,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   return (
     <th
       onClick={() => onSort?.(colKey)}
-      className={`${className} text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group`}
+      className={`${className} text-table-header font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-600 transition-colors select-none group`}
     >
       <div className="flex items-center gap-1.5">
         {label}

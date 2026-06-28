@@ -197,7 +197,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                     />
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
+                    <span className="text-form-label font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
@@ -272,7 +272,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                     {tableColumns.visibleColumns.includes('project') && (
                                         <SortableHeader label="Obra Vinculada" colKey="project" sortable={false} className="px-6 py-5" />
                                     )}
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
+                                    <th className="px-6 py-5 text-table-header font-semibold text-gray-400 uppercase tracking-wider text-right">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -424,7 +424,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                             if (investorProjects.length > 0) {
                                                 return (
                                                     <div className="pt-3 mt-3 border-t border-gray-100">
-                                                        <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold block mb-2">Obra Vinculada</span>
+                                                        <span className="text-form-label text-gray-400 uppercase tracking-widest font-bold block mb-2">Obra Vinculada</span>
                                                         <div className="space-y-1">
                                                             {investorProjects.slice(0, 2).map(p => (
                                                                 <div key={p.id} className="flex items-center gap-1.5 text-xs text-gray-700 bg-purple-50/50 p-1.5 rounded-md border border-purple-100/50">
@@ -433,7 +433,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                                                 </div>
                                                             ))}
                                                             {investorProjects.length > 2 && (
-                                                                <span className="text-[10px] text-gray-400 pl-1">
+                                                                <span className="text-xs text-gray-400 pl-1">
                                                                     + {investorProjects.length - 2} outras obras
                                                                 </span>
                                                             )}
@@ -513,11 +513,11 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                         ) : tokenModal.token?.is_active ? (
                             <div className="space-y-4">
                                 <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
-                                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Link ativo</p>
+                                    <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-2">Link ativo</p>
                                     <p className="text-xs text-gray-700 font-mono break-all leading-relaxed">
                                         {investorPortalTokenService.buildPortalUrl(tokenModal.token.token)}
                                     </p>
-                                    <p className="text-[10px] text-gray-400 mt-2">
+                                    <p className="text-xs text-gray-400 mt-2">
                                         Expira em: {new Date(tokenModal.token.expires_at).toLocaleDateString('pt-BR')}
                                         {tokenModal.token.last_used_at && ` · Último acesso: ${new Date(tokenModal.token.last_used_at).toLocaleDateString('pt-BR')}`}
                                     </p>

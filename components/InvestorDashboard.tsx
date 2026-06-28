@@ -497,7 +497,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 </div>
                                 <div>
                                     <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Portal do Investidor</h2>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para {investorProfile.name.split(' ')[0]}</p>
+                                    <p className="text-form-label font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para {investorProfile.name.split(' ')[0]}</p>
                                 </div>
                             </div>
                             <button onClick={() => setShowTabConfig(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
@@ -521,7 +521,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                             <span className={isVisible ? 'text-blue-500' : 'text-gray-300'}>{tab.icon}</span>
                                             <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
                                         </div>
-                                        <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${isVisible ? 'text-blue-500' : 'text-gray-300'}`}>
+                                        <div className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest ${isVisible ? 'text-blue-500' : 'text-gray-300'}`}>
                                             {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
                                         </div>
                                     </button>
@@ -529,7 +529,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             })}
                         </div>
                         <div className="px-8 pb-8">
-                            <p className="text-[10px] font-bold text-gray-400 text-center uppercase tracking-widest">
+                            <p className="text-xs font-bold text-gray-400 text-center uppercase tracking-widest">
                                 Clique em cada aba para alternar a visibilidade do investidor
                             </p>
                         </div>
@@ -682,7 +682,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 <div key={ann.id} className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-6 space-y-3">
                                     <div className="flex items-start justify-between gap-4">
                                         <div>
-                                            <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">{ann.type}</span>
+                                            <span className="text-xs font-bold text-blue-500 uppercase tracking-widest">{ann.type}</span>
                                             <h3 className="text-lg font-black text-gray-900 mt-0.5">{ann.title}</h3>
                                             <p className="text-sm text-gray-500 mt-2 leading-relaxed">{ann.body}</p>
                                         </div>
@@ -706,7 +706,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                         }
                                     </div>
                                     {ann.published_at && (
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
                                             {new Date(ann.published_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
                                         </p>
                                     )}
@@ -735,7 +735,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             </main>
 
             <div className="pt-12 text-center opacity-30 select-none pointer-events-none">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Gestão de Ativos Premium • Opura Platinum</p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.3em]">Gestão de Ativos Premium • Opura Platinum</p>
             </div>
 
             {/* Confirm Modal */}

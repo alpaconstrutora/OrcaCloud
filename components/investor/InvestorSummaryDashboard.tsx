@@ -82,7 +82,7 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
                         </div>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">{s.label}</p>
                         <p className="text-2xl font-black text-gray-900 tracking-tight">{s.val}</p>
-                        {s.sub && <p className="text-[11px] text-gray-400 mt-1">{s.sub}</p>}
+                        {s.sub && <p className="text-xs text-gray-400 mt-1">{s.sub}</p>}
                     </div>
                 ))}
             </div>
@@ -94,7 +94,7 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
                         <TrendingUp className="w-4 h-4 text-blue-600" />
                         Capital Investido — Evolução Mensal
                     </h3>
-                    <p className="text-[10px] text-gray-400 mb-4">Baseado em aportes com data de pagamento registrada</p>
+                    <p className="text-xs text-gray-400 mb-4">Baseado em aportes com data de pagamento registrada</p>
 
                     {hasHistory ? (
                         <div className="h-56">
@@ -135,7 +135,7 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
 
                 {/* Participações */}
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Minhas Participações</h3>
+                    <h3 className="text-form-label font-bold text-gray-400 uppercase tracking-widest mb-4">Minhas Participações</h3>
                     {holdings.length === 0 ? (
                         <div className="flex-1 flex items-center justify-center">
                             <p className="text-xs text-gray-300 font-bold text-center">Nenhuma participação registrada</p>
@@ -146,12 +146,12 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
                                 <div key={i} className="p-3 rounded-xl border border-gray-50 hover:bg-gray-50 transition-colors">
                                     <div className="flex justify-between items-start mb-2">
                                         <span className="text-sm font-bold text-gray-900 leading-tight">{proj.name}</span>
-                                        <span className="text-[10px] bg-blue-50 text-blue-600 font-black px-2 py-0.5 rounded-lg ml-2 whitespace-nowrap">{proj.cota}</span>
+                                        <span className="text-xs bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-lg ml-2 whitespace-nowrap">{proj.cota}</span>
                                     </div>
                                     <div className="w-full bg-gray-100 rounded-full h-1.5 mb-1">
                                         <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${proj.progress ?? 0}%` }} />
                                     </div>
-                                    <div className="flex justify-between text-[10px] text-gray-400">
+                                    <div className="flex justify-between text-xs text-gray-400">
                                         <span>{proj.status}</span>
                                         <span className="font-bold text-blue-500">{proj.progress ?? 0}%</span>
                                     </div>
@@ -169,7 +169,7 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
             {perProjectData.length > 0 && (
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                     <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-1">Capital por Empreendimento</h3>
-                    <p className="text-[10px] text-gray-400 mb-4">Aportado vs. Patrimônio estimado por obra</p>
+                    <p className="text-xs text-gray-400 mb-4">Aportado vs. Patrimônio estimado por obra</p>
                     <div className="h-48">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={perProjectData} barGap={4}>
